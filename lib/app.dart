@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 
 import 'core/services/age_verification_service.dart';
 import 'core/services/auth_service.dart';
+import 'core/services/cloud_vision_moderation_service.dart';
+import 'core/services/visual_moderation_service.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/moderation/banned_screen.dart';
@@ -18,6 +20,7 @@ class BullyLeagueApp extends StatelessWidget {
       providers: [
         Provider<AuthService>(create: (_) => AuthService(FirebaseAuth.instance)),
         Provider<AgeVerificationService>(create: (_) => StubAgeVerificationService()),
+        Provider<VisualModerationService>(create: (_) => CloudVisionModerationService()),
       ],
       child: MaterialApp(
         title: 'The Bully League',

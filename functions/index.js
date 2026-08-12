@@ -6,6 +6,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {finalizeMatch, VOTE_WINDOW_MS} = require("./matchFinalization");
 const {generateBracket, debugAdvanceRound, DEFAULT_MIN_ENTRANTS} = require("./tournament");
+const {moderateImage} = require("./visualModeration");
 
 // Modular admin SDK API, not the classic admin.firestore()/admin.auth()
 // namespace - firebase-admin v14's classic namespace requires "firebase-
@@ -218,4 +219,37 @@ exports.debugCreateTournament = onCall(async (request) => {
     createdAt: FieldValue.serverTimestamp(),
   });
   return {tournamentId: ref.id};
+});
+
+/**
+ * Runs Google Cloud Vision SafeSearch on an uploaded profile photo (Build
+ * Order step 9a / CLAUDE.md's Content Policy & Moderation section) -
+ * server-side because it's the natural place for any future provider
+ * credentials to live, same "sensitive calls go through Cloud Functions"
+ * pattern as castVote's Turnstile check. Restricted to the caller's own
+ * uploads (storagePath must be under their own profile_photos/{uid}/
+ * folder) as defense in depth alongside storage.rules, which already
+ * enforces the same boundary at the Storage layer.
+ *
+ * This covers PROFILE PHOTOS only. Real-time moderation during LIVE
+ * matches (the other half of CLAUDE.md's visual moderation decision) is
+ * NOT implemented and is currently blocked: agora_rtc_engine 6.6.3's
+ * registerVideoFrameObserver (needed to read live video frames at all) is
+ * an unimplemented stub that throws UnimplementedError - confirmed by
+ * reading the package source back at Build Order step 3. There is no
+ * frame data to moderate until that's resolved (newer SDK version, or a
+ * different frame-access approach) - see CLAUDE.md's step 9a status note.
+ */
+exports.moderatePhoto = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const {storagePath} = request.data || {};
+  if (!storagePath) {
+    throw new HttpsError("invalid-argument", "storagePath is required.");
+  }
+  if (!storagePath.startsWith(`profile_photos/${request.auth.uid}/`)) {
+    throw new HttpsError("permission-denied", "Can only moderate your own photos.");
+  }
+  return moderateImage(storagePath);
 });

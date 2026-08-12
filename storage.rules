@@ -1,0 +1,21 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Profile photos (Build Order step 9a / User Profile System) - each
+    // user can only write into their own folder. Reads are open to any
+    // signed-in user since photos are shown to opponents during the
+    // pre-match bio reveal and (for approved profiles) more broadly.
+    // Acceptance into profile.photoUrls only happens after the
+    // moderatePhoto Cloud Function approves the image - see
+    // functions/visualModeration.js - so a photo landing in Storage does
+    // NOT by itself mean it's live on a profile.
+    match /profile_photos/{userId}/{photoId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

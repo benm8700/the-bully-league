@@ -1,12 +1,24 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+
+import '../../core/services/visual_moderation_service.dart';
+
+const int kRequiredPhotoCount = 5;
 
 /// Editable profile fields per CLAUDE.md's User Profile System - the
 /// "ammo" a roaster gives opponents instead of relying purely on
-/// appearance-based improv. Photos (5 required, face photo required,
-/// visual-moderation gate) are explicitly deferred to Build Order step
-/// 9a and NOT part of this screen - see CLAUDE.md's step 7 status note.
+/// appearance-based improv, plus the 5-photo requirement (Build Order
+/// step 9a - deferred from step 7 specifically to land alongside visual
+/// moderation, since accepting a photo without running it through
+/// moderation first would violate CLAUDE.md's Content Policy & Moderation
+/// section). Manual profile approval (approvalStatus) is a separate V1
+/// admin workflow via the Firebase console, not enforced by this screen.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -29,6 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _loading = true;
   bool _saving = false;
   String? _statusMessage;
+  List<String> _photoUrls = [];
 
   DocumentReference<Map<String, dynamic>> get _userRef => FirebaseFirestore
       .instance
@@ -52,7 +65,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _petsController.text = profile['pets'] as String? ?? '';
     _favoriteFoodController.text = profile['favoriteFood'] as String? ?? '';
     _ammoTextController.text = profile['ammoText'] as String? ?? '';
-    if (mounted) setState(() => _loading = false);
+    final photoUrls = (profile['photoUrls'] as List<dynamic>?)?.cast<String>() ?? [];
+    if (mounted) {
+      setState(() {
+        _photoUrls = photoUrls;
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -62,25 +81,95 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _statusMessage = null;
     });
     try {
-      // Photo fields (photoUrls, approvalStatus) intentionally omitted -
-      // see the class doc comment. Firestore rules only pin rating/
-      // rankTitle/rankedMatchesPlayed/wins/losses, so this update is
-      // otherwise unrestricted for the owning user.
+      // photoUrls is handled separately (each photo writes itself via
+      // arrayUnion as soon as it's approved - see _addPhoto) rather than
+      // through this batched save, since photo moderation has its own
+      // async, per-photo success/failure flow that doesn't map cleanly
+      // onto a single "Save" button. Firestore rules only pin rating/
+      // rankTitle/rankedMatchesPlayed/wins/losses/accountStatus, so this
+      // update is otherwise unrestricted for the owning user.
       await _userRef.update({
-        'profile': {
-          'profession': _professionController.text.trim(),
-          'education': _educationController.text.trim(),
-          'hometown': _hometownController.text.trim(),
-          'interests': _interestsController.text.trim(),
-          'relationshipStatus': _relationshipStatusController.text.trim(),
-          'pets': _petsController.text.trim(),
-          'favoriteFood': _favoriteFoodController.text.trim(),
-          'ammoText': _ammoTextController.text.trim(),
-        },
+        'profile.profession': _professionController.text.trim(),
+        'profile.education': _educationController.text.trim(),
+        'profile.hometown': _hometownController.text.trim(),
+        'profile.interests': _interestsController.text.trim(),
+        'profile.relationshipStatus': _relationshipStatusController.text.trim(),
+        'profile.pets': _petsController.text.trim(),
+        'profile.favoriteFood': _favoriteFoodController.text.trim(),
+        'profile.ammoText': _ammoTextController.text.trim(),
       });
       if (mounted) setState(() => _statusMessage = 'Profile saved.');
     } catch (e) {
       if (mounted) setState(() => _statusMessage = 'Failed to save: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _addPhoto() async {
+    // Read the service before any await - context.read after an async gap
+    // risks using a BuildContext that's no longer valid if this State was
+    // disposed while awaiting (e.g. user navigated away mid-upload).
+    final moderationService = context.read<VisualModerationService>();
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      _statusMessage = null;
+      _saving = true;
+    });
+
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final storagePath = 'profile_photos/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final storageRef = FirebaseStorage.instance.ref(storagePath);
+
+    try {
+      await storageRef.putFile(File(picked.path));
+
+      final rejectionReason = await moderationService.checkImage(storagePath);
+      if (rejectionReason != null) {
+        await storageRef.delete();
+        if (mounted) setState(() => _statusMessage = 'Photo rejected: $rejectionReason');
+        return;
+      }
+
+      final downloadUrl = await storageRef.getDownloadURL();
+      await _userRef.update({
+        'profile.photoUrls': FieldValue.arrayUnion([downloadUrl]),
+      });
+      if (mounted) {
+        setState(() {
+          _photoUrls = [..._photoUrls, downloadUrl];
+          _statusMessage = 'Photo added.';
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _statusMessage = 'Failed to add photo: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _removePhoto(String url) async {
+    setState(() {
+      _saving = true;
+      _statusMessage = null;
+    });
+    try {
+      await _userRef.update({
+        'profile.photoUrls': FieldValue.arrayRemove([url]),
+      });
+      // Best-effort Storage cleanup - refFromURL works for Firebase
+      // Storage download URLs. Not fatal if this fails (e.g. already
+      // deleted); the Firestore removal above is the source of truth for
+      // what's actually shown on the profile.
+      try {
+        await FirebaseStorage.instance.refFromURL(url).delete();
+      } catch (_) {}
+      if (mounted) setState(() => _photoUrls = _photoUrls.where((u) => u != url).toList());
+    } catch (e) {
+      if (mounted) setState(() => _statusMessage = 'Failed to remove photo: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -115,6 +204,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Text(
                       'Give opponents some ammo - it\'s funnier if it\'s true.',
                       style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Photos (${_photoUrls.length}/$kRequiredPhotoCount, first must show your face)',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    _PhotoGrid(
+                      photoUrls: _photoUrls,
+                      busy: _saving,
+                      onAdd: _addPhoto,
+                      onRemove: _removePhoto,
                     ),
                     const SizedBox(height: 24),
                     Text('Required', style: Theme.of(context).textTheme.titleMedium),
@@ -177,6 +278,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(labelText: label),
+    );
+  }
+}
+
+class _PhotoGrid extends StatelessWidget {
+  const _PhotoGrid({
+    required this.photoUrls,
+    required this.busy,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final List<String> photoUrls;
+  final bool busy;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        for (var i = 0; i < photoUrls.length; i++) _photoTile(context, photoUrls[i]),
+        if (photoUrls.length < kRequiredPhotoCount) _addTile(context),
+      ],
+    );
+  }
+
+  Widget _photoTile(BuildContext context, String url) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(url, width: 96, height: 96, fit: BoxFit.cover),
+        ),
+        Positioned(
+          top: -8,
+          right: -8,
+          child: IconButton(
+            icon: const Icon(Icons.cancel, size: 20),
+            onPressed: busy ? null : () => onRemove(url),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _addTile(BuildContext context) {
+    final isFacePhoto = photoUrls.isEmpty;
+    return InkWell(
+      onTap: busy ? null : onAdd,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 96,
+        height: 96,
+        decoration: BoxDecoration(
+          border: Border.all(color: Theme.of(context).colorScheme.outline),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.add_a_photo_outlined),
+            if (isFacePhoto) ...[
+              const SizedBox(height: 4),
+              Text('Face', style: Theme.of(context).textTheme.labelSmall),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
