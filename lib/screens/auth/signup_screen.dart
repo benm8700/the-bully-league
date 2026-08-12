@@ -74,10 +74,13 @@ class _SignupScreenState extends State<SignupScreen> {
       await user?.reload();
       if (user != null) {
         // Ranking fields (rating/wins/losses/rankTitle/rankedMatchesPlayed)
-        // start at fixed defaults here and are never client-writable again
-        // after this create - see firestore.rules and CLAUDE.md's Security
-        // & Compliance Baseline. Cloud Functions (castVote's finalizeMatch)
-        // own all updates to them from here on.
+        // and accountStatus start at fixed defaults here and are never
+        // client-writable again after this create - see firestore.rules and
+        // CLAUDE.md's Security & Compliance Baseline. Cloud Functions own
+        // rating/wins/losses updates (castVote's finalizeMatch); banning/
+        // unbanning (accountStatus) is an admin-only action via the
+        // Firebase console, same pattern as profile approval and report
+        // review - see CLAUDE.md's Admin/moderation tooling notes.
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
           'username': username,
           'rating': 1200,
@@ -85,6 +88,7 @@ class _SignupScreenState extends State<SignupScreen> {
           'rankedMatchesPlayed': 0,
           'wins': 0,
           'losses': 0,
+          'accountStatus': 'active',
           'createdAt': FieldValue.serverTimestamp(),
         });
       }

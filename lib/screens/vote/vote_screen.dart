@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/turnstile_challenge.dart';
+import '../moderation/report_screen.dart';
 
 /// Community voting (Build Order step 5). No discovery feed exists yet
 /// (CLAUDE.md's Discovery/feed section is a separate, larger feature) - this
@@ -118,6 +119,36 @@ class _VoteScreenState extends State<VoteScreen> {
                   ],
                 ],
                 const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 8),
+                // Reporting stays available even for match participants
+                // (unlike voting) - CLAUDE.md's report categories are
+                // about things outside the roast format itself, which a
+                // participant is in the best position to have witnessed.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ReportScreen(reportedUserId: player1Id, matchId: widget.matchId),
+                        ),
+                      ),
+                      icon: const Icon(Icons.flag_outlined, size: 18),
+                      label: const Text('Report Player 1'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ReportScreen(reportedUserId: player2Id, matchId: widget.matchId),
+                        ),
+                      ),
+                      icon: const Icon(Icons.flag_outlined, size: 18),
+                      label: const Text('Report Player 2'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 const Divider(),
                 const SizedBox(height: 8),
                 Text('Live tally', style: Theme.of(context).textTheme.titleMedium),

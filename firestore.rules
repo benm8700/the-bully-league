@@ -18,7 +18,8 @@ service cloud.firestore {
         request.resource.data.rankTitle == 'Average Joe' &&
         request.resource.data.rankedMatchesPlayed == 0 &&
         request.resource.data.wins == 0 &&
-        request.resource.data.losses == 0;
+        request.resource.data.losses == 0 &&
+        request.resource.data.accountStatus == 'active';
 
       // Uses .get(field, default) rather than direct field access - a
       // direct `resource.data.rating` on a doc missing that key throws a
@@ -36,7 +37,12 @@ service cloud.firestore {
         request.resource.data.get('rankTitle', null) == resource.data.get('rankTitle', null) &&
         request.resource.data.get('rankedMatchesPlayed', null) == resource.data.get('rankedMatchesPlayed', null) &&
         request.resource.data.get('wins', null) == resource.data.get('wins', null) &&
-        request.resource.data.get('losses', null) == resource.data.get('losses', null);
+        request.resource.data.get('losses', null) == resource.data.get('losses', null) &&
+        // accountStatus (active/banned/flagged) must be just as protected -
+        // otherwise a banned client could simply write itself back to
+        // 'active' and bypass the ban entirely. Only admin action via the
+        // Firebase console (Admin SDK, bypasses these rules) may change it.
+        request.resource.data.get('accountStatus', null) == resource.data.get('accountStatus', null);
 
       allow delete: if false;
     }
@@ -91,6 +97,39 @@ service cloud.firestore {
           get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.status == 'open';
         allow update: if false;
       }
+    }
+
+    match /reports/{reportId} {
+      // In-app report button (Build Order step 9). Reporter picks a
+      // category (CLAUDE.md's Report categories decision) - reason must be
+      // one of the fixed set, not free text, so the console review queue
+      // stays sortable/filterable. Reviewed the SAME way as profile
+      // approval and tournament creation: the Firebase console, not a
+      // custom admin UI - so there's no client read rule at all, and only
+      // the Admin SDK (bypasses these rules) ever sets moderatorNotes or
+      // changes status away from 'pending'.
+      allow read: if false;
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.reporterId &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.reason in
+          ['harassment', 'hate_speech', 'technical_quality', 'inappropriate_content', 'impersonation'];
+      allow update, delete: if false;
+    }
+
+    match /banAppeals/{appealId} {
+      // CLAUDE.md's Ban appeal decision: banned users get a simple way to
+      // contest the decision, reviewed via the console like everything
+      // else admin-side. A banned account can still call `create` here
+      // even though its own users/{uid} doc is otherwise locked down -
+      // the appeal collection is intentionally separate from users/{uid}
+      // so submitting one doesn't require any permission the ban itself
+      // would remove.
+      allow read: if false;
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.uid &&
+        request.resource.data.status == 'pending';
+      allow update, delete: if false;
     }
   }
 }
