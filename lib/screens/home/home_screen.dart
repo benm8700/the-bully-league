@@ -8,6 +8,7 @@ import '../leaderboard/leaderboard_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import '../profile/profile_screen.dart';
+import '../tournament/tournament_list_screen.dart';
 import '../vote/finalize_test_screen.dart';
 import '../vote/vote_entry_screen.dart';
 
@@ -81,6 +82,13 @@ class HomeScreen extends StatelessWidget {
                     MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
                   ),
                   child: const Text('Leaderboard'),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const TournamentListScreen()),
+                  ),
+                  child: const Text('Tournaments'),
                 ),
               ],
             ),

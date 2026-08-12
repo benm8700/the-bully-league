@@ -5,6 +5,7 @@ const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {finalizeMatch, VOTE_WINDOW_MS} = require("./matchFinalization");
+const {generateBracket, debugAdvanceRound, DEFAULT_MIN_ENTRANTS} = require("./tournament");
 
 // Modular admin SDK API, not the classic admin.firestore()/admin.auth()
 // namespace - firebase-admin v14's classic namespace requires "firebase-
@@ -144,4 +145,77 @@ exports.debugFinalizeMatch = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "matchId is required.");
   }
   return finalizeMatch(matchId, {force: true});
+});
+
+/**
+ * Closes entrants and generates the round-1 bracket for a tournament -
+ * see functions/tournament.js and CLAUDE.md's Build Order step 8 status
+ * note. Real admin tooling for tournaments is the Firebase console
+ * (same pattern as profile approval/report review), so this only needs
+ * to be callable by SOME authenticated user for now - not gated behind
+ * an admin-role check because no such system exists yet (same caveat as
+ * debugFinalizeMatch above).
+ */
+exports.generateTournamentBracket = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const {tournamentId} = request.data || {};
+  if (!tournamentId) {
+    throw new HttpsError("invalid-argument", "tournamentId is required.");
+  }
+  return generateBracket(tournamentId);
+});
+
+/**
+ * DEV/TEST ONLY - resolves the current round with a coin flip per
+ * matchup rather than a real match result, purely to prove bracket
+ * advancement (byes, round generation, completion) works end to end.
+ * See functions/tournament.js's debugAdvanceRound doc comment.
+ */
+exports.debugAdvanceTournamentRound = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const {tournamentId} = request.data || {};
+  if (!tournamentId) {
+    throw new HttpsError("invalid-argument", "tournamentId is required.");
+  }
+  return debugAdvanceRound(tournamentId);
+});
+
+/**
+ * DEV/TEST ONLY - creates a tournament document. Firestore rules block
+ * direct client writes to tournaments/{id} (real creation is meant to go
+ * through the Firebase console, per CLAUDE.md's Admin/moderation tooling
+ * notes), so this exists purely so the app can be tested end to end
+ * without console access. Must be removed or admin-gated before launch.
+ */
+exports.debugCreateTournament = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const {name, minEntrants} = request.data || {};
+  if (!name) {
+    throw new HttpsError("invalid-argument", "name is required.");
+  }
+  const db = getFirestore();
+  const ref = await db.collection("tournaments").add({
+    name,
+    description: "Test tournament created via debugCreateTournament.",
+    entryFee: null,
+    prizeType: "points",
+    prizeValue: 0,
+    eligibleStates: [],
+    format: "async",
+    bracketType: "single_elimination",
+    seeding: "random",
+    withdrawalAllowedBeforeStart: true,
+    minEntrants: minEntrants ?? DEFAULT_MIN_ENTRANTS,
+    status: "open",
+    bracket: null,
+    winnerId: null,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {tournamentId: ref.id};
 });

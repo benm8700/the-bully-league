@@ -64,5 +64,33 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if false;
     }
+
+    match /tournaments/{tournamentId} {
+      // Creation and bracket generation/advancement only happen via Admin
+      // SDK (Firebase console for creation, Cloud Functions for the
+      // bracket - see functions/tournament.js and CLAUDE.md's Admin/
+      // moderation tooling notes, which use the console rather than a
+      // custom admin UI for V1). No entry fee is actually collected from
+      // clients yet (see CLAUDE.md's step 8 status note), so there's no
+      // client-side reason to write here at all.
+      allow read: if request.auth != null;
+      allow write: if false;
+
+      match /entrants/{userId} {
+        // Joining/withdrawing is free in V1 (no payment processor - see
+        // CLAUDE.md's step 8 status note), so these write directly from
+        // the client, gated on the parent tournament still being open.
+        // Withdrawal-before-start is CLAUDE.md's explicit tournament
+        // withdrawal decision; once bracket generation flips status away
+        // from 'open', both creating and deleting an entrant doc stop
+        // being allowed.
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && request.auth.uid == userId &&
+          get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.status == 'open';
+        allow delete: if request.auth != null && request.auth.uid == userId &&
+          get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.status == 'open';
+        allow update: if false;
+      }
+    }
   }
 }
