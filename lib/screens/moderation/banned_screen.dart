@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/auth_service.dart';
+import '../support/support_screen.dart';
 
 /// CLAUDE.md's Ban appeal decision: a simple appeal/dispute flow for
 /// banned users, even though the underlying ban decision stays admin
@@ -58,6 +59,16 @@ class _BannedScreenState extends State<BannedScreen> {
       appBar: AppBar(
         title: const Text('Account banned'),
         actions: [
+          // Kept separate from the appeal form below - a banned account
+          // may have an unrelated need (billing, a genuine account issue)
+          // that shouldn't be limited to only contesting the ban itself.
+          IconButton(
+            icon: const Icon(Icons.help_outline),
+            tooltip: 'Support & Feedback',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SupportScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sign out',

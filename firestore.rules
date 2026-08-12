@@ -131,5 +131,19 @@ service cloud.firestore {
         request.resource.data.status == 'pending';
       allow update, delete: if false;
     }
+
+    match /supportRequests/{requestId} {
+      // In-app support/contact form (Build Order step 9b, CLAUDE.md's
+      // Support & Launch Strategy decision - satisfies app-store listing
+      // requirements for a support contact). Same "console review queue,
+      // no custom admin UI, no client read" pattern as reports/banAppeals.
+      allow read: if false;
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.uid &&
+        request.resource.data.status == 'open' &&
+        request.resource.data.category in
+          ['general_question', 'bug_report', 'refund_request', 'account_issue', 'other'];
+      allow update, delete: if false;
+    }
   }
 }
