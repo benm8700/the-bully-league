@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "283010814552",
+    "project_id": "the-bully-league",
+    "storage_bucket": "the-bully-league.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:283010814552:android:ef648efb57b1ebdcf9702d",
+        "android_client_info": {
+          "package_name": "com.bullyleague.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-yeC1osuXpfwXWNZPnLEOq7yLviM7J0c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -43,3 +43,13 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/build/
+
+# Local secrets (API keys, etc.) - see CLAUDE.md Security & Compliance Baseline
+lib/core/config/agora_config.dart
+lib/core/config/turnstile_config.dart
+
+# Cloud Functions
+functions/node_modules/
+functions/.env
+functions/.env.*

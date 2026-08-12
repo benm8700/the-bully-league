@@ -1,4 +1,4 @@
-package com.example.roast_royale
+package com.bullyleague.app
 
 import io.flutter.embedding.android.FlutterActivity
 

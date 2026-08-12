@@ -1,0 +1,68 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{userId} {
+      // Rating/rank fields are sensitive per CLAUDE.md's Security &
+      // Compliance Baseline - a modified client must not be able to fake
+      // wins or grant itself rank. Only the castVote Cloud Function's
+      // finalizeMatch (Admin SDK, bypasses these rules entirely) may ever
+      // change them after account creation. create requires the exact
+      // starting defaults; update requires those five fields to be
+      // unchanged from their current values.
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null && request.auth.uid == userId &&
+        request.resource.data.rating == 1200 &&
+        request.resource.data.rankTitle == 'Average Joe' &&
+        request.resource.data.rankedMatchesPlayed == 0 &&
+        request.resource.data.wins == 0 &&
+        request.resource.data.losses == 0;
+
+      // Uses .get(field, default) rather than direct field access - a
+      // direct `resource.data.rating` on a doc missing that key throws a
+      // rules evaluation error (not just a false condition), which denies
+      // the ENTIRE update, including otherwise-unrelated fields like
+      // `profile`. Confirmed live: a legacy test account created before
+      // these fields existed in the signup flow got permission-denied on
+      // every single profile save, with no way to self-heal client-side,
+      // until the doc was manually backfilled. Real users should always
+      // have these fields (signup_screen.dart sets them atomically at
+      // creation), but rules shouldn't hard-fail an unrelated write just
+      // because some other migration gap left a doc mid-shape.
+      allow update: if request.auth != null && request.auth.uid == userId &&
+        request.resource.data.get('rating', null) == resource.data.get('rating', null) &&
+        request.resource.data.get('rankTitle', null) == resource.data.get('rankTitle', null) &&
+        request.resource.data.get('rankedMatchesPlayed', null) == resource.data.get('rankedMatchesPlayed', null) &&
+        request.resource.data.get('wins', null) == resource.data.get('wins', null) &&
+        request.resource.data.get('losses', null) == resource.data.get('losses', null);
+
+      allow delete: if false;
+    }
+
+    match /matches/{matchId} {
+      // Match creation isn't routed through a Cloud Function yet (no real
+      // matchmaking backend exists - see CLAUDE.md Build Order step 4
+      // notes), so the two participants write it directly. Not treated as
+      // "sensitive" the way rating/points are, since it doesn't move
+      // ranking - see CLAUDE.md Security & Compliance Baseline for the
+      // fields that DO need to move server-side.
+      allow read: if request.auth != null;
+      allow create: if request.auth != null &&
+        (request.auth.uid == request.resource.data.player1Id ||
+         request.auth.uid == request.resource.data.player2Id);
+      allow update, delete: if false;
+    }
+
+    match /votes/{matchId}/ballots/{voterId} {
+      // Votes ONLY go through the castVote Cloud Function (CAPTCHA
+      // verification, 24h window, one-vote-per-account, and account-age
+      // vote-weight all need server-side enforcement - see functions/index.js
+      // and CLAUDE.md's Judging / CAPTCHA-gate notes). Reads are open to any
+      // signed-in user so the client can compute a live tally.
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}

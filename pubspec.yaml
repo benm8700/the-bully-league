@@ -1,5 +1,5 @@
-name: roast_royale
-description: "A new Flutter project."
+name: bully_league
+description: "The Bully League — live 1v1 video roast battle app."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -34,7 +34,13 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-
+  firebase_core: ^4.13.0
+  firebase_auth: ^6.5.7
+  provider: ^6.1.5+1
+  agora_rtc_engine: ^6.6.3
+  webview_flutter: ^4.14.1
+  cloud_firestore: ^6.8.0
+  cloud_functions: ^6.3.6
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -57,10 +63,8 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/turnstile.html
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

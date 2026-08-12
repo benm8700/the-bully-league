@@ -5,6 +5,12 @@ allprojects {
     }
 }
 
+// agora_rtc_engine's own Android module defaults its compileSdkVersion to
+// 31 unless the root project provides this ext property (Groovy
+// safeExtGet pattern) - without it, checkDebugAarMetadata fails because
+// agora's transitive androidx deps require compileSdk 33/34+.
+rootProject.extra["compileSdkVersion"] = 36
+
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")
