@@ -36,60 +36,43 @@ const {getStorage} = require("firebase-admin/storage");
 const AGORA_API = "https://api.agora.io/v1/apps";
 
 /**
- * VERTICAL 9:16, because the whole point of recording is TikTok/Reels/
- * Shorts and those are vertical-native (1080x1920 is the documented
- * standard; 720x1280 the stated minimum).
+ * INDIVIDUAL mode: each player's stream is recorded as its own file, full
+ * frame, untouched - no mixing, no cropping, no layout baked in.
  *
- * The first version of this recorded 960x360 - an 8:3 ultra-wide strip,
- * chosen to sit in Agora's cheap HD billing band. That was a mistake for
- * this use case: dropped into a 9:16 frame it occupies about a fifth of
- * the screen height, with the rest empty, and there's no vertical picture
- * information to recover by cropping. It would have produced unusable
- * clips for the exact channel the content strategy depends on.
+ * This replaced composite (mix) mode, and the reason is worth keeping:
+ * match footage is unrepeatable. Composite mode bakes one layout choice
+ * into an asset that can never be recaptured, so a later discovery about
+ * what actually performs on short-form video would strand every match
+ * recorded before it. Recording the raw streams defers every framing
+ * decision to the editing pipeline, where it can be changed freely and
+ * re-rendered from the same source.
  *
- * Agora bills on aggregate resolution, and any genuinely vertical format
- * at or above TikTok's minimum already lands in the Full HD band
- * (921,600-2,073,600 px). The only vertical shape that stays in the HD
- * band is about 540x960, which is below that minimum. So the cost step is
- * unavoidable if the clips are to be usable at all - and once it's taken,
- * 720x1280 and 1080x1920 cost exactly the same. Hence full 1080x1920.
+ * It also allows DIFFERENT renditions from one recording, which a single
+ * composite forbids outright:
+ *   - TikTok/Reels/Shorts: 9:16 vertical, both players stacked, trimmed
+ *     to the strongest 15-60 seconds.
+ *   - Website: landscape side-by-side, full match length. (Side-by-side
+ *     is genuinely good here and genuinely bad in a vertical frame, where
+ *     it gives each player a 540x1920 sliver.)
  *
- * Cost effect: recording goes from ~$0.015 to ~$0.034 per match, so about
- * $19 more per 1,000 recorded matches. See CLAUDE.md's Cost Planning.
+ * Both players stay visible in both, deliberately: in roast content the
+ * listener's reaction is frequently funnier than the line, and
+ * speaker-only framing throws that away.
+ *
+ * COST: Agora bills on the aggregate resolution across recorded streams,
+ * so two 720x1280 streams total 1,843,200 px - the same Full HD band as a
+ * single 1080x1920 composite, at the same ~$0.034 per match. Publishing
+ * 1080x1920 per player instead would total 4,147,200 px and jump to the
+ * 2K+ band at roughly four times the price, which is why the client
+ * encoder is pinned to 720x1280 (also TikTok's stated minimum, so the
+ * delivered clip loses nothing).
  */
-const CANVAS = {width: 1080, height: 1920};
+const RECORDING_MODE = "individual";
 
-/** Two players stacked, each getting half the height. */
-const TILE = {width: 1080, height: 960};
-
-/**
- * Frame rate and bitrate are NOT billed - Agora charges on resolution and
- * duration only - so these are free quality. The original 15fps/800kbps
- * was tuned for a tiny canvas and would look blocky at 1080x1920.
- */
-const FPS = 30;
-const BITRATE_KBPS = 2500;
-
-/**
- * Player 1 on top, player 2 underneath, each filling the full width and
- * half the height. Coordinates are fractions of the canvas.
- *
- * The uids are the fixed ones assigned at pairing (see agoraUidFor in
- * functions/matchmaking.js) - a customized layout has to name each
- * region's occupant, which is why players no longer join with the
- * wildcard uid 0.
- *
- * render_mode 0 is "crop": scale to fill the region and trim the
- * overflow. Each tile is 1080x960 (wider than tall) while a phone camera
- * publishes portrait, so "fit" would pillarbox each player into a narrow
- * strip with black either side. Cropping fills the tile and keeps the
- * middle of the frame, which is where the pre-match oval guide already
- * trains players to put their face.
- */
-const STACKED_LAYOUT = [
-  {uid: "1", x_axis: 0.0, y_axis: 0.0, width: 1.0, height: 0.5, alpha: 1.0, render_mode: 0},
-  {uid: "2", x_axis: 0.0, y_axis: 0.5, width: 1.0, height: 0.5, alpha: 1.0, render_mode: 0},
-];
+/** The fixed uids assigned at pairing (functions/matchmaking.js). Naming
+ * them explicitly means the recorder subscribes to exactly the two players
+ * and nothing else. */
+const PLAYER_UIDS = ["1", "2"];
 
 /** The uid the recording bot joins as. Must not collide with a real
  * participant; the app joins with uid 0 (wildcard) and Agora assigns
@@ -186,7 +169,7 @@ async function startRecording(matchId, channelName, creds) {
     );
 
     const started = await agoraPost(
-        `cloud_recording/resourceid/${acquired.resourceId}/mode/mix/start`,
+        `cloud_recording/resourceid/${acquired.resourceId}/mode/${RECORDING_MODE}/start`,
         {
           cname: channelName,
           uid: RECORDER_UID,
@@ -197,26 +180,32 @@ async function startRecording(matchId, channelName, creds) {
               streamTypes: 2, // Audio + video.
               videoStreamType: 0,
               maxIdleTime: 30, // Stop by itself if everyone leaves.
+              // Record exactly the two players. Possible because their
+              // uids are fixed at pairing rather than assigned by Agora.
+              subscribeVideoUids: PLAYER_UIDS,
+              subscribeAudioUids: PLAYER_UIDS,
+              // REQUIRED in individual mode, and its absence is a hard
+              // 400 ("subscribeUidGroup type mismatch or missing under
+              // single mode") rather than a default. It declares the
+              // expected size of the subscriber pool so Agora can size
+              // the recorder: 0 covers 1-2 uids, which is exactly a
+              // two-player match.
               subscribeUidGroup: 0,
-              transcodingConfig: {
-                width: CANVAS.width,
-                height: CANVAS.height,
-                fps: FPS,
-                bitrate: BITRATE_KBPS,
-                // 3 = customized layout, positioned explicitly below.
-                //
-                // "Best fit" (1) was tried first and is wrong here:
-                // confirmed by watching real output, it tiles
-                // participants side by side regardless of canvas shape,
-                // so on a 9:16 canvas each player got a narrow
-                // half-width column with dead space above and below.
-                // Stacking has to be stated outright.
-                mixedVideoLayout: 3,
-                layoutConfig: STACKED_LAYOUT,
-                backgroundColor: "#000000",
-              },
+              // No transcodingConfig here: that configures the mixing
+              // canvas, and individual mode does no mixing. Framing,
+              // layout and length all move to the editing pipeline.
             },
-            recordingFileConfig: {avFileType: ["hls", "mp4"]},
+            // HLS only. Individual mode rejects mp4 outright ("mp4, mp3,
+            // fmp4 or hls-fmp4 in avFileType is not supported by
+            // individual mode"), so each player's stream arrives as an
+            // .m3u8 playlist plus .ts segments rather than a single file.
+            //
+            // That is a real consequence of choosing individual mode: no
+            // directly postable file comes out of the recorder, which
+            // makes the editing pipeline mandatory rather than optional.
+            // It reads HLS fine - ffmpeg takes an .m3u8 as an input - so
+            // this costs a build step, not capability.
+            recordingFileConfig: {avFileType: ["hls"]},
             storageConfig: storageConfig(storage, matchId),
           },
         },
@@ -247,7 +236,7 @@ async function stopRecording(matchId, channelName, handle, creds) {
   let stopError = null;
   try {
     await agoraPost(
-        `cloud_recording/resourceid/${handle.resourceId}/sid/${handle.sid}/mode/mix/stop`,
+        `cloud_recording/resourceid/${handle.resourceId}/sid/${handle.sid}/mode/${RECORDING_MODE}/stop`,
         {
           cname: channelName,
           uid: RECORDER_UID,
@@ -290,6 +279,26 @@ async function stopRecording(matchId, channelName, handle, creds) {
  * Reading the bucket works in every one of those cases, because the
  * bucket is ours and the files are already there.
  */
+/**
+ * Recovers which player a recorded file belongs to.
+ *
+ * Agora names individual-mode files with the publisher's uid in them.
+ * Both player uids are single digits (1 and 2) assigned at pairing, and
+ * the filename also contains the sid and channel name, so this looks for
+ * the uid as a distinct underscore-delimited token rather than matching a
+ * bare digit anywhere in the string.
+ *
+ * Returns null when it can't be determined, which the editing pipeline
+ * should treat as "needs a human look" rather than guessing.
+ */
+function uidFromFileName(path) {
+  const name = path.split("/").pop() ?? "";
+  for (const uid of PLAYER_UIDS) {
+    if (name.split(/[_.]/).includes(uid)) return uid;
+  }
+  return null;
+}
+
 async function listRecordedFiles(matchId) {
   try {
     const [objects] = await getStorage().bucket()
@@ -298,9 +307,16 @@ async function listRecordedFiles(matchId) {
       path: o.name,
       sizeBytes: Number(o.metadata?.size ?? 0),
       contentType: o.metadata?.contentType ?? null,
-      // The composited mp4 is what the highlight pipeline will want; the
-      // .ts segments and .m3u8 playlist are HLS scaffolding around it.
-      isComposite: o.name.endsWith(".mp4"),
+      // Individual mode writes one set of files per player, and the
+      // editing pipeline has to know whose stream is whose to place them
+      // in a layout. Agora embeds the uid in each filename, so recover it
+      // here rather than making the editor re-derive it later.
+      agoraUid: uidFromFileName(o.name),
+      // The .m3u8 playlist is each player's entry point - it stitches
+      // that player's .ts segments into one continuous stream, and is
+      // what the editing pipeline should hand to ffmpeg. Individual mode
+      // produces no mp4, so there is no single-file alternative.
+      isPlaylist: o.name.endsWith(".m3u8"),
     }));
   } catch (e) {
     console.error(`could not list recorded files for ${matchId}:`, e.message);
@@ -409,13 +425,14 @@ module.exports = {
   startRecording,
   stopRecording,
   listRecordedFiles,
+  uidFromFileName,
   stopRunawayRecordings,
   maxRecordingSeconds,
   writeRecordingState,
   isRecordingConfigured,
   UNSET,
-  CANVAS,
-  TILE,
+  RECORDING_MODE,
+  PLAYER_UIDS,
   RECORDER_UID,
   storageConfig,
 };

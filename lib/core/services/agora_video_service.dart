@@ -49,11 +49,47 @@ class AgoraVideoCallService implements VideoCallService {
   @override
   Stream<RawVideoFrame> get remoteFrameSamples => _remoteFrameSamples.stream;
 
+  /// What each player actually publishes.
+  ///
+  /// This was previously unset, so Agora applied its default - roughly
+  /// 640x360 at 15fps. That default was the single biggest constraint on
+  /// how the recorded match looks: no canvas size or layout can add detail
+  /// that was never encoded, and a ~360p stream blown up to fill a
+  /// 1080x1920 recording is soft no matter what happens downstream.
+  ///
+  /// Portrait 720x1280, which is a deliberate cost boundary rather than a
+  /// quality ceiling. Recording captures each player's stream separately
+  /// (see functions/cloudRecording.js), and Agora bills on the aggregate
+  /// resolution across recorded streams: two 720x1280 streams total
+  /// 1,843,200 px and stay in the Full HD band, while two 1080x1920
+  /// streams total 4,147,200 px and jump to the 2K+ band at roughly four
+  /// times the price. 720x1280 is also TikTok's stated minimum, so the
+  /// delivered clip loses nothing. It is lighter on phones and on mobile
+  /// data during the match too.
+  ///
+  /// orientationMode is FIXED PORTRAIT rather than adaptive: the composite
+  /// layout assumes portrait tiles, and a player who turns their phone
+  /// sideways would otherwise publish landscape and land letterboxed
+  /// inside their half of the frame.
+  ///
+  /// degradationPreference is maintainBalanced so a weak connection
+  /// degrades gracefully - Agora scales resolution and frame rate down on
+  /// its own rather than freezing. Setting a high target is therefore safe
+  /// on bad networks; it's a ceiling, not a demand.
+  static const _encoderConfiguration = VideoEncoderConfiguration(
+    dimensions: VideoDimensions(width: 720, height: 1280),
+    frameRate: 30,
+    bitrate: 0, // 0 = let Agora pick the standard bitrate for these dimensions.
+    orientationMode: OrientationMode.orientationModeFixedPortrait,
+    degradationPreference: DegradationPreference.maintainBalanced,
+  );
+
   @override
   Future<void> initialize() async {
     _engine = createAgoraRtcEngine();
     await _engine.initialize(const RtcEngineContext(appId: agoraAppId));
     await _engine.enableVideo();
+    await _engine.setVideoEncoderConfiguration(_encoderConfiguration);
     await _engine.startPreview();
     // Volume indication only reports once a user is publishing in a
     // channel (see localAudioLevel doc comment) - enabling here just
