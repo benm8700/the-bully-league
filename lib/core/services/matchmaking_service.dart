@@ -2,21 +2,75 @@ import 'dart:async';
 
 import 'package:cloud_functions/cloud_functions.dart';
 
+/// Timings for one match (CLAUDE.md's `config/matchSettings` schema).
+///
+/// Resolved SERVER-side once at pairing time and stamped onto the match
+/// document, so both players are guaranteed to run identical numbers -
+/// see functions/matchSettings.js for why that matters and why this is a
+/// Firestore document rather than client-side Remote Config.
+///
+/// The defaults here are a last-resort safety net for an older match
+/// document written before settings existed; the server has its own
+/// copy of the same values.
+class MatchSettings {
+  const MatchSettings({
+    this.roundCount = 3,
+    this.roundLengthSeconds = 15,
+    this.countdownSeconds = 5,
+    this.bioRevealSeconds = 60,
+  });
+
+  final int roundCount;
+  final int roundLengthSeconds;
+  final int countdownSeconds;
+  final int bioRevealSeconds;
+
+  /// Total turns in a match - each round gives both players one turn.
+  int get totalTurns => roundCount * 2;
+
+  factory MatchSettings.fromMap(Map<String, dynamic>? map) {
+    if (map == null) return const MatchSettings();
+    const fallback = MatchSettings();
+    int read(String key, int orElse) => (map[key] as num?)?.toInt() ?? orElse;
+    return MatchSettings(
+      roundCount: read('roundCount', fallback.roundCount),
+      roundLengthSeconds: read('roundLengthSeconds', fallback.roundLengthSeconds),
+      countdownSeconds: read('countdownSeconds', fallback.countdownSeconds),
+      bioRevealSeconds: read('bioRevealSeconds', fallback.bioRevealSeconds),
+    );
+  }
+}
+
 /// A pairing handed back by the matchmaking backend - everything the match
 /// flow needs to actually start: which Agora channel to join, which match
-/// document to settle at the end, and who the opponent is.
+/// document to settle at the end, who the opponent is, and the timings
+/// both sides will run.
 class MatchPairing {
   const MatchPairing({
     required this.matchId,
     required this.channelName,
     required this.opponentId,
     required this.mode,
+    this.settings = const MatchSettings(),
   });
 
   final String matchId;
   final String channelName;
   final String opponentId;
   final String mode;
+  final MatchSettings settings;
+
+  factory MatchPairing.fromMap(Map<String, dynamic> data, {String? fallbackMode}) {
+    return MatchPairing(
+      matchId: data['matchId'] as String,
+      channelName: data['channelName'] as String,
+      opponentId: data['opponentId'] as String,
+      mode: data['mode'] as String? ?? fallbackMode ?? 'ranked',
+      settings: MatchSettings.fromMap(
+        (data['settings'] as Map?)?.cast<String, dynamic>(),
+      ),
+    );
+  }
 }
 
 /// Progress while still queued, so the UI can explain what's happening
@@ -82,12 +136,7 @@ class MatchmakingService {
 
         switch (data['status'] as String?) {
           case 'matched':
-            return MatchPairing(
-              matchId: data['matchId'] as String,
-              channelName: data['channelName'] as String,
-              opponentId: data['opponentId'] as String,
-              mode: data['mode'] as String? ?? mode,
-            );
+            return MatchPairing.fromMap(data, fallbackMode: mode);
           case 'not_queued':
             // The entry was pruned as stale (a long background suspend, a
             // slow network) - re-enter rather than polling forever against
@@ -125,12 +174,7 @@ class MatchmakingService {
           await _functions.httpsCallable('getActiveMatch').call<Map<String, dynamic>>();
       final data = result.data;
       if (data['found'] != true) return null;
-      return MatchPairing(
-        matchId: data['matchId'] as String,
-        channelName: data['channelName'] as String,
-        opponentId: data['opponentId'] as String,
-        mode: data['mode'] as String? ?? 'ranked',
-      );
+      return MatchPairing.fromMap(data);
     } catch (_) {
       // Purely additive UI - if this check fails the player just doesn't
       // see the banner, which is no worse than before it existed.

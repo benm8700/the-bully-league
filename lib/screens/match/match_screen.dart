@@ -19,9 +19,10 @@ import '../../core/services/yuv_to_jpeg.dart';
 /// and the opponent's identity all come from the matchmaking backend
 /// (functions/matchmaking.js) rather than the hardcoded "test-channel"
 /// both devices used to join. What's still outstanding:
-/// - Round count/length/countdown are hardcoded to the documented V1
-///   defaults (CLAUDE.md's config/matchSettings schema) rather than pulled
-///   from Firebase Remote Config, which isn't wired up yet.
+/// - Round count/length/countdown now come from live configuration
+///   (CLAUDE.md's config/matchSettings), resolved server-side at pairing
+///   time and carried on the pairing, so they can be retuned without
+///   shipping a new app version.
 /// - Turn sequencing still has no server-authoritative state. One device
 ///   is elected "host" (lower Agora-assigned uid) and drives the real
 ///   timer, broadcasting state to the other over Agora's data-stream
@@ -43,10 +44,15 @@ class MatchScreen extends StatefulWidget {
 enum _Phase { waitingForOpponent, countdown, turn, verdict }
 
 class _MatchScreenState extends State<MatchScreen> {
-  static const _roundCount = 3;
-  static const _roundLengthSeconds = 15;
-  static const _countdownSeconds = 5;
-  static const _totalTurns = _roundCount * 2;
+  // Timings come from the pairing, which carries what the server resolved
+  // and stamped onto the match document at pairing time - so both players
+  // run identical numbers and the developer can retune round count/length
+  // live without shipping a new app version (CLAUDE.md's explicit
+  // requirement). See functions/matchSettings.js.
+  MatchSettings get _settings => widget.pairing.settings;
+  int get _roundLengthSeconds => _settings.roundLengthSeconds;
+  int get _countdownSeconds => _settings.countdownSeconds;
+  int get _totalTurns => _settings.totalTurns;
 
   late final VideoCallService _videoCallService;
   late final VisualModerationService _moderationService;

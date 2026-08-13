@@ -3,6 +3,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {STARTING_RATING, RANK_TIERS, GOAT_TITLE, computeBaseRankTitle} = require("./rating");
+const {getMatchSettings} = require("./matchSettings");
 
 /**
  * Real matchmaking (Build Order step 4's missing half). Replaces the
@@ -343,14 +344,19 @@ async function pollMatchmaking(auth, data) {
   const entry = snap.val();
   if (!entry) return {status: "not_queued"};
 
-  // The opponent's poll may have already paired us.
+  // The opponent's poll may have already paired us. Settings come from the
+  // match document rather than being re-resolved, so this side runs exactly
+  // what was stamped when the pairing was made - re-reading config here
+  // could hand the two players different numbers if it changed in between.
   if (entry.status === "matched") {
+    const matchSnap = await db.collection("matches").doc(entry.matchId).get();
     return {
       status: "matched",
       matchId: entry.matchId,
       channelName: entry.channelName,
       opponentId: entry.opponentId,
       mode,
+      settings: matchSnap.data()?.settings ?? null,
     };
   }
 
@@ -370,11 +376,17 @@ async function pollMatchmaking(auth, data) {
     };
   }
 
+  // Resolved once, here, and stamped onto the match document - so both
+  // players run identical timings for this match regardless of when
+  // either device last read config. See functions/matchSettings.js.
+  const settings = await getMatchSettings(mode);
+
   try {
     await matchRef.set({
       player1Id: uid,
       player2Id: paired.opponentId,
       mode,
+      settings,
       // Created at PAIRING time now, not at verdict time - the document is
       // what the two clients agree on (channel name, who the opponent is),
       // so it has to exist before the match rather than after it. Anything
@@ -409,6 +421,7 @@ async function pollMatchmaking(auth, data) {
     channelName,
     opponentId: paired.opponentId,
     mode,
+    settings,
   };
 }
 
@@ -448,6 +461,7 @@ async function getActiveMatch(auth) {
       channelName: entry.channelName,
       opponentId: entry.opponentId,
       mode,
+      settings: snap.data().settings ?? null,
     };
   }
 

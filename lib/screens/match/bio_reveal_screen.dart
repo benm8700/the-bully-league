@@ -22,10 +22,10 @@ import 'match_screen.dart';
 /// full bio pre-match only, to keep the video UI clean and to test what
 /// the roaster actually remembered.
 ///
-/// The reveal length is hardcoded here rather than read from Firebase
-/// Remote Config, the same outstanding gap MatchScreen has for round
-/// count/length (CLAUDE.md's config/matchSettings schema lists
-/// bioRevealSeconds alongside them).
+/// The reveal length comes from live configuration (CLAUDE.md's
+/// config/matchSettings `bioRevealSeconds`), resolved server-side at
+/// pairing time and carried on the pairing, so both players count down
+/// together and the value can be retuned without a new app release.
 class BioRevealScreen extends StatefulWidget {
   const BioRevealScreen({super.key, required this.pairing});
 
@@ -36,13 +36,13 @@ class BioRevealScreen extends StatefulWidget {
 }
 
 class _BioRevealScreenState extends State<BioRevealScreen> {
-  static const _revealSeconds = 60;
+  int get _revealSeconds => widget.pairing.settings.bioRevealSeconds;
 
   final _service = MatchmakingService();
 
   Map<String, dynamic>? _opponent;
   String? _loadError;
-  int _secondsLeft = _revealSeconds;
+  late int _secondsLeft = _revealSeconds;
   int? _skipsLeft;
   bool _iAmReady = false;
   bool _bothReady = false;
@@ -332,7 +332,11 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
   }
 
   Widget _buildTimerBar() {
-    final fraction = (_secondsLeft / _revealSeconds).clamp(0.0, 1.0);
+    // Guarded because bioRevealSeconds is live-configurable and 0 is a
+    // legitimate value (skip the reveal entirely) - dividing by it would
+    // hand LinearProgressIndicator a NaN.
+    final fraction =
+        _revealSeconds > 0 ? (_secondsLeft / _revealSeconds).clamp(0.0, 1.0) : 0.0;
     return Column(
       children: [
         LinearProgressIndicator(value: fraction, minHeight: 4),

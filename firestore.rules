@@ -60,6 +60,23 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Live match configuration (CLAUDE.md's config/matchSettings): round
+    // count, turn length, countdown, bio-reveal length, plus per-mode
+    // overrides. Edited by hand in the Firebase console, which is the
+    // same admin workflow used for profile approval, report review and
+    // tournament creation.
+    //
+    // Readable so a client could show the values, but NOT the source of
+    // truth for a match in progress: the settings that actually govern a
+    // match are resolved server-side at pairing time and stamped onto the
+    // match document, so both players run identical timings even if the
+    // config changes mid-match. Writes are console-only - a client that
+    // could edit this would set its own turn length.
+    match /config/{document} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     match /matches/{matchId} {
       // Match documents are now created and settled entirely server-side:
       // pollMatchmaking creates them at pairing time and completeMatch
