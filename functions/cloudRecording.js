@@ -226,9 +226,88 @@ async function writeRecordingState(matchId, patch) {
   }
 }
 
+/**
+ * The longest a recording for this match could legitimately run, derived
+ * from the settings actually stamped on that match rather than a fixed
+ * guess.
+ *
+ * This matters because match timings are live-configurable (see
+ * functions/matchSettings.js): a flat cap generous enough for a 10-round,
+ * 120-second-turn configuration would be far too slack for the 3-round
+ * default, while a cap tight enough for the default would cut off a
+ * legitimately long tournament format. Deriving it means the watchdog can
+ * never kill a real match, and can never let a stuck one bill forever.
+ */
+function maxRecordingSeconds(settings) {
+  const s = settings ?? {};
+  const rounds = s.roundCount ?? 3;
+  const turn = s.roundLengthSeconds ?? 15;
+  const countdown = s.countdownSeconds ?? 5;
+  const reveal = s.bioRevealSeconds ?? 60;
+  // Both players take a turn each round, each preceded by a countdown.
+  const matchSeconds = rounds * 2 * (turn + countdown);
+  // Slack for the verdict screen, the stop call, and network lag. Kept
+  // deliberately modest: recording starts at host election, so joining is
+  // already done by this point, and an over-generous cap means a wedged
+  // recording costs MORE than a real match rather than less. Note the
+  // watchdog polls on a schedule, so real-world stop time is this cap plus
+  // up to one poll interval - tuning this below a couple of minutes buys
+  // nothing.
+  const SLACK_SECONDS = 120;
+  return reveal + matchSeconds + SLACK_SECONDS;
+}
+
+/**
+ * Force-stops recordings that have outlived any plausible match.
+ *
+ * This is the backstop for the one genuinely unbounded billing path.
+ * Agora's own `maxIdleTime` handles the common case - it stops recording
+ * shortly after the channel empties - but it does nothing while clients
+ * are still connected. A match whose state machine wedged, or a client
+ * that never leaves the channel, would otherwise keep billing recording
+ * minutes indefinitely with nothing to notice.
+ *
+ * Alerts tell you after money is spent; this prevents the spend.
+ */
+async function stopRunawayRecordings(creds, {now = Date.now()} = {}) {
+  const db = getFirestore();
+  const snap = await db
+      .collection("matches")
+      .where("recording.status", "==", "recording")
+      .get();
+
+  let stopped = 0;
+  let running = 0;
+
+  for (const doc of snap.docs) {
+    const match = doc.data();
+    const startedAt = match.recording?.startedAt;
+    if (typeof startedAt !== "number") continue;
+
+    const ageSeconds = (now - startedAt) / 1000;
+    if (ageSeconds <= maxRecordingSeconds(match.settings)) {
+      running++;
+      continue;
+    }
+
+    console.warn(
+        `runaway recording on match ${doc.id}: ${Math.round(ageSeconds)}s old, force-stopping`,
+    );
+    const result = await stopRecording(doc.id, match.channelName, match.recording, creds);
+    await writeRecordingState(doc.id, result.ok ?
+      {status: "recorded", files: result.files, stoppedAt: now, forceStopped: true} :
+      {status: "stop_failed", error: result.error, forceStopped: true});
+    stopped++;
+  }
+
+  return {stopped, running, checked: snap.size};
+}
+
 module.exports = {
   startRecording,
   stopRecording,
+  stopRunawayRecordings,
+  maxRecordingSeconds,
   writeRecordingState,
   isRecordingConfigured,
   UNSET,

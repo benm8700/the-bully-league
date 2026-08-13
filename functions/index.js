@@ -211,6 +211,28 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
  * is what bounds the recording consent players gave, and it's what the
  * published Privacy Policy promises happens to their footage.
  */
+/**
+ * Runaway-recording backstop. Agora's own maxIdleTime stops a recording
+ * once the channel empties, but does nothing while clients are still
+ * connected - so a wedged match or a client that never leaves would bill
+ * recording minutes indefinitely. This is the only genuinely unbounded
+ * cost path in the project, and a billing alert would only report it after
+ * the money was spent.
+ *
+ * Every 10 minutes: frequent enough that the worst case is a few minutes
+ * of extra recording (fractions of a cent), cheap enough to be free.
+ */
+exports.stopRunawayRecordings = onSchedule(
+    {schedule: "every 10 minutes", secrets: recordingSecrets},
+    async () => {
+      const {stopRunawayRecordings} = require("./cloudRecording");
+      const result = await stopRunawayRecordings(recordingCreds(null));
+      if (result.stopped > 0 || result.running > 0) {
+        console.log("stopRunawayRecordings:", JSON.stringify(result));
+      }
+    },
+);
+
 exports.purgeExpiredRecordings = onSchedule("every 24 hours", async () => {
   const {purgeExpiredRecordings} = require("./recordingRetention");
   const result = await purgeExpiredRecordings();
