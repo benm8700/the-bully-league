@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -5,7 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
 import '../../core/services/video_call_service.dart';
-import 'match_screen.dart';
+import 'matchmaking_screen.dart';
 
 /// Camera/mic check before a match (Build Order step 3). Real per-check
 /// scope, per CLAUDE.md's Agora notes:
@@ -14,12 +15,21 @@ import 'match_screen.dart';
 ///   brightness/motion/face analysis is wired up (see the visual content
 ///   moderation module for the one place a video frame observer IS used).
 ///
-/// TEMPORARY: joins the hardcoded "test-channel" (real matchmaking will
-/// assign a real channel here once it exists, Build Order step 4+), but
-/// the join token itself is real - fetched per-join from the
-/// generateAgoraToken Cloud Function, not a hardcoded temp token.
+/// Joins a SOLO channel of its own (precheck_{uid}) rather than the real
+/// match channel: this step is just the player checking their own camera
+/// and mic, so there's no reason for an opponent to be able to see or hear
+/// it. generateAgoraToken will only mint a precheck token for the caller's
+/// own uid, so nobody can join anyone else's check either.
+///
+/// Runs BEFORE matchmaking, not after. Both orderings satisfy CLAUDE.md's
+/// "both users must pass this before the match starts"; doing it first
+/// means a player sorting out their lighting or a denied permission isn't
+/// burning an already-paired opponent's time while they do it.
 class PreMatchScreen extends StatefulWidget {
-  const PreMatchScreen({super.key});
+  const PreMatchScreen({super.key, required this.mode});
+
+  /// Carried through to matchmaking - 'exhibition' or 'ranked'.
+  final String mode;
 
   @override
   State<PreMatchScreen> createState() => _PreMatchScreenState();
@@ -63,9 +73,16 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     }
     try {
       await _videoCallService.initialize();
-      final token = await fetchAgoraToken('test-channel');
+      final myUid = FirebaseAuth.instance.currentUser?.uid;
+      if (myUid == null) {
+        if (!mounted) return;
+        setState(() => _error = 'You need to be signed in to check in for a match.');
+        return;
+      }
+      final channelName = 'precheck_$myUid';
+      final token = await fetchAgoraToken(channelName);
       await _videoCallService.joinChannel(
-        channelName: 'test-channel',
+        channelName: channelName,
         uid: 0,
         token: token,
       );
@@ -109,7 +126,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     await _videoCallService.dispose();
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const MatchScreen()),
+      MaterialPageRoute(builder: (_) => MatchmakingScreen(mode: widget.mode)),
     );
   }
 
@@ -189,7 +206,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Text(_micVerified ? "I'm Ready" : 'Say something to test your mic...'),
+                      : Text(_micVerified ? 'Find an Opponent' : 'Say something to test your mic...'),
                 ),
                 if (kDebugMode && !_micVerified)
                   TextButton(

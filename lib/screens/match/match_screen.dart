@@ -8,28 +8,33 @@ import 'package:provider/provider.dart';
 
 import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
+import '../../core/services/matchmaking_service.dart';
 import '../../core/services/video_call_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../core/services/yuv_to_jpeg.dart';
 
-/// Round/turn/timer state machine (Build Order step 4). Real matchmaking
-/// and Firestore match documents don't exist yet, so:
-/// - Both devices join the same hardcoded "test-channel" - same placeholder
-///   pattern as PreMatchScreen. The join token itself is real, fetched
-///   per-join from the generateAgoraToken Cloud Function.
+/// Round/turn/timer state machine (Build Order step 4).
+///
+/// This now runs on a REAL pairing: the match document, the Agora channel,
+/// and the opponent's identity all come from the matchmaking backend
+/// (functions/matchmaking.js) rather than the hardcoded "test-channel"
+/// both devices used to join. What's still outstanding:
 /// - Round count/length/countdown are hardcoded to the documented V1
 ///   defaults (CLAUDE.md's config/matchSettings schema) rather than pulled
 ///   from Firebase Remote Config, which isn't wired up yet.
-/// - There's no server-authoritative state. One device is elected "host"
-///   (lower Agora-assigned uid) and drives the real timer, broadcasting
-///   state to the other over Agora's data-stream messaging
-///   (sendStreamMessage/onStreamMessage - see AgoraVideoCallService). The
-///   non-host device purely mirrors whatever the host broadcasts.
+/// - Turn sequencing still has no server-authoritative state. One device
+///   is elected "host" (lower Agora-assigned uid) and drives the real
+///   timer, broadcasting state to the other over Agora's data-stream
+///   messaging (sendStreamMessage/onStreamMessage - see
+///   AgoraVideoCallService). The non-host device purely mirrors it. Only
+///   the match's creation and completion are server-side.
 /// - Who goes first each round is always the host - CLAUDE.md doesn't
 ///   document a rule for this (e.g. alternating/coin-flip), so this is a
 ///   placeholder default, not a final decision. Flagged in CLAUDE.md.
 class MatchScreen extends StatefulWidget {
-  const MatchScreen({super.key});
+  const MatchScreen({super.key, required this.pairing});
+
+  final MatchPairing pairing;
 
   @override
   State<MatchScreen> createState() => _MatchScreenState();
@@ -45,13 +50,13 @@ class _MatchScreenState extends State<MatchScreen> {
 
   late final VideoCallService _videoCallService;
   late final VisualModerationService _moderationService;
+  final _matchmakingService = MatchmakingService();
   bool _initialized = false;
   String? _error;
 
   bool? _isHost;
   int? _myUid;
   int? _opponentUid;
-  String? _opponentFirebaseUid;
   StreamSubscription<Map<String, dynamic>>? _msgSub;
   StreamSubscription<RawVideoFrame>? _frameSampleSub;
   Completer<void>? _earlyEndCompleter;
@@ -74,8 +79,13 @@ class _MatchScreenState extends State<MatchScreen> {
   int? _activeUid;
   int _secondsRemaining = 0;
   Timer? _ticker;
-  String? _savedMatchId;
+  bool _matchCompleted = false;
+  bool _completeRequested = false;
   String? _matchSaveError;
+
+  /// Known from the pairing itself now, rather than exchanged
+  /// peer-to-peer over the data channel after joining.
+  String get _opponentFirebaseUid => widget.pairing.opponentId;
 
   @override
   void initState() {
@@ -88,11 +98,12 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   Future<void> _setup() async {
+    final channelName = widget.pairing.channelName;
     try {
       await _videoCallService.initialize();
-      final token = await fetchAgoraToken('test-channel');
+      final token = await fetchAgoraToken(channelName);
       await _videoCallService.joinChannel(
-        channelName: 'test-channel',
+        channelName: channelName,
         uid: 0,
         token: token,
       );
@@ -104,6 +115,15 @@ class _MatchScreenState extends State<MatchScreen> {
     if (!mounted) return;
     setState(() => _initialized = true);
     _msgSub = _videoCallService.matchMessages.listen(_onMessage);
+    // Frame sampling can start right at join now. It previously had to
+    // wait for an 'identity' message carrying the opponent's Firebase uid,
+    // because _handleContentViolation's report-filing is guarded on having
+    // someone to file against - and a violation detected before that
+    // message landed silently produced no report at all (a real race,
+    // caught live during step 9a testing). The pairing now supplies the
+    // opponent's uid before this screen is even built, so that race is
+    // structurally impossible rather than merely ordered around.
+    _frameSampleSub = _videoCallService.remoteFrameSamples.listen(_onRemoteFrameSample);
     _videoCallService.localUid.addListener(_maybeElectHost);
     _videoCallService.remoteUid.addListener(_maybeElectHost);
     _maybeElectHost();
@@ -150,13 +170,16 @@ class _MatchScreenState extends State<MatchScreen> {
 
     if (iAmReporter) {
       final myFirebaseUid = FirebaseAuth.instance.currentUser?.uid;
-      final opponentFirebaseUid = _opponentFirebaseUid;
-      if (myFirebaseUid != null && opponentFirebaseUid != null) {
+      if (myFirebaseUid != null) {
         try {
           await FirebaseFirestore.instance.collection('reports').add({
             'reporterId': myFirebaseUid,
-            'reportedUserId': opponentFirebaseUid,
-            'matchId': null,
+            'reportedUserId': _opponentFirebaseUid,
+            // The match document exists from pairing time now, so an
+            // auto-filed report can actually point at it - it used to be
+            // null here because nothing was written until verdict time,
+            // which a violation never reached.
+            'matchId': widget.pairing.matchId,
             'reason': 'inappropriate_content',
             'details': 'Automatically detected by live visual content moderation: $reason',
             'status': 'pending',
@@ -171,6 +194,18 @@ class _MatchScreenState extends State<MatchScreen> {
       } catch (_) {
         // Best-effort - still proceed to leave below even if this drops.
       }
+    }
+
+    // Settle the match as abandoned so it's never voted on, never rated,
+    // and never surfaces in the public discovery feed. Both devices call
+    // this; the second is a server-side no-op.
+    try {
+      await _matchmakingService.completeMatch(widget.pairing.matchId, outcome: 'abandoned');
+    } catch (e) {
+      // The hourly sweep settles any match still pending after the vote
+      // window, so a dropped call here delays cleanup rather than leaving
+      // a violation match eligible for rating.
+      debugPrint('Failed to mark violation match abandoned: $e');
     }
 
     try {
@@ -189,11 +224,11 @@ class _MatchScreenState extends State<MatchScreen> {
 
     _myUid = myUid;
     _opponentUid = oppUid;
+    // Host election still uses the Agora-assigned uids - it decides which
+    // device drives the turn timer, which is unrelated to Firebase
+    // identity. The 'identity' handshake this used to send is gone: both
+    // players' Firebase uids come from the pairing now.
     _isHost = myUid < oppUid;
-    _videoCallService.sendMatchMessage({
-      'type': 'identity',
-      'firebaseUid': FirebaseAuth.instance.currentUser?.uid,
-    });
     if (_isHost!) {
       unawaited(_runHostSequence());
     }
@@ -203,19 +238,6 @@ class _MatchScreenState extends State<MatchScreen> {
     switch (message['type']) {
       case 'earlyEnd':
         _earlyEndCompleter?.complete();
-      case 'identity':
-        _opponentFirebaseUid = message['firebaseUid'] as String?;
-        // Frame sampling deliberately doesn't start until the opponent's
-        // Firebase uid is known, not right at join - a violation detected
-        // before this arrives would have no reportedUserId to file
-        // against. Confirmed live: an early enough violation (e.g. a
-        // trivially-fast moderation check) can otherwise race ahead of
-        // this message and silently produce no report at all, since
-        // _handleContentViolation's report-filing is guarded on
-        // _opponentFirebaseUid being non-null.
-        _frameSampleSub ??= _videoCallService.remoteFrameSamples.listen(_onRemoteFrameSample);
-      case 'matchSaved':
-        if (mounted) setState(() => _savedMatchId = message['matchId'] as String?);
       case 'matchEndedViolation':
         // The OTHER device detected a violation in what it saw of MY
         // stream and already auto-filed a report - this side doesn't
@@ -248,38 +270,22 @@ class _MatchScreenState extends State<MatchScreen> {
     }
     if (_violationEnded) return;
     await _hostAdvance(phase: _Phase.verdict, turnIndex: _totalTurns, activeUid: null, duration: 0);
-    await _saveMatch();
   }
 
-  Future<void> _saveMatch() async {
-    if (_violationEnded) return;
-    final myFirebaseUid = FirebaseAuth.instance.currentUser?.uid;
-    final opponentFirebaseUid = _opponentFirebaseUid;
-    if (myFirebaseUid == null || opponentFirebaseUid == null) {
-      if (mounted) {
-        setState(() => _matchSaveError = 'Could not save match: missing player identity.');
-      }
-      return;
-    }
-
+  /// Flips the already-existing match document from "pending" to
+  /// "completed", which is what admits it to the 24h voting window and,
+  /// for ranked matches, eventually to real Elo changes.
+  ///
+  /// This replaces the old client-side document creation. The client can't
+  /// write the matches collection at all any more (firestore.rules) - a
+  /// modified client could otherwise invent matches between arbitrary
+  /// players and declare them finished.
+  Future<void> _completeMatch() async {
+    if (_violationEnded || _completeRequested) return;
+    _completeRequested = true;
     try {
-      final docRef = FirebaseFirestore.instance.collection('matches').doc();
-      await docRef.set({
-        'player1Id': myFirebaseUid,
-        'player2Id': opponentFirebaseUid,
-        // Hardcoded 'ranked' so the rating pipeline (Build Order step 6) is
-        // testable - there's no real mode selection UI yet, and no
-        // enforcement of "a few exhibition matches first" (see CLAUDE.md's
-        // Modes note) before ranked unlocks.
-        'mode': 'ranked',
-        'status': 'completed',
-        'createdAt': FieldValue.serverTimestamp(),
-        'completedAt': FieldValue.serverTimestamp(),
-        'voteFinalized': false,
-        'winnerId': null,
-      });
-      if (mounted) setState(() => _savedMatchId = docRef.id);
-      await _videoCallService.sendMatchMessage({'type': 'matchSaved', 'matchId': docRef.id});
+      await _matchmakingService.completeMatch(widget.pairing.matchId);
+      if (mounted) setState(() => _matchCompleted = true);
     } catch (e) {
       if (mounted) setState(() => _matchSaveError = 'Could not save match: $e');
     }
@@ -330,6 +336,11 @@ class _MatchScreenState extends State<MatchScreen> {
         _videoCallService.muteLocalAudio(activeUid != _myUid);
       case _Phase.verdict:
         _videoCallService.muteLocalAudio(false);
+        // BOTH devices settle the match, not just the host - the call is
+        // idempotent server-side (the second one returns alreadySettled),
+        // and this way a host that crashes right at the verdict doesn't
+        // leave the match stuck "pending" until the hourly sweep.
+        unawaited(_completeMatch());
       case _Phase.countdown:
       case _Phase.waitingForOpponent:
         _videoCallService.muteLocalAudio(true);
@@ -523,9 +534,9 @@ class _MatchScreenState extends State<MatchScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            if (_savedMatchId != null) ...[
+            if (_matchCompleted) ...[
               const Text('Match ID', style: TextStyle(fontWeight: FontWeight.bold)),
-              SelectableText(_savedMatchId!),
+              SelectableText(widget.pairing.matchId),
             ] else if (_matchSaveError != null)
               Text(_matchSaveError!, style: const TextStyle(color: Colors.red))
             else

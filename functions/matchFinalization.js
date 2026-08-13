@@ -29,6 +29,18 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     return {skipped: "already-finalized"};
   }
 
+  // Match documents are created at pairing time now (functions/
+  // matchmaking.js), so the hourly sweep also turns up matches that were
+  // never played to a verdict - a client crash, a force-quit, a
+  // content-violation auto-end. The sweep only looks at documents older
+  // than the full 24h vote window, so anything still "pending" by then is
+  // genuinely abandoned rather than in progress. Settle it with no winner
+  // and no rating change so it stops being reconsidered every hour.
+  if (match.status !== "completed") {
+    await matchRef.update({voteFinalized: true, winnerId: null, status: "abandoned"});
+    return {skipped: "not-completed"};
+  }
+
   if (match.mode === "exhibition") {
     // Exhibition matches never affect rating (see CLAUDE.md's Match
     // structure notes) - mark finalized so the scheduled sweep stops

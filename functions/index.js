@@ -9,6 +9,12 @@ const {generateBracket, debugAdvanceRound, DEFAULT_MIN_ENTRANTS} = require("./to
 const {moderateImage, moderateImageContent} = require("./visualModeration");
 const {generateToken} = require("./agoraToken");
 const {onVoteCast} = require("./voteCount");
+const {
+  enterQueue,
+  leaveQueue,
+  pollMatchmaking,
+  completeMatch,
+} = require("./matchmaking");
 
 // Modular admin SDK API, not the classic admin.firestore()/admin.auth()
 // namespace - firebase-admin v14's classic namespace requires "firebase-
@@ -94,6 +100,19 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     throw new HttpsError("not-found", "Match not found.");
   }
   const match = matchSnap.data();
+
+  // Match documents now exist from PAIRING time onward (see
+  // functions/matchmaking.js), so a match can legitimately exist while
+  // it's still being played or after it was abandoned. Only a finished
+  // contest is votable.
+  if (match.status !== "completed") {
+    throw new HttpsError(
+        "failed-precondition",
+        match.status === "pending" ?
+          "This match is still in progress." :
+          "This match didn't finish, so there's nothing to vote on.",
+    );
+  }
 
   if (voterId === match.player1Id || voterId === match.player2Id) {
     throw new HttpsError("permission-denied", "Match participants can't vote on their own match.");
@@ -291,12 +310,18 @@ exports.moderateMatchFrame = onCall(async (request) => {
  * can never be shipped to the client, so this is server-side for the same
  * reason castVote's Turnstile secret is - see Security & Compliance
  * Baseline's "route sensitive writes/calls through Cloud Functions"
- * pattern. Channel name isn't validated against a real match document yet
- * since real matchmaking doesn't exist (both devices still join a
- * hardcoded "test-channel" - see MatchScreen/PreMatchScreen), so any
- * signed-in user can currently request a token for any channel name; this
- * matches the same "no admin/match-ownership system yet" caveat already
- * flagged on the debug* functions above, not a new gap.
+ * pattern.
+ *
+ * The channel name IS now validated against real state, which it couldn't
+ * be while both devices joined a hardcoded "test-channel". Exactly two
+ * shapes are mintable:
+ *   precheck_{uid}  - the caller's own solo pre-match camera/mic check,
+ *                     so nobody can join anyone else's check.
+ *   match_{matchId} - only if the caller is one of that match's two
+ *                     players and the match hasn't finished yet.
+ * Without this, any signed-in user could mint a token for any channel and
+ * drop in on a stranger's match uninvited - a real eavesdropping hole
+ * once channels stopped being a shared test room.
  */
 exports.generateAgoraToken = onCall({secrets: [agoraAppCertificate]}, async (request) => {
   if (!request.auth) {
@@ -306,8 +331,47 @@ exports.generateAgoraToken = onCall({secrets: [agoraAppCertificate]}, async (req
   if (!channelName) {
     throw new HttpsError("invalid-argument", "channelName is required.");
   }
+
+  if (channelName !== `precheck_${request.auth.uid}`) {
+    if (!channelName.startsWith("match_")) {
+      throw new HttpsError("permission-denied", "Not a channel you can join.");
+    }
+    const matchId = channelName.slice("match_".length);
+    const matchSnap = await getFirestore().collection("matches").doc(matchId).get();
+    if (!matchSnap.exists) {
+      throw new HttpsError("not-found", "Match not found.");
+    }
+    const match = matchSnap.data();
+    if (request.auth.uid !== match.player1Id && request.auth.uid !== match.player2Id) {
+      throw new HttpsError("permission-denied", "Not a participant in this match.");
+    }
+    if (match.status !== "pending") {
+      throw new HttpsError("failed-precondition", "This match has already ended.");
+    }
+  }
+
   const token = generateToken(agoraAppCertificate.value(), channelName);
   return {token};
 });
+
+/**
+ * Real matchmaking (Build Order step 4's missing half - see
+ * functions/matchmaking.js for the queue design and why clients only ever
+ * reach it through these callables). Replaces the hardcoded "test-channel"
+ * both devices used to join.
+ */
+exports.enterMatchmakingQueue = onCall((request) => enterQueue(request.auth, request.data));
+exports.pollMatchmaking = onCall((request) => pollMatchmaking(request.auth, request.data));
+exports.leaveMatchmakingQueue = onCall((request) => leaveQueue(request.auth, request.data));
+
+/**
+ * Marks a paired match finished. Server-side because the match document
+ * is now created at PAIRING time (status "pending") rather than written
+ * by a client at verdict time - so flipping it to "completed" is what
+ * admits it to the voting pipeline and, for ranked, eventually to real
+ * rating changes. That has to be a participant-only, server-checked
+ * action rather than an arbitrary client write.
+ */
+exports.completeMatch = onCall((request) => completeMatch(request.auth, request.data));
 
 exports.onVoteCast = onVoteCast;

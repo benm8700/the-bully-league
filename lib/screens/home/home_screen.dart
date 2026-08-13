@@ -59,9 +59,14 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 if (uid != null) _RankBadge(uid: uid),
                 const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: () => _startMatch(context, 'ranked'),
+                  child: const Text('Find Ranked Match'),
+                ),
+                const SizedBox(height: 12),
                 OutlinedButton(
-                  onPressed: () => _startMatch(context),
-                  child: const Text('Start Match (Test)'),
+                  onPressed: () => _startMatch(context, 'exhibition'),
+                  child: const Text('Find Exhibition Match'),
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton(
@@ -106,14 +111,22 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _startMatch(BuildContext context) async {
+  /// Recording consent -> camera/mic check -> matchmaking queue -> match.
+  ///
+  /// Mode is chosen here and carried all the way through, because each
+  /// mode has its own matchmaking queue - an exhibition player is never
+  /// paired into a match that moves someone's rating. Note that the
+  /// "play a few exhibition matches before ranked unlocks" gate from
+  /// CLAUDE.md's Modes decision is NOT enforced yet: there's no
+  /// exhibitionMatchesPlayed counter to gate on.
+  Future<void> _startMatch(BuildContext context, String mode) async {
     final consented = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
     );
     if (consented != true || !context.mounted) return;
 
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const PreMatchScreen()),
+      MaterialPageRoute(builder: (_) => PreMatchScreen(mode: mode)),
     );
   }
 }

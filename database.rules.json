@@ -1,0 +1,19 @@
+{
+  // The matchmaking queue (matchmakingQueue/{mode}/{uid}) is written and read ONLY by
+  // the Cloud Functions in functions/matchmaking.js, which use the Admin SDK and so
+  // bypass these rules entirely. Clients reach the queue exclusively through the
+  // enterQueue / pollMatchmaking / leaveQueue callables.
+  //
+  // Denying everything at the root is therefore the correct posture, not an oversight:
+  // a queue entry carries the player's real rating, tier, and block list, so any direct
+  // client write would let a modified client claim whatever rating it liked and
+  // hand-pick its opponents. Same reasoning as firestore.rules locking rating/rankTitle
+  // to Cloud-Function-only writes (see CLAUDE.md's Security & Compliance Baseline).
+  //
+  // No child rule grants access below this, and RTDB rules never cascade to re-grant
+  // what a parent denied, so this single deny covers the whole tree.
+  "rules": {
+    ".read": false,
+    ".write": false
+  }
+}

@@ -41,6 +41,19 @@ function toFeedMatches(
 const FEED_LIMIT = 20;
 
 /**
+ * Match documents exist from pairing time onward now (see
+ * functions/matchmaking.js), so the collection also holds matches that are
+ * still being played and ones that were abandoned mid-way. The public feed
+ * must show neither: a "pending" match has no result to browse, and an
+ * abandoned one (a crash, or a live content-moderation auto-end) is
+ * explicitly not content anyone should be pointed at.
+ *
+ * Both feeds pair this with an orderBy on a different field, which needs a
+ * composite index - see firestore.indexes.json.
+ */
+const COMPLETED = "completed";
+
+/**
  * "Recent" tab (CLAUDE.md's Discovery/feed decision) - most-recent-first,
  * guarantees every match gets visibility during its 24h vote window even
  * with zero votes yet, avoiding the cold-start trap a trending-only feed
@@ -48,7 +61,12 @@ const FEED_LIMIT = 20;
  */
 export async function getRecentMatches(): Promise<FeedMatch[]> {
   const db = getAdminFirestore();
-  const snap = await db.collection("matches").orderBy("createdAt", "desc").limit(FEED_LIMIT).get();
+  const snap = await db
+    .collection("matches")
+    .where("status", "==", COMPLETED)
+    .orderBy("createdAt", "desc")
+    .limit(FEED_LIMIT)
+    .get();
   const uids = snap.docs.flatMap((d) => [d.data().player1Id, d.data().player2Id]);
   const usernames = await resolveUsernames(db, uids);
   return toFeedMatches(snap.docs, usernames);
@@ -65,7 +83,12 @@ export async function getRecentMatches(): Promise<FeedMatch[]> {
  */
 export async function getTrendingMatches(): Promise<FeedMatch[]> {
   const db = getAdminFirestore();
-  const snap = await db.collection("matches").orderBy("voteCount", "desc").limit(FEED_LIMIT).get();
+  const snap = await db
+    .collection("matches")
+    .where("status", "==", COMPLETED)
+    .orderBy("voteCount", "desc")
+    .limit(FEED_LIMIT)
+    .get();
   const uids = snap.docs.flatMap((d) => [d.data().player1Id, d.data().player2Id]);
   const usernames = await resolveUsernames(db, uids);
   return toFeedMatches(snap.docs, usernames);

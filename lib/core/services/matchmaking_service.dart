@@ -1,0 +1,125 @@
+import 'dart:async';
+
+import 'package:cloud_functions/cloud_functions.dart';
+
+/// A pairing handed back by the matchmaking backend - everything the match
+/// flow needs to actually start: which Agora channel to join, which match
+/// document to settle at the end, and who the opponent is.
+class MatchPairing {
+  const MatchPairing({
+    required this.matchId,
+    required this.channelName,
+    required this.opponentId,
+    required this.mode,
+  });
+
+  final String matchId;
+  final String channelName;
+  final String opponentId;
+  final String mode;
+}
+
+/// Progress while still queued, so the UI can explain what's happening
+/// rather than showing an indefinite spinner - [tierBand] is how far the
+/// search has widened past the player's own tier (0 = same tier only).
+class MatchmakingProgress {
+  const MatchmakingProgress({required this.waited, required this.tierBand});
+
+  final Duration waited;
+  final int tierBand;
+}
+
+/// Client half of real matchmaking (Build Order step 4's missing half).
+///
+/// The queue itself lives in Realtime Database and is reachable ONLY
+/// through these Cloud Functions - see functions/matchmaking.js for why
+/// (a queue entry carries the player's real rating and tier, so letting a
+/// client write its own entry would let a modified client claim any rating
+/// and hand-pick opponents).
+///
+/// [findMatch] polls rather than subscribing. That's deliberate: the
+/// server widens the acceptable tier range the longer someone waits, so
+/// something has to re-attempt pairing on a timer regardless, and polling
+/// makes that the same mechanism instead of a second one. It also keeps
+/// firebase_database off the Flutter side entirely, avoiding another
+/// Android dependency in a toolchain CLAUDE.md documents as fragile.
+class MatchmakingService {
+  MatchmakingService({FirebaseFunctions? functions})
+      : _functions = functions ?? FirebaseFunctions.instance;
+
+  final FirebaseFunctions _functions;
+
+  static const pollInterval = Duration(seconds: 3);
+
+  Future<void> _call(String name, Map<String, dynamic> args) async {
+    await _functions.httpsCallable(name).call<Map<String, dynamic>>(args);
+  }
+
+  /// Joins the queue, then polls until paired or until [cancel] completes.
+  ///
+  /// [onProgress] fires on every unsuccessful poll so the UI can show wait
+  /// time and how far the tier search has widened.
+  ///
+  /// Returns null if cancelled. Always leaves the queue on the way out -
+  /// including on cancellation and on error - so a abandoned search can't
+  /// leave an entry behind for someone else to be paired against.
+  Future<MatchPairing?> findMatch({
+    required String mode,
+    required Future<void> cancel,
+    void Function(MatchmakingProgress)? onProgress,
+  }) async {
+    var cancelled = false;
+    unawaited(cancel.then((_) => cancelled = true));
+
+    try {
+      await _call('enterMatchmakingQueue', {'mode': mode});
+
+      while (!cancelled) {
+        final result = await _functions
+            .httpsCallable('pollMatchmaking')
+            .call<Map<String, dynamic>>({'mode': mode});
+        final data = result.data;
+
+        switch (data['status'] as String?) {
+          case 'matched':
+            return MatchPairing(
+              matchId: data['matchId'] as String,
+              channelName: data['channelName'] as String,
+              opponentId: data['opponentId'] as String,
+              mode: data['mode'] as String? ?? mode,
+            );
+          case 'not_queued':
+            // The entry was pruned as stale (a long background suspend, a
+            // slow network) - re-enter rather than polling forever against
+            // a queue we're no longer in.
+            await _call('enterMatchmakingQueue', {'mode': mode});
+          default:
+            onProgress?.call(MatchmakingProgress(
+              waited: Duration(milliseconds: (data['waitedMs'] as num?)?.toInt() ?? 0),
+              tierBand: (data['tierBand'] as num?)?.toInt() ?? 0,
+            ));
+        }
+
+        // Race the sleep against cancellation so tapping Cancel doesn't
+        // hang for the rest of the interval before the UI responds.
+        await Future.any([Future<void>.delayed(pollInterval), cancel]);
+      }
+      return null;
+    } finally {
+      // Best-effort: if this fails, the entry is pruned server-side once
+      // it goes stale, so a dropped call delays cleanup rather than
+      // corrupting the queue.
+      try {
+        await _call('leaveMatchmakingQueue', {'mode': mode});
+      } catch (_) {}
+    }
+  }
+
+  /// Marks a paired match finished. [outcome] is 'completed' for a match
+  /// played to a verdict, or 'abandoned' when it ended without a real
+  /// contest (currently the live content-violation auto-end) - abandoned
+  /// matches are never voted on or rated.
+  Future<void> completeMatch(String matchId, {String outcome = 'completed'}) async {
+    await _call('completeMatch', {'matchId': matchId, 'outcome': outcome});
+  }
+}
