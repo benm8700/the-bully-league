@@ -2,6 +2,8 @@
 
 import { getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 
 // Client-side Firebase config - NOT a secret (same treatment as the
 // Flutter app's lib/firebase_options.dart, which is committed too). Web
@@ -23,3 +25,5 @@ const firebaseConfig = {
 const app = getApps()[0] ?? initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const functions = getFunctions(app);

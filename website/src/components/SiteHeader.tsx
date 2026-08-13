@@ -8,9 +8,14 @@ export function SiteHeader() {
 
   return (
     <header className="flex items-center justify-between px-6 py-4 border-b border-foreground/10">
-      <Link href="/" className="font-bold">
-        The Bully League
-      </Link>
+      <div className="flex items-center gap-6">
+        <Link href="/" className="font-bold">
+          The Bully League
+        </Link>
+        <Link href="/matches" className="text-sm text-foreground/70 hover:text-foreground">
+          Matches
+        </Link>
+      </div>
       {!loading && (
         <nav className="text-sm">
           {user ? (

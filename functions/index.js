@@ -8,6 +8,7 @@ const {finalizeMatch, VOTE_WINDOW_MS} = require("./matchFinalization");
 const {generateBracket, debugAdvanceRound, DEFAULT_MIN_ENTRANTS} = require("./tournament");
 const {moderateImage, moderateImageContent} = require("./visualModeration");
 const {generateToken} = require("./agoraToken");
+const {onVoteCast} = require("./voteCount");
 
 // Modular admin SDK API, not the classic admin.firestore()/admin.auth()
 // namespace - firebase-admin v14's classic namespace requires "firebase-
@@ -308,3 +309,5 @@ exports.generateAgoraToken = onCall({secrets: [agoraAppCertificate]}, async (req
   const token = generateToken(agoraAppCertificate.value(), channelName);
   return {token};
 });
+
+exports.onVoteCast = onVoteCast;
