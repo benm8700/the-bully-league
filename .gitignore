@@ -49,6 +49,15 @@ app.*.map.json
 lib/core/config/agora_config.dart
 lib/core/config/turnstile_config.dart
 
+# Release signing - the upload keystore and its passwords must never be
+# committed (losing/leaking it is effectively unrecoverable for Play Store
+# updates - see CLAUDE.md's Build Order step 12 status note)
+android/key.properties
+android/app/upload-keystore.jks
+
+# Website secrets (Firebase Admin service account key etc.)
+website/.env.local
+
 # Cloud Functions
 functions/node_modules/
 functions/.env
