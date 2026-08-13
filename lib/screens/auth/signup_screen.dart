@@ -89,6 +89,11 @@ class _SignupScreenState extends State<SignupScreen> {
           'wins': 0,
           'losses': 0,
           'accountStatus': 'active',
+          // Admin-only, same protection/rationale as accountStatus - grants
+          // access to the debug*/admin-gated Cloud Functions (see
+          // CLAUDE.md's Security & Compliance Baseline). Flipped to true
+          // only by hand via the Firebase console, never by the app.
+          'isAdmin': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }

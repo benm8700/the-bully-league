@@ -37,6 +37,26 @@ async function verifyTurnstileToken(token, secret) {
 }
 
 /**
+ * Gates the debug/admin tournament-bracket functions below - see CLAUDE.md's
+ * Security & Compliance Baseline, which flagged these as callable by ANY
+ * signed-in user with no admin check. There's still no real admin-role UI
+ * (Firebase console remains the actual admin tool for V1, per CLAUDE.md's
+ * Admin/moderation tooling notes), so this just reads the caller's own
+ * users/{uid}.isAdmin field - a field firestore.rules protects the same way
+ * as accountStatus (client can create it only as false, can never change
+ * it), so flipping it to true requires a manual Firebase console edit.
+ */
+async function requireAdmin(auth) {
+  if (!auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const snap = await getFirestore().collection("users").doc(auth.uid).get();
+  if (!snap.exists || snap.data().isAdmin !== true) {
+    throw new HttpsError("permission-denied", "Admin only.");
+  }
+}
+
+/**
  * Casts a vote on a completed match. Server-side because it must:
  * (a) verify the Turnstile token with the secret key, which can never be
  *     shipped to the client (see CLAUDE.md's Judging / CAPTCHA-gate note -
@@ -133,16 +153,11 @@ exports.finalizeExpiredMatches = onSchedule("every 60 minutes", async () => {
 
 /**
  * DEV/TEST ONLY - bypasses the 24h window so the rating pipeline can be
- * verified without waiting a real day. Not gated behind any admin check
- * because no admin-role system exists yet (see CLAUDE.md's Admin/
- * moderation tooling notes, which defer to the Firebase console for V1).
- * Must be removed or properly access-controlled before real launch -
- * anyone signed in can currently force-finalize any match early.
+ * verified without waiting a real day. Admin-gated (see requireAdmin above)
+ * since force-finalizing any match early has real rating consequences.
  */
 exports.debugFinalizeMatch = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Must be signed in.");
-  }
+  await requireAdmin(request.auth);
   const {matchId} = request.data || {};
   if (!matchId) {
     throw new HttpsError("invalid-argument", "matchId is required.");
@@ -153,16 +168,13 @@ exports.debugFinalizeMatch = onCall(async (request) => {
 /**
  * Closes entrants and generates the round-1 bracket for a tournament -
  * see functions/tournament.js and CLAUDE.md's Build Order step 8 status
- * note. Real admin tooling for tournaments is the Firebase console
- * (same pattern as profile approval/report review), so this only needs
- * to be callable by SOME authenticated user for now - not gated behind
- * an admin-role check because no such system exists yet (same caveat as
- * debugFinalizeMatch above).
+ * note. Real admin tooling for tournaments is the Firebase console (same
+ * pattern as profile approval/report review); this is the action an admin
+ * triggers to actually start a tournament, so it's admin-gated like the
+ * other functions here.
  */
 exports.generateTournamentBracket = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Must be signed in.");
-  }
+  await requireAdmin(request.auth);
   const {tournamentId} = request.data || {};
   if (!tournamentId) {
     throw new HttpsError("invalid-argument", "tournamentId is required.");
@@ -174,12 +186,11 @@ exports.generateTournamentBracket = onCall(async (request) => {
  * DEV/TEST ONLY - resolves the current round with a coin flip per
  * matchup rather than a real match result, purely to prove bracket
  * advancement (byes, round generation, completion) works end to end.
- * See functions/tournament.js's debugAdvanceRound doc comment.
+ * See functions/tournament.js's debugAdvanceRound doc comment. Admin-gated
+ * since it overwrites real bracket state.
  */
 exports.debugAdvanceTournamentRound = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Must be signed in.");
-  }
+  await requireAdmin(request.auth);
   const {tournamentId} = request.data || {};
   if (!tournamentId) {
     throw new HttpsError("invalid-argument", "tournamentId is required.");
@@ -192,12 +203,10 @@ exports.debugAdvanceTournamentRound = onCall(async (request) => {
  * direct client writes to tournaments/{id} (real creation is meant to go
  * through the Firebase console, per CLAUDE.md's Admin/moderation tooling
  * notes), so this exists purely so the app can be tested end to end
- * without console access. Must be removed or admin-gated before launch.
+ * without console access. Admin-gated.
  */
 exports.debugCreateTournament = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Must be signed in.");
-  }
+  await requireAdmin(request.auth);
   const {name, minEntrants} = request.data || {};
   if (!name) {
     throw new HttpsError("invalid-argument", "name is required.");

@@ -19,7 +19,8 @@ service cloud.firestore {
         request.resource.data.rankedMatchesPlayed == 0 &&
         request.resource.data.wins == 0 &&
         request.resource.data.losses == 0 &&
-        request.resource.data.accountStatus == 'active';
+        request.resource.data.accountStatus == 'active' &&
+        request.resource.data.isAdmin == false;
 
       // Uses .get(field, default) rather than direct field access - a
       // direct `resource.data.rating` on a doc missing that key throws a
@@ -42,7 +43,10 @@ service cloud.firestore {
         // otherwise a banned client could simply write itself back to
         // 'active' and bypass the ban entirely. Only admin action via the
         // Firebase console (Admin SDK, bypasses these rules) may change it.
-        request.resource.data.get('accountStatus', null) == resource.data.get('accountStatus', null);
+        request.resource.data.get('accountStatus', null) == resource.data.get('accountStatus', null) &&
+        // Same reasoning for isAdmin - otherwise any client could grant
+        // itself access to the debug*/admin-gated Cloud Functions below.
+        request.resource.data.get('isAdmin', null) == resource.data.get('isAdmin', null);
 
       allow delete: if false;
     }

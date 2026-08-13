@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
@@ -30,6 +31,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
   bool _micVerified = false;
   bool _serviceDisposed = false;
   bool _navigating = false;
+  bool _permissionDenied = false;
   String? _error;
 
   static const _micThreshold = 15; // out of 255
@@ -42,6 +44,23 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
   }
 
   Future<void> _setup() async {
+    // Must be requested before initialize() acquires the camera/mic -
+    // without this, a real device (unlike the dev emulators, which have
+    // permissions pre-granted via `adb shell pm grant`) would silently fail
+    // or crash instead of showing the OS permission prompt. See CLAUDE.md's
+    // Tech Stack notes on why permission_handler was previously removed and
+    // is now back.
+    final statuses = await [Permission.camera, Permission.microphone].request();
+    final granted = (statuses[Permission.camera]?.isGranted ?? false) &&
+        (statuses[Permission.microphone]?.isGranted ?? false);
+    if (!granted) {
+      if (!mounted) return;
+      setState(() {
+        _permissionDenied = true;
+        _error = 'Camera and microphone access are required to check in for a match.';
+      });
+      return;
+    }
     try {
       await _videoCallService.initialize();
       final token = await fetchAgoraToken('test-channel');
@@ -99,10 +118,31 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Pre-Match Check')),
       body: _error != null
-          ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))
+          ? _buildErrorUi()
           : !_initialized
               ? const Center(child: CircularProgressIndicator())
               : _buildCheckUi(),
+    );
+  }
+
+  Widget _buildErrorUi() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!, textAlign: TextAlign.center),
+            if (_permissionDenied) ...[
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: openAppSettings,
+                child: const Text('Open App Settings'),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
