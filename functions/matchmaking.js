@@ -4,6 +4,14 @@ const {getMessaging} = require("firebase-admin/messaging");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {STARTING_RATING, RANK_TIERS, GOAT_TITLE, computeBaseRankTitle} = require("./rating");
 const {getMatchSettings} = require("./matchSettings");
+const {stopRecording, writeRecordingState} = require("./cloudRecording");
+
+/** CLAUDE.md's recording scope decision: only ranked and tournament
+ * matches are recorded and eligible for the highlight pipeline.
+ * Exhibition matches are casual, don't move rating, and are never posted,
+ * so they're never recorded - which also keeps the per-match recording
+ * cost off the mode people play most casually. */
+const RECORDED_MODES = ["ranked", "tournament"];
 
 /**
  * Real matchmaking (Build Order step 4's missing half). Replaces the
@@ -426,6 +434,65 @@ async function pollMatchmaking(auth, data) {
 }
 
 /**
+ * Starts recording a match, called once by the host device as the match
+ * actually begins (host election requires both players to be in the
+ * channel, so this is the first moment there's anything worth recording).
+ *
+ * Recording only ever covers ranked and tournament matches, per
+ * CLAUDE.md's recording scope decision - exhibition matches return
+ * `skipped` rather than an error, since not recording them is correct
+ * behaviour rather than a failure.
+ *
+ * Never throws for a recording problem. Two people are about to play a
+ * match; losing the footage is bad, but blocking the match on a recording
+ * vendor being unreachable is much worse.
+ */
+async function startMatchRecording(auth, data, creds) {
+  const {matchRef, match} = await loadPendingMatch(auth, data?.matchId);
+  const matchId = data.matchId;
+
+  if (!RECORDED_MODES.includes(match.mode)) {
+    return {started: false, reason: "mode-not-recorded"};
+  }
+  if (match.recording?.status === "recording") {
+    // The other device raced us, or this is a retry. Not an error.
+    return {started: false, reason: "already-recording"};
+  }
+  const {startRecording, isRecordingConfigured} = require("./cloudRecording");
+  if (!isRecordingConfigured(creds)) {
+    // Expected while the Agora RESTful credentials are still being set
+    // up. Recorded on the document so it's visible that a match went
+    // unrecorded for this reason rather than a failure.
+    await writeRecordingState(matchId, {status: "unconfigured"});
+    return {started: false, reason: "not-configured"};
+  }
+
+  const result = await startRecording(matchId, match.channelName, creds);
+  if (!result.ok) {
+    await writeRecordingState(matchId, {status: "start_failed", error: result.error});
+    return {started: false, reason: "start-failed"};
+  }
+
+  await matchRef.set({
+    recording: {
+      status: "recording",
+      resourceId: result.resourceId,
+      sid: result.sid,
+      startedAt: result.startedAt,
+      // The human gate CLAUDE.md requires before anything is posted
+      // publicly - covering both "is this fit for a public audience" and
+      // the separate question of whether it would trip TikTok/Instagram/
+      // YouTube's own rules, which are stricter than this app's internal
+      // speech policy. Nothing in this pipeline publishes on its own.
+      reviewStatus: "pending",
+      published: false,
+    },
+  }, {merge: true});
+
+  return {started: true};
+}
+
+/**
  * Finds a match the caller was paired into but never actually collected.
  *
  * This closes a real hole opened by the match-found push. A player can be
@@ -479,7 +546,7 @@ async function getActiveMatch(auth) {
  * rating sweep never reconsiders them, matching the previous behaviour
  * where a violation-ended match was simply never written at all.
  */
-async function completeMatch(auth, data) {
+async function completeMatch(auth, data, creds = null) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
   const {matchId, outcome = "completed"} = data || {};
   if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
@@ -507,6 +574,19 @@ async function completeMatch(auth, data) {
     completedAt: FieldValue.serverTimestamp(),
     ...(outcome === "abandoned" ? {voteFinalized: true} : {}),
   });
+
+  // Stop the recording if one is running. Deliberately after the status
+  // write, so a slow or failing Agora call can't leave the match stuck
+  // "pending" - the match being settled matters more than the footage.
+  // Agora's own maxIdleTime also stops the recording once both players
+  // leave, so a failure here costs the file list, not the recording.
+  const handle = match.recording;
+  if (creds && handle?.resourceId && handle?.sid && handle.status === "recording") {
+    const result = await stopRecording(matchId, match.channelName, handle, creds);
+    await writeRecordingState(matchId, result.ok ?
+      {status: "recorded", files: result.files, stoppedAt: Date.now()} :
+      {status: "stop_failed", error: result.error});
+  }
 
   if (outcome === "completed") {
     // Feeds the repeat-opponent cooldown on the next queue entry.
@@ -639,7 +719,9 @@ module.exports = {
   leaveQueue,
   pollMatchmaking,
   completeMatch,
+  startMatchRecording,
   getActiveMatch,
+  RECORDED_MODES,
   setMatchReady,
   skipMatch,
   getSkipAllowance,

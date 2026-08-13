@@ -10,6 +10,24 @@ service firebase.storage {
     // moderatePhoto Cloud Function approves the image - see
     // functions/visualModeration.js - so a photo landing in Storage does
     // NOT by itself mean it's live on a profile.
+    // Raw match recordings (Agora Cloud Recording writes here directly,
+    // using its own HMAC credentials - which bypass these rules entirely,
+    // exactly like the Admin SDK does).
+    //
+    // Denied to clients in BOTH directions, deliberately:
+    //  - No client writes: nothing in the app uploads footage, so any
+    //    write here would be forged.
+    //  - No client reads: this is raw, unreviewed footage of two people,
+    //    retained for at most 7 days. CLAUDE.md requires human review
+    //    before any clip reaches an audience, and a readable path would
+    //    route around that gate entirely - anyone who could guess a match
+    //    id could pull unreviewed video of strangers.
+    // Published highlights will be served from their own reviewed
+    // location, not from here.
+    match /match_recordings/{matchId}/{allPaths=**} {
+      allow read, write: if false;
+    }
+
     match /profile_photos/{userId}/{photoId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId &&

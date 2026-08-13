@@ -236,6 +236,14 @@ class _MatchScreenState extends State<MatchScreen> {
     // players' Firebase uids come from the pairing now.
     _isHost = myUid < oppUid;
     if (_isHost!) {
+      // Started here rather than at pairing because host election is the
+      // first moment both players are provably in the channel - starting
+      // earlier would record an empty room while the second player was
+      // still finishing their bio reveal, and Agora bills by duration.
+      // Only the host asks, so the two devices don't race; the backend
+      // treats a duplicate as a no-op anyway. Exhibition matches are
+      // declined server-side (CLAUDE.md's recording scope decision).
+      unawaited(_matchmakingService.startRecording(widget.pairing.matchId));
       unawaited(_runHostSequence());
     }
   }

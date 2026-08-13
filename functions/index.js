@@ -7,13 +7,14 @@ const {getAuth} = require("firebase-admin/auth");
 const {finalizeMatch, VOTE_WINDOW_MS} = require("./matchFinalization");
 const {generateBracket, debugAdvanceRound, DEFAULT_MIN_ENTRANTS} = require("./tournament");
 const {moderateImage, moderateImageContent} = require("./visualModeration");
-const {generateToken} = require("./agoraToken");
+const {generateToken, AGORA_APP_ID} = require("./agoraToken");
 const {onVoteCast} = require("./voteCount");
 const {
   enterQueue,
   leaveQueue,
   pollMatchmaking,
   completeMatch,
+  startMatchRecording,
   getActiveMatch,
   setMatchReady,
   skipMatch,
@@ -32,6 +33,50 @@ initializeApp();
 
 const turnstileSecret = defineSecret("TURNSTILE_SECRET_KEY");
 const agoraAppCertificate = defineSecret("AGORA_APP_CERTIFICATE");
+
+// Agora Cloud Recording uses a RESTful API credential pair that is
+// SEPARATE from the App ID / App Certificate above, plus an HMAC key pair
+// so Agora can write recordings directly into the project's Cloud Storage
+// bucket. All four stay server-side, same as every other secret here.
+const agoraCustomerId = defineSecret("AGORA_CUSTOMER_ID");
+const agoraCustomerSecret = defineSecret("AGORA_CUSTOMER_SECRET");
+const recordingStorageKey = defineSecret("RECORDING_STORAGE_ACCESS_KEY");
+const recordingStorageSecret = defineSecret("RECORDING_STORAGE_SECRET_KEY");
+const recordingSecrets = [
+  agoraAppCertificate,
+  agoraCustomerId,
+  agoraCustomerSecret,
+  recordingStorageKey,
+  recordingStorageSecret,
+];
+
+/**
+ * Assembles the recording credentials from secrets at call time.
+ *
+ * Returns partially-empty values rather than throwing when recording
+ * isn't configured yet: the callers treat that as "don't record" and let
+ * the match proceed normally, which is what should happen while the
+ * credentials are still being set up.
+ */
+function recordingCreds(channelName) {
+  const {generateRecorderToken} = require("./agoraToken");
+  const {RECORDER_UID} = require("./cloudRecording");
+  const certificate = agoraAppCertificate.value();
+  return {
+    appId: AGORA_APP_ID,
+    customerId: agoraCustomerId.value(),
+    customerSecret: agoraCustomerSecret.value(),
+    token: certificate && channelName ?
+      generateRecorderToken(certificate, channelName, RECORDER_UID) : "",
+    storage: {
+      // Firebase's default bucket for this project - the same one profile
+      // photos already use.
+      bucket: `${process.env.GCLOUD_PROJECT || "the-bully-league"}.firebasestorage.app`,
+      accessKey: recordingStorageKey.value(),
+      secretKey: recordingStorageSecret.value(),
+    },
+  };
+}
 
 const ACCOUNT_AGE_FULL_WEIGHT_MS = 24 * 60 * 60 * 1000;
 const REDUCED_VOTE_WEIGHT = 0.5;
@@ -157,6 +202,21 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
  * System section. Runs hourly; finalizing a given match is a no-op if
  * already done (voteFinalized flag), so re-running on overlap is safe.
  */
+/**
+ * Enforces CLAUDE.md's Video Retention Policy - raw footage is deleted
+ * after 7 days, published highlights are kept. Daily is frequent enough
+ * for a 7-day window and keeps the storage-listing cost trivial.
+ *
+ * This is a compliance obligation, not housekeeping: the retention window
+ * is what bounds the recording consent players gave, and it's what the
+ * published Privacy Policy promises happens to their footage.
+ */
+exports.purgeExpiredRecordings = onSchedule("every 24 hours", async () => {
+  const {purgeExpiredRecordings} = require("./recordingRetention");
+  const result = await purgeExpiredRecordings();
+  console.log("purgeExpiredRecordings:", JSON.stringify(result));
+});
+
 exports.finalizeExpiredMatches = onSchedule("every 60 minutes", async () => {
   const db = getFirestore();
   const cutoff = new Date(Date.now() - VOTE_WINDOW_MS);
@@ -376,7 +436,27 @@ exports.leaveMatchmakingQueue = onCall((request) => leaveQueue(request.auth, req
  * rating changes. That has to be a participant-only, server-checked
  * action rather than an arbitrary client write.
  */
-exports.completeMatch = onCall((request) => completeMatch(request.auth, request.data));
+exports.completeMatch = onCall({secrets: recordingSecrets}, async (request) => {
+  // The channel name is only known after loading the match, so creds are
+  // assembled without a token here - stopping a recording doesn't need one.
+  return completeMatch(request.auth, request.data, recordingCreds(null));
+});
+
+/**
+ * Starts recording a match (CLAUDE.md's recording scope: ranked and
+ * tournament only). Called once by the host device as the match begins.
+ * See functions/cloudRecording.js for why this is server-side composite
+ * recording rather than capture on the devices.
+ */
+exports.startMatchRecording = onCall({secrets: recordingSecrets}, async (request) => {
+  const {getFirestore} = require("firebase-admin/firestore");
+  const matchId = request.data?.matchId;
+  // Channel name is needed to mint the recorder's token, so read it first.
+  const snap = matchId ?
+    await getFirestore().collection("matches").doc(matchId).get() : null;
+  const channelName = snap?.data()?.channelName ?? null;
+  return startMatchRecording(request.auth, request.data, recordingCreds(channelName));
+});
 
 /**
  * Pre-match bio reveal (CLAUDE.md's "Pre-match bio reveal" decision): each

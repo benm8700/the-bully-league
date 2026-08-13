@@ -31,4 +31,26 @@ function generateToken(appCertificate, channelName) {
   );
 }
 
-module.exports = {generateToken, AGORA_APP_ID};
+/**
+ * Token for the Cloud Recording bot, which joins the match channel as a
+ * subscriber under its own fixed uid (see functions/cloudRecording.js).
+ *
+ * Bound to that specific uid rather than the wildcard 0 used for players:
+ * this token is handed to Agora's recording service rather than to a
+ * device, and there's no reason for it to be usable as any other
+ * participant. SUBSCRIBER because the recorder only ever consumes streams
+ * - it must never be able to publish into a match.
+ */
+function generateRecorderToken(appCertificate, channelName, recorderUid) {
+  return RtcTokenBuilder.buildTokenWithUid(
+      AGORA_APP_ID,
+      appCertificate,
+      channelName,
+      Number(recorderUid),
+      RtcRole.SUBSCRIBER,
+      TOKEN_EXPIRE_SECONDS,
+      TOKEN_EXPIRE_SECONDS,
+  );
+}
+
+module.exports = {generateToken, generateRecorderToken, AGORA_APP_ID};

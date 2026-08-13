@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 
 /// Timings for one match (CLAUDE.md's `config/matchSettings` schema).
 ///
@@ -179,6 +180,22 @@ class MatchmakingService {
       // Purely additive UI - if this check fails the player just doesn't
       // see the banner, which is no worse than before it existed.
       return null;
+    }
+  }
+
+  /// Asks the backend to start recording this match. Called once by the
+  /// host device as the match begins.
+  ///
+  /// Silently does nothing on failure, by design: recording is server-side
+  /// (see functions/cloudRecording.js) and only covers ranked/tournament
+  /// matches, so an exhibition match or an unconfigured backend both come
+  /// back as "not started" — neither is something to interrupt two players
+  /// mid-match about.
+  Future<void> startRecording(String matchId) async {
+    try {
+      await _call('startMatchRecording', {'matchId': matchId});
+    } catch (e) {
+      debugPrint('Could not start match recording: $e');
     }
   }
 
