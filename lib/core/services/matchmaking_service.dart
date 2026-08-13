@@ -115,6 +115,29 @@ class MatchmakingService {
     }
   }
 
+  /// Recovers a match this player was paired into but never collected -
+  /// the cold-start case after tapping a match-found push, where the queue
+  /// entry and match document both exist but the app has no idea about
+  /// either. Returns null if there's nothing waiting.
+  Future<MatchPairing?> activeMatch() async {
+    try {
+      final result =
+          await _functions.httpsCallable('getActiveMatch').call<Map<String, dynamic>>();
+      final data = result.data;
+      if (data['found'] != true) return null;
+      return MatchPairing(
+        matchId: data['matchId'] as String,
+        channelName: data['channelName'] as String,
+        opponentId: data['opponentId'] as String,
+        mode: data['mode'] as String? ?? 'ranked',
+      );
+    } catch (_) {
+      // Purely additive UI - if this check fails the player just doesn't
+      // see the banner, which is no worse than before it existed.
+      return null;
+    }
+  }
+
   /// Marks the local player ready during the pre-match bio reveal. Both
   /// clients watch the match document, so this is how each learns the
   /// other has finished reading.

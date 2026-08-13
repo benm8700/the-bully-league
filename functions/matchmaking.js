@@ -413,6 +413,48 @@ async function pollMatchmaking(auth, data) {
 }
 
 /**
+ * Finds a match the caller was paired into but never actually collected.
+ *
+ * This closes a real hole opened by the match-found push. A player can be
+ * paired while the app is backgrounded, tap the notification (or just
+ * reopen the app later) and — if the process had been killed in between —
+ * land on Home with no route back: their queue entry is flagged "matched",
+ * the match document is sitting there "pending", and nothing in the UI was
+ * looking for either. Matched entries are deliberately never touched by
+ * the stale-entry pruning, which is what makes them recoverable here.
+ *
+ * Checks every mode because the caller's own client no longer knows which
+ * queue it was in after a cold start. Also self-heals: if the match has
+ * since ended (the opponent skipped, or the sweep abandoned it), the dead
+ * queue entry is cleared instead of being handed back.
+ */
+async function getActiveMatch(auth) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const db = getFirestore();
+
+  for (const mode of MODES) {
+    const entry = (await queueRef(mode).child(auth.uid).get()).val();
+    if (!entry || entry.status !== "matched" || !entry.matchId) continue;
+
+    const snap = await db.collection("matches").doc(entry.matchId).get();
+    if (!snap.exists || snap.data().status !== "pending") {
+      await queueRef(mode).child(auth.uid).remove();
+      continue;
+    }
+
+    return {
+      found: true,
+      matchId: entry.matchId,
+      channelName: entry.channelName,
+      opponentId: entry.opponentId,
+      mode,
+    };
+  }
+
+  return {found: false};
+}
+
+/**
  * Marks a paired match finished. Server-side so a client can't mark a
  * match it isn't in as complete (which would push it into the voting
  * pipeline and, for ranked, eventually into real rating changes).
@@ -583,6 +625,7 @@ module.exports = {
   leaveQueue,
   pollMatchmaking,
   completeMatch,
+  getActiveMatch,
   setMatchReady,
   skipMatch,
   getSkipAllowance,

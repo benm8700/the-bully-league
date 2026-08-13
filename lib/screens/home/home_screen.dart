@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/auth_service.dart';
+import '../../core/services/matchmaking_service.dart';
 import '../../core/services/push_notification_service.dart';
 import '../leaderboard/leaderboard_screen.dart';
+import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import '../profile/profile_screen.dart';
@@ -60,6 +62,7 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 if (uid != null) _RankBadge(uid: uid),
                 const SizedBox(height: 24),
+                const _ActiveMatchBanner(),
                 FilledButton(
                   onPressed: () => _startMatch(context, 'ranked'),
                   child: const Text('Find Ranked Match'),
@@ -149,6 +152,92 @@ class HomeScreen extends StatelessWidget {
 /// Shows rank title + raw rating + win/loss record. Real "Laugh Meter"
 /// visual gauge (CLAUDE.md's Display decision) isn't designed yet - this is
 /// the plain "detailed stats view" fallback CLAUDE.md explicitly allows.
+/// Shows a way back into a match the player was paired into but never
+/// collected, and renders nothing at all when there isn't one.
+///
+/// This exists because of the match-found push: a player can be paired
+/// while the app is backgrounded, and if the process was killed before
+/// they came back, they'd otherwise land here with a live pairing they
+/// have no route to. Their queue entry stays flagged "matched"
+/// server-side precisely so it can be recovered (matched entries are
+/// deliberately exempt from stale-entry pruning).
+///
+/// Re-checks on app resume as well as on first build, so tapping the
+/// notification surfaces the banner even when the process was already
+/// alive. Doubles as the in-app "match found" indicator CLAUDE.md asks
+/// for alongside the push, though only in this recovery position - a
+/// live indicator while queueing isn't built.
+class _ActiveMatchBanner extends StatefulWidget {
+  const _ActiveMatchBanner();
+
+  @override
+  State<_ActiveMatchBanner> createState() => _ActiveMatchBannerState();
+}
+
+class _ActiveMatchBannerState extends State<_ActiveMatchBanner> with WidgetsBindingObserver {
+  final _service = MatchmakingService();
+  MatchPairing? _pending;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _check();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _check();
+  }
+
+  Future<void> _check() async {
+    final pairing = await _service.activeMatch();
+    if (!mounted) return;
+    setState(() => _pending = pairing);
+  }
+
+  void _rejoin() {
+    final pairing = _pending;
+    if (pairing == null) return;
+    setState(() => _pending = null);
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => BioRevealScreen(pairing: pairing)))
+        // The match may have ended while they were away, so re-check on
+        // the way back rather than leaving a stale banner behind.
+        .then((_) => _check());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_pending == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Card(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              const Text(
+                'You have a match waiting',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              FilledButton(onPressed: _rejoin, child: const Text('Rejoin match')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RankBadge extends StatelessWidget {
   const _RankBadge({required this.uid});
 

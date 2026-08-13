@@ -14,6 +14,7 @@ const {
   leaveQueue,
   pollMatchmaking,
   completeMatch,
+  getActiveMatch,
   setMatchReady,
   skipMatch,
   getSkipAllowance,
@@ -382,6 +383,13 @@ exports.completeMatch = onCall((request) => completeMatch(request.auth, request.
  * player reads the other's profile "ammo" for up to a minute before the
  * match starts, and either can decline the pairing outright.
  */
+/**
+ * Lets a client that cold-started (after tapping a match-found push, say)
+ * recover a match it was paired into but never collected - otherwise that
+ * player is stranded on Home with a live pairing they can't reach.
+ */
+exports.getActiveMatch = onCall((request) => getActiveMatch(request.auth));
+
 exports.setMatchReady = onCall((request) => setMatchReady(request.auth, request.data));
 exports.skipMatch = onCall((request) => skipMatch(request.auth, request.data));
 exports.getSkipAllowance = onCall((request) => getSkipAllowance(request.auth));
