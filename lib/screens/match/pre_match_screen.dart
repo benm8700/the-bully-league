@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/config/agora_config.dart';
+import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
 import '../../core/services/video_call_service.dart';
 import 'match_screen.dart';
@@ -9,17 +9,14 @@ import 'match_screen.dart';
 /// Camera/mic check before a match (Build Order step 3). Real per-check
 /// scope, per CLAUDE.md's Agora notes:
 /// - Mic level: REAL, via Agora's volume indication.
-/// - Lighting/shake/face-visible: advisory prompts only - the Agora Flutter
-///   SDK's video frame observer (needed for real brightness/motion/face
-///   analysis) is an unimplemented stub in agora_rtc_engine 6.6.3
-///   (throws UnimplementedError - see registerVideoFrameObserver in the
-///   package source). Revisit if a future SDK version implements it, or
-///   integrate ML Kit separately for face detection.
+/// - Lighting/shake/face-visible: advisory prompts only - no automated
+///   brightness/motion/face analysis is wired up (see the visual content
+///   moderation module for the one place a video frame observer IS used).
 ///
-/// TEMPORARY: joins "test-channel" with the hardcoded temp token (same as
-/// CallTestScreen) purely so Agora's volume indication has a channel to
-/// report from - real matchmaking will assign a real channel+token here
-/// once it exists (Build Order step 4+).
+/// TEMPORARY: joins the hardcoded "test-channel" (real matchmaking will
+/// assign a real channel here once it exists, Build Order step 4+), but
+/// the join token itself is real - fetched per-join from the
+/// generateAgoraToken Cloud Function, not a hardcoded temp token.
 class PreMatchScreen extends StatefulWidget {
   const PreMatchScreen({super.key});
 
@@ -47,10 +44,11 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
   Future<void> _setup() async {
     try {
       await _videoCallService.initialize();
+      final token = await fetchAgoraToken('test-channel');
       await _videoCallService.joinChannel(
         channelName: 'test-channel',
         uid: 0,
-        token: agoraTestChannelToken,
+        token: token,
       );
     } catch (e) {
       if (!mounted) return;

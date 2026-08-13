@@ -7,6 +7,7 @@ const {getAuth} = require("firebase-admin/auth");
 const {finalizeMatch, VOTE_WINDOW_MS} = require("./matchFinalization");
 const {generateBracket, debugAdvanceRound, DEFAULT_MIN_ENTRANTS} = require("./tournament");
 const {moderateImage, moderateImageContent} = require("./visualModeration");
+const {generateToken} = require("./agoraToken");
 
 // Modular admin SDK API, not the classic admin.firestore()/admin.auth()
 // namespace - firebase-admin v14's classic namespace requires "firebase-
@@ -19,6 +20,7 @@ const {moderateImage, moderateImageContent} = require("./visualModeration");
 initializeApp();
 
 const turnstileSecret = defineSecret("TURNSTILE_SECRET_KEY");
+const agoraAppCertificate = defineSecret("AGORA_APP_CERTIFICATE");
 
 const ACCOUNT_AGE_FULL_WEIGHT_MS = 24 * 60 * 60 * 1000;
 const REDUCED_VOTE_WEIGHT = 0.5;
@@ -268,4 +270,32 @@ exports.moderateMatchFrame = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "imageBase64 is required.");
   }
   return moderateImageContent(imageBase64);
+});
+
+/**
+ * Generates a real, signed Agora RTC token server-side (functions/
+ * agoraToken.js) - replaces the hardcoded 24h temp token used during early
+ * Build Order testing (see CLAUDE.md's Agora toolchain notes: "A hardcoded
+ * temp token was used only to verify connectivity works end to end... do
+ * NOT ship that pattern"). The App Certificate needed to sign the token
+ * can never be shipped to the client, so this is server-side for the same
+ * reason castVote's Turnstile secret is - see Security & Compliance
+ * Baseline's "route sensitive writes/calls through Cloud Functions"
+ * pattern. Channel name isn't validated against a real match document yet
+ * since real matchmaking doesn't exist (both devices still join a
+ * hardcoded "test-channel" - see MatchScreen/PreMatchScreen), so any
+ * signed-in user can currently request a token for any channel name; this
+ * matches the same "no admin/match-ownership system yet" caveat already
+ * flagged on the debug* functions above, not a new gap.
+ */
+exports.generateAgoraToken = onCall({secrets: [agoraAppCertificate]}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const {channelName} = request.data || {};
+  if (!channelName) {
+    throw new HttpsError("invalid-argument", "channelName is required.");
+  }
+  const token = generateToken(agoraAppCertificate.value(), channelName);
+  return {token};
 });

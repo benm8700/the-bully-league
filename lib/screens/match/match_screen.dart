@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/config/agora_config.dart';
+import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
 import '../../core/services/video_call_service.dart';
 import '../../core/services/visual_moderation_service.dart';
@@ -14,8 +14,9 @@ import '../../core/services/yuv_to_jpeg.dart';
 
 /// Round/turn/timer state machine (Build Order step 4). Real matchmaking
 /// and Firestore match documents don't exist yet, so:
-/// - Both devices join the same hardcoded "test-channel" (temp token, see
-///   agora_config.dart) - same placeholder pattern as PreMatchScreen.
+/// - Both devices join the same hardcoded "test-channel" - same placeholder
+///   pattern as PreMatchScreen. The join token itself is real, fetched
+///   per-join from the generateAgoraToken Cloud Function.
 /// - Round count/length/countdown are hardcoded to the documented V1
 ///   defaults (CLAUDE.md's config/matchSettings schema) rather than pulled
 ///   from Firebase Remote Config, which isn't wired up yet.
@@ -89,10 +90,11 @@ class _MatchScreenState extends State<MatchScreen> {
   Future<void> _setup() async {
     try {
       await _videoCallService.initialize();
+      final token = await fetchAgoraToken('test-channel');
       await _videoCallService.joinChannel(
         channelName: 'test-channel',
         uid: 0,
-        token: agoraTestChannelToken,
+        token: token,
       );
     } catch (e) {
       if (!mounted) return;
