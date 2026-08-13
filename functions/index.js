@@ -6,7 +6,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {finalizeMatch, VOTE_WINDOW_MS} = require("./matchFinalization");
 const {generateBracket, debugAdvanceRound, DEFAULT_MIN_ENTRANTS} = require("./tournament");
-const {moderateImage} = require("./visualModeration");
+const {moderateImage, moderateImageContent} = require("./visualModeration");
 
 // Modular admin SDK API, not the classic admin.firestore()/admin.auth()
 // namespace - firebase-admin v14's classic namespace requires "firebase-
@@ -231,14 +231,9 @@ exports.debugCreateTournament = onCall(async (request) => {
  * folder) as defense in depth alongside storage.rules, which already
  * enforces the same boundary at the Storage layer.
  *
- * This covers PROFILE PHOTOS only. Real-time moderation during LIVE
- * matches (the other half of CLAUDE.md's visual moderation decision) is
- * NOT implemented and is currently blocked: agora_rtc_engine 6.6.3's
- * registerVideoFrameObserver (needed to read live video frames at all) is
- * an unimplemented stub that throws UnimplementedError - confirmed by
- * reading the package source back at Build Order step 3. There is no
- * frame data to moderate until that's resolved (newer SDK version, or a
- * different frame-access approach) - see CLAUDE.md's step 9a status note.
+ * This covers PROFILE PHOTOS only. Live match video moderation is
+ * moderateMatchFrame below - a separate function since frames are never
+ * uploaded to Storage (they're ephemeral, sent as inline base64 bytes).
  */
 exports.moderatePhoto = onCall(async (request) => {
   if (!request.auth) {
@@ -252,4 +247,25 @@ exports.moderatePhoto = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Can only moderate your own photos.");
   }
   return moderateImage(storagePath);
+});
+
+/**
+ * Runs Google Cloud Vision SafeSearch on a sampled LIVE match video frame
+ * (Build Order step 9a's live-video half, unblocked after correcting the
+ * earlier "registerVideoFrameObserver is a stub" misdiagnosis - see
+ * CLAUDE.md's step 3/9a status notes). The client samples the remote
+ * participant's video every few seconds (AgoraVideoCallService's
+ * remoteFrameSamples), converts I420 to JPEG (lib/core/services/
+ * yuv_to_jpeg.dart), and sends it here as base64 - no Storage upload,
+ * since a frame that passes moderation has no reason to be kept anywhere.
+ */
+exports.moderateMatchFrame = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const {imageBase64} = request.data || {};
+  if (!imageBase64) {
+    throw new HttpsError("invalid-argument", "imageBase64 is required.");
+  }
+  return moderateImageContent(imageBase64);
 });

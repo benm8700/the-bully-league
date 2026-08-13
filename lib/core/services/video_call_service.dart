@@ -1,6 +1,35 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+/// One sampled frame of the remote participant's video, in raw I420
+/// (YUV420 planar) pixel data - the format Agora's frame observer
+/// delivers. Provider-agnostic shape (not Agora's own VideoFrame type) so
+/// callers (e.g. visual content moderation, Build Order step 9a) don't
+/// depend on the Agora SDK directly.
+class RawVideoFrame {
+  const RawVideoFrame({
+    required this.remoteUid,
+    required this.width,
+    required this.height,
+    required this.yStride,
+    required this.uStride,
+    required this.vStride,
+    required this.yBuffer,
+    required this.uBuffer,
+    required this.vBuffer,
+  });
+
+  final int remoteUid;
+  final int width;
+  final int height;
+  final int yStride;
+  final int uStride;
+  final int vStride;
+  final Uint8List yBuffer;
+  final Uint8List uBuffer;
+  final Uint8List vBuffer;
+}
+
 /// Wraps the video call provider (Agora) so UI/match-flow code never talks
 /// to the SDK directly - see CLAUDE.md's "Video provider logic MUST be
 /// isolated" rule. Swapping providers later means writing a new
@@ -50,4 +79,10 @@ abstract class VideoCallService {
 
   /// Decoded messages sent by the other participant via sendMatchMessage.
   Stream<Map<String, dynamic>> get matchMessages;
+
+  /// Periodic sampled frames of the remote participant's video, for live
+  /// visual content moderation (Build Order step 9a). Throttled internally
+  /// by the implementation - callers should not assume every frame is
+  /// delivered, only an occasional sample.
+  Stream<RawVideoFrame> get remoteFrameSamples;
 }

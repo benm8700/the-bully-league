@@ -13,6 +13,14 @@ class AgoraVideoCallService implements VideoCallService {
   String? _channelName;
   int? _dataStreamId;
   Completer<void>? _joinCompleter;
+  VideoFrameObserver? _frameObserver;
+  DateTime? _lastFrameSampleTime;
+
+  // Sampling, not per-frame - see the class doc comment on
+  // remoteFrameSamples. Cloud Vision is billed per call and there's no
+  // reason to check more often than this for a moderation use case (a
+  // violation stays on-screen for well more than 4 seconds).
+  static const _frameSampleInterval = Duration(seconds: 4);
 
   final ValueNotifier<int?> _remoteUid = ValueNotifier(null);
   final ValueNotifier<bool> _isJoined = ValueNotifier(false);
@@ -20,6 +28,8 @@ class AgoraVideoCallService implements VideoCallService {
   final ValueNotifier<int?> _localUid = ValueNotifier(null);
   final StreamController<Map<String, dynamic>> _matchMessages =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<RawVideoFrame> _remoteFrameSamples =
+      StreamController<RawVideoFrame>.broadcast();
 
   @override
   ValueListenable<int?> get remoteUid => _remoteUid;
@@ -37,6 +47,9 @@ class AgoraVideoCallService implements VideoCallService {
   Stream<Map<String, dynamic>> get matchMessages => _matchMessages.stream;
 
   @override
+  Stream<RawVideoFrame> get remoteFrameSamples => _remoteFrameSamples.stream;
+
+  @override
   Future<void> initialize() async {
     _engine = createAgoraRtcEngine();
     await _engine.initialize(const RtcEngineContext(appId: agoraAppId));
@@ -46,6 +59,44 @@ class AgoraVideoCallService implements VideoCallService {
     // channel (see localAudioLevel doc comment) - enabling here just
     // arms it for whenever joinChannel happens.
     await _engine.enableAudioVolumeIndication(interval: 200, smooth: 3, reportVad: true);
+
+    // Must be registered before joinChannel per Agora's docs. Despite
+    // earlier CLAUDE.md notes claiming this API is an unimplemented stub,
+    // it's confirmed live to deliver real frame data - getMediaEngine()
+    // returns a hand-written override with a working native-backed
+    // implementation, not the auto-generated binding stub that actually
+    // does throw UnimplementedError. See CLAUDE.md's step 3/9a status
+    // notes for the full story.
+    _frameObserver = VideoFrameObserver(
+      onRenderVideoFrame: (channelId, remoteUid, videoFrame) {
+        final now = DateTime.now();
+        if (_lastFrameSampleTime != null &&
+            now.difference(_lastFrameSampleTime!) < _frameSampleInterval) {
+          return;
+        }
+        final width = videoFrame.width;
+        final height = videoFrame.height;
+        final yBuffer = videoFrame.yBuffer;
+        final uBuffer = videoFrame.uBuffer;
+        final vBuffer = videoFrame.vBuffer;
+        if (width == null || height == null || yBuffer == null || uBuffer == null || vBuffer == null) {
+          return;
+        }
+        _lastFrameSampleTime = now;
+        _remoteFrameSamples.add(RawVideoFrame(
+          remoteUid: remoteUid,
+          width: width,
+          height: height,
+          yStride: videoFrame.yStride ?? width,
+          uStride: videoFrame.uStride ?? (width ~/ 2),
+          vStride: videoFrame.vStride ?? (width ~/ 2),
+          yBuffer: yBuffer,
+          uBuffer: uBuffer,
+          vBuffer: vBuffer,
+        ));
+      },
+    );
+    _engine.getMediaEngine().registerVideoFrameObserver(_frameObserver!);
 
     _engine.registerEventHandler(
       RtcEngineEventHandler(
@@ -177,11 +228,20 @@ class AgoraVideoCallService implements VideoCallService {
         // Best-effort - still proceed to release the engine below.
       }
     }
+    final observer = _frameObserver;
+    if (observer != null) {
+      try {
+        _engine.getMediaEngine().unregisterVideoFrameObserver(observer);
+      } catch (_) {
+        // Best-effort - still proceed to release the engine below.
+      }
+    }
     _remoteUid.dispose();
     _isJoined.dispose();
     _localAudioLevel.dispose();
     _localUid.dispose();
     await _matchMessages.close();
+    await _remoteFrameSamples.close();
     await _engine.release();
   }
 }

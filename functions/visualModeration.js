@@ -10,34 +10,52 @@ const client = new vision.ImageAnnotatorClient();
 // (the free-speech policy stays untouched - this is visual-only).
 const REJECT_LEVELS = new Set(["LIKELY", "VERY_LIKELY"]);
 
+function verdictFromSafeSearch(safeSearch, {failureReason}) {
+  if (!safeSearch) {
+    return {approved: false, reason: failureReason};
+  }
+  if (REJECT_LEVELS.has(safeSearch.adult)) {
+    return {approved: false, reason: "Flagged for adult content."};
+  }
+  if (REJECT_LEVELS.has(safeSearch.racy)) {
+    return {approved: false, reason: "Flagged for suggestive content."};
+  }
+  if (REJECT_LEVELS.has(safeSearch.violence)) {
+    return {approved: false, reason: "Flagged for violent content."};
+  }
+  return {approved: true};
+}
+
 /**
  * Runs Google Cloud Vision SafeSearch on an already-uploaded Storage
  * object and returns an approve/reject verdict. Used for profile photos
- * (Build Order step 9a) - NOT live match video, which is a separate,
- * currently-blocked problem (see functions/index.js's moderatePhoto doc
- * comment and CLAUDE.md's step 9a status note).
+ * (Build Order step 9a).
  */
 async function moderateImage(storagePath) {
   const bucket = getStorage().bucket();
   const gcsUri = `gs://${bucket.name}/${storagePath}`;
 
   const [result] = await client.safeSearchDetection(gcsUri);
-  const safeSearch = result.safeSearchAnnotation;
-  if (!safeSearch) {
-    return {approved: false, reason: "Could not analyze this image - try a different photo."};
-  }
-
-  if (REJECT_LEVELS.has(safeSearch.adult)) {
-    return {approved: false, reason: "This photo was flagged for adult content."};
-  }
-  if (REJECT_LEVELS.has(safeSearch.racy)) {
-    return {approved: false, reason: "This photo was flagged for suggestive content."};
-  }
-  if (REJECT_LEVELS.has(safeSearch.violence)) {
-    return {approved: false, reason: "This photo was flagged for violent content."};
-  }
-
-  return {approved: true};
+  return verdictFromSafeSearch(result.safeSearchAnnotation, {
+    failureReason: "Could not analyze this image - try a different photo.",
+  });
 }
 
-module.exports = {moderateImage};
+/**
+ * Same as moderateImage, but for image bytes that were never uploaded to
+ * Storage - used for live match video frames (Build Order step 9a's
+ * live-video half). Frames are sampled every few seconds client-side
+ * (see AgoraVideoCallService's remoteFrameSamples), converted from raw
+ * I420 to JPEG, and sent here as base64 - ephemeral moderation checks,
+ * not content worth persisting anywhere.
+ */
+async function moderateImageContent(base64Content) {
+  const [result] = await client.safeSearchDetection({
+    image: {content: Buffer.from(base64Content, "base64")},
+  });
+  return verdictFromSafeSearch(result.safeSearchAnnotation, {
+    failureReason: "Could not analyze this frame.",
+  });
+}
+
+module.exports = {moderateImage, moderateImageContent};

@@ -2,11 +2,15 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/config/agora_config.dart';
 import '../../core/services/agora_video_service.dart';
 import '../../core/services/video_call_service.dart';
+import '../../core/services/visual_moderation_service.dart';
+import '../../core/services/yuv_to_jpeg.dart';
 
 /// Round/turn/timer state machine (Build Order step 4). Real matchmaking
 /// and Firestore match documents don't exist yet, so:
@@ -39,6 +43,7 @@ class _MatchScreenState extends State<MatchScreen> {
   static const _totalTurns = _roundCount * 2;
 
   late final VideoCallService _videoCallService;
+  late final VisualModerationService _moderationService;
   bool _initialized = false;
   String? _error;
 
@@ -47,7 +52,21 @@ class _MatchScreenState extends State<MatchScreen> {
   int? _opponentUid;
   String? _opponentFirebaseUid;
   StreamSubscription<Map<String, dynamic>>? _msgSub;
+  StreamSubscription<RawVideoFrame>? _frameSampleSub;
   Completer<void>? _earlyEndCompleter;
+  bool _processingFrame = false;
+
+  // Content-violation state (Build Order step 9a's live-video half) - set
+  // either by this device detecting a violation in the opponent's stream
+  // (_violationIAmReporter = true, a report gets auto-filed) or by the
+  // opponent's device detecting one in MINE and telling me via a match
+  // message (_violationIAmReporter = false, no report filed from this
+  // side - the OTHER device already did). Either way the match ends
+  // immediately and is never saved/scored, same as a technical
+  // disqualification.
+  bool _violationEnded = false;
+  bool _violationIAmReporter = false;
+  String? _violationReason;
 
   _Phase _phase = _Phase.waitingForOpponent;
   int _turnIndex = 0;
@@ -61,6 +80,9 @@ class _MatchScreenState extends State<MatchScreen> {
   void initState() {
     super.initState();
     _videoCallService = AgoraVideoCallService();
+    // Read before any async gap - see the note on this pattern in
+    // ProfileScreen._addPhoto.
+    _moderationService = context.read<VisualModerationService>();
     _setup();
   }
 
@@ -83,6 +105,78 @@ class _MatchScreenState extends State<MatchScreen> {
     _videoCallService.localUid.addListener(_maybeElectHost);
     _videoCallService.remoteUid.addListener(_maybeElectHost);
     _maybeElectHost();
+  }
+
+  /// One sampled remote frame arrives here every few seconds (throttled by
+  /// AgoraVideoCallService, not per-frame). Converts I420 to JPEG off the
+  /// UI thread (compute() - real per-pixel work over a full video frame),
+  /// then sends it through visual moderation. _processingFrame guards
+  /// against a slow moderation call overlapping with the next sample.
+  Future<void> _onRemoteFrameSample(RawVideoFrame frame) async {
+    if (_violationEnded || _processingFrame) return;
+    _processingFrame = true;
+    try {
+      final jpeg = await compute(i420ToJpeg, I420FrameData.fromRawVideoFrame(frame));
+      final reason = await _moderationService.checkImageBytes(jpeg);
+      if (reason != null) {
+        await _handleContentViolation(reason, iAmReporter: true);
+      }
+    } catch (e) {
+      // A failed moderation CALL (network hiccup, etc.) is not itself a
+      // violation - fail open rather than ending real matches over a
+      // transient error. The next sample a few seconds later tries again.
+      debugPrint('Frame moderation check failed: $e');
+    } finally {
+      _processingFrame = false;
+    }
+  }
+
+  /// Ends the match immediately and never scores/saves it - same
+  /// treatment as a technical disqualification. If this device is the one
+  /// that detected the violation (iAmReporter), it also auto-files a
+  /// report against the opponent (CLAUDE.md's step 9a decision: this
+  /// stays consistent with the existing report pipeline - the ban/
+  /// suspend decision is still admin review, not automatic) and tells the
+  /// other device to end too, since only one side can see any given
+  /// remote stream.
+  Future<void> _handleContentViolation(String reason, {required bool iAmReporter}) async {
+    if (_violationEnded) return;
+    _violationEnded = true;
+    _violationIAmReporter = iAmReporter;
+    _violationReason = reason;
+    _ticker?.cancel();
+
+    if (iAmReporter) {
+      final myFirebaseUid = FirebaseAuth.instance.currentUser?.uid;
+      final opponentFirebaseUid = _opponentFirebaseUid;
+      if (myFirebaseUid != null && opponentFirebaseUid != null) {
+        try {
+          await FirebaseFirestore.instance.collection('reports').add({
+            'reporterId': myFirebaseUid,
+            'reportedUserId': opponentFirebaseUid,
+            'matchId': null,
+            'reason': 'inappropriate_content',
+            'details': 'Automatically detected by live visual content moderation: $reason',
+            'status': 'pending',
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        } catch (e) {
+          debugPrint('Failed to auto-file content violation report: $e');
+        }
+      }
+      try {
+        await _videoCallService.sendMatchMessage({'type': 'matchEndedViolation'});
+      } catch (_) {
+        // Best-effort - still proceed to leave below even if this drops.
+      }
+    }
+
+    try {
+      await _videoCallService.leaveChannel();
+    } catch (_) {
+      // Best-effort - UI already reflects the ended match regardless.
+    }
+    if (mounted) setState(() {});
   }
 
   void _maybeElectHost() {
@@ -109,8 +203,22 @@ class _MatchScreenState extends State<MatchScreen> {
         _earlyEndCompleter?.complete();
       case 'identity':
         _opponentFirebaseUid = message['firebaseUid'] as String?;
+        // Frame sampling deliberately doesn't start until the opponent's
+        // Firebase uid is known, not right at join - a violation detected
+        // before this arrives would have no reportedUserId to file
+        // against. Confirmed live: an early enough violation (e.g. a
+        // trivially-fast moderation check) can otherwise race ahead of
+        // this message and silently produce no report at all, since
+        // _handleContentViolation's report-filing is guarded on
+        // _opponentFirebaseUid being non-null.
+        _frameSampleSub ??= _videoCallService.remoteFrameSamples.listen(_onRemoteFrameSample);
       case 'matchSaved':
         if (mounted) setState(() => _savedMatchId = message['matchId'] as String?);
+      case 'matchEndedViolation':
+        // The OTHER device detected a violation in what it saw of MY
+        // stream and already auto-filed a report - this side doesn't
+        // file a second one (iAmReporter: false), just ends the match.
+        unawaited(_handleContentViolation('Reported by the other participant.', iAmReporter: false));
       case 'state':
         final phase = _Phase.values.byName(message['phase'] as String);
         _applyState(
@@ -124,8 +232,10 @@ class _MatchScreenState extends State<MatchScreen> {
 
   Future<void> _runHostSequence() async {
     for (var i = 0; i < _totalTurns; i++) {
+      if (_violationEnded) return;
       final activeUid = (i.isEven) ? _myUid! : _opponentUid!;
       await _hostAdvance(phase: _Phase.countdown, turnIndex: i, activeUid: activeUid, duration: _countdownSeconds);
+      if (_violationEnded) return;
       await _hostAdvance(
         phase: _Phase.turn,
         turnIndex: i,
@@ -134,11 +244,13 @@ class _MatchScreenState extends State<MatchScreen> {
         allowEarlyEnd: true,
       );
     }
+    if (_violationEnded) return;
     await _hostAdvance(phase: _Phase.verdict, turnIndex: _totalTurns, activeUid: null, duration: 0);
     await _saveMatch();
   }
 
   Future<void> _saveMatch() async {
+    if (_violationEnded) return;
     final myFirebaseUid = FirebaseAuth.instance.currentUser?.uid;
     final opponentFirebaseUid = _opponentFirebaseUid;
     if (myFirebaseUid == null || opponentFirebaseUid == null) {
@@ -248,6 +360,7 @@ class _MatchScreenState extends State<MatchScreen> {
   void dispose() {
     _ticker?.cancel();
     _msgSub?.cancel();
+    _frameSampleSub?.cancel();
     _videoCallService.localUid.removeListener(_maybeElectHost);
     _videoCallService.remoteUid.removeListener(_maybeElectHost);
     _videoCallService.dispose();
@@ -262,7 +375,42 @@ class _MatchScreenState extends State<MatchScreen> {
           ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))
           : !_initialized
               ? const Center(child: CircularProgressIndicator())
-              : _buildMatchUi(),
+              : _violationEnded
+                  ? _buildViolationEndedUi()
+                  : _buildMatchUi(),
+    );
+  }
+
+  Widget _buildViolationEndedUi() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.report_gmailerrorred_outlined, size: 48),
+            const SizedBox(height: 16),
+            Text('Match ended', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 12),
+            Text(
+              _violationIAmReporter
+                  ? 'Our automated content check flagged something in this match '
+                      '(${_violationReason ?? 'content violation'}) and ended it. A '
+                      'report has been filed for review - this doesn\'t mean anyone\'s '
+                      'been banned, just that a human will take a look.'
+                  : 'This match was ended and reported by the other participant\'s '
+                      'device. If you think this was a mistake, you can reach out '
+                      'via Support & Feedback on Home.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+              child: const Text('Back to Home'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
