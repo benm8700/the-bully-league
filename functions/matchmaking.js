@@ -563,17 +563,29 @@ async function completeMatch(auth, data, creds = null) {
   if (auth.uid !== match.player1Id && auth.uid !== match.player2Id) {
     throw new HttpsError("permission-denied", "Only a participant can complete this match.");
   }
-  if (match.status !== "pending") {
-    // Both clients may call this (whichever reaches the verdict first
-    // wins the race); the second call is a no-op rather than an error.
-    return {status: match.status, alreadySettled: true};
-  }
 
-  await matchRef.update({
-    status: outcome,
-    completedAt: FieldValue.serverTimestamp(),
-    ...(outcome === "abandoned" ? {voteFinalized: true} : {}),
+  // Claim the settle in a TRANSACTION, not a read-then-write. Both
+  // clients call this when they reach the verdict, and a plain check
+  // let both pass it before either wrote - so both went on to stop the
+  // recording. One stop succeeded and one came back with Agora's "not
+  // recording" error, and the loser's error overwrote the winner's file
+  // list. Found on a real two-device match; the footage was fine but the
+  // record of it wasn't.
+  const claimed = await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(matchRef);
+    if (fresh.data().status !== "pending") return false;
+    tx.update(matchRef, {
+      status: outcome,
+      completedAt: FieldValue.serverTimestamp(),
+      ...(outcome === "abandoned" ? {voteFinalized: true} : {}),
+    });
+    return true;
   });
+
+  if (!claimed) {
+    const current = (await matchRef.get()).data();
+    return {status: current.status, alreadySettled: true};
+  }
 
   // Stop the recording if one is running. Deliberately after the status
   // write, so a slow or failing Agora call can't leave the match stuck

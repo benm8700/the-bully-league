@@ -1,4 +1,5 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getStorage} = require("firebase-admin/storage");
 
 /**
  * Match recording via Agora Cloud Recording (Build Order step 11's
@@ -184,8 +185,9 @@ async function startRecording(matchId, channelName, creds) {
  */
 async function stopRecording(matchId, channelName, handle, creds) {
   const {appId, customerId, customerSecret} = creds;
+  let stopError = null;
   try {
-    const stopped = await agoraPost(
+    await agoraPost(
         `cloud_recording/resourceid/${handle.resourceId}/sid/${handle.sid}/mode/mix/stop`,
         {
           cname: channelName,
@@ -194,15 +196,56 @@ async function stopRecording(matchId, channelName, handle, creds) {
         },
         appId, customerId, customerSecret,
     );
-    const files = (stopped.serverResponse?.fileList ?? []).map((f) => ({
-      fileName: f.fileName,
-      trackType: f.trackType,
-      sliceStartTime: f.sliceStartTime ?? null,
-    }));
-    return {ok: true, files};
   } catch (e) {
-    console.error(`stopRecording failed for match ${matchId}:`, e.message);
-    return {ok: false, error: e.message};
+    // An "already stopped" response is an entirely normal outcome, not a
+    // failure: Agora's own maxIdleTime ends the recording shortly after
+    // the channel empties, which can easily beat our stop request. The
+    // footage is complete in that case. Rather than trying to classify
+    // Agora's error codes, we let the bucket be the judge below - if the
+    // files are there, the recording succeeded.
+    stopError = e.message;
+  }
+
+  // Authoritative regardless of who actually ended the recording.
+  const files = await listRecordedFiles(matchId);
+  if (files.length > 0) {
+    return {ok: true, files, stopError};
+  }
+
+  console.error(`stopRecording produced no files for match ${matchId}:`, stopError ?? "(no error)");
+  return {ok: false, error: stopError ?? "no files were produced", files: []};
+}
+
+/**
+ * Lists what actually landed in Cloud Storage for a match.
+ *
+ * This is the authoritative file list, deliberately preferred over the
+ * one Agora returns from its stop call. The stop response is only
+ * available when *our* stop request is the one that ended the recording -
+ * but a recording can equally be ended by Agora's own maxIdleTime once
+ * the channel empties, or by the runaway watchdog. Confirmed on a real
+ * match: the footage finalized perfectly while the stop call came back
+ * with Agora's "not recording" error, leaving the document claiming zero
+ * files for a recording that had produced ten objects.
+ *
+ * Reading the bucket works in every one of those cases, because the
+ * bucket is ours and the files are already there.
+ */
+async function listRecordedFiles(matchId) {
+  try {
+    const [objects] = await getStorage().bucket()
+        .getFiles({prefix: `match_recordings/${matchId}/`});
+    return objects.map((o) => ({
+      path: o.name,
+      sizeBytes: Number(o.metadata?.size ?? 0),
+      contentType: o.metadata?.contentType ?? null,
+      // The composited mp4 is what the highlight pipeline will want; the
+      // .ts segments and .m3u8 playlist are HLS scaffolding around it.
+      isComposite: o.name.endsWith(".mp4"),
+    }));
+  } catch (e) {
+    console.error(`could not list recorded files for ${matchId}:`, e.message);
+    return [];
   }
 }
 
@@ -306,6 +349,7 @@ async function stopRunawayRecordings(creds, {now = Date.now()} = {}) {
 module.exports = {
   startRecording,
   stopRecording,
+  listRecordedFiles,
   stopRunawayRecordings,
   maxRecordingSeconds,
   writeRecordingState,
