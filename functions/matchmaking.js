@@ -1,5 +1,6 @@
 const {getDatabase} = require("firebase-admin/database");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getMessaging} = require("firebase-admin/messaging");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {STARTING_RATING, RANK_TIERS, GOAT_TITLE, computeBaseRankTitle} = require("./rating");
 
@@ -272,6 +273,60 @@ async function attemptPairing(uid, mode, matchId, channelName, now) {
 }
 
 /**
+ * Tells a player they've been paired, via push.
+ *
+ * This exists because of how pairing is discovered: the client finds its
+ * match by polling, and those timers stall once the app is backgrounded.
+ * Whoever's poll made the pairing is demonstrably in the foreground and
+ * already knows - it's the OTHER player who may have queued and switched
+ * away, and without this they'd sit in a stalled queue entry indefinitely.
+ * Their entry stays flagged "matched" server-side until collected, so
+ * returning to the app at any point still lands them in the right match.
+ *
+ * Entirely best-effort: a failed send must never fail the pairing itself,
+ * which has already been committed by the time this runs.
+ */
+async function notifyMatchFound(opponentId, matchId, fromUsername) {
+  try {
+    const db = getFirestore();
+    const snap = await db.collection("users").doc(opponentId).get();
+    const tokens = snap.data()?.fcmTokens ?? [];
+    if (tokens.length === 0) return;
+
+    const response = await getMessaging().sendEachForMulticast({
+      tokens,
+      notification: {
+        title: "Opponent found",
+        body: `${fromUsername || "Someone"} is ready to battle. Tap to start.`,
+      },
+      // The category is in the payload so that per-category mute settings
+      // (CLAUDE.md decides on those, they aren't built) can be honoured
+      // here later without changing the client's message handling.
+      data: {category: "match_found", matchId},
+      android: {priority: "high"},
+    });
+
+    // FCM reports permanently-dead tokens (app uninstalled, token rotated
+    // on another device). Left in place they accumulate forever and every
+    // future send wastes work on them, so prune as we learn about them.
+    const dead = [];
+    response.responses.forEach((r, i) => {
+      const code = r.error?.code;
+      if (code === "messaging/registration-token-not-registered" ||
+          code === "messaging/invalid-registration-token") {
+        dead.push(tokens[i]);
+      }
+    });
+    if (dead.length > 0) {
+      await db.collection("users").doc(opponentId)
+          .update({fcmTokens: FieldValue.arrayRemove(...dead)});
+    }
+  } catch (e) {
+    console.error(`match-found push to ${opponentId} failed:`, e.message);
+  }
+}
+
+/**
  * Called on an interval by a waiting client. Returns either the match it
  * has been paired into (whether this call made the pairing or the
  * opponent's poll did) or a "still searching" status carrying enough
@@ -343,6 +398,10 @@ async function pollMatchmaking(auth, data) {
     ]).catch(() => {});
     throw new HttpsError("internal", `Could not create the match: ${e.message}`);
   }
+
+  // Awaited so the function doesn't return (and the instance potentially
+  // freeze) mid-send, but it can never fail the call - see notifyMatchFound.
+  await notifyMatchFound(paired.opponentId, matchRef.id, entry.username);
 
   return {
     status: "matched",

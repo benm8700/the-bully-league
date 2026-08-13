@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/auth_service.dart';
+import '../../core/services/push_notification_service.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
@@ -34,7 +35,7 @@ class HomeScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sign out',
-            onPressed: () => authService.signOut(),
+            onPressed: () => _signOut(context, authService),
           ),
         ],
       ),
@@ -109,6 +110,20 @@ class HomeScreen extends StatelessWidget {
         },
       ),
     );
+  }
+
+  /// Drops this device's push token before signing out, so the next person
+  /// to sign in here doesn't receive the previous account's match alerts.
+  /// Best-effort: a failure to clean up the token must not trap someone in
+  /// an account they're trying to leave, so sign-out proceeds regardless.
+  Future<void> _signOut(BuildContext context, AuthService authService) async {
+    final push = context.read<PushNotificationService>();
+    try {
+      await push.unregister();
+    } catch (_) {
+      // Intentionally ignored - see above.
+    }
+    await authService.signOut();
   }
 
   /// Recording consent -> camera/mic check -> matchmaking queue -> match.
