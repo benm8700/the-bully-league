@@ -407,11 +407,128 @@ async function completeMatch(auth, data) {
   return {status: outcome};
 }
 
+/**
+ * CLAUDE.md's skip/decline decision allows "2-3 skips per day" - enough of
+ * an escape hatch for a genuinely bad pairing, few enough that nobody can
+ * cherry-pick easy opponents all evening.
+ */
+const MAX_SKIPS_PER_DAY = 3;
+
+/** UTC calendar day, used to reset the daily skip allowance. Deliberately
+ * UTC rather than the player's local midnight: it needs to agree between
+ * the server and every device, and a per-user timezone isn't stored. The
+ * practical effect is that the allowance resets at 5pm Pacific rather than
+ * local midnight - fine for V1, worth revisiting if players notice. */
+function utcDayKey(nowMs) {
+  return new Date(nowMs).toISOString().slice(0, 10);
+}
+
+async function loadPendingMatch(auth, matchId) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
+  const matchRef = getFirestore().collection("matches").doc(matchId);
+  const snap = await matchRef.get();
+  if (!snap.exists) throw new HttpsError("not-found", "Match not found.");
+  const match = snap.data();
+  if (auth.uid !== match.player1Id && auth.uid !== match.player2Id) {
+    throw new HttpsError("permission-denied", "Not a participant in this match.");
+  }
+  return {matchRef, match};
+}
+
+/**
+ * Marks the caller ready during the pre-match bio reveal. Both clients
+ * watch the match document, so this is how each learns the other is done
+ * reading - the bio reveal ends as soon as both are ready, or when its
+ * timer runs out, per CLAUDE.md ("up to 1 minute OR until both players tap
+ * ready, whichever comes first").
+ *
+ * Server-side rather than a direct client write because clients can't
+ * write the matches collection at all (firestore.rules), and because
+ * readiness has to be attributable - a client shouldn't be able to mark
+ * its opponent ready.
+ */
+async function setMatchReady(auth, data) {
+  const {matchRef, match} = await loadPendingMatch(auth, data?.matchId);
+  if (match.status !== "pending") {
+    return {status: match.status, ready: match.readyPlayerIds ?? []};
+  }
+  await matchRef.update({readyPlayerIds: FieldValue.arrayUnion(auth.uid)});
+  const after = (await matchRef.get()).data();
+  return {status: "pending", ready: after.readyPlayerIds ?? []};
+}
+
+/**
+ * Declines a proposed match after seeing the opponent's bio (CLAUDE.md's
+ * skip/decline decision). Spends one of the caller's daily skips, settles
+ * the match as abandoned so it never reaches voting or rating, and lets
+ * the other player find out via their own listener on the document.
+ *
+ * The counter lives server-side and is protected in firestore.rules for
+ * the same reason rating is: a client that could reset its own
+ * skipsUsedToday would have unlimited skips, which defeats the entire
+ * point of the limit (cherry-picking easy opponents).
+ */
+async function skipMatch(auth, data) {
+  const {matchRef, match} = await loadPendingMatch(auth, data?.matchId);
+  if (match.status !== "pending") {
+    throw new HttpsError("failed-precondition", "This match can no longer be skipped.");
+  }
+
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(auth.uid);
+  const now = Date.now();
+  const today = utcDayKey(now);
+
+  // Transaction so two rapid skips can't both read the same count and
+  // each write count+1, spending only one of the allowance.
+  const remaining = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    const user = snap.data() ?? {};
+    const sameDay = user.skipsResetDate === today;
+    const used = sameDay ? (user.skipsUsedToday ?? 0) : 0;
+    if (used >= MAX_SKIPS_PER_DAY) {
+      throw new HttpsError(
+          "resource-exhausted",
+          `You've used all ${MAX_SKIPS_PER_DAY} of today's skips.`,
+      );
+    }
+    tx.update(userRef, {skipsUsedToday: used + 1, skipsResetDate: today});
+    return MAX_SKIPS_PER_DAY - (used + 1);
+  });
+
+  await matchRef.update({
+    status: "abandoned",
+    // Settled immediately so the hourly rating sweep never reconsiders it,
+    // and so neither player takes a result from a match nobody played.
+    voteFinalized: true,
+    completedAt: FieldValue.serverTimestamp(),
+    skippedByUserId: auth.uid,
+  });
+
+  return {skipped: true, skipsRemaining: remaining};
+}
+
+/** Read-only: how many skips the caller has left today, so the UI can show
+ * it before they spend one (and hide the button at zero). */
+async function getSkipAllowance(auth) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const snap = await getFirestore().collection("users").doc(auth.uid).get();
+  const user = snap.data() ?? {};
+  const used = user.skipsResetDate === utcDayKey(Date.now()) ? (user.skipsUsedToday ?? 0) : 0;
+  return {remaining: Math.max(0, MAX_SKIPS_PER_DAY - used), max: MAX_SKIPS_PER_DAY};
+}
+
 module.exports = {
   enterQueue,
   leaveQueue,
   pollMatchmaking,
   completeMatch,
+  setMatchReady,
+  skipMatch,
+  getSkipAllowance,
+  utcDayKey,
+  MAX_SKIPS_PER_DAY,
   tierIndexFor,
   // Exported for test/matchmaking.test.js - the pairing rules are the part
   // worth exercising directly, independently of RTDB.

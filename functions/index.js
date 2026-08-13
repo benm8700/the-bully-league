@@ -14,6 +14,9 @@ const {
   leaveQueue,
   pollMatchmaking,
   completeMatch,
+  setMatchReady,
+  skipMatch,
+  getSkipAllowance,
 } = require("./matchmaking");
 
 // Modular admin SDK API, not the classic admin.firestore()/admin.auth()
@@ -373,5 +376,14 @@ exports.leaveMatchmakingQueue = onCall((request) => leaveQueue(request.auth, req
  * action rather than an arbitrary client write.
  */
 exports.completeMatch = onCall((request) => completeMatch(request.auth, request.data));
+
+/**
+ * Pre-match bio reveal (CLAUDE.md's "Pre-match bio reveal" decision): each
+ * player reads the other's profile "ammo" for up to a minute before the
+ * match starts, and either can decline the pairing outright.
+ */
+exports.setMatchReady = onCall((request) => setMatchReady(request.auth, request.data));
+exports.skipMatch = onCall((request) => skipMatch(request.auth, request.data));
+exports.getSkipAllowance = onCall((request) => getSkipAllowance(request.auth));
 
 exports.onVoteCast = onVoteCast;

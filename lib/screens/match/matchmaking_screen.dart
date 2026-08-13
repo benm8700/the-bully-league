@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/services/matchmaking_service.dart';
-import 'match_screen.dart';
+import 'bio_reveal_screen.dart';
 
 /// The "finding you an opponent" step (Build Order step 4's missing half).
 ///
@@ -49,7 +49,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
       // pushReplacement so Back from the match returns Home rather than
       // dropping the player into a search for another opponent.
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => MatchScreen(pairing: pairing)),
+        MaterialPageRoute(builder: (_) => BioRevealScreen(pairing: pairing)),
       );
     } catch (e) {
       if (!mounted) return;

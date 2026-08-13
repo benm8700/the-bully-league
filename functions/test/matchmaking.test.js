@@ -22,9 +22,11 @@ const {
   selectOpponent,
   applyPairing,
   isOnCooldown,
+  utcDayKey,
   TIER_WIDEN_INTERVAL_MS,
   REPEAT_OPPONENT_COOLDOWN_MS,
   STALE_ENTRY_MS,
+  MAX_SKIPS_PER_DAY,
 } = require("../matchmaking");
 
 const NOW = 1_700_000_000_000;
@@ -213,6 +215,47 @@ test("an explicitly banned or flagged account cannot queue", () => {
 
 test("an explicitly active account can queue", () => {
   assert.strictEqual(isQueueEligible({accountStatus: "active"}), true);
+});
+
+// --- Daily skip allowance -------------------------------------------------
+
+/** Mirrors skipMatch's counter read. The interesting case is the day
+ * rollover: a stale skipsResetDate must reset the count rather than
+ * carrying yesterday's usage forward. */
+function skipsRemaining(user, today) {
+  const used = user.skipsResetDate === today ? (user.skipsUsedToday ?? 0) : 0;
+  return Math.max(0, MAX_SKIPS_PER_DAY - used);
+}
+
+test("the skip allowance stays within CLAUDE.md's stated 2-3 per day", () => {
+  assert.ok(
+      MAX_SKIPS_PER_DAY >= 2 && MAX_SKIPS_PER_DAY <= 3,
+      `MAX_SKIPS_PER_DAY is ${MAX_SKIPS_PER_DAY}, outside the decided 2-3 range`,
+  );
+});
+
+test("a fresh account has its full skip allowance", () => {
+  assert.strictEqual(skipsRemaining({}, "2026-08-13"), MAX_SKIPS_PER_DAY);
+});
+
+test("skips used today count against the allowance", () => {
+  const user = {skipsUsedToday: 1, skipsResetDate: "2026-08-13"};
+  assert.strictEqual(skipsRemaining(user, "2026-08-13"), MAX_SKIPS_PER_DAY - 1);
+});
+
+test("yesterday's skips don't carry over", () => {
+  const user = {skipsUsedToday: MAX_SKIPS_PER_DAY, skipsResetDate: "2026-08-12"};
+  assert.strictEqual(skipsRemaining(user, "2026-08-13"), MAX_SKIPS_PER_DAY);
+});
+
+test("an exhausted allowance reports zero, never negative", () => {
+  const user = {skipsUsedToday: MAX_SKIPS_PER_DAY + 5, skipsResetDate: "2026-08-13"};
+  assert.strictEqual(skipsRemaining(user, "2026-08-13"), 0);
+});
+
+test("utcDayKey is a stable YYYY-MM-DD that rolls at UTC midnight", () => {
+  assert.strictEqual(utcDayKey(Date.UTC(2026, 7, 13, 23, 59, 59)), "2026-08-13");
+  assert.strictEqual(utcDayKey(Date.UTC(2026, 7, 14, 0, 0, 1)), "2026-08-14");
 });
 
 // --- Concurrency: the property that actually matters ----------------------

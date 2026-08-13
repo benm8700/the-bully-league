@@ -46,7 +46,16 @@ service cloud.firestore {
         request.resource.data.get('accountStatus', null) == resource.data.get('accountStatus', null) &&
         // Same reasoning for isAdmin - otherwise any client could grant
         // itself access to the debug*/admin-gated Cloud Functions below.
-        request.resource.data.get('isAdmin', null) == resource.data.get('isAdmin', null);
+        request.resource.data.get('isAdmin', null) == resource.data.get('isAdmin', null) &&
+        // The daily skip allowance (CLAUDE.md's skip/decline decision) is
+        // only meaningful if the client can't reset its own counter -
+        // otherwise a modified client has unlimited skips and can
+        // cherry-pick easy opponents all day, which is the exact behaviour
+        // the limit exists to prevent. Written only by the skipMatch Cloud
+        // Function. Neither field exists at signup, so the .get(_, null)
+        // form matters here as much as it does above.
+        request.resource.data.get('skipsUsedToday', null) == resource.data.get('skipsUsedToday', null) &&
+        request.resource.data.get('skipsResetDate', null) == resource.data.get('skipsResetDate', null);
 
       allow delete: if false;
     }

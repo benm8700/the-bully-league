@@ -115,6 +115,34 @@ class MatchmakingService {
     }
   }
 
+  /// Marks the local player ready during the pre-match bio reveal. Both
+  /// clients watch the match document, so this is how each learns the
+  /// other has finished reading.
+  Future<void> setReady(String matchId) async {
+    await _call('setMatchReady', {'matchId': matchId});
+  }
+
+  /// Declines a proposed match after seeing the opponent's bio. Spends one
+  /// of the player's daily skips and settles the match as abandoned.
+  ///
+  /// Throws if the allowance is exhausted - the caller should surface that
+  /// rather than silently swallowing it, since the player is expecting the
+  /// match to end.
+  Future<int> skipMatch(String matchId) async {
+    final result = await _functions
+        .httpsCallable('skipMatch')
+        .call<Map<String, dynamic>>({'matchId': matchId});
+    return (result.data['skipsRemaining'] as num?)?.toInt() ?? 0;
+  }
+
+  /// How many skips the player has left today, so the UI can show the
+  /// count and hide the button at zero.
+  Future<int> skipsRemaining() async {
+    final result =
+        await _functions.httpsCallable('getSkipAllowance').call<Map<String, dynamic>>();
+    return (result.data['remaining'] as num?)?.toInt() ?? 0;
+  }
+
   /// Marks a paired match finished. [outcome] is 'completed' for a match
   /// played to a verdict, or 'abandoned' when it ended without a real
   /// contest (currently the live content-violation auto-end) - abandoned
