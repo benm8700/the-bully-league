@@ -70,6 +70,27 @@ const TILE = {width: 1080, height: 960};
 const FPS = 30;
 const BITRATE_KBPS = 2500;
 
+/**
+ * Player 1 on top, player 2 underneath, each filling the full width and
+ * half the height. Coordinates are fractions of the canvas.
+ *
+ * The uids are the fixed ones assigned at pairing (see agoraUidFor in
+ * functions/matchmaking.js) - a customized layout has to name each
+ * region's occupant, which is why players no longer join with the
+ * wildcard uid 0.
+ *
+ * render_mode 0 is "crop": scale to fill the region and trim the
+ * overflow. Each tile is 1080x960 (wider than tall) while a phone camera
+ * publishes portrait, so "fit" would pillarbox each player into a narrow
+ * strip with black either side. Cropping fills the tile and keeps the
+ * middle of the frame, which is where the pre-match oval guide already
+ * trains players to put their face.
+ */
+const STACKED_LAYOUT = [
+  {uid: "1", x_axis: 0.0, y_axis: 0.0, width: 1.0, height: 0.5, alpha: 1.0, render_mode: 0},
+  {uid: "2", x_axis: 0.0, y_axis: 0.5, width: 1.0, height: 0.5, alpha: 1.0, render_mode: 0},
+];
+
 /** The uid the recording bot joins as. Must not collide with a real
  * participant; the app joins with uid 0 (wildcard) and Agora assigns
  * real users low numbers, so a fixed high value is safe. */
@@ -182,19 +203,16 @@ async function startRecording(matchId, channelName, creds) {
                 height: CANVAS.height,
                 fps: FPS,
                 bitrate: BITRATE_KBPS,
-                // 1 = "best fit": Agora tiles the participants to fill the
-                // canvas. On a 9:16 canvas with two players that should
-                // produce the stacked pair we want, without needing to
-                // know each player's Agora-assigned uid up front (they
-                // join with the wildcard uid 0, so the server can't name
-                // them in a customized layout).
+                // 3 = customized layout, positioned explicitly below.
                 //
-                // If it ever arranges them side by side instead, the fix
-                // is a customized layout (mixedVideoLayout 3 +
-                // layoutConfig with explicit per-uid regions), which would
-                // also mean giving players deterministic uids at join.
-                // Verified by inspecting real output rather than assumed.
-                mixedVideoLayout: 1,
+                // "Best fit" (1) was tried first and is wrong here:
+                // confirmed by watching real output, it tiles
+                // participants side by side regardless of canvas shape,
+                // so on a 9:16 canvas each player got a narrow
+                // half-width column with dead space above and below.
+                // Stacking has to be stated outright.
+                mixedVideoLayout: 3,
+                layoutConfig: STACKED_LAYOUT,
                 backgroundColor: "#000000",
               },
             },

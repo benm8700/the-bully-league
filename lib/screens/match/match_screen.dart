@@ -110,7 +110,13 @@ class _MatchScreenState extends State<MatchScreen> {
       final token = await fetchAgoraToken(channelName);
       await _videoCallService.joinChannel(
         channelName: channelName,
-        uid: 0,
+        // A fixed uid from the pairing (1 or 2) rather than the wildcard
+        // 0, so the recording layout can name each player's region. The
+        // token is still minted against uid 0, which Agora treats as a
+        // wildcard valid for any uid, so nothing about token minting
+        // changes. Host election below still compares the two uids, and
+        // is now deterministic: player1 hosts.
+        uid: widget.pairing.agoraUid,
         token: token,
       );
     } catch (e) {

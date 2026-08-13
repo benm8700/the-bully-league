@@ -53,6 +53,7 @@ class MatchPairing {
     required this.opponentId,
     required this.mode,
     this.settings = const MatchSettings(),
+    this.agoraUid = 0,
   });
 
   final String matchId;
@@ -60,6 +61,15 @@ class MatchPairing {
   final String opponentId;
   final String mode;
   final MatchSettings settings;
+
+  /// The fixed Agora uid to join the match channel with - 1 for player1,
+  /// 2 for player2, assigned server-side at pairing.
+  ///
+  /// Not the wildcard 0 any more, because the recording layout has to name
+  /// each player's region by uid and the server can't learn a
+  /// dynamically-assigned one. 0 remains the fallback for an older pairing
+  /// that predates this, where Agora assigns a uid as before.
+  final int agoraUid;
 
   factory MatchPairing.fromMap(Map<String, dynamic> data, {String? fallbackMode}) {
     return MatchPairing(
@@ -70,6 +80,7 @@ class MatchPairing {
       settings: MatchSettings.fromMap(
         (data['settings'] as Map?)?.cast<String, dynamic>(),
       ),
+      agoraUid: (data['agoraUid'] as num?)?.toInt() ?? 0,
     );
   }
 }

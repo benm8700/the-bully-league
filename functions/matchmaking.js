@@ -86,6 +86,29 @@ function queueRef(mode) {
   return getDatabase().ref(`matchmakingQueue/${mode}`);
 }
 
+/**
+ * The fixed Agora uid a player joins the match channel with: player1 is
+ * always 1, player2 always 2.
+ *
+ * Clients used to join with the wildcard uid 0 and let Agora assign one
+ * dynamically. That has to stop, because the recording layout has to name
+ * each player's region by uid and the server has no way of learning a
+ * dynamically-assigned one. Confirmed necessary by looking at real output:
+ * Agora's "best fit" layout tiles participants side by side regardless of
+ * canvas shape, which on a 9:16 canvas gives each player a narrow
+ * half-width column instead of the stacked pair short-form video needs.
+ *
+ * The token is unaffected - it's minted against uid 0, which Agora treats
+ * as a wildcard valid for any uid.
+ */
+const PLAYER1_AGORA_UID = 1;
+const PLAYER2_AGORA_UID = 2;
+
+function agoraUidFor(match, uid) {
+  if (!match) return null;
+  return uid === match.player1Id ? PLAYER1_AGORA_UID : PLAYER2_AGORA_UID;
+}
+
 function assertMode(mode) {
   if (!MODES.includes(mode)) {
     throw new HttpsError("invalid-argument", `mode must be one of: ${MODES.join(", ")}`);
@@ -358,13 +381,15 @@ async function pollMatchmaking(auth, data) {
   // could hand the two players different numbers if it changed in between.
   if (entry.status === "matched") {
     const matchSnap = await db.collection("matches").doc(entry.matchId).get();
+    const m = matchSnap.data();
     return {
       status: "matched",
       matchId: entry.matchId,
       channelName: entry.channelName,
       opponentId: entry.opponentId,
       mode,
-      settings: matchSnap.data()?.settings ?? null,
+      settings: m?.settings ?? null,
+      agoraUid: agoraUidFor(m, uid),
     };
   }
 
@@ -430,6 +455,8 @@ async function pollMatchmaking(auth, data) {
     opponentId: paired.opponentId,
     mode,
     settings,
+    // This caller created the match, so it is player1 by construction.
+    agoraUid: PLAYER1_AGORA_UID,
   };
 }
 
@@ -529,6 +556,7 @@ async function getActiveMatch(auth) {
       opponentId: entry.opponentId,
       mode,
       settings: snap.data().settings ?? null,
+      agoraUid: agoraUidFor(snap.data(), auth.uid),
     };
   }
 
