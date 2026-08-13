@@ -35,11 +35,40 @@ const {getStorage} = require("firebase-admin/storage");
 
 const AGORA_API = "https://api.agora.io/v1/apps";
 
-// Two 480x360 tiles side by side = 960x360 = 345,600 px, comfortably
-// inside the HD band. Vertical-friendly framing for the eventual social
-// clip is a later concern for the editing pipeline, not the raw capture.
-const CANVAS = {width: 960, height: 360};
-const TILE = {width: 480, height: 360};
+/**
+ * VERTICAL 9:16, because the whole point of recording is TikTok/Reels/
+ * Shorts and those are vertical-native (1080x1920 is the documented
+ * standard; 720x1280 the stated minimum).
+ *
+ * The first version of this recorded 960x360 - an 8:3 ultra-wide strip,
+ * chosen to sit in Agora's cheap HD billing band. That was a mistake for
+ * this use case: dropped into a 9:16 frame it occupies about a fifth of
+ * the screen height, with the rest empty, and there's no vertical picture
+ * information to recover by cropping. It would have produced unusable
+ * clips for the exact channel the content strategy depends on.
+ *
+ * Agora bills on aggregate resolution, and any genuinely vertical format
+ * at or above TikTok's minimum already lands in the Full HD band
+ * (921,600-2,073,600 px). The only vertical shape that stays in the HD
+ * band is about 540x960, which is below that minimum. So the cost step is
+ * unavoidable if the clips are to be usable at all - and once it's taken,
+ * 720x1280 and 1080x1920 cost exactly the same. Hence full 1080x1920.
+ *
+ * Cost effect: recording goes from ~$0.015 to ~$0.034 per match, so about
+ * $19 more per 1,000 recorded matches. See CLAUDE.md's Cost Planning.
+ */
+const CANVAS = {width: 1080, height: 1920};
+
+/** Two players stacked, each getting half the height. */
+const TILE = {width: 1080, height: 960};
+
+/**
+ * Frame rate and bitrate are NOT billed - Agora charges on resolution and
+ * duration only - so these are free quality. The original 15fps/800kbps
+ * was tuned for a tiny canvas and would look blocky at 1080x1920.
+ */
+const FPS = 30;
+const BITRATE_KBPS = 2500;
 
 /** The uid the recording bot joins as. Must not collide with a real
  * participant; the app joins with uid 0 (wildcard) and Agora assigns
@@ -151,9 +180,21 @@ async function startRecording(matchId, channelName, creds) {
               transcodingConfig: {
                 width: CANVAS.width,
                 height: CANVAS.height,
-                fps: 15,
-                bitrate: 800,
-                mixedVideoLayout: 0,
+                fps: FPS,
+                bitrate: BITRATE_KBPS,
+                // 1 = "best fit": Agora tiles the participants to fill the
+                // canvas. On a 9:16 canvas with two players that should
+                // produce the stacked pair we want, without needing to
+                // know each player's Agora-assigned uid up front (they
+                // join with the wildcard uid 0, so the server can't name
+                // them in a customized layout).
+                //
+                // If it ever arranges them side by side instead, the fix
+                // is a customized layout (mixedVideoLayout 3 +
+                // layoutConfig with explicit per-uid regions), which would
+                // also mean giving players deterministic uids at join.
+                // Verified by inspecting real output rather than assumed.
+                mixedVideoLayout: 1,
                 backgroundColor: "#000000",
               },
             },
