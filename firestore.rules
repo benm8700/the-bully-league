@@ -132,6 +132,24 @@ service cloud.firestore {
       }
     }
 
+    // A vote session: one CAPTCHA solve buying a bounded run of votes, so
+    // the feed doesn't put a checkbox between every battle.
+    //
+    // WRITES ARE THE WHOLE POINT OF THIS RULE. The document holds the
+    // remaining vote budget and the expiry - a client able to write its own
+    // would simply mint an unlimited, never-expiring session and skip the
+    // CAPTCHA entirely, which is the one thing this mechanism exists to
+    // prevent. Only startVoteSession and castVote touch it, via the Admin
+    // SDK, which bypasses these rules.
+    //
+    // Reading your own is allowed so the client can re-challenge BEFORE a
+    // vote is refused rather than after, and it reveals nothing but how
+    // many votes you have left.
+    match /voteSessions/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
     match /votes/{matchId}/ballots/{voterId} {
       // Votes ONLY go through the castVote Cloud Function (CAPTCHA
       // verification, 24h window, one-vote-per-account, and account-age

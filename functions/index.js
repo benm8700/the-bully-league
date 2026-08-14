@@ -131,16 +131,39 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   const voterId = request.auth.uid;
   const {matchId, votedForPlayerId, turnstileToken} = request.data || {};
 
-  if (!matchId || !votedForPlayerId || !turnstileToken) {
+  if (!matchId || !votedForPlayerId) {
     throw new HttpsError(
         "invalid-argument",
-        "matchId, votedForPlayerId, and turnstileToken are required.",
+        "matchId and votedForPlayerId are required.",
     );
   }
 
-  const turnstileOk = await verifyTurnstileToken(turnstileToken, turnstileSecret.value());
-  if (!turnstileOk) {
-    throw new HttpsError("permission-denied", "Turnstile verification failed.");
+  // Two ways to prove a human is behind this vote, and exactly one of them
+  // must hold.
+  //
+  // A per-vote CAPTCHA suits the website, where someone arrives from a
+  // shared clip, votes once and leaves. It is fatal in the app's feed,
+  // where the design is to scroll from one battle to the next - a checkbox
+  // between every video would make judging a chore, and votes are the
+  // scarce resource this app runs on. So a session, bought with one solve,
+  // covers a bounded run instead (see functions/voteSession.js).
+  //
+  // The session is tried FIRST so an app already holding one never pays
+  // for a token it does not need, and the budget is spent inside a
+  // transaction so a fast scroll cannot stretch it past its ceiling.
+  const {spendVote} = require("./voteSession");
+  const spent = await spendVote(voterId);
+  if (!spent.ok) {
+    if (!turnstileToken) {
+      throw new HttpsError(
+          "failed-precondition",
+          "No active voting session. Complete the CAPTCHA to start one.",
+      );
+    }
+    const turnstileOk = await verifyTurnstileToken(turnstileToken, turnstileSecret.value());
+    if (!turnstileOk) {
+      throw new HttpsError("permission-denied", "Turnstile verification failed.");
+    }
   }
 
   const db = getFirestore();
@@ -648,6 +671,23 @@ exports.getSkipAllowance = onCall((request) => getSkipAllowance(request.auth));
  * archive. Runs server-side because the clip URLs are short-lived signed
  * URLs and because ballots are deliberately not client-readable.
  */
+/**
+ * Buys a bounded run of votes with one CAPTCHA solve, so the feed does not
+ * put a checkbox between every battle. See functions/voteSession.js.
+ */
+exports.startVoteSession = onCall({secrets: [turnstileSecret]}, (request) => {
+  const {startVoteSession} = require("./voteSession");
+  return startVoteSession(request.auth, request.data,
+      (token) => verifyTurnstileToken(token, turnstileSecret.value()));
+});
+
+/** How much of the caller's session is left, so the client can
+ * re-challenge BEFORE a vote is refused rather than after. */
+exports.getVoteSession = onCall((request) => {
+  const {getVoteSession} = require("./voteSession");
+  return getVoteSession(request.auth);
+});
+
 exports.getWatchFeed = onCall((request) => {
   const {getWatchFeed} = require("./watchFeed");
   return getWatchFeed(request.auth, request.data);
