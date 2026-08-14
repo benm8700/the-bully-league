@@ -140,7 +140,7 @@ function buildTimeline(files) {
  * each audio segment to its own offset. Together those are what keep
  * picture and sound aligned across the muted stretches.
  */
-function buildFfmpegArgs(timeline, localDir, outputPath) {
+function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
   const {uids, segments} = timeline;
   const inputs = [];
   const filters = [];
@@ -184,11 +184,26 @@ function buildFfmpegArgs(timeline, localDir, outputPath) {
 
   // A single player (the opponent never published) still renders, just
   // filling the frame alone rather than stacking.
+  // Captions are burned on AFTER stacking, so one subtitle track spans the
+  // whole frame rather than being scaled differently inside each tile.
+  const stacked = options.subtitlePath ? "[vstacked]" : "[vout]";
   if (videoLabels.length === 1) {
     filters.push(`${videoLabels[0]}scale=${CANVAS.width}:${CANVAS.height}:` +
-      `force_original_aspect_ratio=increase,crop=${CANVAS.width}:${CANVAS.height}[vout]`);
+      `force_original_aspect_ratio=increase,crop=${CANVAS.width}:${CANVAS.height}${stacked}`);
   } else {
-    filters.push(`${videoLabels.join("")}vstack=inputs=${videoLabels.length}[vout]`);
+    filters.push(`${videoLabels.join("")}vstack=inputs=${videoLabels.length}${stacked}`);
+  }
+
+  if (options.subtitlePath) {
+    // ffmpeg parses the filter graph as a string, so a Windows path's
+    // backslashes and drive colon would be read as escapes and option
+    // separators. Normalising to forward slashes and escaping the colon
+    // is what makes the same code work locally and on Cloud Functions.
+    const escaped = options.subtitlePath
+        .replace(/\\/g, "/")
+        .replace(/:/g, "\\:")
+        .replace(/'/g, "\\'");
+    filters.push(`[vstacked]subtitles='${escaped}'[vout]`);
   }
 
   // normalize=0 because the segments do not overlap - normalising would
@@ -244,7 +259,7 @@ function runFfmpeg(binary, args) {
  * matches never become highlights, and rendering each one would burn
  * compute on clips nobody will post.
  */
-async function renderMatchHighlight(matchId) {
+async function renderMatchHighlight(matchId, {captions = true} = {}) {
   const db = getFirestore();
   const bucket = getStorage().bucket();
   const matchRef = db.collection("matches").doc(matchId);
@@ -283,7 +298,35 @@ async function renderMatchHighlight(matchId) {
 
     const outputPath = path.join(workDir, "vertical.mp4");
     const ffmpegPath = require("ffmpeg-static");
-    const args = buildFfmpegArgs(timeline, workDir, outputPath);
+
+    // Captions are burned in rather than shipped as a sidecar track:
+    // TikTok, Reels and Shorts don't render an external subtitle file, and
+    // most short-form video is watched muted (see CLAUDE.md's Production
+    // quality bar), so the text has to be part of the picture.
+    let subtitlePath = null;
+    let cueCount = 0;
+    if (captions) {
+      const {transcribeSegments, groupWordsIntoCues, buildAssFile} = require("./captions");
+      const audioSegs = timeline.segments.filter((s) => s.kind === "audio");
+      const {words, failures} = await transcribeSegments(
+          audioSegs, workDir, ffmpegPath, workDir,
+      );
+      if (failures.length > 0) {
+        warnings.push(`${failures.length} audio segment(s) could not be transcribed`);
+      }
+      const cues = groupWordsIntoCues(words);
+      cueCount = cues.length;
+      if (cues.length > 0) {
+        subtitlePath = path.join(workDir, "captions.ass");
+        await fs.writeFile(subtitlePath, buildAssFile(cues, CANVAS), "utf8");
+      } else {
+        // Rendering without captions beats failing the whole clip - a
+        // match with no intelligible speech is unusual but not an error.
+        warnings.push("no speech was transcribed, so the clip has no captions");
+      }
+    }
+
+    const args = buildFfmpegArgs(timeline, workDir, outputPath, {subtitlePath});
     await runFfmpeg(ffmpegPath, args);
 
     const destination = `${HIGHLIGHT_PREFIX}/${matchId}/vertical.mp4`;
@@ -295,6 +338,8 @@ async function renderMatchHighlight(matchId) {
         path: destination,
         sizeBytes: size,
         renderedAt: FieldValue.serverTimestamp(),
+        captioned: cueCount > 0,
+        cueCount,
         // Same human gate as the raw recording: rendering something
         // watchable is not the same as approving it for an audience.
         reviewStatus: "pending",
@@ -303,7 +348,7 @@ async function renderMatchHighlight(matchId) {
       },
     }, {merge: true});
 
-    return {rendered: true, path: destination, sizeBytes: size, warnings};
+    return {rendered: true, path: destination, sizeBytes: size, cueCount, warnings};
   } finally {
     await fs.rm(workDir, {recursive: true, force: true}).catch(() => {});
   }
