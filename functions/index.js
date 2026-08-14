@@ -688,6 +688,22 @@ exports.getVoteSession = onCall((request) => {
   return getVoteSession(request.auth);
 });
 
+/**
+ * A participant objecting to their own footage being public. Two channels
+ * behaving very differently - see functions/takedown.js.
+ */
+exports.requestTakedown = onCall((request) => {
+  const {requestTakedown} = require("./takedown");
+  return requestTakedown(request.auth, request.data);
+});
+
+/** What the client needs to render the request honestly: whether the
+ * opt-out window is still open, and how many requests are left. */
+exports.getTakedownOptions = onCall((request) => {
+  const {getTakedownOptions} = require("./takedown");
+  return getTakedownOptions(request.auth, request.data);
+});
+
 exports.getWatchFeed = onCall((request) => {
   const {getWatchFeed} = require("./watchFeed");
   return getWatchFeed(request.auth, request.data);

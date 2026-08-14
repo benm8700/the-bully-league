@@ -64,6 +64,32 @@ async function publishHighlight(matchId) {
   const snap = await matchRef.get();
   if (!snap.exists) throw new HttpsError("not-found", "Match not found.");
 
+  // A HARD BLOCK, enforced here rather than left to an admin remembering.
+  // Two things stop a publication: a participant having objected, and the
+  // objection window still being open - so nothing reaches a public
+  // audience before both players have had their full chance to opt out.
+  // Putting this in the publish path itself is the point; a note in a
+  // console is exactly what gets missed at the moment it matters.
+  //
+  // Collecting the objection BEFORE publishing is also the honest answer to
+  // "posting it cost me money": the money is never spent on footage that
+  // cannot be used.
+  const {publishBlockedReason} = require("./takedown");
+  const blocked = publishBlockedReason(snap.data(), Date.now());
+  if (blocked === "participant-objected") {
+    throw new HttpsError(
+        "failed-precondition",
+        "A player in this battle has asked for it not to be posted.",
+    );
+  }
+  if (blocked === "objection-window-open") {
+    throw new HttpsError(
+        "failed-precondition",
+        "Voting is still open on this battle, so its players can still opt " +
+        "out. It can be published once that window closes.",
+    );
+  }
+
   const [objects] = await bucket.getFiles({prefix: `${HIGHLIGHT_PREFIX}/${matchId}/`});
   const videos = objects.filter((o) => o.name.endsWith(".mp4"));
   if (videos.length === 0) {
@@ -92,6 +118,29 @@ async function publishHighlight(matchId) {
       publicUrls,
     },
   }, {merge: true});
+
+  // Tell both players their battle is now public.
+  //
+  // Without this, the safeguards are theoretical: you cannot object to
+  // something you do not know exists, and the person most likely to want a
+  // takedown is exactly the person who never found out their clip went out.
+  // Best-effort - a failed push must never undo a completed publication.
+  try {
+    const {sendToUsers} = require("./notifications");
+    const match = snap.data();
+    const players = await Promise.all([
+      db.collection("users").doc(match.player1Id).get(),
+      db.collection("users").doc(match.player2Id).get(),
+    ]);
+    await sendToUsers(players.filter((p) => p.exists), {
+      title: "Your battle is live",
+      body: "One of your roasts just went public. Tap if you'd rather it wasn't.",
+      category: "match_found",
+      data: {kind: "highlight_published", matchId},
+    });
+  } catch (e) {
+    console.error(`publish notification failed for ${matchId}:`, e.message);
+  }
 
   return {published: true, renditions: Object.keys(publicUrls), publicUrls};
 }
