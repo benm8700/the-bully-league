@@ -235,6 +235,8 @@ async function getWatchFeed(auth, data) {
       verdict: verdictFor(c.match),
       videoUrl: await clipUrl(c.match),
       captioned: c.match.highlight?.captioned === true,
+      reactionCounts: c.match.reactionCounts ?? {},
+      reactionTotal: c.match.reactionTotal ?? 0,
     });
   }
 

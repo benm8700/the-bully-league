@@ -9,6 +9,7 @@ const {generateBracket, debugAdvanceRound, DEFAULT_MIN_ENTRANTS} = require("./to
 const {moderateImage, moderateImageContent} = require("./visualModeration");
 const {generateToken, AGORA_APP_ID} = require("./agoraToken");
 const {onVoteCast} = require("./voteCount");
+const {onReactionWritten} = require("./reactions");
 const {
   enterQueue,
   leaveQueue,
@@ -722,3 +723,4 @@ exports.getMatchesNeedingVotes = onCall((request) => {
 exports.getRankedUnlock = onCall((request) => getRankedUnlock(request.auth));
 
 exports.onVoteCast = onVoteCast;
+exports.onReactionWritten = onReactionWritten;

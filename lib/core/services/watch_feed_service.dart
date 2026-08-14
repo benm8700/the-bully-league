@@ -15,6 +15,7 @@ class FeedMatch {
     required this.windowOpen,
     required this.videoUrl,
     required this.verdict,
+    required this.reactionCounts,
   });
 
   final String matchId;
@@ -45,6 +46,10 @@ class FeedMatch {
   /// video spoils it.
   final FeedVerdict? verdict;
 
+  /// Per-emoji tallies as of page load. Not live - a listener per clip in
+  /// a scrolling feed is a lot of sockets for a number nobody watches move.
+  final Map<String, int> reactionCounts;
+
   static FeedMatch fromMap(Map<String, dynamic> m) => FeedMatch(
         matchId: m['matchId'] as String,
         player1Id: m['player1Id'] as String? ?? '',
@@ -58,6 +63,8 @@ class FeedMatch {
         windowOpen: m['windowOpen'] == true,
         videoUrl: m['videoUrl'] as String?,
         verdict: FeedVerdict.fromMap(m['verdict']),
+        reactionCounts: ((m['reactionCounts'] as Map?) ?? const {})
+            .map((k, v) => MapEntry(k as String, (v as num).toInt())),
       );
 }
 

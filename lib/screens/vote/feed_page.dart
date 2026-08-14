@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/services/watch_feed_service.dart';
+import '../../widgets/clip_reactions.dart';
 import '../../widgets/live_tally.dart';
 
 /// One battle, full screen, with the choice laid over the players' faces.
@@ -157,6 +158,18 @@ class _FeedPageState extends State<FeedPage> {
           if (_choiceVisible) ..._choiceOverlay(context),
           if (_chosenPlayerId != null) _afterChoice(context),
           _header(context),
+          // Sits low and out of the way of both faces, and stays available
+          // whether or not the choice has been made - reacting is not a
+          // judgement and should not wait on one.
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.of(context).padding.bottom + 16,
+            child: ClipReactions(
+              matchId: widget.match.matchId,
+              counts: widget.match.reactionCounts,
+            ),
+          ),
         ],
       ),
     );

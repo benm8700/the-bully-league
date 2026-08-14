@@ -120,6 +120,25 @@ service cloud.firestore {
       // feature.
       //
       // Written only by the onVoteCast trigger via the Admin SDK.
+      // Emoji reactions on a clip - what stands in for comments, which are
+      // ruled out entirely so they can't affect the roasters' mental state.
+      //
+      // The allowed set is enforced HERE rather than only in the trigger,
+      // because this is the write path a modified client would use. The set
+      // is all-positive or intensity-only by design: a thumbs-down would be
+      // a comment section in emoji form, a way for strangers to pile on
+      // whoever lost, which is the exact harm that decision prevents.
+      //
+      // You may only write your own, and only one - changing it moves the
+      // tally rather than adding a second, which keeps the count a measure
+      // of how many people felt something.
+      match /reactions/{userId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && request.auth.uid == userId &&
+          (request.resource == null ||
+           request.resource.data.emoji in ['fire', 'skull', 'cry', 'oof']);
+      }
+
       match /tally/{document} {
         allow read: if request.auth != null && (
           exists(/databases/$(database)/documents/votes/$(matchId)/ballots/$(request.auth.uid)) ||
