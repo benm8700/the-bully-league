@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/live_tally.dart';
+import '../moderation/clip_takedown_sheet.dart';
 
 /// Your own battles, with the vote count moving in real time.
 ///
@@ -143,6 +144,15 @@ class _MatchCard extends StatelessWidget {
                           ? 'Being judged'
                           : status,
                   style: Theme.of(context).textTheme.labelSmall,
+                ),
+                // The only route to the takedown flow, and it belongs here:
+                // this is the screen showing your OWN battles, which is
+                // exactly where someone unhappy about their footage looks.
+                IconButton(
+                  icon: const Icon(Icons.more_horiz, size: 18),
+                  tooltip: 'Clip options',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => ClipTakedownSheet.show(context, matchId),
                 ),
               ],
             ),
