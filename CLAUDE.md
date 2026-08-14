@@ -609,6 +609,7 @@ A user can sign up (Firebase Auth email/password), the app checks their Play Age
 - Premium subscription price point and exact number of free monthly tournament entries — features decided, pricing/numbers not yet set.
 - Friend Battles feature — concept, constraints, and community-judging decided (free, exhibition-only for rating, but recorded+voted); invite link/code mechanism not yet designed.
 - Voting incentive point values, streak bonus amounts, and Judge track titles/thresholds — structure decided, exact numbers/titles not yet designed.
+- **Voting guardrails — DEVELOPER EXPLICITLY FLAGGED THIS FOR A DEDICATED DESIGN CONVERSATION LATER.** Two open questions that must be designed together, plus one already-built item recorded so it isn't mistaken for missing. The live risk: `finalizeMatch` declares a winner on *any* weight imbalance, so today a **single vote settles a ranked match and moves both players' Elo**. See the full write-up in Problems To Solve Later → "Voting guardrails". Pick this up before the private beta produces rated matches worth caring about.
 - Highlight reel branding specifics (intro/outro design, font/color template, whether to use background music) — production-quality requirement decided, visual/audio design not yet done.
 - App name — not yet decided; brainstormed candidates need trademark/domain availability check.
 - Quality-flag abuse detection mechanism/threshold — safeguard decided, exact implementation not yet designed.
