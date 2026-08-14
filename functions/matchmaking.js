@@ -829,6 +829,10 @@ module.exports = {
   startMatchRecording,
   getActiveMatch,
   RECORDED_MODES,
+  // Every queue that exists, so the online-count publisher (presence.js)
+  // sweeps exactly the same set of modes matchmaking uses rather than
+  // keeping its own list that could silently drift out of step.
+  MODES,
   setMatchReady,
   skipMatch,
   getSkipAllowance,

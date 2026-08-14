@@ -1,8 +1,11 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/services/event_window.dart';
 import '../../core/services/matchmaking_service.dart';
+import '../../core/services/presence.dart';
 import 'bio_reveal_screen.dart';
 
 /// The "finding you an opponent" step (Build Order step 4's missing half).
@@ -23,6 +26,8 @@ class MatchmakingScreen extends StatefulWidget {
 }
 
 class _MatchmakingScreenState extends State<MatchmakingScreen> {
+  static const _quietHintAfterSeconds = 25;
+
   final _cancel = Completer<void>();
   final _service = MatchmakingService();
 
@@ -140,6 +145,18 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        // The highest-conversion place in the whole app to mention the
+        // daily window: someone staring at a spinner during a quiet hour
+        // has just discovered the problem the window exists to solve, and
+        // is more receptive to "come back at 6" than they will ever be
+        // again. Turns a matchmaking failure into a scheduling nudge.
+        //
+        // Held back for the first stretch of the wait - a pairing that
+        // arrives in ten seconds shouldn't be preceded by an apology.
+        if (waited.inSeconds >= _quietHintAfterSeconds) ...[
+          const SizedBox(height: 24),
+          const _QuietQueueHint(),
+        ],
         const SizedBox(height: 40),
         OutlinedButton(
           onPressed: _leaving ? null : _onCancel,
@@ -171,5 +188,77 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
     if (seconds < 60) return 'Searching for ${seconds}s';
     final minutes = waited.inMinutes;
     return 'Searching for ${minutes}m ${seconds % 60}s';
+  }
+}
+
+/// Shown once a wait has gone on long enough to feel quiet: tells the
+/// player when the app is actually busy, and how many people are here now.
+///
+/// Two states, both honest. If people ARE online it says so, because a real
+/// number reframes the wait as bad luck rather than as an empty app. If
+/// nobody is, it points at the window instead - which is the true and
+/// useful answer, and far better than leaving someone to conclude on their
+/// own that nothing here works.
+class _QuietQueueHint extends StatelessWidget {
+  const _QuietQueueHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('config')
+          .doc('eventWindow')
+          .snapshots(),
+      builder: (context, configSnap) {
+        if (configSnap.hasError) return const SizedBox.shrink();
+        final config = EventWindowConfig.fromMap(configSnap.data?.data());
+        if (!config.enabled) return const SizedBox.shrink();
+
+        final now = DateTime.now().toUtc();
+        final window = currentOrNextWindow(now, config);
+        // During the window there is nothing useful to promise - they are
+        // already at the busiest moment of the day.
+        if (window.contains(now)) return const SizedBox.shrink();
+
+        return StreamBuilder<OnlineCount?>(
+          stream: onlineCountStream(),
+          builder: (context, countSnap) {
+            final count = countSnap.data;
+            final others = (count != null && count.isFresh)
+                // Discount the caller, who is in the queue being counted.
+                ? (count.total - 1).clamp(0, 1 << 30)
+                : null;
+
+            return Card(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  children: [
+                    Text(
+                      others != null && others > 0
+                          ? 'A few people are around - hang tight'
+                          : 'It\'s quiet right now',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${config.name} is the busiest hour of the day - '
+                      '6pm-7pm Pacific. That\'s when everyone is here.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../core/services/event_window.dart';
+import '../core/services/presence.dart';
 
 /// The always-visible countdown to the daily window.
 ///
@@ -99,6 +100,12 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
                         _localTimeLabel(window, config),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                      // The single most persuasive thing on this banner:
+                      // the objection is "nobody will be there," and a real
+                      // number answers it directly. Rendered only when
+                      // there IS somebody - "0 roasters online" is an
+                      // argument against opening the app.
+                      const _OnlineCountLine(),
                     ],
                   ),
                 ),
@@ -143,5 +150,45 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
     final suffix = local.hour < 12 ? 'am' : 'pm';
     if (local.minute == 0) return '$h$suffix';
     return '$h:${local.minute.toString().padLeft(2, '0')}$suffix';
+  }
+}
+
+/// "N roasters online now", or nothing at all.
+///
+/// Deliberately renders nothing when the count is zero, stale, or
+/// unreadable. This line only ever exists to make the app look alive; a
+/// "0 roasters online" label would be an argument against opening it, and a
+/// frozen number from an hour ago would be a lie that costs the counter its
+/// credibility the first time someone queues against it.
+class _OnlineCountLine extends StatelessWidget {
+  const _OnlineCountLine();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<OnlineCount?>(
+      stream: onlineCountStream(),
+      builder: (context, snapshot) {
+        final count = snapshot.data;
+        if (count == null || !count.isFresh || count.total <= 0) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            children: [
+              const Icon(Icons.circle, size: 8, color: Colors.greenAccent),
+              const SizedBox(width: 6),
+              Text(
+                count.label,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

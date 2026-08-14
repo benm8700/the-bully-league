@@ -33,9 +33,9 @@ class HomeScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.help_outline),
             tooltip: 'Support & Feedback',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SupportScreen()),
-            ),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SupportScreen())),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -54,69 +54,94 @@ class HomeScreen extends StatelessWidget {
         builder: (context, snapshot) {
           final username = snapshot.data?.displayName ?? 'Roaster';
           final uid = snapshot.data?.uid;
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Welcome, $username',
-                  style: Theme.of(context).textTheme.headlineMedium,
+          // Scrollable rather than a bare centred Column: Home has grown
+          // past what a small screen can show at once (seen live as a
+          // 156px overflow on a 320x640 device), and it will keep growing.
+          // Centred only when there's room to spare, so it still looks
+          // deliberate on a large phone rather than pinned to the top.
+          return LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - 32,
                 ),
-                const SizedBox(height: 12),
-                if (uid != null) _RankBadge(uid: uid),
-                const SizedBox(height: 24),
-                const _ActiveMatchBanner(),
-                const EventWindowBanner(),
-                const SizedBox(height: 4),
-                const _RankedUnlockGate(),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: () => _startMatch(context, 'exhibition'),
-                  child: const Text('Find Exhibition Match'),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Welcome, $username',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    if (uid != null) _RankBadge(uid: uid),
+                    const SizedBox(height: 24),
+                    const _ActiveMatchBanner(),
+                    const EventWindowBanner(),
+                    const SizedBox(height: 4),
+                    const _RankedUnlockGate(),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () => _startMatch(context, 'exhibition'),
+                      child: const Text('Find Exhibition Match'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const VoteQueueScreen(),
+                        ),
+                      ),
+                      child: const Text('Judge a Battle'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const MyBattlesScreen(),
+                        ),
+                      ),
+                      child: const Text('My Battles'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const FinalizeTestScreen(),
+                        ),
+                      ),
+                      child: const Text('Finalize Match (test)'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ProfileScreen(),
+                        ),
+                      ),
+                      child: const Text('Your Profile'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const LeaderboardScreen(),
+                        ),
+                      ),
+                      child: const Text('Leaderboard'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const TournamentListScreen(),
+                        ),
+                      ),
+                      child: const Text('Tournaments'),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const VoteQueueScreen()),
-                  ),
-                  child: const Text('Judge a Battle'),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const MyBattlesScreen()),
-                  ),
-                  child: const Text('My Battles'),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const FinalizeTestScreen()),
-                  ),
-                  child: const Text('Finalize Match (test)'),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                  ),
-                  child: const Text('Your Profile'),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
-                  ),
-                  child: const Text('Leaderboard'),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const TournamentListScreen()),
-                  ),
-                  child: const Text('Tournaments'),
-                ),
-              ],
+              ),
             ),
           );
         },
@@ -137,7 +162,6 @@ class HomeScreen extends StatelessWidget {
     }
     await authService.signOut();
   }
-
 }
 
 /// Recording consent -> camera/mic check -> matchmaking queue -> match.
@@ -162,9 +186,9 @@ Future<void> _startMatch(BuildContext context, String mode) async {
   );
   if (consented != true || !context.mounted) return;
 
-  await Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => PreMatchScreen(mode: mode)),
-  );
+  await Navigator.of(
+    context,
+  ).push(MaterialPageRoute(builder: (_) => PreMatchScreen(mode: mode)));
 }
 
 /// Shows the onboarding tutorial if this player hasn't done it, and
@@ -178,17 +202,19 @@ Future<bool> _ensureTutorialCompleted(BuildContext context) async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return true;
   try {
-    final snap =
-        await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
     if (snap.data()?['tutorialCompleted'] == true) return true;
   } catch (_) {
     return true;
   }
   if (!context.mounted) return false;
   // Only continue into the match if they actually finished it.
-  final completed = await Navigator.of(context).push<bool>(
-    MaterialPageRoute(builder: (_) => const TutorialScreen()),
-  );
+  final completed = await Navigator.of(
+    context,
+  ).push<bool>(MaterialPageRoute(builder: (_) => const TutorialScreen()));
   return completed == true;
 }
 
@@ -237,10 +263,7 @@ class _RankedUnlockGateState extends State<_RankedUnlockGate> {
 
     return Column(
       children: [
-        const FilledButton(
-          onPressed: null,
-          child: Text('Ranked locked'),
-        ),
+        const FilledButton(onPressed: null, child: Text('Ranked locked')),
         const SizedBox(height: 6),
         Text(
           state.progressLabel,
@@ -274,7 +297,8 @@ class _ActiveMatchBanner extends StatefulWidget {
   State<_ActiveMatchBanner> createState() => _ActiveMatchBannerState();
 }
 
-class _ActiveMatchBannerState extends State<_ActiveMatchBanner> with WidgetsBindingObserver {
+class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
+    with WidgetsBindingObserver {
   final _service = MatchmakingService();
   MatchPairing? _pending;
 
@@ -307,7 +331,9 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner> with WidgetsBind
     if (pairing == null) return;
     setState(() => _pending = null);
     Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => BioRevealScreen(pairing: pairing)))
+        .push(
+          MaterialPageRoute(builder: (_) => BioRevealScreen(pairing: pairing)),
+        )
         // The match may have ended while they were away, so re-check on
         // the way back rather than leaving a stale banner behind.
         .then((_) => _check());
@@ -329,7 +355,10 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner> with WidgetsBind
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              FilledButton(onPressed: _rejoin, child: const Text('Rejoin match')),
+              FilledButton(
+                onPressed: _rejoin,
+                child: const Text('Rejoin match'),
+              ),
             ],
           ),
         ),
@@ -360,8 +389,14 @@ class _RankBadge extends StatelessWidget {
         return Column(
           children: [
             Text(rankTitle, style: Theme.of(context).textTheme.titleLarge),
-            Text('Rating: $rating', style: Theme.of(context).textTheme.bodyMedium),
-            Text('$wins wins, $losses losses', style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              'Rating: $rating',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            Text(
+              '$wins wins, $losses losses',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ],
         );
       },

@@ -232,6 +232,25 @@ exports.stopRunawayRecordings = onSchedule(
     },
 );
 
+/**
+ * Publishes how many people are queueing or mid-match, for the "N roasters
+ * online now" counter (see functions/presence.js for why this is a fixed
+ * scheduled job rather than a callable or an activity-driven write).
+ *
+ * Failure is logged and swallowed: a missing count renders nothing on the
+ * client, which is the correct degraded state. A social-proof number is
+ * never worth breaking Home over.
+ */
+exports.publishOnlineCount = onSchedule("every 1 minutes", async () => {
+  const {publishOnlineCount} = require("./presence");
+  try {
+    const counts = await publishOnlineCount();
+    if (counts.total > 0) console.log("publishOnlineCount:", JSON.stringify(counts));
+  } catch (err) {
+    console.error("publishOnlineCount failed:", err);
+  }
+});
+
 exports.purgeExpiredRecordings = onSchedule("every 24 hours", async () => {
   const {purgeExpiredRecordings} = require("./recordingRetention");
   const result = await purgeExpiredRecordings();

@@ -77,6 +77,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Aggregate, non-identifying counts - currently just how many people
+    // are queueing or mid-match, for the "N roasters online now" counter.
+    // Readable by any signed-in client because that number is the whole
+    // point; written only by the scheduled publishOnlineCount function,
+    // since a client that could write it could fake a busy app.
+    match /stats/{document} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     match /matches/{matchId} {
       // Match documents are now created and settled entirely server-side:
       // pollMatchmaking creates them at pairing time and completeMatch
