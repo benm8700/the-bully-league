@@ -40,6 +40,10 @@ const URGENCY_BAND_MS = 2 * 60 * 60 * 1000;
  * limits renders to signed-in viewers. */
 const CLIP_URL_TTL_MS = 6 * 60 * 60 * 1000;
 
+/** How many candidates get a ballot lookup. Bounds the reads one feed
+ * load costs while still giving an honest badge count. */
+const BALLOT_CHECK_LIMIT = 30;
+
 const PAGE_SIZE = 10;
 const SCAN_LIMIT = 60;
 
@@ -159,19 +163,29 @@ async function getWatchFeed(auth, data) {
     });
   }
 
-  const results = [];
-  for (const c of candidates) {
-    if (results.length >= limit) break;
-
+  // Resolve votability for every candidate, not just the page being
+  // returned, so the Judge tab's badge can show a true count of battles
+  // waiting on this viewer. A badge that undercounts because it only saw
+  // one page would quietly stop being the pull it exists to be.
+  const votable = new Map();
+  for (const c of candidates.slice(0, BALLOT_CHECK_LIMIT)) {
     // Participants can never vote on their own match, and a ballot already
     // cast cannot be cast again - both make a match archive-like for this
     // viewer even while its window is open.
-    let alreadyVoted = false;
-    if (c.windowOpen && !c.isParticipant) {
-      const ballot = await db.collection("votes").doc(c.doc.id)
-          .collection("ballots").doc(auth.uid).get();
-      alreadyVoted = ballot.exists;
+    if (!c.windowOpen || c.isParticipant) {
+      votable.set(c.doc.id, false);
+      continue;
     }
+    const ballot = await db.collection("votes").doc(c.doc.id)
+        .collection("ballots").doc(auth.uid).get();
+    votable.set(c.doc.id, !ballot.exists);
+  }
+
+  const results = [];
+  for (const c of candidates) {
+    if (results.length >= limit) break;
+    const alreadyVoted = c.windowOpen && !c.isParticipant &&
+      votable.get(c.doc.id) === false;
 
     const [p1, p2] = await Promise.all([
       db.collection("users").doc(c.match.player1Id).get(),
@@ -197,7 +211,12 @@ async function getWatchFeed(auth, data) {
     });
   }
 
-  return {matches: orderFeed(results, nowMs)};
+  return {
+    matches: orderFeed(results, nowMs),
+    // Drives the Judge tab badge: how many battles are waiting on THIS
+    // viewer specifically, not how many are open in general.
+    pendingVotes: [...votable.values()].filter(Boolean).length,
+  };
 }
 
 module.exports = {

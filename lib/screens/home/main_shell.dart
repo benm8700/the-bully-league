@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import '../profile/profile_screen.dart';
 import '../vote/my_battles_screen.dart';
-import '../vote/vote_queue_screen.dart';
+import '../vote/watch_feed_screen.dart';
 import 'home_screen.dart';
 
 /// The app's top-level navigation.
@@ -36,7 +36,7 @@ class _MainShellState extends State<MainShell> {
   /// their listeners every time someone glances at another tab.
   static const _screens = [
     HomeScreen(),
-    VoteQueueScreen(embedded: true),
+    WatchFeedScreen(embedded: true),
     MyBattlesScreen(embedded: true),
     LeaderboardScreen(embedded: true),
     ProfileScreen(embedded: true),
