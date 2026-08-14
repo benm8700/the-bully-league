@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/push_notification_service.dart';
+import '../../widgets/event_window_banner.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
@@ -65,6 +66,8 @@ class HomeScreen extends StatelessWidget {
                 if (uid != null) _RankBadge(uid: uid),
                 const SizedBox(height: 24),
                 const _ActiveMatchBanner(),
+                const EventWindowBanner(),
+                const SizedBox(height: 4),
                 const _RankedUnlockGate(),
                 const SizedBox(height: 12),
                 OutlinedButton(
