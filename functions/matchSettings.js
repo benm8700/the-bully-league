@@ -34,6 +34,24 @@ const DEFAULTS = {
   roundLengthSeconds: 15,
   countdownSeconds: 5,
   bioRevealSeconds: 60,
+  /**
+   * Vote weight at which a result counts for full rating movement (see
+   * voteConfidence in rating.js).
+   *
+   * Live-configurable for a specific reason: this is an ABSOLUTE number,
+   * so as the app grows it stops binding. If the typical match one day
+   * draws 200 votes, a 10-vote match is unusually thinly judged yet would
+   * still earn full confidence - the guardrail would quietly switch
+   * itself off. Raising this as volume grows keeps it meaningful without
+   * shipping a new version.
+   *
+   * Deliberately NOT relative to other matches' vote counts: that would
+   * make one player's rating movement depend on how popular other
+   * people's matches were, which is both odd to explain and arguably
+   * unfair. Ten independent judges is a real verdict whether or not some
+   * other match drew two hundred.
+   */
+  fullConfidenceVotes: 10,
 };
 
 /** Bounds exist so a typo in the console can't brick live matches - a
@@ -46,6 +64,10 @@ const LIMITS = {
   roundLengthSeconds: {min: 5, max: 120},
   countdownSeconds: {min: 0, max: 30},
   bioRevealSeconds: {min: 0, max: 300},
+  // At least 1 (0 would make every result count for nothing), and capped
+  // well above any plausible per-match vote count so it can grow with the
+  // platform without needing a code change.
+  fullConfidenceVotes: {min: 1, max: 1000},
 };
 
 function sanitize(field, value, fallback) {

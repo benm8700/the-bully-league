@@ -6,6 +6,7 @@ const {
   GOAT_ELIGIBLE_MIN_MATCHES,
   applyEloChange,
   computeBaseRankTitle,
+  voteConfidence,
 } = require("./rating");
 
 const VOTE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -91,14 +92,28 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     let p2Wins = p2.wins ?? 0;
     let p2Losses = p2.losses ?? 0;
 
+    // How much this result should move rating, given how many people
+    // actually judged it. A match decided by one friendly vote barely
+    // moves anything; a well-judged one moves the full amount. See
+    // voteConfidence in rating.js for why this is scaled rather than
+    // gated behind a minimum vote count.
+    // Read from the settings stamped on this match at pairing time, so a
+    // match is judged by the rules that were in force when it was played
+    // rather than by whatever the config says a day later. Falls back to
+    // the default for matches recorded before this was configurable.
+    const confidence = voteConfidence(
+        player1Weight + player2Weight,
+        match.settings?.fullConfidenceVotes,
+    );
+
     if (winnerId === match.player1Id) {
-      p1NewRating = applyEloChange(p1Rating, p2Rating, 1);
-      p2NewRating = applyEloChange(p2Rating, p1Rating, 0);
+      p1NewRating = applyEloChange(p1Rating, p2Rating, 1, confidence);
+      p2NewRating = applyEloChange(p2Rating, p1Rating, 0, confidence);
       p1Wins += 1;
       p2Losses += 1;
     } else if (winnerId === match.player2Id) {
-      p2NewRating = applyEloChange(p2Rating, p1Rating, 1);
-      p1NewRating = applyEloChange(p1Rating, p2Rating, 0);
+      p2NewRating = applyEloChange(p2Rating, p1Rating, 1, confidence);
+      p1NewRating = applyEloChange(p1Rating, p2Rating, 0, confidence);
       p2Wins += 1;
       p1Losses += 1;
     }
@@ -125,6 +140,9 @@ async function finalizeMatch(matchId, {force = false} = {}) {
       winnerId,
       player1FinalWeight: player1Weight,
       player2FinalWeight: player2Weight,
+      // Recorded so a thin result is explicable after the fact - "why did
+      // that win only move me two points" has an answer on the document.
+      voteConfidence: confidence,
     });
   });
 

@@ -93,15 +93,54 @@ service cloud.firestore {
       // Compliance Baseline, so it belongs behind a Cloud Function.
       allow read: if request.auth != null;
       allow write: if false;
+
+      // The running head-to-head score, powering the live scoreboard.
+      //
+      // Kept in its own document rather than on the match specifically so
+      // it can be gated differently: the match itself must be readable by
+      // everyone for the feed, but seeing who is AHEAD before you vote
+      // biases your vote, and it would tell someone rallying support
+      // exactly how many more ballots they still need.
+      //
+      // So it is readable if you have ALREADY cast your ballot on this
+      // match - your vote is in, there is nothing left to bias - or if you
+      // are one of the two players. Participants cannot vote on their own
+      // match at all, so there is no vote of theirs left to influence, and
+      // watching your own result come in live is the entire point of the
+      // feature.
+      //
+      // Written only by the onVoteCast trigger via the Admin SDK.
+      match /tally/{document} {
+        allow read: if request.auth != null && (
+          exists(/databases/$(database)/documents/votes/$(matchId)/ballots/$(request.auth.uid)) ||
+          request.auth.uid ==
+            get(/databases/$(database)/documents/matches/$(matchId)).data.player1Id ||
+          request.auth.uid ==
+            get(/databases/$(database)/documents/matches/$(matchId)).data.player2Id
+        );
+        allow write: if false;
+      }
     }
 
     match /votes/{matchId}/ballots/{voterId} {
       // Votes ONLY go through the castVote Cloud Function (CAPTCHA
       // verification, 24h window, one-vote-per-account, and account-age
       // vote-weight all need server-side enforcement - see functions/index.js
-      // and CLAUDE.md's Judging / CAPTCHA-gate notes). Reads are open to any
-      // signed-in user so the client can compute a live tally.
-      allow read: if request.auth != null;
+      // and CLAUDE.md's Judging / CAPTCHA-gate notes).
+      //
+      // You may read your OWN ballot and nobody else's. This used to be
+      // open to any signed-in user so the client could add the ballots up
+      // itself, which is now exactly the wrong shape: the running score is
+      // deliberately hidden until you have voted (see the tally rule
+      // above), and readable ballots let any client sum them and see the
+      // score anyway - the gate would be decoration. Ballots also name who
+      // voted for whom, which is the raw material for coordinating a
+      // brigade.
+      //
+      // Reading your own is still allowed because the client legitimately
+      // needs to know whether you have already judged this match, and it
+      // reveals nothing you did not do yourself.
+      allow read: if request.auth != null && request.auth.uid == voterId;
       allow write: if false;
     }
 

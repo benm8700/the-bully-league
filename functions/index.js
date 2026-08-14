@@ -572,6 +572,19 @@ exports.skipMatch = onCall((request) => skipMatch(request.auth, request.data));
 exports.getSkipAllowance = onCall((request) => getSkipAllowance(request.auth));
 
 /**
+ * The matches most in need of a vote, fewest-votes first.
+ *
+ * The liquidity half of the voting guardrails: weighting rating by vote
+ * confidence is only fair if votes are actually gettable. Server-side
+ * because the "have I already voted" check reads the ballots
+ * subcollection, which clients are deliberately blocked from reading.
+ */
+exports.getMatchesNeedingVotes = onCall((request) => {
+  const {getMatchesNeedingVotes} = require("./voteQueue");
+  return getMatchesNeedingVotes(request.auth, request.data);
+});
+
+/**
  * Whether Ranked has unlocked for the caller, and how many exhibition
  * matches remain if not. CLAUDE.md asks for this progress to be visible
  * ("3 matches until Ranked unlocks") rather than a silent unlock.

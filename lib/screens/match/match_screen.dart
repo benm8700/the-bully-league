@@ -12,6 +12,8 @@ import '../../core/services/matchmaking_service.dart';
 import '../../core/services/video_call_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../core/services/yuv_to_jpeg.dart';
+import '../vote/my_battles_screen.dart';
+import '../vote/vote_queue_screen.dart';
 
 /// Round/turn/timer state machine (Build Order step 4).
 ///
@@ -548,21 +550,48 @@ class _MatchScreenState extends State<MatchScreen> {
             const SizedBox(height: 16),
             Text('Match complete!', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 12),
+            // The reciprocal ask, made at the highest-intent moment in the
+            // app: they're invested, waiting on their own verdict, and
+            // already looking at this screen. Asking here converts far
+            // better than a cold notification later, and framing it as
+            // "judge while you're judged" makes it plainly fair rather
+            // than extractive. It also directly feeds the vote confidence
+            // that now determines how much any result moves rating.
             const Text(
-              'Match participants can\'t vote on their own match - use a different '
-              'account\'s "Vote (test)" flow on Home with the ID below.',
+              'Your battle is now with the crowd. They have 24 hours to call it.\n\n'
+              'Judge a few others while you wait - the more people who judge a '
+              'battle, the more it counts.',
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
-            if (_matchCompleted) ...[
-              const Text('Match ID', style: TextStyle(fontWeight: FontWeight.bold)),
-              SelectableText(widget.pairing.matchId),
-            ] else if (_matchSaveError != null)
+            const SizedBox(height: 24),
+            if (_matchCompleted)
+              FilledButton.icon(
+                onPressed: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const VoteQueueScreen()),
+                ),
+                icon: const Icon(Icons.how_to_vote_outlined),
+                label: const Text('Judge a battle'),
+              )
+            else if (_matchSaveError != null)
               Text(_matchSaveError!, style: const TextStyle(color: Colors.red))
             else
               const CircularProgressIndicator(),
-            const SizedBox(height: 24),
-            FilledButton(
+            if (_matchCompleted) ...[
+              const SizedBox(height: 8),
+              // The other half of the wait: watching your own count climb.
+              // Participants can't vote on their own match, so there's no
+              // judgement of theirs left to bias and the scoreboard is open
+              // to them from the first ballot.
+              TextButton.icon(
+                onPressed: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const MyBattlesScreen()),
+                ),
+                icon: const Icon(Icons.leaderboard_outlined, size: 18),
+                label: const Text('Watch the votes come in'),
+              ),
+            ],
+            const SizedBox(height: 12),
+            TextButton(
               onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
               child: const Text('Back to Home'),
             ),

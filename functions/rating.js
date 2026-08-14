@@ -43,6 +43,44 @@ function kFactorForRating(rating) {
   return 40;
 }
 
+/**
+ * Vote weight at which a result is treated as fully evidenced.
+ *
+ * PLACEHOLDER, like the rank thresholds - wants tuning once there's real
+ * voting volume to look at.
+ */
+const FULL_CONFIDENCE_WEIGHT = 10;
+
+/**
+ * How much a result should be trusted, given how many people actually
+ * judged it. Scales the K-factor, so a thinly-judged match moves rating
+ * proportionally less.
+ *
+ * WHY THIS RATHER THAN A MINIMUM-VOTE THRESHOLD. Requiring N votes before
+ * a match counts creates a cliff: below it nothing happens, above it the
+ * full swing, so there's an incentive to farm exactly enough votes and no
+ * reason to care beyond that. Worse, at private-beta volume most matches
+ * would close under the threshold, nobody's rating would move, nobody
+ * would climb, and the prestige loop the whole ranking system exists to
+ * drive would never start - protecting the ladder by switching it off.
+ *
+ * Scaling instead means every match counts for something, proportional to
+ * the evidence behind it. It also blunts collusion without banning
+ * anything: at the time this was written a single friendly vote moved 14
+ * points at 1200 rating, and 29 such wins reached the Headliner
+ * threshold. Under this curve that same climb needs roughly ten times as
+ * many matches.
+ *
+ * It becomes a no-op at real volume, which is the point - it's a
+ * correction for thin evidence, not a permanent damper.
+ */
+function voteConfidence(totalWeight, fullConfidenceWeight = FULL_CONFIDENCE_WEIGHT) {
+  if (!Number.isFinite(totalWeight) || totalWeight <= 0) return 0;
+  const target = Number.isFinite(fullConfidenceWeight) && fullConfidenceWeight > 0 ?
+    fullConfidenceWeight : FULL_CONFIDENCE_WEIGHT;
+  return Math.min(1, totalWeight / target);
+}
+
 /** Standard Elo expected-score formula. */
 function expectedScore(ratingSelf, ratingOpponent) {
   return 1 / (1 + Math.pow(10, (ratingOpponent - ratingSelf) / 400));
@@ -54,8 +92,12 @@ function expectedScore(ratingSelf, ratingOpponent) {
  * function at all - CLAUDE.md decided ties cause zero rating change for
  * either player, not the standard Elo 0.5-0.5 treatment.
  */
-function applyEloChange(ratingSelf, ratingOpponent, actualScore) {
-  const k = kFactorForRating(ratingSelf);
+function applyEloChange(ratingSelf, ratingOpponent, actualScore, confidence = 1) {
+  // Two multipliers on K, for two different kinds of uncertainty: the
+  // rating band covers how settled this PLAYER is, and confidence covers
+  // how settled this RESULT is. Defaults to 1 so existing callers and
+  // tests that don't care about vote volume behave exactly as before.
+  const k = kFactorForRating(ratingSelf) * Math.max(0, Math.min(1, confidence));
   const expected = expectedScore(ratingSelf, ratingOpponent);
   const newRating = ratingSelf + k * (actualScore - expected);
   return Math.max(RATING_FLOOR, Math.round(newRating));
@@ -82,6 +124,8 @@ module.exports = {
   GOAT_POOL_SIZE,
   GOAT_ELIGIBLE_MIN_MATCHES,
   kFactorForRating,
+  voteConfidence,
+  FULL_CONFIDENCE_WEIGHT,
   expectedScore,
   applyEloChange,
   computeBaseRankTitle,
