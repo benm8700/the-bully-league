@@ -362,6 +362,20 @@ exports.releaseUnansweredChallenges = onSchedule("every 2 minutes", async () => 
   }
 });
 
+/**
+ * Recomputes the all-time hall of fame. Daily is plenty - it is an
+ * all-time list, and a battle that belongs in it will still belong
+ * tomorrow.
+ */
+exports.rebuildHallOfFame = onSchedule("every 24 hours", async () => {
+  const {rebuildHallOfFame} = require("./hallOfFame");
+  try {
+    console.log("rebuildHallOfFame:", JSON.stringify(await rebuildHallOfFame()));
+  } catch (err) {
+    console.error("rebuildHallOfFame failed:", err);
+  }
+});
+
 exports.purgeExpiredRecordings = onSchedule("every 24 hours", async () => {
   const {purgeExpiredRecordings} = require("./recordingRetention");
   const result = await purgeExpiredRecordings();
