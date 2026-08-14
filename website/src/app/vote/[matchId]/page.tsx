@@ -72,11 +72,31 @@ export default function VotePage() {
   if (authLoading) return null;
 
   if (!user) {
+    // Someone arriving from a shared clip has no account and cannot make
+    // one here: signup happens in the app, because age verification runs
+    // on the store-level Play Age Signals API and has no web equivalent.
+    //
+    // So this is deliberately a CONVERSION surface, not a dead end. It
+    // used to say "Sign in to vote" and link to a login page that offers
+    // no way to register - which read as a wall to the exact visitor the
+    // shared clip was meant to attract. The clip poses the question; the
+    // app is where it gets answered.
     return (
-      <main className="flex-1 flex flex-col items-center justify-center gap-4 px-6 py-20">
-        <p className="text-foreground/70">Sign in to vote on this match.</p>
-        <Link href="/login" className="text-accent hover:underline">
-          Sign In
+      <main className="flex-1 flex flex-col items-center justify-center gap-4 px-6 py-20 text-center">
+        <p className="text-lg font-semibold">Who won this one?</p>
+        <p className="text-foreground/70 max-w-md">
+          Voting happens in the app, where we can check you&apos;re over 18.
+          Grab it, judge this battle, and get matched against a stranger
+          yourself.
+        </p>
+        <Link
+          href="/matches"
+          className="rounded-full bg-accent px-6 py-3 font-semibold text-background"
+        >
+          Watch more battles
+        </Link>
+        <Link href="/login" className="text-foreground/60 text-sm hover:underline">
+          Already have an account? Sign in
         </Link>
       </main>
     );
