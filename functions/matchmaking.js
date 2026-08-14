@@ -6,6 +6,7 @@ const {HttpsError} = require("firebase-functions/v2/https");
 const {STARTING_RATING, RANK_TIERS, GOAT_TITLE, computeBaseRankTitle} = require("./rating");
 const {getMatchSettings} = require("./matchSettings");
 const {readEventWindowConfig, qualifiesForWindow} = require("./eventWindow");
+const {shouldBecomeStanding, isLive} = require("./standingChallenge");
 const {stopRecording, writeRecordingState} = require("./cloudRecording");
 
 /** CLAUDE.md's recording scope decision: only ranked and tournament
@@ -258,6 +259,13 @@ async function enterQueue(auth, data) {
     recentOpponentIds: recent,
     joinedAt: Date.now(),
     status: "waiting",
+    // Whether this player can be woken by a push, which decides whether a
+    // long wait may become a STANDING challenge. A standing challenge
+    // works by notifying its owner when someone takes it up, so without a
+    // registered device it would sit in the pool being paired against and
+    // never answered - costing every player who matched it a five-minute
+    // wait for nothing. See functions/standingChallenge.js.
+    canNotify: Array.isArray(user.fcmTokens) && user.fcmTokens.length > 0,
   });
 
   return {queued: true, mode};
@@ -306,14 +314,33 @@ function isOnCooldown(a, b, now) {
  */
 function selectOpponent(queue, uid, now) {
   const me = queue[uid];
-  if (!me || me.status !== "waiting") return null;
+  // A standing entry can still be paired FROM as well as against - the
+  // player may have reopened the app and started polling again, and there
+  // is no reason to make them requeue to be matched.
+  if (!me || (me.status !== "waiting" && me.status !== "standing")) return null;
 
-  // Prune abandoned entries in the same pass, so a crashed client's
-  // leftover entry can't be paired against.
+  // A search that finds nobody becomes a STANDING challenge rather than
+  // failing: it outlives the app being closed, so someone queueing hours
+  // later matches it instantly and this player gets pushed. That is the
+  // whole point - without it, queueing outside a busy hour returns nothing
+  // and the core loop never fires.
+  // Applied to EVERY entry, not just the caller's. Whether a wait has
+  // become a standing challenge is a fact about how long it has waited,
+  // not about who happens to be polling - and only transitioning the
+  // caller would strand anyone who queued and closed the app before the
+  // threshold, leaving them to be pruned as stale rather than left as the
+  // standing challenge they had earned.
+  for (const entry of Object.values(queue)) {
+    if (shouldBecomeStanding(entry, now)) entry.status = "standing";
+  }
+
+  // Prune entries nobody is behind any more, so a crashed client's
+  // leftover cannot be paired against. Two different rules, because the
+  // two states mean different things: "waiting" claims someone is in front
+  // of the app right now, while "standing" says the opposite and must
+  // survive far longer. See functions/standingChallenge.js.
   for (const [id, entry] of Object.entries(queue)) {
-    if (entry.status === "waiting" && now - entry.joinedAt > STALE_ENTRY_MS) {
-      delete queue[id];
-    }
+    if (!isLive(entry, now, {staleMs: STALE_ENTRY_MS})) delete queue[id];
   }
   // Note: when this call ends up returning null, the transaction aborts
   // and these deletions are discarded along with it. That's intentional -
@@ -329,7 +356,10 @@ function selectOpponent(queue, uid, now) {
 
   const candidates = Object.values(queue).filter((o) =>
     o.uid !== uid &&
-    o.status === "waiting" &&
+    // Standing challenges are pairable exactly like live waits. This is
+    // the change that makes off-peak work at all: without it, queueing at
+    // 2pm and queueing at 8pm never meet.
+    (o.status === "waiting" || o.status === "standing") &&
     Math.abs((o.tierIndex ?? 0) - (me.tierIndex ?? 0)) <= band &&
     // Blocking is checked in BOTH directions - CLAUDE.md's blocking
     // decision is a personal preference tool, and it would be useless
@@ -347,7 +377,13 @@ function selectOpponent(queue, uid, now) {
 
   // Closest rating first; ties broken by who has waited longest, so
   // nobody starves while equally-good pairings keep appearing.
+  // Someone live and waiting beats a standing challenge, always. A live
+  // opponent can battle in the next thirty seconds; a standing one has to
+  // be woken by a push and may not answer for minutes, or at all. Pairing
+  // against a sleeper while a live player sits in the same queue would
+  // make the app feel slower precisely when it is busiest.
   pool.sort((a, b) =>
+    (a.status === "standing" ? 1 : 0) - (b.status === "standing" ? 1 : 0) ||
     Math.abs(a.rating - me.rating) - Math.abs(b.rating - me.rating) ||
     a.joinedAt - b.joinedAt,
   );
@@ -359,13 +395,28 @@ function selectOpponent(queue, uid, now) {
  * the test suite can drive the exact same mutation the transaction does.
  */
 function applyPairing(queue, uid, opponentId, matchId, channelName) {
-  queue[uid] = {...queue[uid], status: "matched", matchId, channelName, opponentId};
+  // Remembered before the status is overwritten: a match born from a
+  // standing challenge has to be treated differently downstream, because
+  // one of its players may be asleep. It gets a five-minute acceptance
+  // window instead of the bio reveal's short timer, and if nobody answers
+  // it is released rather than left pending.
+  // Recorded on the entries themselves rather than returned alongside,
+  // because the transaction can only commit the queue - and the statuses
+  // are about to be overwritten with "matched", losing the distinction.
+  const iWasStanding = queue[uid]?.status === "standing";
+  const theyWereStanding = queue[opponentId]?.status === "standing";
+
+  queue[uid] = {
+    ...queue[uid], status: "matched", matchId, channelName, opponentId,
+    wasStanding: iWasStanding,
+  };
   queue[opponentId] = {
     ...queue[opponentId],
     status: "matched",
     matchId,
     channelName,
     opponentId: uid,
+    wasStanding: theyWereStanding,
   };
   return queue;
 }
@@ -400,7 +451,11 @@ async function attemptPairing(uid, mode, matchId, channelName, now) {
   if (!mine || mine.status !== "matched" || mine.matchId !== matchId) return null;
   // Carried out so the prime-time-window determination can use the EARLIER
   // of the two players' queue times - see resolveEventWindow.
-  return {...mine, opponentJoinedAt: queue?.[mine.opponentId]?.joinedAt ?? null};
+  return {
+    ...mine,
+    opponentJoinedAt: queue?.[mine.opponentId]?.joinedAt ?? null,
+    opponentWasStanding: queue?.[mine.opponentId]?.wasStanding === true,
+  };
 }
 
 /**
@@ -541,6 +596,13 @@ async function pollMatchmaking(auth, data) {
       mode,
       settings,
       eventWindow,
+      // Where this pairing came from. A match born of a standing challenge
+      // may have a player who is asleep, so it gets a five-minute
+      // acceptance window instead of the bio reveal timer, and is released
+      // rather than left pending if nobody answers.
+      origin: paired.opponentWasStanding || paired.wasStanding ? "standing" : "live",
+      challengerId: paired.opponentWasStanding ? paired.opponentId :
+        paired.wasStanding ? uid : null,
       // Created at PAIRING time now, not at verdict time - the document is
       // what the two clients agree on (channel name, who the opponent is),
       // so it has to exist before the match rather than after it. Anything

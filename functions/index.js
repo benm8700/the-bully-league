@@ -314,6 +314,23 @@ exports.autoRenderHighlights = onSchedule(
       }
     });
 
+/**
+ * Frees players left waiting on a standing challenge nobody answered.
+ * Without it, one unanswered challenge quietly removes a willing player
+ * from the pool - see functions/releaseChallenges.js.
+ */
+exports.releaseUnansweredChallenges = onSchedule("every 2 minutes", async () => {
+  const {releaseUnansweredChallenges} = require("./releaseChallenges");
+  try {
+    const result = await releaseUnansweredChallenges();
+    if (result.released.length > 0) {
+      console.log("releaseUnansweredChallenges:", JSON.stringify(result));
+    }
+  } catch (err) {
+    console.error("releaseUnansweredChallenges failed:", err);
+  }
+});
+
 exports.purgeExpiredRecordings = onSchedule("every 24 hours", async () => {
   const {purgeExpiredRecordings} = require("./recordingRetention");
   const result = await purgeExpiredRecordings();

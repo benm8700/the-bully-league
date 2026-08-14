@@ -43,6 +43,7 @@ function entry(uid, overrides = {}) {
     recentOpponentIds: {},
     joinedAt: NOW,
     status: "waiting",
+    canNotify: true,
     ...overrides,
   };
 }
@@ -149,14 +150,88 @@ test("the legacy plain-array recentOpponentIds shape is treated as on cooldown",
 
 // --- Stale entries --------------------------------------------------------
 
-test("an abandoned entry is never paired against", () => {
-  const q = queueOf(entry("a"), entry("b", {joinedAt: NOW - STALE_ENTRY_MS - 1}));
+test("an abandoned entry with no device is never paired against", () => {
+  // Without a registered device there is nobody to push, so a long wait
+  // cannot become a standing challenge - it stays an ordinary wait and is
+  // pruned. Pairing against it would cost a live player five minutes
+  // waiting on someone who can never be told they were matched.
+  const q = queueOf(
+      entry("a"),
+      entry("b", {joinedAt: NOW - STALE_ENTRY_MS - 1, canNotify: false}),
+  );
   assert.strictEqual(selectOpponent(q, "a", NOW), null);
 });
 
-test("our own stale entry stops us pairing", () => {
+test("a long wait becomes a standing challenge instead of being pruned", () => {
+  // This used to assert the opposite: an entry older than the stale
+  // threshold was dropped and its owner could not pair. That was the whole
+  // problem standing challenges exist to fix - queue outside a busy hour,
+  // find nobody, and leave with nothing. A wait that long is now a standing
+  // challenge, which is exactly what should be pairable.
   const q = queueOf(entry("a", {joinedAt: NOW - STALE_ENTRY_MS - 1}), entry("b"));
-  assert.strictEqual(selectOpponent(q, "a", NOW), null);
+  const picked = selectOpponent(q, "a", NOW);
+  assert.ok(picked, "a long-waiting player should still be able to pair");
+  assert.strictEqual(picked.uid, "b");
+  assert.strictEqual(q["a"].status, "standing");
+});
+
+test("a standing challenge outlives the app being closed", () => {
+  // The entire point: someone queueing hours later matches it instantly.
+  const q = queueOf(
+      entry("asleep", {joinedAt: NOW - 3 * 60 * 60 * 1000}),
+      entry("fresh"),
+  );
+  const picked = selectOpponent(q, "fresh", NOW);
+  assert.ok(picked);
+  assert.strictEqual(picked.uid, "asleep");
+});
+
+test("a standing challenge is eventually forgotten", () => {
+  // A challenge left days ago would pair someone against an opponent who
+  // has long since forgotten they queued.
+  const q = queueOf(
+      entry("ancient", {joinedAt: NOW - 7 * 60 * 60 * 1000}),
+      entry("fresh"),
+  );
+  assert.strictEqual(selectOpponent(q, "fresh", NOW), null);
+});
+
+test("a live opponent is always preferred over a standing one", () => {
+  // A live player can battle in the next thirty seconds; a standing one
+  // has to be woken by a push and may never answer. Pairing against a
+  // sleeper while someone live sits in the same queue would make the app
+  // feel slowest exactly when it is busiest.
+  const q = queueOf(
+      entry("me"),
+      entry("standing", {joinedAt: NOW - 60 * 60 * 1000, rating: 1200}),
+      entry("live", {joinedAt: NOW - 1000, rating: 1400}),
+  );
+  const picked = selectOpponent(q, "me", NOW);
+  // Picked despite being much further away in rating.
+  assert.strictEqual(picked.uid, "live");
+});
+
+test("an unwakeable player never becomes a standing challenge", () => {
+  // However long they wait. Being pushed is the entire mechanism, so an
+  // entry that cannot be pushed has nothing to offer the pool.
+  const q = queueOf(
+      entry("nodevice", {joinedAt: NOW - 5 * 60 * 60 * 1000, canNotify: false}),
+      entry("me"),
+  );
+  assert.strictEqual(selectOpponent(q, "me", NOW), null);
+});
+
+test("a standing challenge survives being taken up and released", () => {
+  // Releasing an unanswered challenge returns it to the pool rather than
+  // deleting it, so a player who was briefly away is not punished for one
+  // missed push.
+  const q = queueOf(entry("a", {joinedAt: NOW - 2 * 60 * 1000}), entry("b"));
+  const first = selectOpponent(q, "b", NOW);
+  assert.strictEqual(first.uid, "a");
+  // Simulate release: status goes back to standing rather than vanishing.
+  q["a"] = {...q["a"], status: "standing"};
+  const second = selectOpponent(q, "b", NOW + 1000);
+  assert.strictEqual(second.uid, "a");
 });
 
 // --- Selection quality ----------------------------------------------------
