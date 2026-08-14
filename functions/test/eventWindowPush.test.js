@@ -177,6 +177,39 @@ check("a single roaster is described in the singular", () => {
   assert.ok(copyFor("start", {name: "X"}, 1).body.includes("1 roaster is"));
 });
 
+check("people who committed are reminded of their own promise", () => {
+  // The whole mechanism pre-commitment relies on: an intention only raises
+  // follow-through if something reminds you that you made it. Sending the
+  // generic broadcast to someone who deliberately opted in wastes the
+  // strongest signal the app has about who intends to show up.
+  const committed = copyFor("start", {name: "X"}, 4, {committed: true});
+  const general = copyFor("start", {name: "X"}, 4);
+  assert.ok(/you said/i.test(committed.body), committed.body);
+  assert.ok(!/you said/i.test(general.body), general.body);
+  assert.notStrictEqual(committed.body, general.body);
+});
+
+check("the committed last call also references the promise", () => {
+  const committed = copyFor("last_call", {name: "X"}, 3, {committed: true});
+  assert.ok(/you said/i.test(committed.body), committed.body);
+});
+
+check("committed copy still never invents a count", () => {
+  for (const kind of ["start", "last_call"]) {
+    const {body} = copyFor(kind, {name: "X"}, 0, {committed: true});
+    assert.ok(!/\d/.test(body), `${kind}: "${body}"`);
+  }
+});
+
+check("committed copy reads correctly for exactly one other person", () => {
+  // Plural agreement is easy to get wrong when a count is spliced into a
+  // sentence, and "So are 1 others" is the kind of thing that makes an app
+  // feel unfinished.
+  const {body} = copyFor("start", {name: "X"}, 1, {committed: true});
+  assert.ok(!/are 1 others/.test(body), body);
+  assert.ok(/is 1 other\b/.test(body), body);
+});
+
 // --- preferences ---
 
 check("absent preferences mean opted IN", () => {

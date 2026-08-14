@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/services/agora_video_service.dart';
+import '../../core/services/event_window.dart';
 import '../../core/services/video_call_service.dart';
 
 /// Mandatory one-time onboarding before a player's first match
@@ -57,6 +58,36 @@ class _TutorialScreenState extends State<TutorialScreen> {
   void initState() {
     super.initState();
     _videoCallService = AgoraVideoCallService();
+    _loadWindowConfig();
+  }
+
+  /// The daily window's name and hours, for the closing panel.
+  ///
+  /// Read once rather than watched: the tutorial is over in a couple of
+  /// minutes, and a banner changing under someone mid-sentence would be
+  /// stranger than a slightly stale one. Starts at the documented defaults
+  /// so the copy is correct even before this resolves, and stays there if
+  /// the read fails - a missed config must never block onboarding.
+  EventWindowConfig _windowConfig = const EventWindowConfig();
+
+  Future<void> _loadWindowConfig() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('config')
+          .doc('eventWindow')
+          .get();
+      if (!mounted) return;
+      setState(() => _windowConfig = EventWindowConfig.fromMap(snap.data()));
+    } catch (_) {
+      // Defaults already loaded; nothing to do.
+    }
+  }
+
+  String _windowHours() {
+    String hour12(int h) =>
+        '${h % 12 == 0 ? 12 : h % 12}${h < 12 ? 'am' : 'pm'}';
+    return '${hour12(_windowConfig.startHourPacific)}-'
+        '${hour12(_windowConfig.endHourPacific)} Pacific';
   }
 
   @override
@@ -385,8 +416,16 @@ class _TutorialScreenState extends State<TutorialScreen> {
     return _Panel(
       icon: Icons.check_circle_outline,
       title: 'That\'s the whole format',
-      body: const [
+      body: [
         'Take turns, keep it short, land the joke. The crowd decides the rest.',
+        // Said once, here, because the single hardest thing about a
+        // scheduled event is getting people to remember when it is - and
+        // this is the one moment every new player is guaranteed to read.
+        // Pulled from live config rather than hardcoded, since the name and
+        // hours are both provisional; the defaults match the live values,
+        // so an unreadable config still prints the right sentence.
+        '${_windowConfig.name} is the busiest hour of the day - '
+            '${_windowHours()}. That is when you will find people fastest.',
         'One more thing: your profile is the ammo your opponent gets. Fill it '
             'in, and it is funnier if it is true.',
       ],

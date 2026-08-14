@@ -1,6 +1,6 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {sendToUsers} = require("./notifications");
-const {readEventWindowConfig, pacificNow} = require("./eventWindow");
+const {readEventWindowConfig, pacificNow, upcomingWindowDayKey} = require("./eventWindow");
 
 /**
  * The daily "it's starting" push for the prime-time window, plus a last
@@ -44,20 +44,49 @@ function pushDecision({nowMinutes, startMinutes, endMinutes, sentKinds = [], lea
   return sentKinds.includes("start") ? null : "start";
 }
 
-function copyFor(kind, config, onlineCount) {
+/**
+ * Notification copy.
+ *
+ * `committed` gives people who tapped "I'm in tonight" a different line
+ * that references their own promise. That is the entire mechanism
+ * pre-commitment relies on - an intention only raises follow-through if
+ * something reminds you that you made it - and it costs one extra send.
+ * Without it, someone who deliberately opted in gets the same generic
+ * broadcast as someone who never engaged, which wastes the strongest
+ * signal the app has about who actually intends to show up.
+ */
+function copyFor(kind, config, onlineCount, {committed = false} = {}) {
+  const people = (n) => `${n} ${n === 1 ? "roaster is" : "roasters are"}`;
+
   if (kind === "last_call") {
+    if (committed) {
+      return {
+        title: `${config.name} closes soon`,
+        body: onlineCount > 0 ?
+          `You said you were in. ${people(onlineCount)} still on - one more battle?` :
+          "You said you were in. Still time for one battle.",
+      };
+    }
     return {
       title: `Last call for ${config.name}`,
       body: onlineCount > 0 ?
-        `${onlineCount} ${onlineCount === 1 ? "roaster is" : "roasters are"} still on. ` +
-          "Time for one more battle." :
+        `${people(onlineCount)} still on. Time for one more battle.` :
         "It closes soon - time for one more battle.",
+    };
+  }
+
+  if (committed) {
+    return {
+      title: `${config.name} starts now`,
+      body: onlineCount > 0 ?
+        `You said you'd be here. So ${onlineCount === 1 ? "is" : "are"} ${onlineCount} other${onlineCount === 1 ? "" : "s"}.` :
+        "You said you'd be here. Go get someone.",
     };
   }
   return {
     title: `${config.name} starts now`,
     body: onlineCount > 0 ?
-      `${onlineCount} ${onlineCount === 1 ? "roaster is" : "roasters are"} already on. Come get someone.` :
+      `${people(onlineCount)} already on. Come get someone.` :
       "The busiest hour of the day. Come get someone.",
   };
 }
@@ -106,11 +135,39 @@ async function sendEventWindowPush(now = new Date()) {
   // Everyone with at least one registered device. Preference filtering
   // happens in sendToUsers, which also prunes dead tokens.
   const users = await db.collection("users").where("fcmTokens", "!=", null).get();
-  const result = await sendToUsers(users.docs, {
-    ...copyFor(kind, config, onlineCount),
-    category: "event_window",
-    data: {kind},
-  });
+
+  // Split so people who tapped "I'm in tonight" get copy that references
+  // their own promise. Two sends rather than one; the extra call is
+  // trivial next to the point of pre-commitment existing at all.
+  const commitmentKey = upcomingWindowDayKey(now, config);
+  const committed = [];
+  const everyoneElse = [];
+  for (const doc of users.docs) {
+    (doc.data()?.eventCommitmentDayKey === commitmentKey ? committed : everyoneElse)
+        .push(doc);
+  }
+
+  const [committedResult, generalResult] = await Promise.all([
+    committed.length === 0 ? {sent: 0, failed: 0, recipients: 0} :
+      sendToUsers(committed, {
+        ...copyFor(kind, config, onlineCount, {committed: true}),
+        category: "event_window",
+        data: {kind, committed: "true"},
+      }),
+    everyoneElse.length === 0 ? {sent: 0, failed: 0, recipients: 0} :
+      sendToUsers(everyoneElse, {
+        ...copyFor(kind, config, onlineCount),
+        category: "event_window",
+        data: {kind},
+      }),
+  ]);
+
+  const result = {
+    sent: committedResult.sent + generalResult.sent,
+    failed: committedResult.failed + generalResult.failed,
+    recipients: committedResult.recipients + generalResult.recipients,
+    committedRecipients: committedResult.recipients,
+  };
 
   // Recorded on the marker so the outcome of a send is inspectable without
   // Cloud Logging access. A scheduled push has no user watching it fail,
