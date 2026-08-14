@@ -643,6 +643,16 @@ exports.getSkipAllowance = onCall((request) => getSkipAllowance(request.auth));
  * because the "have I already voted" check reads the ballots
  * subcollection, which clients are deliberately blocked from reading.
  */
+/**
+ * The single in-app feed: battles needing judgement first, then the
+ * archive. Runs server-side because the clip URLs are short-lived signed
+ * URLs and because ballots are deliberately not client-readable.
+ */
+exports.getWatchFeed = onCall((request) => {
+  const {getWatchFeed} = require("./watchFeed");
+  return getWatchFeed(request.auth, request.data);
+});
+
 exports.getMatchesNeedingVotes = onCall((request) => {
   const {getMatchesNeedingVotes} = require("./voteQueue");
   return getMatchesNeedingVotes(request.auth, request.data);
