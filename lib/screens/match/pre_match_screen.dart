@@ -178,7 +178,12 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
         ),
         Expanded(
           flex: 2,
-          child: Padding(
+          child: SingleChildScrollView(
+            // Scrollable because this panel has a fixed share of the
+            // screen and its contents do not shrink: on a short device the
+            // Ready button falls off the bottom entirely, which strands
+            // someone one tap short of a match with no way to reach it.
+            // Seen live as a 28px overflow on a 320x640 emulator.
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -197,7 +202,10 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
                   icon: Icons.face_outlined,
                   text: 'Keep your face inside the outline.',
                 ),
-                const Spacer(),
+                // A Spacer here would throw now that this scrolls - it
+                // needs bounded height from a Flex, and a scroll view gives
+                // its child unbounded height by definition.
+                const SizedBox(height: 24),
                 FilledButton(
                   onPressed: (_micVerified && !_navigating) ? _onReady : null,
                   child: _navigating

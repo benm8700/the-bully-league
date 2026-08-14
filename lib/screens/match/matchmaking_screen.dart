@@ -29,6 +29,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
   static const _quietHintAfterSeconds = 25;
 
   final _cancel = Completer<void>();
+  final _standDown = Completer<void>();
   final _service = MatchmakingService();
 
   MatchmakingProgress? _progress;
@@ -46,6 +47,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
       final pairing = await _service.findMatch(
         mode: widget.mode,
         cancel: _cancel.future,
+        standDown: _standDown.future,
         onProgress: (p) {
           if (mounted) setState(() => _progress = p);
         },
@@ -79,6 +81,16 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
 
   @override
   void dispose() {
+    // A back gesture must not throw away a standing challenge. Once the
+    // search has been running long enough to have become one, leaving the
+    // screen stands down - keeping the entry - rather than cancelling,
+    // which would delete the very thing that makes off-peak queueing work.
+    // Below that threshold there is no challenge yet, so leaving really
+    // does mean giving up, and the queue entry should go with it.
+    final becameStanding = (_progress?.waited ?? Duration.zero) >= _standingAfter;
+    if (becameStanding && !_standDown.isCompleted) {
+      _standDown.complete();
+    }
     // findMatch's own finally block leaves the queue when this completes -
     // important on a back-gesture exit, which doesn't go through _onCancel.
     if (!_cancel.isCompleted) _cancel.complete();
@@ -116,9 +128,15 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
     );
   }
 
+  /// When a search stops being a wait and becomes a standing challenge.
+  /// Mirrors STANDING_AFTER_MS in functions/standingChallenge.js - if the
+  /// two drift, the screen promises something the backend hasn't done yet.
+  static const _standingAfter = Duration(seconds: 90);
+
   Widget _buildSearchingUi() {
     final waited = _progress?.waited ?? Duration.zero;
     final band = _progress?.tierBand ?? 0;
+    if (waited >= _standingAfter) return _buildStandingUi();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -161,6 +179,56 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
         OutlinedButton(
           onPressed: _leaving ? null : _onCancel,
           child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+
+  /// Once the search has become a standing challenge, staring at a spinner
+  /// is exactly the wrong thing to ask for.
+  ///
+  /// The point of a standing challenge is that it outlives the app being
+  /// closed - so this screen stops implying you have to wait, and offers
+  /// leaving instead. The queue entry stays behind either way; the only
+  /// difference between the two buttons is whether it survives.
+  Widget _buildStandingUi() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.outbound_outlined, size: 48),
+        const SizedBox(height: 20),
+        Text(
+          'Your challenge is out there',
+          style: Theme.of(context).textTheme.titleLarge,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Nobody is around right now, so we left your challenge in the '
+          'queue. The next person who goes looking gets matched with you, '
+          'and we will let you know - you can close the app.',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'It stays up for a few hours.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 32),
+        FilledButton(
+          // Leaves the SCREEN, not the queue - the entry is the challenge.
+          onPressed: _leaving
+              ? null
+              : () {
+                  if (!_standDown.isCompleted) _standDown.complete();
+                  Navigator.of(context).pop();
+                },
+          child: const Text('Done - notify me'),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _leaving ? null : _onCancel,
+          child: const Text('Cancel my challenge'),
         ),
       ],
     );

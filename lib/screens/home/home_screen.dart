@@ -325,14 +325,22 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
           padding: const EdgeInsets.all(12),
           child: Column(
             children: [
-              const Text(
-                'You have a match waiting',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              // Someone who left a standing challenge may have queued
+              // hours ago and forgotten. "You have a match waiting" reads
+              // as a bug to them; naming what happened reads as the thing
+              // they actually asked for.
+              Text(
+                _pending?.origin == 'standing'
+                    ? 'Someone took up your challenge'
+                    : 'You have a match waiting',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: _rejoin,
-                child: const Text('Rejoin match'),
+                child: Text(
+                  _pending?.origin == 'standing' ? 'Battle now' : 'Rejoin match',
+                ),
               ),
             ],
           ),

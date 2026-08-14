@@ -74,6 +74,7 @@ class MatchPairing {
     required this.mode,
     this.settings = const MatchSettings(),
     this.agoraUid = 0,
+    this.origin = 'live',
   });
 
   final String matchId;
@@ -91,6 +92,12 @@ class MatchPairing {
   /// that predates this, where Agora assigns a uid as before.
   final int agoraUid;
 
+  /// "standing" when this match came from a challenge left behind rather
+  /// than a live pairing. Someone returning to it may have queued hours
+  /// ago and forgotten, so the UI can explain itself instead of just
+  /// announcing a match.
+  final String origin;
+
   factory MatchPairing.fromMap(Map<String, dynamic> data, {String? fallbackMode}) {
     return MatchPairing(
       matchId: data['matchId'] as String,
@@ -101,6 +108,7 @@ class MatchPairing {
         (data['settings'] as Map?)?.cast<String, dynamic>(),
       ),
       agoraUid: (data['agoraUid'] as num?)?.toInt() ?? 0,
+      origin: data['origin'] as String? ?? 'live',
     );
   }
 }
@@ -149,13 +157,24 @@ class MatchmakingService {
   /// Returns null if cancelled. Always leaves the queue on the way out -
   /// including on cancellation and on error - so a abandoned search can't
   /// leave an entry behind for someone else to be paired against.
+  /// [standDown] is how someone walks away WITHOUT giving up their place.
+  /// Once a search has run long enough it becomes a standing challenge that
+  /// outlives the app being closed, and leaving the queue at that point
+  /// would throw away the very thing that makes off-peak queueing work.
+  /// Cancelling still leaves the queue; standing down does not.
   Future<MatchPairing?> findMatch({
     required String mode,
     required Future<void> cancel,
+    Future<void>? standDown,
     void Function(MatchmakingProgress)? onProgress,
   }) async {
     var cancelled = false;
+    var keepEntry = false;
     unawaited(cancel.then((_) => cancelled = true));
+    unawaited(standDown?.then((_) {
+      keepEntry = true;
+      cancelled = true;
+    }));
 
     try {
       await _call('enterMatchmakingQueue', {'mode': mode});
@@ -183,16 +202,26 @@ class MatchmakingService {
 
         // Race the sleep against cancellation so tapping Cancel doesn't
         // hang for the rest of the interval before the UI responds.
-        await Future.any([Future<void>.delayed(pollInterval), cancel]);
+        await Future.any([
+          Future<void>.delayed(pollInterval),
+          cancel,
+          // ignore: use_null_aware_elements
+          if (standDown != null) standDown,
+        ]);
       }
       return null;
     } finally {
-      // Best-effort: if this fails, the entry is pruned server-side once
-      // it goes stale, so a dropped call delays cleanup rather than
-      // corrupting the queue.
-      try {
-        await _call('leaveMatchmakingQueue', {'mode': mode});
-      } catch (_) {}
+      // Standing down deliberately leaves the entry in place - that IS the
+      // standing challenge, and removing it here would undo the whole
+      // mechanism the moment someone closed the screen.
+      if (!keepEntry) {
+        // Best-effort: if this fails, the entry is pruned server-side once
+        // it goes stale, so a dropped call delays cleanup rather than
+        // corrupting the queue.
+        try {
+          await _call('leaveMatchmakingQueue', {'mode': mode});
+        } catch (_) {}
+      }
     }
   }
 

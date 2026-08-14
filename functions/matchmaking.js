@@ -330,6 +330,15 @@ function selectOpponent(queue, uid, now) {
   // caller would strand anyone who queued and closed the app before the
   // threshold, leaving them to be pruned as stale rather than left as the
   // standing challenge they had earned.
+  // Note the stored status often stays "waiting" for a while: an
+  // unsuccessful poll aborts its transaction, so this mutation is
+  // discarded along with the stale-entry deletions above. That is
+  // harmless, because standing-ness is DERIVED from age on every pass -
+  // the entry is treated as standing by both the candidate filter and the
+  // prune rule regardless of what is currently persisted, and the status
+  // is written for real the next time a pairing commits. Confirmed live:
+  // an entry left behind by a closed app still reads "waiting" in the
+  // database while behaving as a standing challenge.
   for (const entry of Object.values(queue)) {
     if (shouldBecomeStanding(entry, now)) entry.status = "standing";
   }
@@ -739,6 +748,12 @@ async function getActiveMatch(auth) {
       opponentId: entry.opponentId,
       mode,
       settings: snap.data().settings ?? null,
+      // Lets the client say WHY there is a match waiting. Someone who left
+      // a standing challenge hours ago has forgotten they queued; "a match
+      // is waiting" reads as a bug, while "someone took up your challenge"
+      // reads as the thing they asked for.
+      origin: snap.data().origin ?? "live",
+      challengerId: snap.data().challengerId ?? null,
       agoraUid: agoraUidFor(snap.data(), auth.uid),
     };
   }
