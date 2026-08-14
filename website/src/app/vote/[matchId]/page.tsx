@@ -85,9 +85,8 @@ export default function VotePage() {
       <main className="flex-1 flex flex-col items-center justify-center gap-4 px-6 py-20 text-center">
         <p className="text-lg font-semibold">Who won this one?</p>
         <p className="text-foreground/70 max-w-md">
-          Voting happens in the app, where we can check you&apos;re over 18.
-          Grab it, judge this battle, and get matched against a stranger
-          yourself.
+          Download the app to vote on this battle - or to get matched
+          against a stranger and take one yourself.
         </p>
         <Link
           href="/matches"
