@@ -10,6 +10,7 @@ import '../leaderboard/leaderboard_screen.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
+import '../onboarding/tutorial_screen.dart';
 import '../profile/profile_screen.dart';
 import '../support/support_screen.dart';
 import '../tournament/tournament_list_screen.dart';
@@ -138,6 +139,13 @@ class HomeScreen extends StatelessWidget {
 /// Ranked unlock gate can start the flow without one reaching into the
 /// other's widget.
 Future<void> _startMatch(BuildContext context, String mode) async {
+  // The tutorial is a mandatory one-time gate before a first match
+  // (CLAUDE.md's Onboarding tutorial decision). Checked here rather than
+  // on Home so it fires at the moment it's relevant - someone browsing
+  // the leaderboard shouldn't be made to sit through it.
+  if (!await _ensureTutorialCompleted(context)) return;
+  if (!context.mounted) return;
+
   final consented = await Navigator.of(context).push<bool>(
     MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
   );
@@ -146,6 +154,31 @@ Future<void> _startMatch(BuildContext context, String mode) async {
   await Navigator.of(context).push(
     MaterialPageRoute(builder: (_) => PreMatchScreen(mode: mode)),
   );
+}
+
+/// Shows the onboarding tutorial if this player hasn't done it, and
+/// reports whether it's safe to continue into a match.
+///
+/// Fails OPEN: if the flag can't be read, the match proceeds. Being unable
+/// to reach Firestore for a moment shouldn't stop someone playing, and the
+/// cost of occasionally skipping the tutorial is far lower than the cost
+/// of blocking matches on a transient read.
+Future<bool> _ensureTutorialCompleted(BuildContext context) async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return true;
+  try {
+    final snap =
+        await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    if (snap.data()?['tutorialCompleted'] == true) return true;
+  } catch (_) {
+    return true;
+  }
+  if (!context.mounted) return false;
+  // Only continue into the match if they actually finished it.
+  final completed = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(builder: (_) => const TutorialScreen()),
+  );
+  return completed == true;
 }
 
 /// Shows rank title + raw rating + win/loss record. Real "Laugh Meter"
