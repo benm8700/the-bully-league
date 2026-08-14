@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/visual_moderation_service.dart';
+import '../account/delete_account_screen.dart';
 
 const int kRequiredPhotoCount = 5;
 
@@ -258,6 +259,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Text('Save'),
+                    ),
+                    const SizedBox(height: 40),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    // CCPA requires a user-facing way to delete an account
+                    // and its data (see CLAUDE.md's Compliance / Account
+                    // Management item). Placed here because this is where
+                    // a user's personal data lives, and kept visually
+                    // quiet - it should be findable, not easy to hit by
+                    // accident. The screen itself explains exactly what is
+                    // deleted and what is kept before anything happens.
+                    TextButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const DeleteAccountScreen()),
+                      ),
+                      child: const Text(
+                        'Delete my account',
+                        style: TextStyle(color: Colors.red),
+                      ),
                     ),
                   ],
                 ),

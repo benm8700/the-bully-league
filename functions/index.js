@@ -493,6 +493,20 @@ exports.startMatchRecording = onCall({secrets: recordingSecrets}, async (request
 exports.getActiveMatch = onCall((request) => getActiveMatch(request.auth));
 
 /**
+ * User-initiated account and data deletion (CCPA - see CLAUDE.md's
+ * Compliance / Account Management item, and functions/accountDeletion.js
+ * for what is deleted, what is deliberately kept, and why).
+ *
+ * Server-side because it has to reach across Auth, Firestore, Cloud
+ * Storage and the Realtime Database, and because a client cannot be
+ * trusted to have actually removed anything.
+ */
+exports.deleteMyAccount = onCall({timeoutSeconds: 300}, async (request) => {
+  const {deleteAccount} = require("./accountDeletion");
+  return deleteAccount(request.auth);
+});
+
+/**
  * Renders a match's raw per-player recordings into one watchable vertical
  * clip (functions/highlightRender.js).
  *
