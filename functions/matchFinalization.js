@@ -12,6 +12,35 @@ const {
 const VOTE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * When a match's 24-hour voting window starts.
+ *
+ * Completion, not pairing. Match documents are created at PAIRING time
+ * (functions/matchmaking.js), and the gap between pairing and the final
+ * verdict is real - a bio reveal of up to a minute, then several rounds.
+ * Measuring from creation silently shortened every match's voting window
+ * by however long the match itself took, and a match that sat pending
+ * while players sorted out a camera permission could lose a large slice of
+ * it. Nobody would see an error; the match would just close early with
+ * fewer ballots, which under confidence weighting now also means it moves
+ * rating less. A quiet unfairness is the worst kind.
+ *
+ * Falls back to createdAt when there is no completedAt, which is exactly
+ * the abandoned-match case: nothing ever completed it, so pairing time is
+ * the only sensible clock, and that preserves the hourly sweep's existing
+ * behaviour of settling long-dead pending matches.
+ */
+function voteWindowStartMs(match) {
+  return match?.completedAt?.toMillis?.() ?? match?.createdAt?.toMillis?.() ?? 0;
+}
+
+/** When voting closes. Single source of truth - the client shows this
+ * countdown, castVote enforces it, and finalizeMatch acts on it, so they
+ * must not drift apart. */
+function voteWindowEndMs(match) {
+  return voteWindowStartMs(match) + VOTE_WINDOW_MS;
+}
+
+/**
  * Tallies a match's ballots, determines the winner (or tie), and applies
  * Elo rating changes - see CLAUDE.md's Ranking System + Judging sections.
  * `force` bypasses the 24h window check, for the debugFinalizeMatch test
@@ -50,8 +79,7 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     return {skipped: "exhibition"};
   }
 
-  const createdAtMs = match.createdAt?.toMillis?.() ?? 0;
-  const windowClosed = Date.now() - createdAtMs > VOTE_WINDOW_MS;
+  const windowClosed = Date.now() > voteWindowEndMs(match);
   if (!windowClosed && !force) {
     return {skipped: "window-open"};
   }
@@ -195,4 +223,10 @@ async function syncGoatTier() {
   if (dirty) await batch.commit();
 }
 
-module.exports = {finalizeMatch, syncGoatTier, VOTE_WINDOW_MS};
+module.exports = {
+  finalizeMatch,
+  syncGoatTier,
+  VOTE_WINDOW_MS,
+  voteWindowStartMs,
+  voteWindowEndMs,
+};

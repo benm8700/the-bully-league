@@ -109,9 +109,11 @@ class _MatchCard extends StatelessWidget {
     final status = match['status'] as String? ?? 'pending';
     final finalized = match['voteFinalized'] == true;
     final winnerId = match['winnerId'] as String?;
-    final createdAt = match['createdAt'];
-    final closesAtMs = createdAt is Timestamp
-        ? createdAt.millisecondsSinceEpoch + 24 * 60 * 60 * 1000
+    // Window runs from completion, falling back to creation - mirrors
+    // voteWindowStartMs in functions/matchFinalization.js.
+    final windowStart = match['completedAt'] ?? match['createdAt'];
+    final closesAtMs = windowStart is Timestamp
+        ? windowStart.millisecondsSinceEpoch + 24 * 60 * 60 * 1000
         : null;
 
     return FutureBuilder<List<String>>(

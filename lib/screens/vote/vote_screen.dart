@@ -246,14 +246,14 @@ class _VoteScreenState extends State<VoteScreen> {
     );
   }
 
-  /// The 24h vote window is measured from when the match document was
-  /// created, matching finalizeMatch's own arithmetic (functions/
-  /// matchFinalization.js) so the countdown shown here is the one actually
-  /// enforced.
+  /// The 24h vote window runs from match COMPLETION, falling back to
+  /// creation for a match that never completed - mirroring
+  /// voteWindowStartMs in functions/matchFinalization.js exactly, so the
+  /// countdown shown here is the one actually enforced by castVote.
   int? _closesAtMs(Map<String, dynamic> match) {
-    final createdAt = match['createdAt'];
-    if (createdAt is! Timestamp) return null;
-    return createdAt.millisecondsSinceEpoch + 24 * 60 * 60 * 1000;
+    final start = match['completedAt'] ?? match['createdAt'];
+    if (start is! Timestamp) return null;
+    return start.millisecondsSinceEpoch + 24 * 60 * 60 * 1000;
   }
 
   Future<List<String>> _usernames(String player1Id, String player2Id) async {

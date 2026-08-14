@@ -40,14 +40,20 @@ function isVotableBy(match, userId, nowMs) {
   if (match.voteFinalized === true) return false;
   // Participants can't judge their own match.
   if (userId === match.player1Id || userId === match.player2Id) return false;
-  const createdAtMs = match.createdAtMs ?? 0;
-  if (nowMs - createdAtMs > VOTE_WINDOW_MS) return false;
+  if (nowMs > windowEndMs(match)) return false;
   return true;
+}
+
+/** When voting closes, measured from completion (see voteWindowStartMs in
+ * matchFinalization.js). Works off the pre-resolved millisecond fields
+ * this module attaches, so it stays a pure function. */
+function windowEndMs(match) {
+  return (match.completedAtMs ?? match.createdAtMs ?? 0) + VOTE_WINDOW_MS;
 }
 
 /** Milliseconds left before this match stops accepting votes. */
 function msRemaining(match, nowMs) {
-  return Math.max(0, (match.createdAtMs ?? 0) + VOTE_WINDOW_MS - nowMs);
+  return Math.max(0, windowEndMs(match) - nowMs);
 }
 
 async function getMatchesNeedingVotes(auth, data) {
@@ -67,7 +73,11 @@ async function getMatchesNeedingVotes(auth, data) {
   const candidates = [];
   for (const doc of snap.docs) {
     const raw = doc.data();
-    const match = {...raw, createdAtMs: raw.createdAt?.toMillis?.() ?? 0};
+    const match = {
+      ...raw,
+      createdAtMs: raw.createdAt?.toMillis?.() ?? 0,
+      completedAtMs: raw.completedAt?.toMillis?.() ?? null,
+    };
     if (!isVotableBy(match, auth.uid, nowMs)) continue;
     candidates.push({doc, match});
   }

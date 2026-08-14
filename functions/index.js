@@ -4,7 +4,7 @@ const {defineSecret} = require("firebase-functions/params");
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
-const {finalizeMatch, VOTE_WINDOW_MS} = require("./matchFinalization");
+const {finalizeMatch, VOTE_WINDOW_MS, voteWindowEndMs} = require("./matchFinalization");
 const {generateBracket, debugAdvanceRound, DEFAULT_MIN_ENTRANTS} = require("./tournament");
 const {moderateImage, moderateImageContent} = require("./visualModeration");
 const {generateToken, AGORA_APP_ID} = require("./agoraToken");
@@ -171,9 +171,7 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     throw new HttpsError("invalid-argument", "votedForPlayerId must be one of the two match players.");
   }
 
-  const createdAtMs = match.createdAt?.toMillis?.() ?? 0;
-  const now = Date.now();
-  if (now - createdAtMs > VOTE_WINDOW_MS) {
+  if (Date.now() > voteWindowEndMs(match)) {
     throw new HttpsError("failed-precondition", "The 24-hour voting window for this match has closed.");
   }
 
@@ -242,6 +240,14 @@ exports.purgeExpiredRecordings = onSchedule("every 24 hours", async () => {
 
 exports.finalizeExpiredMatches = onSchedule("every 60 minutes", async () => {
   const db = getFirestore();
+  // Still queried on createdAt even though the window is now measured from
+  // completedAt. That's deliberate and correct: completedAt is always >=
+  // createdAt, so this is a strict SUPERSET of the matches whose window has
+  // actually closed. finalizeMatch re-checks the real window itself and
+  // returns "window-open" for anything caught early, which the next hourly
+  // run picks up again. Keeping the query on createdAt avoids a second
+  // composite index and avoids missing abandoned matches entirely, which
+  // never get a completedAt at all.
   const cutoff = new Date(Date.now() - VOTE_WINDOW_MS);
   const snap = await db
       .collection("matches")
