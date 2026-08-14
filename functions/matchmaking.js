@@ -841,6 +841,29 @@ async function completeMatch(auth, data, creds = null) {
           {exhibitionMatchesPlayed: FieldValue.increment(1)} : {}),
       }).catch(() => {});
     }));
+
+    // Points for turning up, doubled inside the prime-time window - a
+    // POINTS multiplier only, never rating, which would give high-rated
+    // players a reason to sit out the very hour it exists to fill.
+    //
+    // Awarded on COMPLETION and keyed by match, so the two devices racing
+    // to settle the same match cannot both pay out; awardPoints is
+    // idempotent per source. Failures are swallowed: points are a reward,
+    // never a precondition for finishing a battle.
+    try {
+      const {awardPoints, pointsSettings, awardAmount} = require("./points");
+      const rates = await pointsSettings();
+      const multiplier = match.eventWindow?.qualified === true ?
+        rates.eventWindowMultiplier : 1;
+      await Promise.all([match.player1Id, match.player2Id].map((uid) =>
+        awardPoints(uid, {
+          reason: "match_played",
+          sourceId: matchId,
+          amount: awardAmount(rates.matchPlayed, {multiplier}),
+        })));
+    } catch (e) {
+      console.error(`match points for ${matchId} failed:`, e.message);
+    }
   }
 
   return {status: outcome};

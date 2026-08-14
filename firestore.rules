@@ -65,9 +65,28 @@ service cloud.firestore {
         // Monthly takedown allowance, for the same reason the skip counter
         // is protected: a client that could reset it would have unlimited
         // opt-outs, which is precisely what the published cap prevents.
-        request.resource.data.get('takedowns', null) == resource.data.get('takedowns', null);
+        request.resource.data.get('takedowns', null) == resource.data.get('takedowns', null) &&
+        // The points balance. Same class of write as rating and wins: a
+        // client able to set its own balance could buy every cosmetic in
+        // the store outright. Written only by awardPoints, which credits
+        // it inside a transaction alongside a ledger entry so the same
+        // event can never pay twice.
+        request.resource.data.get('points', null) == resource.data.get('points', null);
 
       allow delete: if false;
+
+      // The audit trail behind the balance: one entry per award, at a
+      // deterministic id, which is what makes awarding idempotent - a
+      // retried vote or a match settled twice finds its entry already
+      // there and pays nothing.
+      //
+      // Readable by its owner so "where did these points come from" has an
+      // answer in the app. Written only by awardPoints; a client able to
+      // write here could mint entries and inflate its own balance.
+      match /pointsLedger/{entryId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
     }
 
     // Live match configuration (CLAUDE.md's config/matchSettings): round

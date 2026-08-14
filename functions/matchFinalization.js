@@ -174,6 +174,27 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     });
   });
 
+  // The win bonus, paid once the crowd has actually decided. Keyed by
+  // match, so the hourly sweep re-examining a finalized match cannot pay
+  // twice. A tie pays nobody - there is no winner to reward - but both
+  // players already collected the participation award on completion, so a
+  // drawn battle is never worth nothing.
+  if (winnerId) {
+    try {
+      const {awardPoints, pointsSettings, awardAmount} = require("./points");
+      const rates = await pointsSettings();
+      const multiplier = match.eventWindow?.qualified === true ?
+        rates.eventWindowMultiplier : 1;
+      await awardPoints(winnerId, {
+        reason: "match_won",
+        sourceId: matchId,
+        amount: awardAmount(rates.matchWon, {multiplier}),
+      });
+    } catch (e) {
+      console.error(`win points for ${matchId} failed:`, e.message);
+    }
+  }
+
   await syncGoatTier();
   return {winnerId, player1Weight, player2Weight};
 }

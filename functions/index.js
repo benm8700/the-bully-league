@@ -215,6 +215,32 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     timestamp: FieldValue.serverTimestamp(),
   });
 
+  // Paying for judgement is the point of the whole currency: votes are the
+  // scarce resource this app runs on, and the people whose votes matter
+  // most are competitive players who care nothing for cosmetics. Keyed by
+  // match, so one ballot pays once however many times the call is retried.
+  //
+  // Doubled during the prime-time window, and applied to JUDGING as well
+  // as battling - more judges then means more matches reach full vote
+  // confidence, which is what makes the window the place where rating
+  // actually moves.
+  try {
+    const {awardPoints, pointsSettings, awardAmount} = require("./points");
+    const rates = await pointsSettings();
+    const {readEventWindowConfig, isWithinWindow} = require("./eventWindow");
+    const cfgSnap = await db.collection("config").doc("eventWindow").get();
+    const inWindow = isWithinWindow(new Date(), readEventWindowConfig(cfgSnap.data()));
+    await awardPoints(voterId, {
+      reason: "vote_cast",
+      sourceId: matchId,
+      amount: awardAmount(rates.voteCast, {
+        multiplier: inWindow ? rates.eventWindowMultiplier : 1,
+      }),
+    });
+  } catch (e) {
+    console.error(`vote points for ${voterId} failed:`, e.message);
+  }
+
   return {success: true, weight};
 });
 

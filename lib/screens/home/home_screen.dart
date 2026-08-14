@@ -380,6 +380,21 @@ class _RankBadge extends StatelessWidget {
               '$wins wins, $losses losses',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            // Shown right under a rating that can fall, deliberately. This
+            // is the number that only ever climbs, so a player on a losing
+            // streak still has something going up next to something going
+            // down - which is the reason the currency exists at all.
+            if ((data['points'] as num? ?? 0) > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '${data['points']} points',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
           ],
         );
       },
