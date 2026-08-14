@@ -266,6 +266,30 @@ exports.sendEventWindowPush = onSchedule("every 5 minutes", async () => {
   }
 });
 
+/**
+ * Turns finished matches into watchable clips without anyone clicking:
+ * composite first (cheap), captions only for clips that earn them
+ * (expensive). See functions/autoRender.js for why this is a sweep rather
+ * than a trigger, and why the two stages are split.
+ *
+ * Needs the same resources as the manual render callable - this is real
+ * media work, and /tmp is memory-backed on Cloud Functions so the working
+ * files count against memory too.
+ */
+exports.autoRenderHighlights = onSchedule(
+    {schedule: "every 5 minutes", memory: "4GiB", cpu: 2, timeoutSeconds: 540},
+    async () => {
+      const {sweepRenders} = require("./autoRender");
+      try {
+        const result = await sweepRenders();
+        if (result.rendered.length || result.captioned.length || result.failed.length) {
+          console.log("autoRenderHighlights:", JSON.stringify(result));
+        }
+      } catch (err) {
+        console.error("autoRenderHighlights failed:", err);
+      }
+    });
+
 exports.purgeExpiredRecordings = onSchedule("every 24 hours", async () => {
   const {purgeExpiredRecordings} = require("./recordingRetention");
   const result = await purgeExpiredRecordings();

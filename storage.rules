@@ -42,7 +42,33 @@ service firebase.storage {
     // Approved clips get distributed by being posted to the website or
     // social accounts, not by opening this bucket path up.
     match /match_highlights/{matchId}/{allPaths=**} {
-      allow read, write: if false;
+      // Rendered clips are readable by any SIGNED-IN user, so battles can
+      // actually be watched and judged inside the app.
+      //
+      // This is a deliberate loosening. It used to deny everyone, because
+      // a render is unreviewed - no human has looked at it. But keeping it
+      // shut meant every ranked match needed a manual approval inside its
+      // 24-hour voting window or it closed unwatched, which does not scale
+      // past one person, and judging a battle you cannot watch is not
+      // judging at all.
+      //
+      // What makes it acceptable is who is on the other side of this rule:
+      // signed-in accounts only, all age-gated to 18+ at signup, all having
+      // consented to the mature-content terms, with a report button on the
+      // same screen as the video and a 24-hour commitment to act on reports
+      // (Apple Guideline 1.2). That is the standard posture for
+      // user-generated content - you do not pre-moderate every item, you
+      // make every item reportable.
+      //
+      // The human review gate has NOT gone away, it has moved to where the
+      // non-consenting audience actually is: publishHighlight still governs
+      // external posting to the website and social, and nothing reaches a
+      // public URL without an admin approving it.
+      //
+      // Writes stay closed: only the render pipeline (Admin SDK, which
+      // bypasses these rules) ever puts a file here.
+      allow read: if request.auth != null;
+      allow write: if false;
     }
 
     match /profile_photos/{userId}/{photoId} {
