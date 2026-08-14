@@ -202,6 +202,11 @@ async function getWatchFeed(auth, data) {
       voteCount: c.match.voteCount ?? 0,
       windowEndMs: c.windowEndMs,
       canVote: c.windowOpen && !c.isParticipant && !alreadyVoted,
+      // Distinguishes "you already judged this, it is still being decided"
+      // from "this is settled". Without it the client cannot tell the two
+      // apart, because both simply have canVote false and no verdict.
+      alreadyVoted,
+      windowOpen: c.windowOpen,
       isParticipant: c.isParticipant,
       // Null while voting is open - the running score stays hidden until
       // the viewer has judged, or until the result is settled.

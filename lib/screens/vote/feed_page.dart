@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/services/watch_feed_service.dart';
+import '../../widgets/live_tally.dart';
 
 /// One battle, full screen, with the choice laid over the players' faces.
 ///
@@ -197,7 +198,14 @@ class _FeedPageState extends State<FeedPage> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               child: Text(
-                widget.match.canVote ? '$name won' : 'Call it: $name',
+                widget.match.canVote
+                    ? '$name won'
+                    : widget.match.alreadyVoted
+                        // You have already had your say on this one, so
+                        // there is nothing to call - tapping just reveals
+                        // where it stands.
+                        ? name
+                        : 'Call it: $name',
                 style: const TextStyle(
                     color: Colors.white, fontWeight: FontWeight.bold),
               ),
@@ -215,6 +223,14 @@ class _FeedPageState extends State<FeedPage> {
     String line;
     if (widget.match.canVote) {
       line = _submitting ? 'Casting your vote...' : 'Judged. Swipe for the next one.';
+    } else if (v == null && widget.match.windowOpen) {
+      // Rewatching something you already judged, or your own battle, while
+      // voting is still running. There is no verdict yet - saying "nobody
+      // judged this" here would be flatly wrong, and it is what this said
+      // before.
+      line = widget.match.isParticipant
+          ? 'Your battle is still with the crowd.'
+          : 'You judged this one. Still being decided.';
     } else if (v == null || v.outcome == 'undecided') {
       line = 'Nobody judged this one.';
     } else if (v.outcome == 'tie') {
@@ -241,10 +257,28 @@ class _FeedPageState extends State<FeedPage> {
           color: Colors.black.withValues(alpha: 0.75),
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Text(
-          line,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white, fontSize: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              line,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
+            // Having voted is exactly what earns the live score - the gate
+            // exists to stop a judgement being biased, and yours is
+            // already cast. Participants qualify too, since they can never
+            // vote on their own match and so have nothing left to bias.
+            if (widget.match.windowOpen &&
+                (widget.match.alreadyVoted || widget.match.isParticipant)) ...[
+              const SizedBox(height: 12),
+              LiveTally(
+                matchId: widget.match.matchId,
+                player1Name: widget.match.player1Username,
+                player2Name: widget.match.player2Username,
+              ),
+            ],
+          ],
         ),
       ),
     );

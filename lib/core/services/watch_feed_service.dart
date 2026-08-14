@@ -11,6 +11,8 @@ class FeedMatch {
     required this.voteCount,
     required this.canVote,
     required this.isParticipant,
+    required this.alreadyVoted,
+    required this.windowOpen,
     required this.videoUrl,
     required this.verdict,
   });
@@ -29,6 +31,13 @@ class FeedMatch {
   final bool canVote;
 
   final bool isParticipant;
+
+  /// You judged this one already. Distinct from the archive: voting may
+  /// still be open, so there is a live tally rather than a verdict.
+  final bool alreadyVoted;
+
+  /// Voting has not closed yet.
+  final bool windowOpen;
   final String? videoUrl;
 
   /// Null while voting is open. Populated once settled, and revealed only
@@ -45,6 +54,8 @@ class FeedMatch {
         voteCount: (m['voteCount'] as num?)?.toInt() ?? 0,
         canVote: m['canVote'] == true,
         isParticipant: m['isParticipant'] == true,
+        alreadyVoted: m['alreadyVoted'] == true,
+        windowOpen: m['windowOpen'] == true,
         videoUrl: m['videoUrl'] as String?,
         verdict: FeedVerdict.fromMap(m['verdict']),
       );
