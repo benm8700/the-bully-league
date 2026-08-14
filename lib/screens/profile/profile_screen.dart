@@ -21,7 +21,10 @@ const int kRequiredPhotoCount = 5;
 /// section). Manual profile approval (approvalStatus) is a separate V1
 /// admin workflow via the Firebase console, not enforced by this screen.
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.embedded = false});
+
+  /// True when shown as a bottom-nav tab.
+  final bool embedded;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -192,7 +195,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Your Profile')),
+      appBar: AppBar(
+        title: const Text('Your Profile'),
+        automaticallyImplyLeading: !widget.embedded,
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(

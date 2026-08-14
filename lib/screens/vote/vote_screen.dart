@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/live_tally.dart';
+import '../../widgets/match_clip_player.dart';
 import '../../widgets/turnstile_challenge.dart';
 import '../moderation/report_screen.dart';
 
@@ -20,9 +21,14 @@ import '../moderation/report_screen.dart';
 /// The rule is enforced in firestore.rules, not here; this screen only
 /// decides what to render.
 class VoteScreen extends StatefulWidget {
-  const VoteScreen({super.key, required this.matchId});
+  const VoteScreen({super.key, required this.matchId, this.videoUrl});
 
   final String matchId;
+
+  /// The highlight clip to judge, when one has been published. Passed in
+  /// from the queue so this screen doesn't refetch what the caller
+  /// already knows; null renders an honest 'not available yet' state.
+  final String? videoUrl;
 
   @override
   State<VoteScreen> createState() => _VoteScreenState();
@@ -136,6 +142,15 @@ class _VoteScreenState extends State<VoteScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // The clip comes first, always. Judging without watching is
+              // not judging, and the vote-confidence weighting assumes a
+              // vote carries information - so the match has to be
+              // watchable before anyone is asked to pick a winner.
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: MatchClipPlayer(videoUrl: widget.videoUrl),
+              ),
+              const SizedBox(height: 20),
               if (canVote) ...[
                 Text('Who won this roast battle?',
                     style: Theme.of(context).textTheme.titleLarge),

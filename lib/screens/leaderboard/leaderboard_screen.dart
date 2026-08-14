@@ -8,7 +8,10 @@ import 'package:flutter/material.dart';
 /// natural fit for surfacing it, though rank-title computation itself
 /// stays server-side (functions/matchFinalization.js's syncGoatTier).
 class LeaderboardScreen extends StatelessWidget {
-  const LeaderboardScreen({super.key});
+  const LeaderboardScreen({super.key, this.embedded = false});
+
+  /// True when shown as a bottom-nav tab.
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +21,10 @@ class LeaderboardScreen extends StatelessWidget {
         .limit(50);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Leaderboard')),
+      appBar: AppBar(
+        title: const Text('Leaderboard'),
+        automaticallyImplyLeading: !embedded,
+      ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: query.snapshots(),
         builder: (context, snapshot) {

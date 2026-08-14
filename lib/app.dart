@@ -11,7 +11,7 @@ import 'core/services/cloud_vision_moderation_service.dart';
 import 'core/services/push_notification_service.dart';
 import 'core/services/visual_moderation_service.dart';
 import 'screens/auth/signup_screen.dart';
-import 'screens/home/home_screen.dart';
+import 'screens/home/main_shell.dart';
 import 'screens/moderation/banned_screen.dart';
 
 class BullyLeagueApp extends StatelessWidget {
@@ -101,7 +101,7 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
         if (accountStatus == 'banned') {
           return const BannedScreen();
         }
-        return const HomeScreen();
+        return const MainShell();
       },
     );
   }

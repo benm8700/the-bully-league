@@ -20,7 +20,11 @@ import 'vote_screen.dart';
 /// verdict, and the ask - judge a few while yours is being judged - is
 /// plainly reciprocal rather than extractive.
 class VoteQueueScreen extends StatefulWidget {
-  const VoteQueueScreen({super.key});
+  const VoteQueueScreen({super.key, this.embedded = false});
+
+  /// True when shown as a bottom-nav tab, where a back arrow would be
+  /// wrong - there is nothing behind it.
+  final bool embedded;
 
   @override
   State<VoteQueueScreen> createState() => _VoteQueueScreenState();
@@ -65,7 +69,10 @@ class _VoteQueueScreenState extends State<VoteQueueScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Judge a battle')),
+      appBar: AppBar(
+        title: const Text('Judge a battle'),
+        automaticallyImplyLeading: !widget.embedded,
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: _buildBody(),
@@ -134,7 +141,10 @@ class _VoteQueueScreenState extends State<VoteQueueScreen> {
             onTap: () async {
               await Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => VoteScreen(matchId: match['matchId'] as String),
+                  builder: (_) => VoteScreen(
+                    matchId: match['matchId'] as String,
+                    videoUrl: match['videoUrl'] as String?,
+                  ),
                 ),
               );
               // Refresh on return so a match just judged drops off the

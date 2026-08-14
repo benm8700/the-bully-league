@@ -108,6 +108,18 @@ async function getMatchesNeedingVotes(auth, data) {
       mode: match.mode ?? "ranked",
       voteCount: match.voteCount ?? 0,
       msRemaining: msRemaining(match, nowMs),
+      // The clip to judge. VERTICAL first here, unlike the website, which
+      // prefers landscape - this is a phone, and a stacked 9:16 cut fills
+      // the screen where a 16:9 one is a letterboxed strip.
+      //
+      // Null when the highlight isn't published, which is currently most
+      // matches: rendering is on-demand and admin-only, and publishing is
+      // a deliberate human gate. The client renders that case honestly
+      // rather than pretending there is something to watch.
+      videoUrl: match.highlight?.published === true ?
+        (match.highlight.publicUrls?.vertical ??
+         match.highlight.publicUrls?.landscape ?? null) :
+        null,
     });
   }
 

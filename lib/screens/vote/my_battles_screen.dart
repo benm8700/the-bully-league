@@ -17,7 +17,10 @@ import '../../widgets/live_tally.dart';
 /// Everyone else sees a match's score only after casting their own ballot
 /// (see firestore.rules).
 class MyBattlesScreen extends StatelessWidget {
-  const MyBattlesScreen({super.key});
+  const MyBattlesScreen({super.key, this.embedded = false});
+
+  /// True when shown as a bottom-nav tab.
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +30,10 @@ class MyBattlesScreen extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My battles')),
+      appBar: AppBar(
+        title: const Text('My battles'),
+        automaticallyImplyLeading: !embedded,
+      ),
       body: FutureBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
         future: _myMatches(uid),
         builder: (context, snap) {

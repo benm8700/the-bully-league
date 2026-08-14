@@ -7,18 +7,14 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../widgets/event_window_banner.dart';
-import '../leaderboard/leaderboard_screen.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import '../onboarding/tutorial_screen.dart';
-import '../profile/profile_screen.dart';
 import '../settings/notification_settings_screen.dart';
 import '../support/support_screen.dart';
 import '../tournament/tournament_list_screen.dart';
 import '../vote/finalize_test_screen.dart';
-import '../vote/my_battles_screen.dart';
-import '../vote/vote_queue_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -95,24 +91,11 @@ class HomeScreen extends StatelessWidget {
                       onPressed: () => _startMatch(context, 'exhibition'),
                       child: const Text('Find Exhibition Match'),
                     ),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const VoteQueueScreen(),
-                        ),
-                      ),
-                      child: const Text('Judge a Battle'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const MyBattlesScreen(),
-                        ),
-                      ),
-                      child: const Text('My Battles'),
-                    ),
+                    // Judging, My Battles, Ranks and Profile are bottom-nav
+                    // destinations now (see MainShell), so they are
+                    // deliberately not repeated here - a second route to
+                    // the same screen just makes this list longer and the
+                    // tabs look decorative.
                     const SizedBox(height: 12),
                     OutlinedButton(
                       onPressed: () => Navigator.of(context).push(
@@ -121,24 +104,6 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                       child: const Text('Finalize Match (test)'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const ProfileScreen(),
-                        ),
-                      ),
-                      child: const Text('Your Profile'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const LeaderboardScreen(),
-                        ),
-                      ),
-                      child: const Text('Leaderboard'),
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton(
