@@ -106,6 +106,14 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
                           // there IS somebody - "0 roasters online" is an
                           // argument against opening the app.
                           const _OnlineCountLine(),
+                      // The reward, said out loud. The backend has been
+                      // doubling points inside the window since it was
+                      // built, and nothing told anyone - a bonus nobody
+                      // knows about motivates nobody. Read from the same
+                      // live config the server uses, so retuning it to 3x
+                      // changes this copy too rather than leaving the app
+                      // promising the wrong number.
+                      _MultiplierLine(live: live),
                         ],
                       ),
                     ),
@@ -284,6 +292,61 @@ class _CommittedCountLine extends StatelessWidget {
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+        );
+      },
+    );
+  }
+}
+
+/// "2x points on every battle and every vote."
+///
+/// Reads the multiplier from `config/pointsSettings` - the same document
+/// the server awards from - so the promise on screen and the number
+/// actually paid cannot drift apart. Renders nothing if the multiplier is
+/// 1 or the config is unreadable, since announcing a bonus that isn't
+/// being paid is worse than saying nothing.
+class _MultiplierLine extends StatelessWidget {
+  const _MultiplierLine({required this.live});
+
+  final bool live;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('config')
+          .doc('pointsSettings')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const SizedBox.shrink();
+        // Defaults to the documented 2x so the line still appears before
+        // anyone creates the config document.
+        final raw = snapshot.data?.data()?['eventWindowMultiplier'];
+        final multiplier = raw is num ? raw.toDouble() : 2.0;
+        if (multiplier <= 1) return const SizedBox.shrink();
+        final label = multiplier == multiplier.roundToDouble()
+            ? multiplier.toStringAsFixed(0)
+            : multiplier.toString();
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            children: [
+              const Icon(Icons.bolt, size: 14, color: Colors.amber),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  live
+                      ? '${label}x points right now - battling and judging'
+                      : '${label}x points during the hour',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );

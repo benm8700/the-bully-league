@@ -224,24 +224,29 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   // as battling - more judges then means more matches reach full vote
   // confidence, which is what makes the window the place where rating
   // actually moves.
+  let pointsAwarded = 0;
+  let pointsMultiplier = 1;
   try {
     const {awardPoints, pointsSettings, awardAmount} = require("./points");
     const rates = await pointsSettings();
     const {readEventWindowConfig, isWithinWindow} = require("./eventWindow");
     const cfgSnap = await db.collection("config").doc("eventWindow").get();
     const inWindow = isWithinWindow(new Date(), readEventWindowConfig(cfgSnap.data()));
-    await awardPoints(voterId, {
+    pointsMultiplier = inWindow ? rates.eventWindowMultiplier : 1;
+    const result = await awardPoints(voterId, {
       reason: "vote_cast",
       sourceId: matchId,
-      amount: awardAmount(rates.voteCast, {
-        multiplier: inWindow ? rates.eventWindowMultiplier : 1,
-      }),
+      amount: awardAmount(rates.voteCast, {multiplier: pointsMultiplier}),
     });
+    pointsAwarded = result.awarded;
   } catch (e) {
     console.error(`vote points for ${voterId} failed:`, e.message);
   }
 
-  return {success: true, weight};
+  // Returned so the app can show the reward landing rather than leaving
+  // the multiplier to be inferred. A bonus nobody notices motivates
+  // nobody.
+  return {success: true, weight, pointsAwarded, pointsMultiplier};
 });
 
 /**

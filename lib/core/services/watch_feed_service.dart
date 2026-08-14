@@ -171,16 +171,34 @@ class WatchFeedService {
         .call<Map<String, dynamic>>({'calls': calls});
   }
 
-  Future<void> castVote({
+  /// Returns the points this vote earned, so the app can show the reward
+  /// landing. A bonus nobody notices motivates nobody.
+  Future<VoteReward> castVote({
     required String matchId,
     required String votedForPlayerId,
     String? turnstileToken,
   }) async {
-    await FirebaseFunctions.instance.httpsCallable('castVote').call({
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('castVote')
+        .call<Map<String, dynamic>>({
       'matchId': matchId,
       'votedForPlayerId': votedForPlayerId,
       // ignore: use_null_aware_elements
       if (turnstileToken != null) 'turnstileToken': turnstileToken,
     });
+    return VoteReward(
+      points: (result.data['pointsAwarded'] as num?)?.toInt() ?? 0,
+      multiplier: (result.data['pointsMultiplier'] as num?)?.toDouble() ?? 1,
+    );
   }
+}
+
+/// What a vote paid, and whether the window bonus was applied.
+class VoteReward {
+  const VoteReward({required this.points, required this.multiplier});
+
+  final int points;
+  final double multiplier;
+
+  bool get boosted => multiplier > 1;
 }

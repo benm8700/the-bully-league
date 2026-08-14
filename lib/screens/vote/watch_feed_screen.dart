@@ -150,9 +150,28 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
         if (!mounted) return false;
         setState(() => _votesRemaining = 25);
       }
-      await _service.castVote(
-          matchId: matchId, votedForPlayerId: votedForPlayerId);
-      if (mounted) setState(() => _votesRemaining -= 1);
+      final reward = await _service.castVote(
+        matchId: matchId,
+        votedForPlayerId: votedForPlayerId,
+      );
+      if (mounted) {
+        setState(() => _votesRemaining -= 1);
+        // Show the reward landing. The window bonus has been paid since it
+        // was built and nothing ever mentioned it - a bonus nobody
+        // notices motivates nobody.
+        if (reward.points > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              duration: const Duration(seconds: 2),
+              content: Text(
+                reward.boosted
+                    ? '+${reward.points} points - ${_x(reward.multiplier)}x bonus'
+                    : '+${reward.points} points',
+              ),
+            ),
+          );
+        }
+      }
       return true;
     } catch (e) {
       if (mounted) {
@@ -163,6 +182,10 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
       return false;
     }
   }
+
+  /// Renders a whole multiplier as "2" rather than "2.0".
+  String _x(double m) =>
+      m == m.roundToDouble() ? m.toStringAsFixed(0) : m.toString();
 
   /// Shows the CAPTCHA in a sheet and resolves with its token.
   Future<String?> _requestChallenge() async {
