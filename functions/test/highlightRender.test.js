@@ -18,6 +18,7 @@ const {
   classifyFile,
   buildTimeline,
   buildFfmpegArgs,
+  RENDITIONS,
 } = require("../highlightRender");
 
 let passed = 0;
@@ -230,6 +231,41 @@ test("output is vertical 9:16 with a playable moov position", () => {
   assert.ok(graph.includes("scale=1080:960"), "each tile is half of 1080x1920");
   assert.ok(args.includes("+faststart"), "index at the front so it streams while downloading");
   assert.ok(args.includes("yuv420p"), "widely-playable pixel format");
+});
+
+// --- Renditions -----------------------------------------------------------
+
+test("the landscape rendition puts players side by side, not stacked", () => {
+  // Side-by-side is right in 16:9 and wrong in 9:16 - the two renditions
+  // must not share a stacking direction.
+  const timeline = buildTimeline([
+    seg("1", "video", "20260813234113000"),
+    seg("2", "video", "20260813234113000"),
+  ]);
+  const args = buildFfmpegArgs(timeline, "/tmp/work", "/tmp/out.mp4",
+      {rendition: RENDITIONS.landscape});
+  const graph = args[args.indexOf("-filter_complex") + 1];
+  assert.ok(graph.includes("hstack=inputs=2"), "landscape stacks horizontally");
+  assert.ok(!graph.includes("vstack"), "and never vertically");
+  assert.ok(graph.includes("scale=960:1080"), "each tile is half of 1920x1080");
+});
+
+test("the two renditions differ in shape and filename", () => {
+  const v = RENDITIONS.vertical;
+  const l = RENDITIONS.landscape;
+  assert.strictEqual(v.canvas.width / v.canvas.height, 9 / 16, "vertical is 9:16");
+  assert.strictEqual(l.canvas.width / l.canvas.height, 16 / 9, "landscape is 16:9");
+  assert.notStrictEqual(v.fileName, l.fileName, "they must not overwrite each other");
+});
+
+test("tiles tile exactly, leaving no dead space in either rendition", () => {
+  for (const [name, r] of Object.entries(RENDITIONS)) {
+    const across = r.stackFilter === "hstack";
+    const totalW = across ? r.tile.width * 2 : r.tile.width;
+    const totalH = across ? r.tile.height : r.tile.height * 2;
+    assert.strictEqual(totalW, r.canvas.width, `${name} tiles do not fill the width`);
+    assert.strictEqual(totalH, r.canvas.height, `${name} tiles do not fill the height`);
+  }
 });
 
 console.log(`highlightRender: ${passed} checks passed`);

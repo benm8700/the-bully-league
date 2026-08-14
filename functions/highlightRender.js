@@ -35,8 +35,39 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
  * which accumulates rounding error across segments.
  */
 
-const CANVAS = {width: 1080, height: 1920};
-const TILE = {width: 1080, height: 960};
+/**
+ * The two shapes a match is rendered into, from one recording.
+ *
+ * This is the payoff of recording each player separately: the same source
+ * serves both without re-recording, and a third shape could be added later
+ * without touching any footage.
+ *
+ * VERTICAL is for TikTok/Reels/Shorts, stacked, because side-by-side in a
+ * 9:16 frame gives each player a 540x1920 sliver.
+ *
+ * LANDSCAPE is for the website, side-by-side, where that arrangement is
+ * genuinely good - two portrait sources sit naturally next to each other
+ * in a 16:9 frame, and it crops each player less than the vertical stack
+ * does (about 37% of height rather than 50%).
+ */
+const RENDITIONS = {
+  vertical: {
+    canvas: {width: 1080, height: 1920},
+    tile: {width: 1080, height: 960},
+    stackFilter: "vstack",
+    fileName: "vertical.mp4",
+  },
+  landscape: {
+    canvas: {width: 1920, height: 1080},
+    tile: {width: 960, height: 1080},
+    stackFilter: "hstack",
+    fileName: "landscape.mp4",
+  },
+};
+
+/** Kept for callers and tests that just want the vertical shape. */
+const CANVAS = RENDITIONS.vertical.canvas;
+const TILE = RENDITIONS.vertical.tile;
 const OUTPUT_FPS = 30;
 
 /** Where rendered clips live. Deliberately a different prefix from the raw
@@ -141,6 +172,9 @@ function buildTimeline(files) {
  * picture and sound aligned across the muted stretches.
  */
 function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
+  const rendition = options.rendition ?? RENDITIONS.vertical;
+  const canvas = rendition.canvas;
+  const tile = rendition.tile;
   const {uids, segments} = timeline;
   const inputs = [];
   const filters = [];
@@ -165,8 +199,8 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
     inputs.push("-i", path.join(localDir, first.path.split("/").pop()));
     const pad = (first.offsetMs / 1000).toFixed(3);
     filters.push(
-        `[${index}:v]scale=${TILE.width}:${TILE.height}:force_original_aspect_ratio=increase,` +
-      `crop=${TILE.width}:${TILE.height},setsar=1,fps=${OUTPUT_FPS},` +
+        `[${index}:v]scale=${tile.width}:${tile.height}:force_original_aspect_ratio=increase,` +
+      `crop=${tile.width}:${tile.height},setsar=1,fps=${OUTPUT_FPS},` +
       `tpad=start_duration=${pad}:color=black[v${uid}]`,
     );
     videoLabels.push(`[v${uid}]`);
@@ -188,10 +222,12 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
   // whole frame rather than being scaled differently inside each tile.
   const stacked = options.subtitlePath ? "[vstacked]" : "[vout]";
   if (videoLabels.length === 1) {
-    filters.push(`${videoLabels[0]}scale=${CANVAS.width}:${CANVAS.height}:` +
-      `force_original_aspect_ratio=increase,crop=${CANVAS.width}:${CANVAS.height}${stacked}`);
+    filters.push(`${videoLabels[0]}scale=${canvas.width}:${canvas.height}:` +
+      `force_original_aspect_ratio=increase,crop=${canvas.width}:${canvas.height}${stacked}`);
   } else {
-    filters.push(`${videoLabels.join("")}vstack=inputs=${videoLabels.length}${stacked}`);
+    filters.push(
+        `${videoLabels.join("")}${rendition.stackFilter}=inputs=${videoLabels.length}${stacked}`,
+    );
   }
 
   if (options.subtitlePath) {
@@ -296,17 +332,14 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
       bucket.file(o.name).download({destination: path.join(workDir, o.name.split("/").pop())}),
     ));
 
-    const outputPath = path.join(workDir, "vertical.mp4");
     const ffmpegPath = require("ffmpeg-static");
 
-    // Captions are burned in rather than shipped as a sidecar track:
-    // TikTok, Reels and Shorts don't render an external subtitle file, and
-    // most short-form video is watched muted (see CLAUDE.md's Production
-    // quality bar), so the text has to be part of the picture.
-    let subtitlePath = null;
-    let cueCount = 0;
+    // Transcribed ONCE and reused across both renditions. Speech-to-Text
+    // bills per audio minute, so transcribing per rendition would double
+    // the cost for identical words.
+    let cues = [];
     if (captions) {
-      const {transcribeSegments, groupWordsIntoCues, buildAssFile} = require("./captions");
+      const {transcribeSegments, groupWordsIntoCues} = require("./captions");
       const audioSegs = timeline.segments.filter((s) => s.kind === "audio");
       const {words, failures} = await transcribeSegments(
           audioSegs, workDir, ffmpegPath, workDir,
@@ -314,32 +347,53 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
       if (failures.length > 0) {
         warnings.push(`${failures.length} audio segment(s) could not be transcribed`);
       }
-      const cues = groupWordsIntoCues(words);
-      cueCount = cues.length;
-      if (cues.length > 0) {
-        subtitlePath = path.join(workDir, "captions.ass");
-        await fs.writeFile(subtitlePath, buildAssFile(cues, CANVAS), "utf8");
-      } else {
+      cues = groupWordsIntoCues(words);
+      if (cues.length === 0) {
         // Rendering without captions beats failing the whole clip - a
         // match with no intelligible speech is unusual but not an error.
-        warnings.push("no speech was transcribed, so the clip has no captions");
+        warnings.push("no speech was transcribed, so the clips have no captions");
       }
     }
 
-    const args = buildFfmpegArgs(timeline, workDir, outputPath, {subtitlePath});
-    await runFfmpeg(ffmpegPath, args);
+    const {buildAssFile} = require("./captions");
+    const outputs = {};
 
-    const destination = `${HIGHLIGHT_PREFIX}/${matchId}/vertical.mp4`;
-    await bucket.upload(outputPath, {destination, metadata: {contentType: "video/mp4"}});
-    const size = (await fs.stat(outputPath)).size;
+    for (const [name, rendition] of Object.entries(RENDITIONS)) {
+      // Captions are burned in rather than shipped as a sidecar track:
+      // TikTok, Reels and Shorts don't render an external subtitle file,
+      // and most short-form video is watched muted (see CLAUDE.md's
+      // Production quality bar), so the text has to be part of the
+      // picture. A separate subtitle file per rendition because the font
+      // scales to each canvas.
+      let subtitlePath = null;
+      if (cues.length > 0) {
+        subtitlePath = path.join(workDir, `captions-${name}.ass`);
+        await fs.writeFile(subtitlePath, buildAssFile(cues, rendition.canvas), "utf8");
+      }
+
+      const outputPath = path.join(workDir, rendition.fileName);
+      await runFfmpeg(ffmpegPath, buildFfmpegArgs(timeline, workDir, outputPath, {
+        subtitlePath, rendition,
+      }));
+
+      const destination = `${HIGHLIGHT_PREFIX}/${matchId}/${rendition.fileName}`;
+      await bucket.upload(outputPath, {destination, metadata: {contentType: "video/mp4"}});
+      outputs[name] = {
+        path: destination,
+        sizeBytes: (await fs.stat(outputPath)).size,
+        width: rendition.canvas.width,
+        height: rendition.canvas.height,
+      };
+    }
 
     await matchRef.set({
       highlight: {
-        path: destination,
-        sizeBytes: size,
+        // Keyed by rendition so the website and the social pipeline each
+        // pick the shape they need from the same match document.
+        renditions: outputs,
         renderedAt: FieldValue.serverTimestamp(),
-        captioned: cueCount > 0,
-        cueCount,
+        captioned: cues.length > 0,
+        cueCount: cues.length,
         // Same human gate as the raw recording: rendering something
         // watchable is not the same as approving it for an audience.
         reviewStatus: "pending",
@@ -348,7 +402,7 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
       },
     }, {merge: true});
 
-    return {rendered: true, path: destination, sizeBytes: size, cueCount, warnings};
+    return {rendered: true, renditions: outputs, cueCount: cues.length, warnings};
   } finally {
     await fs.rm(workDir, {recursive: true, force: true}).catch(() => {});
   }
@@ -360,6 +414,7 @@ module.exports = {
   classifyFile,
   buildTimeline,
   buildFfmpegArgs,
+  RENDITIONS,
   CANVAS,
   TILE,
   HIGHLIGHT_PREFIX,

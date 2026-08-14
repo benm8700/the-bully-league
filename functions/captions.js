@@ -37,14 +37,17 @@ const STT_SAMPLE_RATE = 16000;
  */
 const STYLE = {
   fontName: "Arial",
-  fontSize: 96,
-  outline: 6,
-  shadow: 2,
+  // Sized as a FRACTION of the canvas height rather than in fixed pixels,
+  // because the same cues are rendered into both a 1080x1920 vertical clip
+  // and a 1920x1080 landscape one. A fixed size legible in the first is
+  // absurdly large in the second.
+  fontHeightRatio: 0.05,
+  outlineRatio: 0.0031,
+  shadowRatio: 0.001,
   // Vertically centred, which on a stacked two-player layout puts the
   // text on the seam between the players rather than over either face,
   // and clear of the platform UI that crowds the bottom of the screen.
   alignment: 5,
-  marginV: 40,
   // Per-speaker colour so a viewer can tell who is talking without
   // relying on the video alone. ASS colours are &HAABBGGRR (reversed).
   player1Colour: "&H00FFFFFF", // white
@@ -150,8 +153,21 @@ function escapeAssText(text) {
   return text.replace(/\\/g, "\\\\").replace(/\{/g, "(").replace(/\}/g, ")").replace(/\n/g, " ");
 }
 
-/** Builds a complete ASS subtitle file from cues. */
+/**
+ * Builds a complete ASS subtitle file from cues, scaled to the canvas it
+ * will be burned into.
+ *
+ * Sizes derive from canvas height so one set of cues serves both the
+ * vertical and landscape renditions without being re-transcribed or
+ * hand-tuned per shape.
+ */
 function buildAssFile(cues, canvas, style = STYLE) {
+  const fontSize = Math.round(canvas.height * style.fontHeightRatio);
+  const outline = Math.max(2, Math.round(canvas.height * style.outlineRatio));
+  const shadow = Math.max(1, Math.round(canvas.height * style.shadowRatio));
+  const marginH = Math.round(canvas.width * 0.055);
+  const marginV = Math.round(canvas.height * 0.02);
+
   const header = [
     "[Script Info]",
     "ScriptType: v4.00+",
@@ -163,10 +179,10 @@ function buildAssFile(cues, canvas, style = STYLE) {
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, " +
       "Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: P1,${style.fontName},${style.fontSize},${style.player1Colour},&H00000000,` +
-      `&H00000000,-1,0,1,${style.outline},${style.shadow},${style.alignment},60,60,${style.marginV},1`,
-    `Style: P2,${style.fontName},${style.fontSize},${style.player2Colour},&H00000000,` +
-      `&H00000000,-1,0,1,${style.outline},${style.shadow},${style.alignment},60,60,${style.marginV},1`,
+    `Style: P1,${style.fontName},${fontSize},${style.player1Colour},&H00000000,` +
+      `&H00000000,-1,0,1,${outline},${shadow},${style.alignment},${marginH},${marginH},${marginV},1`,
+    `Style: P2,${style.fontName},${fontSize},${style.player2Colour},&H00000000,` +
+      `&H00000000,-1,0,1,${outline},${shadow},${style.alignment},${marginH},${marginH},${marginV},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
