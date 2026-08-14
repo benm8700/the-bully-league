@@ -1,4 +1,4 @@
-const {getFirestore} = require("firebase-admin/firestore");
+const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {getStorage} = require("firebase-admin/storage");
 const {voteWindowEndMs} = require("./matchFinalization");
@@ -135,15 +135,37 @@ async function getWatchFeed(auth, data) {
   const db = getFirestore();
   const nowMs = Date.now();
 
-  const snap = await db.collection("matches")
+  // Paginated by completion time, walking backwards.
+  //
+  // A chronological cursor works here for a reason that is easy to miss:
+  // a match open for voting is BY DEFINITION one that finished in the last
+  // 24 hours, so ordering by completedAt descending already puts every
+  // votable battle at the top. Judging work therefore lands on the first
+  // page or two on its own, and later pages are pure archive - no need for
+  // a second cursor over a different ordering.
+  //
+  // Scrolling back in time also beats globally sorting the archive by
+  // popularity, which would show the same handful of clips forever and
+  // never surface anything new. Popularity still orders within a page.
+  const cursorMs = Number(data?.cursorMs);
+  let query = db.collection("matches")
       .where("status", "==", "completed")
-      .orderBy("completedAt", "desc")
-      .limit(SCAN_LIMIT)
-      .get();
+      .orderBy("completedAt", "desc");
+  if (Number.isFinite(cursorMs) && cursorMs > 0) {
+    query = query.startAfter(Timestamp.fromMillis(cursorMs));
+  }
+  const snap = await query.limit(SCAN_LIMIT).get();
 
   const candidates = [];
+  // Advanced past EVERY document examined, not just the ones kept. A whole
+  // page can be filtered out - matches with no render yet, for instance -
+  // and a cursor that only tracked kept items would then never move, so
+  // the client would request the same window forever and the feed would
+  // stop dead a few clips in.
+  let lastScannedMs = 0;
   for (const doc of snap.docs) {
     const match = doc.data();
+    lastScannedMs = match.completedAt?.toMillis?.() ?? lastScannedMs;
     // Nothing to watch without a render, and the feed is a watching
     // surface - metadata-only cards are what the old website feed did and
     // they are not worth a scroll.
@@ -218,9 +240,12 @@ async function getWatchFeed(auth, data) {
 
   return {
     matches: orderFeed(results, nowMs),
-    // Drives the Judge tab badge: how many battles are waiting on THIS
-    // viewer specifically, not how many are open in general.
+    // Only meaningful on the first page: it counts battles waiting on this
+    // viewer overall, not within a window of the archive.
     pendingVotes: [...votable.values()].filter(Boolean).length,
+    // Where the next page starts. Null means the collection is exhausted -
+    // a short scan cannot be refilled by asking again.
+    nextCursorMs: snap.size < SCAN_LIMIT ? null : lastScannedMs,
   };
 }
 

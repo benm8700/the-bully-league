@@ -34,6 +34,15 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
   int _votesRemaining = 0;
   bool _challenging = false;
 
+  int? _cursorMs;
+  bool _exhausted = false;
+  bool _loadingMore = false;
+
+  /// How far from the end to start fetching. Loading a page ahead means the
+  /// next clip is already initialising while the current one plays, rather
+  /// than the feed stalling on a spinner at the moment someone swipes.
+  static const _prefetchWithin = 3;
+
   @override
   void initState() {
     super.initState();
@@ -58,10 +67,44 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
       setState(() {
         _matches = page.matches;
         _votesRemaining = remaining;
+        _cursorMs = page.nextCursorMs;
+        _exhausted = page.nextCursorMs == null;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'Could not load battles: $e');
+    }
+  }
+
+  /// Fetches the next page and appends it.
+  ///
+  /// Keeps walking while the server returns a cursor but no usable matches,
+  /// which happens when a whole window of the archive has no rendered
+  /// clips. Without that the feed would look exhausted while plenty of
+  /// watchable battles sat just past the gap. Bounded so a long barren
+  /// stretch cannot spin forever.
+  Future<void> _loadMore() async {
+    if (_loadingMore || _exhausted || _cursorMs == null) return;
+    _loadingMore = true;
+    try {
+      for (var attempt = 0; attempt < 3; attempt++) {
+        final page = await _service.fetch(cursorMs: _cursorMs);
+        if (!mounted) return;
+        final existing = {for (final m in _matches ?? const []) m.matchId};
+        final fresh =
+            page.matches.where((m) => !existing.contains(m.matchId)).toList();
+        setState(() {
+          _matches = [...?_matches, ...fresh];
+          _cursorMs = page.nextCursorMs;
+          _exhausted = page.nextCursorMs == null;
+        });
+        if (fresh.isNotEmpty || _exhausted) break;
+      }
+    } catch (_) {
+      // A failed page must not break the clips already on screen; the next
+      // swipe simply tries again.
+    } finally {
+      _loadingMore = false;
     }
   }
 
@@ -172,7 +215,10 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
       controller: _pageController,
       scrollDirection: Axis.vertical,
       itemCount: _matches!.length,
-      onPageChanged: (i) => setState(() => _index = i),
+      onPageChanged: (i) {
+        setState(() => _index = i);
+        if (i >= _matches!.length - _prefetchWithin) _loadMore();
+      },
       itemBuilder: (context, i) {
         final match = _matches![i];
         return FeedPage(

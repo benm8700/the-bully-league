@@ -88,12 +88,19 @@ class FeedVerdict {
 }
 
 class WatchFeedPage {
-  const WatchFeedPage({required this.matches, required this.pendingVotes});
+  const WatchFeedPage({
+    required this.matches,
+    required this.pendingVotes,
+    required this.nextCursorMs,
+  });
 
   final List<FeedMatch> matches;
 
   /// How many battles are waiting on this viewer, for the Judge tab badge.
   final int pendingVotes;
+
+  /// Where the next page starts. Null means the archive is exhausted.
+  final int? nextCursorMs;
 }
 
 /// Talks to the feed and the vote session.
@@ -103,16 +110,21 @@ class WatchFeedPage {
 /// make judging a chore and votes are the scarce resource here. See
 /// functions/voteSession.js.
 class WatchFeedService {
-  Future<WatchFeedPage> fetch({int limit = 10}) async {
+  Future<WatchFeedPage> fetch({int limit = 10, int? cursorMs}) async {
     final result = await FirebaseFunctions.instance
         .httpsCallable('getWatchFeed')
-        .call<Map<String, dynamic>>({'limit': limit});
+        .call<Map<String, dynamic>>({
+      'limit': limit,
+      // ignore: use_null_aware_elements
+      if (cursorMs != null) 'cursorMs': cursorMs,
+    });
     final raw = (result.data['matches'] as List?) ?? const [];
     return WatchFeedPage(
       matches: raw
           .map((e) => FeedMatch.fromMap((e as Map).cast<String, dynamic>()))
           .toList(),
       pendingVotes: (result.data['pendingVotes'] as num?)?.toInt() ?? 0,
+      nextCursorMs: (result.data['nextCursorMs'] as num?)?.toInt(),
     );
   }
 
