@@ -24,6 +24,7 @@ class FeedPage extends StatefulWidget {
     required this.match,
     required this.isActive,
     required this.onVote,
+    required this.onCall,
   });
 
   final FeedMatch match;
@@ -36,6 +37,10 @@ class FeedPage extends StatefulWidget {
   /// Casts a real ballot. Null result means it failed; the page keeps the
   /// choice visible so it can be retried.
   final Future<bool> Function(String votedForPlayerId) onVote;
+
+  /// Records a call on a SETTLED battle - a private guess against a result
+  /// already decided. Never a ballot, and it never touches anyone's rating.
+  final void Function(String matchId, String chosenPlayerId) onCall;
 
   @override
   State<FeedPage> createState() => _FeedPageState();
@@ -128,6 +133,11 @@ class _FeedPageState extends State<FeedPage> {
       // A failed ballot must not look like a cast one, or the viewer
       // believes they judged a battle they didn't.
       if (!ok) setState(() => _chosenPlayerId = null);
+    } else if (widget.match.verdict?.outcome == 'decided') {
+      // A call on a settled battle. Only worth recording where there was a
+      // right answer - a tie has none, so calling it is neither right nor
+      // wrong and should not count against a judge.
+      widget.onCall(widget.match.matchId, playerId);
     }
     if (mounted) setState(() => _submitting = false);
   }

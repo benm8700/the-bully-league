@@ -705,6 +705,15 @@ exports.getTakedownOptions = onCall((request) => {
   return getTakedownOptions(request.auth, request.data);
 });
 
+/**
+ * Records calls on settled battles - a private guess against a result
+ * already decided, never a ballot. See functions/judgeStats.js.
+ */
+exports.recordJudgeCalls = onCall((request) => {
+  const {recordCalls} = require("./judgeStats");
+  return recordCalls(request.auth, request.data);
+});
+
 exports.getWatchFeed = onCall((request) => {
   const {getWatchFeed} = require("./watchFeed");
   return getWatchFeed(request.auth, request.data);

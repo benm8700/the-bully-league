@@ -51,6 +51,8 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
 
   @override
   void dispose() {
+    // Anything left over goes now, or leaving the tab loses it.
+    _flushCalls();
     _pageController.dispose();
     super.dispose();
   }
@@ -106,6 +108,32 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
     } finally {
       _loadingMore = false;
     }
+  }
+
+  /// Calls made on settled battles, waiting to be sent.
+  ///
+  /// Batched rather than sent per clip: a call happens on every archive
+  /// video someone scrolls past, and one function invocation behind every
+  /// swipe would be a lot of calls for a passive stat.
+  final List<Map<String, String>> _pendingCalls = [];
+  static const _flushCallsAt = 5;
+
+  void _recordCall(String matchId, String chosenPlayerId) {
+    _pendingCalls.add({'matchId': matchId, 'chosenPlayerId': chosenPlayerId});
+    if (_pendingCalls.length >= _flushCallsAt) _flushCalls();
+  }
+
+  /// Sends whatever has accumulated.
+  ///
+  /// Failures are swallowed and the batch dropped rather than retried: a
+  /// lost judge stat is not worth an error in front of someone watching a
+  /// video, and retrying risks double-counting - which the server guards
+  /// against anyway, but there is no reason to lean on that.
+  void _flushCalls() {
+    if (_pendingCalls.isEmpty) return;
+    final batch = List<Map<String, String>>.from(_pendingCalls);
+    _pendingCalls.clear();
+    _service.recordCalls(batch).catchError((_) {});
   }
 
   /// Casts a ballot, opening a session first if there isn't a usable one.
@@ -226,6 +254,7 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
           match: match,
           isActive: i == _index,
           onVote: (playerId) => _vote(match.matchId, playerId),
+          onCall: _recordCall,
         );
       },
     );

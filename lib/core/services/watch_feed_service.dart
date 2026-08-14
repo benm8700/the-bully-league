@@ -157,6 +157,20 @@ class WatchFeedService {
         .call<Map<String, dynamic>>({'turnstileToken': turnstileToken});
   }
 
+  /// Records calls on settled battles - private guesses against results
+  /// already decided, never ballots.
+  ///
+  /// Batched because a call happens on every archive clip someone scrolls
+  /// past; one invocation per clip would put a function call behind every
+  /// swipe. Failures are swallowed by the caller: a lost judge stat is not
+  /// worth an error in front of someone watching a video.
+  Future<void> recordCalls(List<Map<String, String>> calls) async {
+    if (calls.isEmpty) return;
+    await FirebaseFunctions.instance
+        .httpsCallable('recordJudgeCalls')
+        .call<Map<String, dynamic>>({'calls': calls});
+  }
+
   Future<void> castVote({
     required String matchId,
     required String votedForPlayerId,

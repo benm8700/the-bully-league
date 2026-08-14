@@ -55,7 +55,17 @@ service cloud.firestore {
         // Function. Neither field exists at signup, so the .get(_, null)
         // form matters here as much as it does above.
         request.resource.data.get('skipsUsedToday', null) == resource.data.get('skipsUsedToday', null) &&
-        request.resource.data.get('skipsResetDate', null) == resource.data.get('skipsResetDate', null);
+        request.resource.data.get('skipsResetDate', null) == resource.data.get('skipsResetDate', null) &&
+        // Judge record: how often this user's call matched the crowd. It
+        // feeds a prestige ladder, so a client able to write it could
+        // simply declare itself an infallible judge. Written only by
+        // recordCalls, which checks every call against the match's actual
+        // recorded winner.
+        request.resource.data.get('judgeCalls', null) == resource.data.get('judgeCalls', null) &&
+        // Monthly takedown allowance, for the same reason the skip counter
+        // is protected: a client that could reset it would have unlimited
+        // opt-outs, which is precisely what the published cap prevents.
+        request.resource.data.get('takedowns', null) == resource.data.get('takedowns', null);
 
       allow delete: if false;
     }
