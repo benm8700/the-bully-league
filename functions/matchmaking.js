@@ -5,6 +5,7 @@ const {wantsCategory} = require("./notifications");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {STARTING_RATING, RANK_TIERS, GOAT_TITLE, computeBaseRankTitle} = require("./rating");
 const {getMatchSettings} = require("./matchSettings");
+const {readEventWindowConfig, qualifiesForWindow} = require("./eventWindow");
 const {stopRecording, writeRecordingState} = require("./cloudRecording");
 
 /** CLAUDE.md's recording scope decision: only ranked and tournament
@@ -119,6 +120,51 @@ function tierIndexFor(user) {
 
 function queueRef(mode) {
   return getDatabase().ref(`matchmakingQueue/${mode}`);
+}
+
+/**
+ * The earlier of the two players' queue-entry times, which is the one the
+ * window determination should be judged against. Whoever was waiting first
+ * is the one the pairing latency actually cost.
+ *
+ * Both players always get the same answer, since it's one field on one
+ * shared document - a match where one side counted and the other didn't
+ * would be indefensible.
+ *
+ * Pure and exported so the choice is testable without RTDB.
+ */
+function earliestQueuedAt(pairing) {
+  // Only genuine numbers, and only positive ones. Number(null) is 0 and
+  // Number("") is 0, both of which are finite - so a coercing filter would
+  // let a MISSING opponent time win the Math.min as an epoch timestamp,
+  // placing the match in 1970 and silently denying a bonus that was
+  // legitimately earned. Caught by a test rather than in production.
+  const times = [pairing?.joinedAt, pairing?.opponentJoinedAt]
+      .filter((t) => typeof t === "number" && Number.isFinite(t) && t > 0);
+  return times.length > 0 ? Math.min(...times) : NaN;
+}
+
+/**
+ * The prime-time-window determination to stamp on a new match.
+ *
+ * Best-effort: if the config can't be read, the match proceeds as a
+ * non-window match rather than failing the pairing. A missed bonus is a
+ * disappointment; a failed pairing is a broken app.
+ */
+async function resolveEventWindow(pairedAtMs, queuedAtMs) {
+  try {
+    const snap = await getFirestore().collection("config").doc("eventWindow").get();
+    const config = readEventWindowConfig(snap.data());
+    const qualified = qualifiesForWindow({
+      pairedAtMs,
+      queuedAtMs,
+      config,
+    });
+    return {qualified, name: config.name};
+  } catch (e) {
+    console.error("resolveEventWindow failed:", e.message);
+    return {qualified: false, name: null};
+  }
 }
 
 /**
@@ -347,11 +393,14 @@ async function attemptPairing(uid, mode, matchId, channelName, now) {
   });
 
   if (!result.committed) return null;
-  const mine = result.snapshot.val()?.[uid];
+  const queue = result.snapshot.val();
+  const mine = queue?.[uid];
   // Only report a pairing if THIS attempt is the one that created it -
   // a commit that merely pruned stale entries also counts as committed.
   if (!mine || mine.status !== "matched" || mine.matchId !== matchId) return null;
-  return mine;
+  // Carried out so the prime-time-window determination can use the EARLIER
+  // of the two players' queue times - see resolveEventWindow.
+  return {...mine, opponentJoinedAt: queue?.[mine.opponentId]?.joinedAt ?? null};
 }
 
 /**
@@ -469,12 +518,29 @@ async function pollMatchmaking(auth, data) {
   // either device last read config. See functions/matchSettings.js.
   const settings = await getMatchSettings(mode);
 
+  // Whether this counts as a prime-time-window match, decided ONCE here and
+  // stamped on the document.
+  //
+  // Judged at the START of the match, never the end: a battle that kicks
+  // off at 6:58 and runs past 7:00 qualifies in full. Judging on completion
+  // would penalise a long match and, far worse, give players a reason to
+  // rush or bail out to beat the clock - the exact opposite of what an hour
+  // designed to get people battling should encourage.
+  //
+  // Stamped rather than recomputed later for the same reason match settings
+  // and vote confidence are: the hours are hand-editable in the console, and
+  // a match must be judged by the rules in force when it was played, not by
+  // whatever the config says afterwards. It also means the answer survives
+  // the window being renamed, retimed, or switched off entirely.
+  const eventWindow = await resolveEventWindow(now, earliestQueuedAt(paired));
+
   try {
     await matchRef.set({
       player1Id: uid,
       player2Id: paired.opponentId,
       mode,
       settings,
+      eventWindow,
       // Created at PAIRING time now, not at verdict time - the document is
       // what the two clients agree on (channel name, who the opponent is),
       // so it has to exist before the match rather than after it. Anything
@@ -856,4 +922,5 @@ module.exports = {
   TIER_WIDEN_INTERVAL_MS,
   REPEAT_OPPONENT_COOLDOWN_MS,
   STALE_ENTRY_MS,
+  earliestQueuedAt,
 };

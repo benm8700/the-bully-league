@@ -1,5 +1,6 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {sendToUsers} = require("./notifications");
+const {readEventWindowConfig, pacificNow} = require("./eventWindow");
 
 /**
  * The daily "it's starting" push for the prime-time window, plus a last
@@ -11,51 +12,14 @@ const {sendToUsers} = require("./notifications");
  * everyone else.
  */
 
-const PACIFIC = "America/Los_Angeles";
-
 /** How long before the window closes the last-call nudge goes out. Long
  * enough to still play a match, short enough to feel urgent. */
 const LAST_CALL_LEAD_MINUTES = 15;
 
-/** Defaults mirror lib/core/services/event_window.dart. */
-const DEFAULTS = {enabled: true, name: "Sixes and Sevens", startHourPacific: 18, endHourPacific: 19};
-
-/**
- * Pacific wall-clock right now, via the real IANA database rather than
- * hand-rolled daylight-saving arithmetic. The client computes this itself
- * in pure Dart to avoid a dependency, but Node ships full ICU, so there is
- * no reason to reimplement the rule here and two chances to get it wrong.
- */
-function pacificNow(date) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: PACIFIC,
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false,
-  }).formatToParts(date);
-  const get = (type) => Number(parts.find((p) => p.type === type).value);
-  const hour = get("hour") % 24; // some ICU versions render midnight as 24
-  return {
-    dayKey: `${get("year")}-${String(get("month")).padStart(2, "0")}-` +
-      `${String(get("day")).padStart(2, "0")}`,
-    minutes: hour * 60 + get("minute"),
-  };
-}
-
-function readConfig(data) {
-  const out = {...DEFAULTS};
-  if (!data) return out;
-  if (typeof data.enabled === "boolean") out.enabled = data.enabled;
-  if (typeof data.name === "string" && data.name.trim()) out.name = data.name.trim();
-  const hour = (key) => {
-    const v = data[key];
-    return (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 23) ? v : null;
-  };
-  const start = hour("startHourPacific");
-  const end = hour("endHourPacific");
-  if (start !== null) out.startHourPacific = start;
-  if (end !== null && end > out.startHourPacific) out.endHourPacific = end;
-  return out;
-}
+// Config parsing and the Pacific clock live in eventWindow.js so the push
+// and match qualification share one definition of the window rather than
+// two that can drift apart.
+const readConfig = readEventWindowConfig;
 
 /**
  * Which notification, if any, is due right now.
