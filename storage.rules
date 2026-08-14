@@ -28,6 +28,23 @@ service firebase.storage {
       allow read, write: if false;
     }
 
+    // Rendered highlight clips (functions/highlightRender.js). Written by
+    // the renderMatchHighlight Cloud Function via the Admin SDK, which
+    // bypasses these rules.
+    //
+    // Denied to clients for the same reason as the raw footage above, and
+    // it matters just as much here: a rendered clip is watchable, which
+    // makes it far more attractive to leak than raw HLS, and it is still
+    // UNREVIEWED. `highlight.reviewStatus` starts at "pending" and a human
+    // has to approve a clip before it reaches any audience. A readable
+    // path would route straight around that gate.
+    //
+    // Approved clips get distributed by being posted to the website or
+    // social accounts, not by opening this bucket path up.
+    match /match_highlights/{matchId}/{allPaths=**} {
+      allow read, write: if false;
+    }
+
     match /profile_photos/{userId}/{photoId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId &&

@@ -492,6 +492,38 @@ exports.startMatchRecording = onCall({secrets: recordingSecrets}, async (request
  */
 exports.getActiveMatch = onCall((request) => getActiveMatch(request.auth));
 
+/**
+ * Renders a match's raw per-player recordings into one watchable vertical
+ * clip (functions/highlightRender.js).
+ *
+ * Admin-only and on demand rather than automatic: most matches never
+ * become highlights, so rendering every one would burn compute on clips
+ * nobody posts. Rendering is also what the human review gate needs - a
+ * reviewer cannot sensibly approve two unsynchronised HLS playlists.
+ *
+ * Resourced well above a normal callable because this is real media work:
+ * it downloads the raw tracks, runs ffmpeg over a couple of minutes of
+ * video, and uploads the result. /tmp is memory-backed on Cloud Functions,
+ * so the working files count against the memory limit too.
+ */
+exports.renderMatchHighlight = onCall(
+    {memory: "4GiB", cpu: 2, timeoutSeconds: 540},
+    async (request) => {
+      // Awaited deliberately - requireAdmin is async, and calling it
+      // without awaiting would let a non-admin straight through while the
+      // rejection surfaced as an unhandled promise.
+      await requireAdmin(request.auth);
+      const {renderMatchHighlight} = require("./highlightRender");
+      const matchId = request.data?.matchId;
+      if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
+      try {
+        return await renderMatchHighlight(matchId);
+      } catch (e) {
+        throw new HttpsError("internal", e.message);
+      }
+    },
+);
+
 exports.setMatchReady = onCall((request) => setMatchReady(request.auth, request.data));
 exports.skipMatch = onCall((request) => skipMatch(request.auth, request.data));
 exports.getSkipAllowance = onCall((request) => getSkipAllowance(request.auth));
