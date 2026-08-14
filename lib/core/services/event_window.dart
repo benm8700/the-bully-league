@@ -134,6 +134,26 @@ EventWindowOccurrence currentOrNextWindow(DateTime now, EventWindowConfig config
   return _windowOnPacificDay(utc, 2, config);
 }
 
+/// The Pacific calendar date of the window people mean by "tonight" - the
+/// one running now, or the next one if today's has finished.
+///
+/// Pre-commitments are keyed by this rather than by the viewer's local
+/// date. Two different reasons, both load-bearing: a commitment made at
+/// 8pm must book TOMORROW rather than an evening that has already passed,
+/// and a viewer in Sydney whose local date is already tomorrow must still
+/// commit to the same night as everyone else. The window is one global
+/// moment, so the key has to be too.
+///
+/// Mirrors upcomingWindowDayKey in functions/eventWindow.js. If the two
+/// disagree, someone commits to one night and is counted for another.
+String upcomingWindowDayKey(DateTime now, EventWindowConfig config) {
+  final window = currentOrNextWindow(now, config);
+  final pacific = window.start.add(pacificOffset(window.start));
+  final month = pacific.month.toString().padLeft(2, '0');
+  final day = pacific.day.toString().padLeft(2, '0');
+  return '${pacific.year}-$month-$day';
+}
+
 EventWindowOccurrence _windowOnPacificDay(
     DateTime utc, int dayOffset, EventWindowConfig config) {
   // Pacific wall-clock date for the day in question.

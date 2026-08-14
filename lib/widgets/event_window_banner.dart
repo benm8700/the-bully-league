@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../core/services/event_window.dart';
@@ -68,47 +69,53 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
               : Theme.of(context).colorScheme.surfaceContainerHighest,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(live ? Icons.local_fire_department : Icons.schedule),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        live
-                            ? '${config.name} is LIVE'
-                            : config.name,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
+                Row(
+                  children: [
+                    Icon(live ? Icons.local_fire_department : Icons.schedule),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            live ? '${config.name} is LIVE' : config.name,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            live
+                                ? '${_remaining(window.end, now)} left - most people are online now'
+                                : 'Starts in ${_remaining(window.start, now)}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 2),
+                          // The canonical time stays "6-7 Pacific" so the name
+                          // means the same thing to everyone, but nobody should
+                          // have to do timezone arithmetic to use it.
+                          Text(
+                            _localTimeLabel(window, config),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          // The single most persuasive thing on this banner:
+                          // the objection is "nobody will be there," and a real
+                          // number answers it directly. Rendered only when
+                          // there IS somebody - "0 roasters online" is an
+                          // argument against opening the app.
+                          const _OnlineCountLine(),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        live
-                            ? '${_remaining(window.end, now)} left - most people are online now'
-                            : 'Starts in ${_remaining(window.start, now)}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 2),
-                      // The canonical time stays "6-7 Pacific" so the name
-                      // means the same thing to everyone, but nobody should
-                      // have to do timezone arithmetic to use it.
-                      Text(
-                        _localTimeLabel(window, config),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      // The single most persuasive thing on this banner:
-                      // the objection is "nobody will be there," and a real
-                      // number answers it directly. Rendered only when
-                      // there IS somebody - "0 roasters online" is an
-                      // argument against opening the app.
-                      const _OnlineCountLine(),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+                // Pre-commitment, shown only ahead of the window. Once it
+                // is running, "I'm in tonight" is a worse call to action
+                // than simply battling, which is already one tap away.
+                if (!live)
+                  _CommitRow(dayKey: upcomingWindowDayKey(now, config)),
               ],
             ),
           ),
@@ -126,7 +133,10 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
     return '${d.inMinutes}m';
   }
 
-  String _localTimeLabel(EventWindowOccurrence window, EventWindowConfig config) {
+  String _localTimeLabel(
+    EventWindowOccurrence window,
+    EventWindowConfig config,
+  ) {
     final startLocal = window.start.toLocal();
     final endLocal = window.end.toLocal();
     final pacific =
@@ -180,13 +190,100 @@ class _OnlineCountLine extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 count.label,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
               ),
             ],
           ),
+        );
+      },
+    );
+  }
+}
+
+/// "I'm in tonight" — pre-commitment, plus how many others have said so.
+///
+/// Two distinct payoffs, and the second is the one people underrate:
+///  1. Stating an intention measurably raises follow-through. It is the
+///     cheapest retention mechanic available and costs the user one tap.
+///  2. It produces a PREDICTABLE POOL SIZE. Matchmaking currently hopes
+///     enough people turn up at once; this turns that hope into a number
+///     visible before the window opens, which both reassures the person
+///     deciding whether to bother and tells the developer whether tonight
+///     is worth being online to seed.
+///
+/// The count is deliberately shown only when someone has actually
+/// committed. "0 people are in tonight" is an argument against showing up,
+/// which is the precise opposite of the intended effect - the same honesty
+/// rule the live online count follows.
+class _CommitRow extends StatelessWidget {
+  const _CommitRow({required this.dayKey});
+
+  /// The Pacific day of the window being committed to. Keyed this way
+  /// rather than by the viewer's local date so that everyone worldwide
+  /// commits to the same night.
+  final String dayKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const SizedBox.shrink();
+    final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: userRef.snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const SizedBox.shrink();
+        final committed =
+            snapshot.data?.data()?['eventCommitmentDayKey'] == dayKey;
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Row(
+            children: [
+              committed
+                  ? OutlinedButton.icon(
+                      onPressed: () => userRef.set({
+                        'eventCommitmentDayKey': null,
+                      }, SetOptions(merge: true)),
+                      icon: const Icon(Icons.check_circle, size: 18),
+                      label: const Text("You're in tonight"),
+                    )
+                  : FilledButton.tonal(
+                      onPressed: () => userRef.set({
+                        'eventCommitmentDayKey': dayKey,
+                      }, SetOptions(merge: true)),
+                      child: const Text("I'm in tonight"),
+                    ),
+              const SizedBox(width: 12),
+              const Expanded(child: _CommittedCountLine()),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// "12 in tonight", or nothing.
+class _CommittedCountLine extends StatelessWidget {
+  const _CommittedCountLine();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<OnlineCount?>(
+      stream: onlineCountStream(),
+      builder: (context, snapshot) {
+        final count = snapshot.data;
+        if (count == null || !count.isFresh || count.committedTonight <= 0) {
+          return const SizedBox.shrink();
+        }
+        return Text(
+          '${count.committedTonight} in tonight',
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
         );
       },
     );

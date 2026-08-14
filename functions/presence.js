@@ -1,6 +1,7 @@
 const {getDatabase} = require("firebase-admin/database");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {MODES, STALE_ENTRY_MS} = require("./matchmaking");
+const {readEventWindowConfig, upcomingWindowDayKey} = require("./eventWindow");
 
 /**
  * How many people are actually here right now.
@@ -73,11 +74,46 @@ async function publishOnlineCount() {
   }
 
   const counts = countQueue(queuesByMode, Date.now());
+  const committed = await countCommitments();
   await getFirestore().collection("stats").doc("presence").set({
     ...counts,
+    ...committed,
     updatedAt: FieldValue.serverTimestamp(),
   });
-  return counts;
+  return {...counts, ...committed};
 }
 
-module.exports = {publishOnlineCount, countQueue, PRESENCE_STALE_MS};
+/**
+ * How many people have said they're in for tonight's window.
+ *
+ * Piggybacks on this once-a-minute job rather than getting its own,
+ * because it publishes to the same document clients already listen to -
+ * so a second number costs no extra write, no extra listener, and no extra
+ * scheduled job. It also inherits the same honesty rule as the live count:
+ * the figure is only worth showing while it's true.
+ *
+ * Uses an aggregation count() rather than reading the matching documents,
+ * which stays cheap as the userbase grows - the whole point is that this
+ * number gets larger.
+ *
+ * Best-effort: a failure here returns nothing rather than throwing, so a
+ * broken commitment count never takes the live online count down with it.
+ */
+async function countCommitments(now = new Date()) {
+  try {
+    const db = getFirestore();
+    const configSnap = await db.collection("config").doc("eventWindow").get();
+    const config = readEventWindowConfig(configSnap.data());
+    if (!config.enabled) return {};
+    const dayKey = upcomingWindowDayKey(now, config);
+    const agg = await db.collection("users")
+        .where("eventCommitmentDayKey", "==", dayKey)
+        .count().get();
+    return {committedTonight: agg.data().count, commitmentDayKey: dayKey};
+  } catch (e) {
+    console.error("countCommitments failed:", e.message);
+    return {};
+  }
+}
+
+module.exports = {publishOnlineCount, countQueue, countCommitments, PRESENCE_STALE_MS};

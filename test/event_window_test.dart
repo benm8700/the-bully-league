@@ -97,6 +97,61 @@ void main() {
     });
   });
 
+  group('which night "tonight" means', () {
+    // Anchored to Pacific midnight on 1 July 2026 (PDT, UTC-7) so every
+    // hour lands on the same Pacific date. These expectations deliberately
+    // mirror functions/test/eventWindowQualify.test.js one-for-one: if the
+    // Dart and JS implementations ever disagree, someone commits to one
+    // night and is counted for another, and nothing would surface it.
+    DateTime pacific(int hour, [int minute = 0]) =>
+        DateTime.utc(2026, 7, 1, 7).add(Duration(hours: hour, minutes: minute));
+
+    test('before the window, tonight is today', () {
+      expect(upcomingWindowDayKey(pacific(10), config), '2026-07-01');
+    });
+
+    test('during the window, tonight is still today', () {
+      expect(upcomingWindowDayKey(pacific(18, 30), config), '2026-07-01');
+    });
+
+    test('after the window closes, tonight rolls to tomorrow', () {
+      // Committing at 8pm must book TOMORROW, not an evening that has
+      // already happened.
+      expect(upcomingWindowDayKey(pacific(20), config), '2026-07-02');
+    });
+
+    test('the roll happens when the window ends, not at midnight', () {
+      expect(upcomingWindowDayKey(pacific(18, 59), config), '2026-07-01');
+      expect(upcomingWindowDayKey(pacific(19), config), '2026-07-02');
+    });
+
+    test('the key is a Pacific date, not the viewer\'s local one', () {
+      // A viewer in Sydney whose local calendar already reads tomorrow must
+      // still be counted for the same global window - otherwise the count
+      // splits across two keys and both look emptier than the truth.
+      expect(upcomingWindowDayKey(pacific(10), config), '2026-07-01');
+    });
+
+    test('a month boundary rolls correctly', () {
+      // 9pm PDT on 31 July: the window has closed, so tonight is 1 August.
+      expect(upcomingWindowDayKey(DateTime.utc(2026, 8, 1, 4), config),
+          '2026-08-01');
+    });
+
+    test('a year boundary rolls correctly', () {
+      // 9pm PST on 31 December 2026.
+      expect(upcomingWindowDayKey(DateTime.utc(2027, 1, 1, 5), config),
+          '2027-01-01');
+    });
+
+    test('the key is zero-padded so string comparison is safe', () {
+      // An unpadded "2026-7-1" would sort and compare differently from the
+      // server's padded form, which is how a silent mismatch would begin.
+      final key = upcomingWindowDayKey(pacific(10), config);
+      expect(key, matches(r'^\d{4}-\d{2}-\d{2}$'));
+    });
+  });
+
   group('config parsing', () {
     test('defaults apply when the document is missing entirely', () {
       final c = EventWindowConfig.fromMap(null);

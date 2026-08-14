@@ -107,8 +107,35 @@ function qualifiesForWindow({pairedAtMs, queuedAtMs, config, now = pairedAtMs}) 
   return isWithinWindow(new Date(queuedAtMs), config);
 }
 
+/**
+ * The Pacific day key of the window people mean when they say "tonight" -
+ * the one currently running, or the next one if today's has finished.
+ *
+ * Pre-commitments are keyed by this rather than by the plain calendar date
+ * so that a commitment made at 8pm, after the window has closed, books
+ * TOMORROW rather than a night that has already happened. Getting that
+ * wrong would show someone as committed to an evening they missed, and
+ * silently drop them from the night they actually meant.
+ */
+function upcomingWindowDayKey(date, config) {
+  const {dayKey, minutes} = pacificNow(date);
+  if (minutes < config.endHourPacific * 60) return dayKey;
+  return nextDayKey(dayKey);
+}
+
+/** Calendar-date arithmetic on a YYYY-MM-DD key, month and year rollovers
+ * included. Done in UTC because a bare date has no timezone of its own. */
+function nextDayKey(dayKey) {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-` +
+    `${String(next.getUTCDate()).padStart(2, "0")}`;
+}
+
 module.exports = {
   DEFAULTS,
+  upcomingWindowDayKey,
+  nextDayKey,
   PACIFIC,
   PAIRING_GRACE_MS,
   readEventWindowConfig,

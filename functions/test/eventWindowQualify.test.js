@@ -19,6 +19,8 @@ const {
   readEventWindowConfig,
   isWithinWindow,
   PAIRING_GRACE_MS,
+  upcomingWindowDayKey,
+  nextDayKey,
 } = require("../eventWindow");
 const {earliestQueuedAt} = require("../matchmaking");
 
@@ -32,10 +34,13 @@ function check(label, fn) {
 const config = readEventWindowConfig(null); // 6-7pm Pacific
 const MINUTE = 60 * 1000;
 
-/** A UTC instant for a given Pacific wall-clock time in high summer (PDT,
- * UTC-7), so 6pm Pacific is 01:00 UTC the next day. */
+/** A UTC instant for a Pacific wall-clock time on 1 July 2026, which is in
+ * daylight saving (PDT, UTC-7). Anchored to Pacific MIDNIGHT that day, so
+ * every hour passed in lands on the same Pacific date - otherwise the
+ * date-sensitive assertions below silently drift between the 1st and the
+ * 2nd depending on the hour. */
 const pacific = (hour, minute = 0) =>
-  Date.parse("2026-07-02T00:00:00Z") + (hour + 7) * 60 * MINUTE + minute * MINUTE;
+  Date.parse("2026-07-01T07:00:00Z") + hour * 60 * MINUTE + minute * MINUTE;
 
 // --- the case the developer raised ---
 
@@ -190,6 +195,54 @@ check("the window is 6-7pm Pacific in standard time too", () => {
   assert.strictEqual(isWithinWindow(new Date(winter6pm), config), true);
   assert.strictEqual(
       isWithinWindow(new Date(winter6pm - MINUTE), config), false);
+});
+
+// --- which night "tonight" means, for pre-commitment ---
+
+check("before the window, tonight is today", () => {
+  assert.strictEqual(upcomingWindowDayKey(new Date(pacific(10, 0)), config), "2026-07-01");
+});
+
+check("during the window, tonight is still today", () => {
+  assert.strictEqual(upcomingWindowDayKey(new Date(pacific(18, 30)), config), "2026-07-01");
+});
+
+check("after the window closes, tonight rolls to tomorrow", () => {
+  // The case that makes this worth a helper: committing at 8pm must book
+  // TOMORROW, not an evening that has already happened. Getting this wrong
+  // shows someone as committed to a night they missed and silently drops
+  // them from the one they meant.
+  assert.strictEqual(upcomingWindowDayKey(new Date(pacific(20, 0)), config), "2026-07-02");
+});
+
+check("the roll happens the instant the window ends, not at midnight", () => {
+  assert.strictEqual(upcomingWindowDayKey(new Date(pacific(18, 59)), config), "2026-07-01");
+  assert.strictEqual(upcomingWindowDayKey(new Date(pacific(19, 0)), config), "2026-07-02");
+});
+
+check("the day key rolls over a month boundary", () => {
+  const julyLast = Date.parse("2026-08-01T04:00:00Z"); // 9pm PDT Jul 31
+  assert.strictEqual(upcomingWindowDayKey(new Date(julyLast), config), "2026-08-01");
+});
+
+check("the day key rolls over a year boundary", () => {
+  const newYearsEve = Date.parse("2027-01-01T05:00:00Z"); // 9pm PST Dec 31
+  assert.strictEqual(upcomingWindowDayKey(new Date(newYearsEve), config), "2027-01-01");
+});
+
+check("every viewer worldwide commits to the same night", () => {
+  // The key is a Pacific date, not the viewer's local one. A user in Sydney
+  // whose local calendar already says tomorrow must still be counted for
+  // the same global window as everyone else - otherwise the count splits
+  // across two keys and both look emptier than the truth.
+  const instant = new Date(pacific(10, 0));
+  assert.strictEqual(upcomingWindowDayKey(instant, config), "2026-07-01");
+});
+
+check("nextDayKey handles leap day", () => {
+  assert.strictEqual(nextDayKey("2028-02-28"), "2028-02-29");
+  assert.strictEqual(nextDayKey("2028-02-29"), "2028-03-01");
+  assert.strictEqual(nextDayKey("2027-02-28"), "2027-03-01");
 });
 
 console.log(`\n${checks} checks passed.`);

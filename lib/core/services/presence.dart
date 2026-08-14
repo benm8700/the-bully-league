@@ -13,12 +13,19 @@ class OnlineCount {
     required this.waiting,
     required this.matched,
     required this.total,
+    required this.committedTonight,
     required this.updatedAt,
   });
 
   final int waiting;
   final int matched;
   final int total;
+
+  /// How many people have said they're in for the next window. Published
+  /// alongside the live count by the same once-a-minute job, so it costs
+  /// no extra listener.
+  final int committedTonight;
+
   final DateTime? updatedAt;
 
   /// The publisher runs every minute, so anything much older than that
@@ -40,6 +47,7 @@ class OnlineCount {
       waiting: (data['waiting'] as num?)?.toInt() ?? 0,
       matched: (data['matched'] as num?)?.toInt() ?? 0,
       total: (data['total'] as num?)?.toInt() ?? 0,
+      committedTonight: (data['committedTonight'] as num?)?.toInt() ?? 0,
       updatedAt: updatedAt is Timestamp ? updatedAt.toDate() : null,
     );
   }
