@@ -10,21 +10,44 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
  * popularity signal, with no text to moderate, no 24-hour SLA, and nothing
  * anonymous attached to a real person's face.
  *
- * THE SET IS DELIBERATELY ALL-POSITIVE OR INTENSITY-ONLY. A thumbs-down or
- * a pile-of-dung would be a comment section in emoji form - a way for
- * strangers to pile on the person who lost, which is exactly the harm the
- * no-comments decision exists to prevent. Every reaction here says
- * something about how hard a line landed, never that a player is bad.
+ * THE SET IS WIDE AND INCLUDES NEGATIVE REACTIONS, deliberately. An earlier
+ * version allowed only approving ones and that was wrong twice over: it is
+ * tonally absurd for an app whose premise is harsh unfiltered comedy, and
+ * feedback that can only agree measures how many people watched rather than
+ * how good anything was. The crowd already votes that someone LOST a
+ * battle, which is a far heavier judgement than any emoji.
+ *
+ * THE LINE THAT DOES MATTER is performance versus person. "That didn't
+ * land", "ice cold", crickets - all judgements of the material, all things
+ * comedians actually use. What stays out is contempt aimed at the human
+ * rather than the set. Stand-up audiences boo the bit, not the person's
+ * worth.
+ *
+ * AN ALLOWLIST RATHER THAN FREE EMOJI INPUT, and that is a real constraint
+ * rather than caution: a field accepting arbitrary characters is a comment
+ * box. Someone would type a slur into it within a week, and the entire
+ * reason comments are ruled out is to avoid exactly that. A large curated
+ * set gets the expressiveness without reopening a text-moderation problem,
+ * and it keeps the per-emoji tally bounded instead of growing a new key for
+ * every character anyone invents.
  *
  * ONE REACTION PER PERSON PER CLIP, changeable. That keeps the count a
  * measure of how many people felt something rather than of who tapped
  * fastest, and it makes the number meaningful as a caption-selection input.
  */
 
-/** Allowed reactions. Also enforced in firestore.rules, so a modified
- * client cannot invent one - the rule is the real gate, this is the list
- * the rest of the backend reasons about. */
-const REACTIONS = ["fire", "skull", "cry", "oof"];
+/** Allowed reactions. Also enforced in firestore.rules, which is the real
+ * gate - this is the list the rest of the backend reasons about. Ordered
+ * roughly from "that killed" through to "that died". */
+const REACTIONS = [
+  // It landed.
+  "fire", "skull", "coffin", "cold_blooded", "bullseye", "mindblown",
+  "cry", "laugh", "clap", "salute",
+  // Reactions to the hit itself.
+  "shocked", "hide", "oof",
+  // It didn't land.
+  "ice", "crickets", "yawn", "meh", "thumbsdown",
+];
 
 /**
  * Keeps a per-emoji tally on the match document.

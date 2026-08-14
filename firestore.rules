@@ -120,14 +120,23 @@ service cloud.firestore {
       // feature.
       //
       // Written only by the onVoteCast trigger via the Admin SDK.
+
       // Emoji reactions on a clip - what stands in for comments, which are
       // ruled out entirely so they can't affect the roasters' mental state.
       //
-      // The allowed set is enforced HERE rather than only in the trigger,
-      // because this is the write path a modified client would use. The set
-      // is all-positive or intensity-only by design: a thumbs-down would be
-      // a comment section in emoji form, a way for strangers to pile on
-      // whoever lost, which is the exact harm that decision prevents.
+      // AN ALLOWLIST, ENFORCED HERE rather than only in the trigger,
+      // because this is the write path a modified client would use. The
+      // allowlist is the point: a field accepting arbitrary characters is a
+      // comment box, someone would type a slur into it within a week, and
+      // avoiding exactly that is why comments are ruled out. It also keeps
+      // the per-emoji tally bounded rather than growing a key for every
+      // character anyone invents.
+      //
+      // The set deliberately includes NEGATIVE reactions. Feedback that can
+      // only agree measures how many people watched rather than how good
+      // anything was, and the crowd already votes that someone lost - a far
+      // heavier judgement than an emoji. What stays out is contempt aimed
+      // at the human rather than at the material.
       //
       // You may only write your own, and only one - changing it moves the
       // tally rather than adding a second, which keeps the count a measure
@@ -136,7 +145,12 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow write: if request.auth != null && request.auth.uid == userId &&
           (request.resource == null ||
-           request.resource.data.emoji in ['fire', 'skull', 'cry', 'oof']);
+           request.resource.data.emoji in [
+             'fire', 'skull', 'coffin', 'cold_blooded', 'bullseye',
+             'mindblown', 'cry', 'laugh', 'clap', 'salute',
+             'shocked', 'hide', 'oof',
+             'ice', 'crickets', 'yawn', 'meh', 'thumbsdown',
+           ]);
       }
 
       match /tally/{document} {
