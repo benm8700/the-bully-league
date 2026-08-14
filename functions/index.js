@@ -251,6 +251,21 @@ exports.publishOnlineCount = onSchedule("every 1 minutes", async () => {
   }
 });
 
+/**
+ * The daily window's "it's starting" push, plus a last call before it
+ * closes. Polls every 5 minutes rather than firing on a 6pm cron, because
+ * the hours live in Firestore and are provisional - see eventWindowPush.js.
+ */
+exports.sendEventWindowPush = onSchedule("every 5 minutes", async () => {
+  const {sendEventWindowPush} = require("./eventWindowPush");
+  try {
+    const result = await sendEventWindowPush();
+    if (!result.skipped) console.log("sendEventWindowPush:", JSON.stringify(result));
+  } catch (err) {
+    console.error("sendEventWindowPush failed:", err);
+  }
+});
+
 exports.purgeExpiredRecordings = onSchedule("every 24 hours", async () => {
   const {purgeExpiredRecordings} = require("./recordingRetention");
   const result = await purgeExpiredRecordings();

@@ -1,6 +1,7 @@
 const {getDatabase} = require("firebase-admin/database");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
+const {wantsCategory} = require("./notifications");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {STARTING_RATING, RANK_TIERS, GOAT_TITLE, computeBaseRankTitle} = require("./rating");
 const {getMatchSettings} = require("./matchSettings");
@@ -373,6 +374,11 @@ async function notifyMatchFound(opponentId, matchId, fromUsername) {
     const snap = await db.collection("users").doc(opponentId).get();
     const tokens = snap.data()?.fcmTokens ?? [];
     if (tokens.length === 0) return;
+    // Honour the per-category mute toggle. Match-found is the most useful
+    // notification in the app, but forcing it on someone who switched it
+    // off is how an app earns a system-level block - which silences every
+    // other category too.
+    if (!wantsCategory(snap.data(), "match_found")) return;
 
     const response = await getMessaging().sendEachForMulticast({
       tokens,

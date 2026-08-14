@@ -13,6 +13,7 @@ import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import '../onboarding/tutorial_screen.dart';
 import '../profile/profile_screen.dart';
+import '../settings/notification_settings_screen.dart';
 import '../support/support_screen.dart';
 import '../tournament/tournament_list_screen.dart';
 import '../vote/finalize_test_screen.dart';
@@ -36,6 +37,15 @@ class HomeScreen extends StatelessWidget {
             onPressed: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const SupportScreen())),
+          ),
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            tooltip: 'Notifications',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const NotificationSettingsScreen(),
+              ),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
