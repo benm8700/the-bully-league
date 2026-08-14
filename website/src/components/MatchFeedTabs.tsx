@@ -8,18 +8,38 @@ function MatchCard({ match }: { match: FeedMatch }) {
   return (
     <Link
       href={`/vote/${match.id}`}
-      className="flex items-center justify-between rounded-lg border border-foreground/10 px-4 py-3 hover:border-accent transition-colors"
+      className="flex flex-col rounded-lg border border-foreground/10 overflow-hidden hover:border-accent transition-colors"
     >
-      <div className="flex flex-col">
-        <span className="font-medium">
-          {match.player1Username} <span className="text-foreground/40">vs</span>{" "}
-          {match.player2Username}
+      {match.videoUrl && (
+        // preload="metadata" rather than "auto": a feed of twenty cards
+        // that each eagerly buffered a clip would be a slow page and a
+        // real bandwidth bill, on a project already watching per-match
+        // video costs. muted + playsInline so the poster frame shows
+        // without the browser blocking it or iOS forcing fullscreen.
+        <video
+          src={match.videoUrl}
+          controls
+          muted
+          playsInline
+          preload="metadata"
+          className="w-full max-h-80 bg-black object-contain"
+        />
+      )}
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex flex-col">
+          <span className="font-medium">
+            {match.player1Username} <span className="text-foreground/40">vs</span>{" "}
+            {match.player2Username}
+          </span>
+          <span className="text-xs text-foreground/50 capitalize">
+            {match.mode}
+            {!match.videoUrl && " · clip not published yet"}
+          </span>
+        </div>
+        <span className="text-sm text-foreground/70">
+          {match.voteCount} {match.voteCount === 1 ? "vote" : "votes"}
         </span>
-        <span className="text-xs text-foreground/50 capitalize">{match.mode}</span>
       </div>
-      <span className="text-sm text-foreground/70">
-        {match.voteCount} {match.voteCount === 1 ? "vote" : "votes"}
-      </span>
     </Link>
   );
 }

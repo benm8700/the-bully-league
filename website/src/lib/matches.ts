@@ -7,6 +7,20 @@ export interface FeedMatch {
   mode: string;
   voteCount: number;
   createdAtMs: number | null;
+  /**
+   * Playable clip URL, or null when a match has no published highlight.
+   *
+   * Only ever set for a clip an admin has reviewed and published - the URL
+   * carries a Firebase Storage download token that is issued at publish
+   * time and revoked on takedown (see functions/publishHighlight.js), so
+   * an unreviewed render has no reachable URL to leak even if one were
+   * accidentally surfaced here.
+   *
+   * The LANDSCAPE rendition is used on the website; the vertical one is
+   * for TikTok/Reels/Shorts. Falls back to vertical if a match somehow has
+   * only that, so an old render still plays rather than showing nothing.
+   */
+  videoUrl: string | null;
 }
 
 async function resolveUsernames(db: FirebaseFirestore.Firestore, uids: string[]) {
@@ -27,6 +41,14 @@ function toFeedMatches(
 ): FeedMatch[] {
   return docs.map((doc) => {
     const data = doc.data();
+    const highlight = data.highlight as
+      | { published?: boolean; publicUrls?: Record<string, string> }
+      | undefined;
+    // Gated on `published` as well as on a URL existing. Belt and braces:
+    // the URL is only written at publish time anyway, but a feed that
+    // showed video purely because a field was present would be one stray
+    // write away from surfacing an unreviewed clip.
+    const urls = highlight?.published === true ? highlight.publicUrls : undefined;
     return {
       id: doc.id,
       player1Username: usernames.get(data.player1Id as string) ?? "Unknown",
@@ -34,6 +56,7 @@ function toFeedMatches(
       mode: (data.mode as string | undefined) ?? "exhibition",
       voteCount: (data.voteCount as number | undefined) ?? 0,
       createdAtMs: data.createdAt?.toMillis?.() ?? null,
+      videoUrl: urls?.landscape ?? urls?.vertical ?? null,
     };
   });
 }

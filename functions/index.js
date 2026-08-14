@@ -502,6 +502,34 @@ exports.getActiveMatch = onCall((request) => getActiveMatch(request.auth));
  * Storage and the Realtime Database, and because a client cannot be
  * trusted to have actually removed anything.
  */
+/**
+ * Publishes a reviewed highlight so the website can play it, and takes it
+ * back down again. Admin-only: this is the enforcement point for
+ * CLAUDE.md's human review gate, and nothing else in the pipeline makes a
+ * clip reachable. See functions/publishHighlight.js for why access is
+ * granted by download token rather than by copying files.
+ */
+/**
+ * Publishing and takedown are ONE callable with a flag rather than two
+ * functions. That's partly because they're one decision with a direction,
+ * but mainly for a practical reason: a separately-deployed
+ * `unpublishHighlight` could not be granted its Cloud Run invoker binding
+ * from this environment (every call returned a Cloud Run 401, and neither
+ * a redeploy nor a delete-and-recreate reconciled it, unlike the other
+ * functions here). Folding it into an endpoint that already has a working
+ * binding sidesteps that entirely - and a takedown is far too important to
+ * leave dependent on a console step someone might not have done.
+ */
+exports.publishHighlight = onCall(async (request) => {
+  await requireAdmin(request.auth);
+  const {publishHighlight, unpublishHighlight} = require("./publishHighlight");
+  const matchId = request.data?.matchId;
+  if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
+  // Defaults to publishing; pass published:false to take a clip down.
+  const publish = request.data?.published !== false;
+  return publish ? publishHighlight(matchId) : unpublishHighlight(matchId);
+});
+
 exports.deleteMyAccount = onCall({timeoutSeconds: 300}, async (request) => {
   const {deleteAccount} = require("./accountDeletion");
   return deleteAccount(request.auth);
