@@ -42,6 +42,26 @@ class MatchSettings {
   }
 }
 
+/// Whether Ranked is available yet (CLAUDE.md's Modes decision: Ranked
+/// unlocks only after a few exhibition matches, and the progress toward it
+/// is shown rather than the unlock being silent).
+class RankedUnlock {
+  const RankedUnlock({
+    required this.unlocked,
+    required this.played,
+    required this.required,
+    required this.remaining,
+  });
+
+  final bool unlocked;
+  final int played;
+  final int required;
+  final int remaining;
+
+  String get progressLabel =>
+      '$remaining more exhibition match${remaining == 1 ? '' : 'es'} to unlock Ranked';
+}
+
 /// A pairing handed back by the matchmaking backend - everything the match
 /// flow needs to actually start: which Agora channel to join, which match
 /// document to settle at the end, who the opponent is, and the timings
@@ -173,6 +193,28 @@ class MatchmakingService {
       try {
         await _call('leaveMatchmakingQueue', {'mode': mode});
       } catch (_) {}
+    }
+  }
+
+  /// Whether Ranked has unlocked yet, and how many exhibition matches
+  /// remain if not.
+  ///
+  /// Treated as unlocked if the check fails: the real gate is server-side
+  /// in enterQueue, so a failed lookup should not lock someone out of a
+  /// mode they may well have earned.
+  Future<RankedUnlock> rankedUnlock() async {
+    try {
+      final result =
+          await _functions.httpsCallable('getRankedUnlock').call<Map<String, dynamic>>();
+      final data = result.data;
+      return RankedUnlock(
+        unlocked: data['unlocked'] == true,
+        played: (data['played'] as num?)?.toInt() ?? 0,
+        required: (data['required'] as num?)?.toInt() ?? 0,
+        remaining: (data['remaining'] as num?)?.toInt() ?? 0,
+      );
+    } catch (_) {
+      return const RankedUnlock(unlocked: true, played: 0, required: 0, remaining: 0);
     }
   }
 

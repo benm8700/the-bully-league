@@ -19,6 +19,7 @@ const {
   setMatchReady,
   skipMatch,
   getSkipAllowance,
+  getRankedUnlock,
 } = require("./matchmaking");
 
 // Modular admin SDK API, not the classic admin.firestore()/admin.auth()
@@ -541,5 +542,12 @@ exports.renderMatchHighlight = onCall(
 exports.setMatchReady = onCall((request) => setMatchReady(request.auth, request.data));
 exports.skipMatch = onCall((request) => skipMatch(request.auth, request.data));
 exports.getSkipAllowance = onCall((request) => getSkipAllowance(request.auth));
+
+/**
+ * Whether Ranked has unlocked for the caller, and how many exhibition
+ * matches remain if not. CLAUDE.md asks for this progress to be visible
+ * ("3 matches until Ranked unlocks") rather than a silent unlock.
+ */
+exports.getRankedUnlock = onCall((request) => getRankedUnlock(request.auth));
 
 exports.onVoteCast = onVoteCast;

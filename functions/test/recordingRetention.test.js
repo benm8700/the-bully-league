@@ -74,6 +74,33 @@ test("a failed recording is still purged rather than left behind", () => {
   assert.strictEqual(purgeDecision({recording: {status: "stop_failed"}}), "purge");
 });
 
+// --- Rendered highlights, swept by the same rule -------------------------
+
+test("an unpublished RENDER is purged, not just the raw footage", () => {
+  // A render is as much a copy of two people's faces as its source, so
+  // leaving it would quietly outlive the retention window regardless of
+  // what happened to the raw files.
+  assert.strictEqual(
+      purgeDecision({recording: {purged: true}, highlight: {published: false}}),
+      "purge",
+      "an already-swept recording must not stop a leftover render being swept",
+  );
+});
+
+test("a published render is KEPT even if the raw recording says otherwise", () => {
+  // Publication is recorded on the highlight once one exists; that is the
+  // authoritative flag at that point.
+  assert.strictEqual(
+      purgeDecision({recording: {published: false}, highlight: {published: true}}),
+      "keep",
+  );
+});
+
+test("a match with a render but no recording record is still handled", () => {
+  assert.strictEqual(purgeDecision({highlight: {published: false}}), "purge");
+  assert.strictEqual(purgeDecision({highlight: {published: true}}), "keep");
+});
+
 test("a still-recording match is purged if it somehow survives the window", () => {
   // A match stuck "recording" for over 7 days is broken, not live - the
   // hourly finalization sweep would have abandoned it long before.

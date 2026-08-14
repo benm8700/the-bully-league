@@ -14,6 +14,40 @@ const {stopRecording, writeRecordingState} = require("./cloudRecording");
 const RECORDED_MODES = ["ranked", "tournament"];
 
 /**
+ * How many exhibition matches a player must finish before Ranked unlocks
+ * (CLAUDE.md's Modes decision: "unlocked only after completing a few
+ * exhibition matches first, exact number TBD, lets new users get
+ * comfortable before results count").
+ *
+ * PLACEHOLDER VALUE - the decision says "a few" and explicitly leaves the
+ * number open, so this wants tuning against real data like the rank
+ * thresholds do.
+ */
+const EXHIBITION_MATCHES_TO_UNLOCK_RANKED = 3;
+
+/**
+ * Whether Ranked is available to this player yet, and how far off it is.
+ *
+ * Anyone who has already played a ranked match is grandfathered in
+ * regardless of their exhibition count. Without that, introducing this
+ * gate would retroactively lock out every existing account - their
+ * exhibition counter has never been written, so it reads as zero even for
+ * players who have been playing ranked for weeks. Same class of trap as
+ * the missing-accountStatus bug this file already carries a fix for.
+ */
+function rankedUnlockState(user) {
+  const played = user?.exhibitionMatchesPlayed ?? 0;
+  const alreadyRanked = (user?.rankedMatchesPlayed ?? 0) > 0;
+  const unlocked = alreadyRanked || played >= EXHIBITION_MATCHES_TO_UNLOCK_RANKED;
+  return {
+    unlocked,
+    played,
+    required: EXHIBITION_MATCHES_TO_UNLOCK_RANKED,
+    remaining: unlocked ? 0 : EXHIBITION_MATCHES_TO_UNLOCK_RANKED - played,
+  };
+}
+
+/**
  * Real matchmaking (Build Order step 4's missing half). Replaces the
  * hardcoded "test-channel" both devices used to join - see CLAUDE.md's
  * Build Order step 4 status note, which flagged "no real matchmaking
@@ -145,6 +179,21 @@ async function enterQueue(auth, data) {
   const accountStatus = user.accountStatus ?? "active";
   if (accountStatus !== "active") {
     throw new HttpsError("permission-denied", "This account can't join matches.");
+  }
+
+  // Ranked stays locked until a few exhibition matches are done, so a new
+  // player's first experiences don't move their rating while they're still
+  // working out the format. Enforced here rather than only in the UI - the
+  // client's button state is a convenience, this is the actual gate.
+  if (mode === "ranked") {
+    const unlock = rankedUnlockState(user);
+    if (!unlock.unlocked) {
+      throw new HttpsError(
+          "failed-precondition",
+          `Play ${unlock.remaining} more exhibition match` +
+        `${unlock.remaining === 1 ? "" : "es"} to unlock Ranked.`,
+      );
+    }
   }
 
   // recentOpponentIds is documented in CLAUDE.md's user schema as "[array
@@ -629,14 +678,20 @@ async function completeMatch(auth, data, creds = null) {
   }
 
   if (outcome === "completed") {
-    // Feeds the repeat-opponent cooldown on the next queue entry.
+    // Feeds the repeat-opponent cooldown on the next queue entry, and -
+    // for exhibition matches - the counter that unlocks Ranked. Counted
+    // on completion rather than on pairing so abandoning a match cannot
+    // be used to speed-run the unlock.
     const now = Date.now();
-    await Promise.all([
-      db.collection("users").doc(match.player1Id)
-          .update({[`recentOpponentIds.${match.player2Id}`]: now}).catch(() => {}),
-      db.collection("users").doc(match.player2Id)
-          .update({[`recentOpponentIds.${match.player1Id}`]: now}).catch(() => {}),
-    ]);
+    const countsTowardUnlock = match.mode === "exhibition";
+    await Promise.all([match.player1Id, match.player2Id].map((uid, i) => {
+      const opponent = i === 0 ? match.player2Id : match.player1Id;
+      return db.collection("users").doc(uid).update({
+        [`recentOpponentIds.${opponent}`]: now,
+        ...(countsTowardUnlock ?
+          {exhibitionMatchesPlayed: FieldValue.increment(1)} : {}),
+      }).catch(() => {});
+    }));
   }
 
   return {status: outcome};
@@ -754,6 +809,18 @@ async function getSkipAllowance(auth) {
   return {remaining: Math.max(0, MAX_SKIPS_PER_DAY - used), max: MAX_SKIPS_PER_DAY};
 }
 
+/**
+ * Read-only: whether Ranked is unlocked for the caller and how far off it
+ * is, so Home can show real progress ("2 matches until Ranked unlocks")
+ * rather than a silent unlock - CLAUDE.md explicitly asks for the progress
+ * to be visible.
+ */
+async function getRankedUnlock(auth) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const snap = await getFirestore().collection("users").doc(auth.uid).get();
+  return rankedUnlockState(snap.data() ?? {});
+}
+
 module.exports = {
   enterQueue,
   leaveQueue,
@@ -765,6 +832,9 @@ module.exports = {
   setMatchReady,
   skipMatch,
   getSkipAllowance,
+  getRankedUnlock,
+  rankedUnlockState,
+  EXHIBITION_MATCHES_TO_UNLOCK_RANKED,
   utcDayKey,
   MAX_SKIPS_PER_DAY,
   tierIndexFor,

@@ -26,6 +26,13 @@ const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
  * never reachable by this sweep. */
 const RECORDING_PREFIX = "match_recordings";
 
+/** Rendered clips. Swept on the same schedule and by the same rule as raw
+ * footage: a render that was never published is just as much a copy of two
+ * people's faces as the source it came from, and leaving it indefinitely
+ * would quietly outlive the retention window the Privacy Policy promises.
+ * Published highlights are exempt, exactly as they are for raw footage. */
+const HIGHLIGHT_PREFIX = "match_highlights";
+
 /**
  * Decides what to do with one match's recording. Pure, and separated from
  * the sweep so it can be tested directly - this is the code that
@@ -37,12 +44,17 @@ const RECORDING_PREFIX = "match_recordings";
  */
 function purgeDecision(matchData) {
   const recording = matchData?.recording;
-  if (!recording) return "skip";
-  if (recording.purged) return "skip";
+  const highlight = matchData?.highlight;
+  // Nothing was ever captured or rendered for this match.
+  if (!recording && !highlight) return "skip";
+  // Already swept, and no render appeared afterwards.
+  if (recording?.purged && !highlight) return "skip";
   // An already-published highlight is retained on purpose - CLAUDE.md's
   // CCPA position is that a clip already public isn't retroactively
-  // unpublished, so the sweep must not delete it either.
-  if (recording.published === true) return "keep";
+  // unpublished, so the sweep must not delete it either. Publication is
+  // recorded on the highlight once one has been rendered, and on the
+  // recording before that, so both are checked.
+  if (highlight?.published === true || recording?.published === true) return "keep";
   return "purge";
 }
 
@@ -74,7 +86,8 @@ async function purgeExpiredRecordings({now = Date.now(), dryRun = false} = {}) {
   let skipped = 0;
 
   for (const doc of snap.docs) {
-    const decision = purgeDecision(doc.data());
+    const data = doc.data();
+    const decision = purgeDecision(data);
     if (decision === "skip") {
       skipped++;
       continue;
@@ -85,7 +98,10 @@ async function purgeExpiredRecordings({now = Date.now(), dryRun = false} = {}) {
     }
 
     if (!dryRun) {
+      // Both the raw per-player footage and any rendered clip. A render
+      // is just as much a copy of two people's faces as its source.
       await bucket.deleteFiles({prefix: `${RECORDING_PREFIX}/${doc.id}/`, force: true});
+      await bucket.deleteFiles({prefix: `${HIGHLIGHT_PREFIX}/${doc.id}/`, force: true});
       await doc.ref.set({
         recording: {
           purged: true,
@@ -94,6 +110,9 @@ async function purgeExpiredRecordings({now = Date.now(), dryRun = false} = {}) {
           // that no longer exist so nothing tries to serve them.
           files: FieldValue.delete(),
         },
+        ...(data.highlight ? {
+          highlight: {purged: true, renditions: FieldValue.delete()},
+        } : {}),
       }, {merge: true});
     }
     purged++;
@@ -108,4 +127,5 @@ module.exports = {
   RETENTION_DAYS,
   RETENTION_MS,
   RECORDING_PREFIX,
+  HIGHLIGHT_PREFIX,
 };

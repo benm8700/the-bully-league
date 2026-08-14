@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/matchmaking_service.dart';
 import 'match_screen.dart';
+import 'matchmaking_screen.dart';
 
 /// Pre-match bio reveal (CLAUDE.md's "Pre-match bio reveal" decision).
 ///
@@ -100,11 +101,16 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
 
       if (data['status'] != 'pending') {
         final skippedBy = data['skippedByUserId'] as String?;
-        _endMatch(
-          skippedBy == widget.pairing.opponentId
-              ? 'Your opponent passed on this one. Finding you someone else...'
-              : 'This match ended before it started.',
-        );
+        if (skippedBy == widget.pairing.opponentId) {
+          // Put them straight back in the queue rather than dumping them
+          // on Home. Being declined is already a small rejection; making
+          // the player re-navigate the whole consent and camera-check flow
+          // to try again compounds it for no reason, and they passed those
+          // checks moments ago.
+          _requeue();
+        } else {
+          _endMatch('This match ended before it started.');
+        }
         return;
       }
 
@@ -185,6 +191,22 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     if (_navigated || _endedReason != null) return;
     _ticker?.cancel();
     setState(() => _endedReason = reason);
+  }
+
+  /// Sends the player back into matchmaking for the same mode after their
+  /// opponent declined, replacing this screen so Back still returns Home
+  /// rather than to a dead pairing.
+  void _requeue() {
+    if (_navigated || _endedReason != null) return;
+    _navigated = true;
+    _ticker?.cancel();
+    _matchSub?.cancel();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Your opponent passed. Finding someone else...')),
+    );
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => MatchmakingScreen(mode: widget.pairing.mode)),
+    );
   }
 
   @override

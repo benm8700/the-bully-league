@@ -63,10 +63,7 @@ class HomeScreen extends StatelessWidget {
                 if (uid != null) _RankBadge(uid: uid),
                 const SizedBox(height: 24),
                 const _ActiveMatchBanner(),
-                FilledButton(
-                  onPressed: () => _startMatch(context, 'ranked'),
-                  child: const Text('Find Ranked Match'),
-                ),
+                const _RankedUnlockGate(),
                 const SizedBox(height: 12),
                 OutlinedButton(
                   onPressed: () => _startMatch(context, 'exhibition'),
@@ -129,29 +126,88 @@ class HomeScreen extends StatelessWidget {
     await authService.signOut();
   }
 
-  /// Recording consent -> camera/mic check -> matchmaking queue -> match.
-  ///
-  /// Mode is chosen here and carried all the way through, because each
-  /// mode has its own matchmaking queue - an exhibition player is never
-  /// paired into a match that moves someone's rating. Note that the
-  /// "play a few exhibition matches before ranked unlocks" gate from
-  /// CLAUDE.md's Modes decision is NOT enforced yet: there's no
-  /// exhibitionMatchesPlayed counter to gate on.
-  Future<void> _startMatch(BuildContext context, String mode) async {
-    final consented = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
-    );
-    if (consented != true || !context.mounted) return;
+}
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => PreMatchScreen(mode: mode)),
-    );
-  }
+/// Recording consent -> camera/mic check -> matchmaking queue -> match.
+///
+/// Mode is chosen here and carried all the way through, because each mode
+/// has its own matchmaking queue - an exhibition player is never paired
+/// into a match that moves someone's rating.
+///
+/// Top-level rather than a method so both the exhibition button and the
+/// Ranked unlock gate can start the flow without one reaching into the
+/// other's widget.
+Future<void> _startMatch(BuildContext context, String mode) async {
+  final consented = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
+  );
+  if (consented != true || !context.mounted) return;
+
+  await Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => PreMatchScreen(mode: mode)),
+  );
 }
 
 /// Shows rank title + raw rating + win/loss record. Real "Laugh Meter"
 /// visual gauge (CLAUDE.md's Display decision) isn't designed yet - this is
 /// the plain "detailed stats view" fallback CLAUDE.md explicitly allows.
+/// The Ranked entry point, which stays locked until a few exhibition
+/// matches are done (CLAUDE.md's Modes decision).
+///
+/// Shows real progress rather than a silent unlock - that decision is
+/// explicit, and a disabled button with no explanation reads as a bug.
+/// The server enforces the gate regardless; this is the honest UI for it.
+class _RankedUnlockGate extends StatefulWidget {
+  const _RankedUnlockGate();
+
+  @override
+  State<_RankedUnlockGate> createState() => _RankedUnlockGateState();
+}
+
+class _RankedUnlockGateState extends State<_RankedUnlockGate> {
+  final _service = MatchmakingService();
+  RankedUnlock? _state;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final state = await _service.rankedUnlock();
+    if (mounted) setState(() => _state = state);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = _state;
+    // Until the answer arrives, show the button enabled rather than
+    // flashing a lock at someone who has already unlocked it.
+    if (state == null || state.unlocked) {
+      return FilledButton(
+        onPressed: state == null ? null : () => _startMatch(context, 'ranked'),
+        child: const Text('Find Ranked Match'),
+      );
+    }
+
+    return Column(
+      children: [
+        const FilledButton(
+          onPressed: null,
+          child: Text('Ranked locked'),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          state.progressLabel,
+          style: Theme.of(context).textTheme.bodySmall,
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+}
+
 /// Shows a way back into a match the player was paired into but never
 /// collected, and renders nothing at all when there isn't one.
 ///
