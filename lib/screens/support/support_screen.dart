@@ -15,10 +15,20 @@ class SupportScreen extends StatefulWidget {
   State<SupportScreen> createState() => _SupportScreenState();
 }
 
+/// Deliberately does NOT offer a refund category.
+///
+/// Two reasons. Nothing in the app takes money yet, so it advertised a
+/// process that did not exist. And once subscriptions do ship, purchases go
+/// through Apple and Google - THEY process refunds, not us - so a refund
+/// option here would promise something we cannot deliver and route people
+/// away from the only place that can actually help them.
+///
+/// Options in a list read as suggestions, so anything listed should be
+/// something we want asked. A billing category is worth adding when there
+/// is billing, and its answer will be "here is the store's refund process".
 enum _SupportCategory {
   generalQuestion('general_question', 'General question'),
   bugReport('bug_report', 'Bug report'),
-  refundRequest('refund_request', 'Refund request'),
   accountIssue('account_issue', 'Account issue'),
   other('other', 'Other');
 
@@ -76,7 +86,7 @@ class _SupportScreenState extends State<SupportScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Questions, bugs, refund requests, or anything else - let us know.',
+                      'Questions, bugs, or anything else - let us know.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 24),

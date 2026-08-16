@@ -305,7 +305,11 @@ service cloud.firestore {
         request.auth.uid == request.resource.data.uid &&
         request.resource.data.status == 'open' &&
         request.resource.data.category in
-          ['general_question', 'bug_report', 'refund_request', 'account_issue', 'other'];
+          // No refund category, deliberately: nothing in the app takes
+          // money yet, and once subscriptions ship the stores process
+          // refunds rather than us. Older requests that used it are
+          // unaffected - this only validates new writes.
+          ['general_question', 'bug_report', 'account_issue', 'other'];
       allow update, delete: if false;
     }
   }
