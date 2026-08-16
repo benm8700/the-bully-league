@@ -238,7 +238,10 @@ async function enterQueue(auth, data) {
     if (!unlock.unlocked) {
       throw new HttpsError(
           "failed-precondition",
-          `Play ${unlock.remaining} more exhibition match` +
+          // "Practice" in copy, `exhibition` in data - the mode id is
+          // baked into queue entries, match documents and the unlock
+          // counter, so only the user-facing name changed.
+          `Play ${unlock.remaining} more practice match` +
         `${unlock.remaining === 1 ? "" : "es"} to unlock Ranked.`,
       );
     }

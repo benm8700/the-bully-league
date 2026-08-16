@@ -59,7 +59,7 @@ class RankedUnlock {
   final int remaining;
 
   String get progressLabel =>
-      '$remaining more exhibition match${remaining == 1 ? '' : 'es'} to unlock Ranked';
+      '$remaining more practice match${remaining == 1 ? '' : 'es'} to unlock Ranked';
 }
 
 /// A pairing handed back by the matchmaking backend - everything the match

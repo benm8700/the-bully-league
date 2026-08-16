@@ -86,10 +86,33 @@ class HomeScreen extends StatelessWidget {
                     const EventWindowBanner(),
                     const SizedBox(height: 4),
                     const _RankedUnlockGate(),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
+                    // Ranked is the primary action and Practice is
+                    // deliberately quieter. Everything durable lives in
+                    // ranked - it is the only recorded mode, so the only
+                    // one producing clips, feed content and a ladder
+                    // position - and offering both as equal siblings split
+                    // an already-thin pool across two queues.
+                    //
+                    // Named "Practice" rather than "Exhibition" because
+                    // the people who need it are new, and "exhibition"
+                    // tells them nothing about what it is for. The
+                    // internal mode id stays `exhibition`: renaming that
+                    // would orphan every existing queue entry, match
+                    // document and unlock counter.
+                    const SizedBox(height: 8),
+                    TextButton(
                       onPressed: () => _startMatch(context, 'exhibition'),
-                      child: const Text('Find Exhibition Match'),
+                      child: const Text('Practice instead'),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Text(
+                        'Unranked and never recorded. Good for checking your '
+                        'camera and lighting, or getting the first one out of '
+                        'the way.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
                     // Judging, My Battles, Ranks and Profile are bottom-nav
                     // destinations now (see MainShell), so they are

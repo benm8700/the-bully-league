@@ -101,7 +101,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.mode == 'ranked' ? 'Ranked Match' : 'Exhibition Match'),
+        title: Text(widget.mode == 'ranked' ? 'Ranked Match' : 'Practice Match'),
       ),
       body: Center(
         child: Padding(
