@@ -29,7 +29,13 @@ import '../../core/services/video_call_service.dart';
 /// a first-time user is never someone else's opponent while they're still
 /// working out which way to hold the phone.
 class TutorialScreen extends StatefulWidget {
-  const TutorialScreen({super.key});
+  const TutorialScreen({super.key, this.replay = false});
+
+  /// True when someone chose to watch this again rather than being gated
+  /// into it before a first match. A voluntary viewer must be able to
+  /// leave at any point - trapping someone who opened it out of curiosity
+  /// is a good way to make them never open it again.
+  final bool replay;
 
   @override
   State<TutorialScreen> createState() => _TutorialScreenState();
@@ -184,11 +190,11 @@ class _TutorialScreenState extends State<TutorialScreen> {
     return PopScope(
       // One-time and mandatory, so leaving by the back gesture would just
       // put the player back where they started.
-      canPop: _step == _Step.intro,
+      canPop: widget.replay || _step == _Step.intro,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('How a battle works'),
-          automaticallyImplyLeading: _step == _Step.intro,
+          automaticallyImplyLeading: widget.replay || _step == _Step.intro,
         ),
         body: _error != null ? _buildErrorUi() : _buildStep(),
       ),

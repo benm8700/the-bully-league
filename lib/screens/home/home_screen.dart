@@ -27,12 +27,39 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('The Bully League'),
         actions: [
-          IconButton(
+          // The help icon is where people look when they are confused, so
+          // it offers both things a confused person might want: a reminder
+          // of how a battle actually works, and a way to reach a human.
+          //
+          // The tutorial was previously UNREACHABLE after the first time -
+          // completing it set a flag and nothing ever offered it again, so
+          // anyone who wanted to check the rules had no way back to them.
+          // Replaying costs nothing: it uses the local camera preview and
+          // a simulated opponent, joining no channel and burning no video
+          // minutes.
+          PopupMenuButton<String>(
             icon: const Icon(Icons.help_outline),
-            tooltip: 'Support & Feedback',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const SupportScreen())),
+            tooltip: 'Help',
+            onSelected: (choice) {
+              final route = choice == 'tutorial'
+                  ? MaterialPageRoute<void>(
+                      builder: (_) => const TutorialScreen(replay: true),
+                    )
+                  : MaterialPageRoute<void>(
+                      builder: (_) => const SupportScreen(),
+                    );
+              Navigator.of(context).push(route);
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'tutorial',
+                child: Text('How a battle works'),
+              ),
+              PopupMenuItem(
+                value: 'support',
+                child: Text('Support & feedback'),
+              ),
+            ],
           ),
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
