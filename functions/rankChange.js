@@ -18,32 +18,120 @@ const {RANK_TIERS, GOAT_TITLE} = require("./rating");
  * skips, and each is still specific to where you landed.
  */
 
+/**
+ * THREE VARIANTS PER RANK PER DIRECTION, which CLAUDE.md asks for to
+ * avoid repetition. It matters most for the ranks people actually bounce
+ * between: someone oscillating around a threshold would otherwise get the
+ * same two lines every time, and a joke stops being one the third time
+ * you read it.
+ */
+
 /** Arriving at a rank, having climbed to it. */
 const UP = {
-  "Average Joe": "You clawed your way back to average. We are as surprised as you are.",
-  "Open Micer": "You bombed less than usual. Welcome to Open Mic Night.",
-  "Class Clown": "Funniest person in a room of people who are not funny. Class Clown.",
-  "The Funny Friend": "Every group has one. Yours is now officially you.",
-  "Door Guy": "They are letting you work the door. Try not to let it go to your head.",
-  "Regular": "You are on the schedule now. Regular.",
-  "Headliner": "Congrats, you are the main event now.",
-  "Legend": "People are quoting you back to each other. Legend.",
-  "Hall of Famer": "They will show your clips to people who were not even there.",
-  [GOAT_TITLE]: "Do not let this go to your head, but you are funnier than everyone else.",
+  "Average Joe": [
+    "You clawed your way back to average. We are as surprised as you are.",
+    "Average Joe. Not an insult, exactly. Not a compliment either.",
+    "You have returned to the middle of the pack. The pack is not thrilled.",
+  ],
+  "Open Micer": [
+    "You bombed less than usual. Welcome to Open Mic Night.",
+    "Open Micer. You now have five minutes and a room that owes you nothing.",
+    "They put your name on the list. In pencil, but still.",
+  ],
+  "Class Clown": [
+    "Funniest person in a room of people who are not funny. Class Clown.",
+    "Class Clown. You peaked in year nine and you are peaking again.",
+    "Nobody in this room can touch you. It is a small room.",
+  ],
+  "The Funny Friend": [
+    "Every group has one. Yours is now officially you.",
+    "The Funny Friend. People bring you places specifically to do this.",
+    "You are the one they warn new people about. Fondly.",
+  ],
+  "Door Guy": [
+    "They are letting you work the door. Try not to let it go to your head.",
+    "Door Guy. You decide who gets in now. Use it responsibly. Do not.",
+    "Promoted to Door Guy, which is a real job and you are doing it.",
+  ],
+  "Regular": [
+    "You are on the schedule now. Regular.",
+    "Regular. They stopped asking your name because they know it.",
+    "You have a spot. An actual spot. Do not waste it.",
+  ],
+  "Headliner": [
+    "Congrats, you are the main event now.",
+    "Headliner. People are staying up for you specifically.",
+    "Top of the bill. Everyone before you is now a warm-up act.",
+  ],
+  "Legend": [
+    "People are quoting you back to each other. Legend.",
+    "Legend. Your sets get described secondhand, badly, by people who were there.",
+    "You have crossed into the part where newer players study you.",
+  ],
+  "Hall of Famer": [
+    "They will show your clips to people who were not even there.",
+    "Hall of Famer. You are archive footage now, in the best way.",
+    "Hall of Famer. Whatever happens next, this part is permanent.",
+  ],
+  [GOAT_TITLE]: [
+    "Do not let this go to your head, but you are funnier than everyone else.",
+    "Top five on the whole platform. Somebody is already coming for it.",
+    "GOAT. Enjoy it - this one is rented, never owned.",
+  ],
 };
 
 /** Falling to a rank, having dropped into it. */
 const DOWN = {
-  "Average Joe": "Wow, you are awful. Maybe it is time to find a new hobby.",
-  "Open Micer": "Back to the open mic. The signup sheet missed you.",
-  "Class Clown": "Back to Class Clown. The bar was on the floor and you found a basement.",
-  "The Funny Friend": "You are the friend who is funny again. For a group of four.",
-  "Door Guy": "Back on the door. At least you are still in the building.",
-  "Regular": "Regular again. Still on the schedule, just not on the poster.",
-  "Headliner": "Bumped down to Headliner. Still the main event, technically.",
-  "Legend": "Legend only. The Hall can wait.",
-  "Hall of Famer": "Out of the top five and back into the Hall.",
-  [GOAT_TITLE]: "Somehow you are still the GOAT. Nobody is happy about it.",
+  "Average Joe": [
+    "Wow, you are awful. Maybe it is time to find a new hobby.",
+    "All the way back to Average Joe. The scenic route down.",
+    "Average Joe. Everyone starts here. Not everyone comes back.",
+  ],
+  "Open Micer": [
+    "Back to the open mic. The signup sheet missed you.",
+    "Open Micer again. Five minutes, one light, no mercy.",
+    "Demoted to Open Micer. The list is long and you are on it again.",
+  ],
+  "Class Clown": [
+    "Back to Class Clown. The bar was on the floor and you found a basement.",
+    "Class Clown. Funny for the room you are in, which is now a smaller room.",
+    "You have been sent back to the cheap seats. They saved you one.",
+  ],
+  "The Funny Friend": [
+    "You are the friend who is funny again. For a group of four.",
+    "The Funny Friend. Beloved locally. Unranked everywhere else.",
+    "Back to being funny at parties. Which is something.",
+  ],
+  "Door Guy": [
+    "Back on the door. At least you are still in the building.",
+    "Door Guy again. Nobody is getting past you, including your rating.",
+    "Reassigned to the door. Somebody has to do it and today it is you.",
+  ],
+  "Regular": [
+    "Regular again. Still on the schedule, just not on the poster.",
+    "Back to Regular. You kept the spot. You lost the billing.",
+    "Regular. Reliable is a compliment. Mostly.",
+  ],
+  "Headliner": [
+    "Bumped down to Headliner. Still the main event, technically.",
+    "Headliner. A fall that most people would call a career.",
+    "Down to Headliner, which is a sentence that annoys almost everyone.",
+  ],
+  "Legend": [
+    "Legend only. The Hall can wait.",
+    "Back to Legend. Tragic, obviously.",
+    "Still a Legend. Just no longer an exhibit.",
+  ],
+  "Hall of Famer": [
+    "Out of the top five and back into the Hall.",
+    "Hall of Famer again. The plaque stays, the crown does not.",
+    "You are back among the greats, rather than above them.",
+  ],
+  [GOAT_TITLE]: [
+    "Somehow you are still the GOAT. Nobody is happy about it.",
+    "Still top five. Still insufferable.",
+    "You went down and you are STILL the GOAT. Fix the ladder.",
+  ],
 };
 
 /**
@@ -76,7 +164,27 @@ function rankIndex(title) {
  * lastSeenRankTitle, and greeting someone with "you have been promoted to
  * Average Joe" for merely existing devalues every real promotion after it.
  */
-function rankChangeFor(previousTitle, currentTitle, {displacedFromGoat = false} = {}) {
+/**
+ * Picks a variant deterministically from a seed.
+ *
+ * NOT Math.random, and the reason is specific: the push and the in-app
+ * popup call this SEPARATELY, at different moments. A random pick would
+ * have the notification say one thing and the app say another about the
+ * same event, which is exactly the drift that made the copy server-side
+ * in the first place.
+ *
+ * The seed should be stable for one event but different across events -
+ * callers pass the player's match count, which cannot change without a
+ * new match being played (and therefore a new event to announce).
+ */
+function pickVariant(variants, seed) {
+  if (!Array.isArray(variants) || variants.length === 0) return null;
+  const n = Number.isFinite(Number(seed)) ? Math.abs(Math.trunc(Number(seed))) : 0;
+  return variants[n % variants.length];
+}
+
+function rankChangeFor(previousTitle, currentTitle,
+    {displacedFromGoat = false, seed = 0} = {}) {
   if (!previousTitle || !currentTitle) return null;
   if (previousTitle === currentTitle) return null;
 
@@ -101,7 +209,7 @@ function rankChangeFor(previousTitle, currentTitle, {displacedFromGoat = false} 
     from: previousTitle,
     to: currentTitle,
     title: up ? `You are now ${currentTitle}` : `You dropped to ${currentTitle}`,
-    message: (up ? UP : DOWN)[currentTitle] ?? null,
+    message: pickVariant((up ? UP : DOWN)[currentTitle], seed),
     displaced: false,
   };
 }
@@ -141,7 +249,8 @@ async function notifyRankChanges(uids, {displacedFromGoat = []} = {}) {
       const user = snap.data();
       const change = rankChangeFor(
           user.lastNotifiedRankTitle, user.rankTitle,
-          {displacedFromGoat: displaced.has(uid)});
+          {displacedFromGoat: displaced.has(uid),
+            seed: user.rankedMatchesPlayed});
       if (!change) {
         // Still record the current title, so a player whose rank moved
         // before this feature existed does not get an announcement for a
@@ -203,7 +312,8 @@ async function getPendingRankChange(auth) {
   }
   if (seen === user.rankTitle) return {change: null};
 
-  const change = rankChangeFor(seen, user.rankTitle);
+  const change = rankChangeFor(seen, user.rankTitle,
+      {seed: user.rankedMatchesPlayed});
   // Marked seen BEFORE returning. A popup that reappears every launch
   // because the write was skipped is far worse than one missed
   // celebration.
@@ -213,5 +323,6 @@ async function getPendingRankChange(auth) {
 
 module.exports = {
   rankChangeFor, rankIndex, notifyRankChanges, getPendingRankChange,
+  pickVariant,
   UP, DOWN, GOAT_DISPLACED, ORDER,
 };
