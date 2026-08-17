@@ -7,6 +7,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/entitlement_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/push_notification_service.dart';
+import '../../widgets/admin_only.dart';
 import '../../widgets/daily_quests.dart';
 import '../../widgets/event_window_banner.dart';
 import '../match/bio_reveal_screen.dart';
@@ -176,14 +177,18 @@ class HomeScreen extends StatelessWidget {
                     // deliberately not repeated here - a second route to
                     // the same screen just makes this list longer and the
                     // tabs look decorative.
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const FinalizeTestScreen(),
+                    AdminOnly(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const FinalizeTestScreen(),
+                            ),
+                          ),
+                          child: const Text('Finalize Match (test)'),
                         ),
                       ),
-                      child: const Text('Finalize Match (test)'),
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton(

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/admin_only.dart';
 import 'tournament_detail_screen.dart';
 
 /// Browse tournaments (Build Order step 8). Real tournament creation is
@@ -48,16 +49,23 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Tournaments')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _creating ? null : _createTestTournament,
-        label: _creating
-            ? const SizedBox(
-                height: 16,
-                width: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Text('Create Test Tournament'),
-        icon: _creating ? null : const Icon(Icons.add),
+      // Admin tooling. Real tournaments are created in the Firebase
+      // console (CLAUDE.md's Admin/moderation tooling decision); this
+      // exists because no console access was available while testing. An
+      // entrant must not see it - the server refuses them anyway, and a
+      // button that answers "Admin only" reads as a broken app.
+      floatingActionButton: AdminOnly(
+        child: FloatingActionButton.extended(
+          onPressed: _creating ? null : _createTestTournament,
+          label: _creating
+              ? const SizedBox(
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Create Test Tournament'),
+          icon: _creating ? null : const Icon(Icons.add),
+        ),
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: query.snapshots(),

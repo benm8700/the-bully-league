@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/admin_only.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import 'tournament_lobby_screen.dart';
@@ -166,10 +167,17 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                       child: Text(isEntrant ? 'Withdraw' : 'Join'),
                     ),
                   const SizedBox(height: 12),
+                  // Both bracket controls are admin tooling, hidden from
+                  // entrants: the server gates them on the same isAdmin
+                  // flag, and an entrant tapping "Advance Round" would be
+                  // told "Admin only" - which reads as a broken app rather
+                  // than as a control that was never theirs.
                   if (isOpen)
-                    OutlinedButton(
-                      onPressed: _busy ? null : () => _callDebugFunction('generateTournamentBracket'),
-                      child: const Text('Generate Bracket (test)'),
+                    AdminOnly(
+                      child: OutlinedButton(
+                        onPressed: _busy ? null : () => _callDebugFunction('generateTournamentBracket'),
+                        child: const Text('Generate Bracket (test)'),
+                      ),
                     ),
                   // The way into an actual bracket match. Shown only when
                   // this player genuinely has one to play, so the button
@@ -179,9 +187,11 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                   // action that is certain to fail reads as a bug.
                   if (status == 'in_progress') ..._playSection(tournament),
                   if (status == 'in_progress')
-                    OutlinedButton(
-                      onPressed: _busy ? null : () => _callDebugFunction('debugAdvanceTournamentRound'),
-                      child: const Text('Advance Round (test)'),
+                    AdminOnly(
+                      child: OutlinedButton(
+                        onPressed: _busy ? null : () => _callDebugFunction('debugAdvanceTournamentRound'),
+                        child: const Text('Advance Round (test)'),
+                      ),
                     ),
                   if (_statusMessage != null) ...[
                     const SizedBox(height: 16),
