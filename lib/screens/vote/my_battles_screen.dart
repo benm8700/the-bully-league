@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/live_tally.dart';
 import '../battles/get_clip_sheet.dart';
+import '../settings/blocked_players_screen.dart';
 import '../moderation/clip_takedown_sheet.dart';
 
 /// Your own battles, with the vote count moving in real time.
@@ -159,11 +160,38 @@ class _MatchCard extends StatelessWidget {
                     visualDensity: VisualDensity.compact,
                     onPressed: () => GetClipSheet.show(context, matchId),
                   ),
-                IconButton(
+                // Blocking belongs HERE, next to the takedown, because
+                // CLAUDE.md places it "after a match" and this is the
+                // screen showing your own battles. It is also where
+                // someone who has just had a bad time with an opponent
+                // actually looks - the two things they might want are the
+                // same two things offered here.
+                PopupMenuButton<String>(
                   icon: const Icon(Icons.more_horiz, size: 18),
-                  tooltip: 'Clip options',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => ClipTakedownSheet.show(context, matchId),
+                  tooltip: 'Options',
+                  onSelected: (choice) {
+                    if (choice == 'clip') {
+                      ClipTakedownSheet.show(context, matchId);
+                      return;
+                    }
+                    final me = FirebaseAuth.instance.currentUser?.uid;
+                    final opponentId = me == player1Id ? player2Id : player1Id;
+                    final opponentName =
+                        me == player1Id ? names[1] : names[0];
+                    if (opponentId.isNotEmpty) {
+                      confirmBlock(context, opponentId, opponentName);
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'clip',
+                      child: Text('Clip options'),
+                    ),
+                    PopupMenuItem(
+                      value: 'block',
+                      child: Text('Block this player'),
+                    ),
+                  ],
                 ),
               ],
             ),

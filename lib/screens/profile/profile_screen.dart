@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/services/visual_moderation_service.dart';
 import '../account/delete_account_screen.dart';
+import '../settings/blocked_players_screen.dart';
 import 'form_card.dart';
 
 const int kRequiredPhotoCount = 5;
@@ -323,6 +324,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         'Subscribers can search for your username and see '
                         'your first photo and rank. Turn this off and you '
                         'stop appearing in search entirely.',
+                      ),
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.block),
+                      title: const Text('Blocked players'),
+                      subtitle: const Text('See and undo who you have blocked.'),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const BlockedPlayersScreen(),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),

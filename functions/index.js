@@ -863,6 +863,22 @@ exports.requestMatchClip = onCall((request) => {
  * rules - opt-out, two-way blocking, banned accounts - can be enforced by
  * a client query.
  */
+/**
+ * Blocking a specific person - a personal preference tool, not a
+ * moderation action, and silent to the person blocked. Honoured by
+ * matchmaking (two-way) and by the player directory.
+ */
+exports.setBlocked = onCall((request) => {
+  const {setBlocked} = require("./blocking");
+  return setBlocked(request.auth, request.data);
+});
+
+/** The caller's own block list, named so it can actually be undone. */
+exports.getBlockedPlayers = onCall((request) => {
+  const {getBlockedPlayers} = require("./blocking");
+  return getBlockedPlayers(request.auth);
+});
+
 exports.searchPlayers = onCall((request) => {
   const {searchPlayers} = require("./playerDirectory");
   return searchPlayers(request.auth, request.data);
