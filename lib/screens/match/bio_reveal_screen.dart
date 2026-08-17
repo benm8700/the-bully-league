@@ -52,7 +52,14 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
   String? _endedReason;
 
   Timer? _ticker;
+  Timer? _heartbeat;
+  bool _opponentGone = false;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _matchSub;
+
+  /// How long without a sign of the opponent before offering a way out.
+  /// Must stay comfortably under the server's threshold so the button
+  /// never appears before the server would honour it.
+  static const _opponentStaleAfter = Duration(seconds: 75);
 
   @override
   void initState() {
@@ -61,6 +68,26 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     _loadSkips();
     _watchMatch();
     _startTicker();
+    _startHeartbeat();
+  }
+
+  /// Says "still here" without saying "ready".
+  ///
+  /// The reveal ends the moment both players tap Ready, so its maximum
+  /// only ever matters when one of them doesn't - which means a long
+  /// window's real cost is being held by somebody who walked away. Ready
+  /// alone can't tell that apart from someone thinking hard about their
+  /// material, and throwing the latter out would collapse a ten-minute
+  /// window back to seconds.
+  void _startHeartbeat() {
+    _service.sendPresence(widget.pairing.matchId);
+    _heartbeat = Timer.periodic(const Duration(seconds: 20), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      _service.sendPresence(widget.pairing.matchId);
+    });
   }
 
   Future<void> _loadOpponent() async {
@@ -118,8 +145,39 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
       if (ready.length >= 2 && !_bothReady) {
         setState(() => _bothReady = true);
         _goToMatch();
+        return;
       }
+
+      // Surface a way out once the opponent has stopped signalling. The
+      // server decides whether a release is actually allowed; this only
+      // decides when to offer it, and errs on the late side so the button
+      // never appears before the server would honour it.
+      final seen = data['lastSeenAt'] as Map<String, dynamic>?;
+      final theirLastSeen = (seen?[widget.pairing.opponentId] as num?)?.toInt();
+      final opponentReady = ready.contains(widget.pairing.opponentId);
+      final referenceMs = theirLastSeen ??
+          (data['createdAt'] as Timestamp?)?.millisecondsSinceEpoch;
+      final gone = !opponentReady &&
+          referenceMs != null &&
+          DateTime.now().millisecondsSinceEpoch - referenceMs >
+              _opponentStaleAfter.inMilliseconds;
+      if (gone != _opponentGone) setState(() => _opponentGone = gone);
     });
+  }
+
+  Future<void> _leaveUnresponsive() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final released = await _service.releaseUnresponsive(widget.pairing.matchId);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (released) {
+      // Straight back to searching rather than out to Home: they did
+      // nothing wrong and passed consent and the camera check moments ago.
+      _requeue();
+    } else {
+      setState(() => _opponentGone = false);
+    }
   }
 
   void _startTicker() {
@@ -212,6 +270,7 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _heartbeat?.cancel();
     _matchSub?.cancel();
     super.dispose();
   }
@@ -386,6 +445,16 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
             onPressed: (_busy || _iAmReady) ? null : _onReady,
             child: Text(_iAmReady ? 'Ready - waiting for opponent' : "I'm Ready"),
           ),
+          // Only ever offered once the opponent has genuinely gone quiet,
+          // and it costs no skip - they declined nobody, they were stood up.
+          if (_opponentGone) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _leaveUnresponsive,
+              icon: const Icon(Icons.person_off_outlined),
+              label: const Text('Opponent left - find someone else'),
+            ),
+          ],
           const SizedBox(height: 8),
           if (skipsLeft == null || skipsLeft > 0)
             TextButton(

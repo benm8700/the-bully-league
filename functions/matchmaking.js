@@ -6,7 +6,7 @@ const {HttpsError} = require("firebase-functions/v2/https");
 const {STARTING_RATING, RANK_TIERS, GOAT_TITLE, computeBaseRankTitle} = require("./rating");
 const {getMatchSettings} = require("./matchSettings");
 const {readEventWindowConfig, qualifiesForWindow} = require("./eventWindow");
-const {readMonetizationConfig, battleEntitlement} = require("./entitlement");
+const {readMonetizationConfig, battleEntitlement, toMillis} = require("./entitlement");
 const {shouldBecomeStanding, isLive} = require("./standingChallenge");
 const {stopRecording, writeRecordingState} = require("./cloudRecording");
 
@@ -896,9 +896,91 @@ async function setMatchReady(auth, data) {
   if (match.status !== "pending") {
     return {status: match.status, ready: match.readyPlayerIds ?? []};
   }
-  await matchRef.update({readyPlayerIds: FieldValue.arrayUnion(auth.uid)});
+  const update = {[`lastSeenAt.${auth.uid}`]: Date.now()};
+  // Doubles as a heartbeat so the bio reveal can tell "still reading" from
+  // "walked away". Readiness alone cannot do that: with a long reveal
+  // someone may legitimately sit there for minutes without tapping ready,
+  // and ejecting them would silently collapse the window back to seconds.
+  if (data?.ready !== false) {
+    update.readyPlayerIds = FieldValue.arrayUnion(auth.uid);
+  }
+  await matchRef.update(update);
   const after = (await matchRef.get()).data();
-  return {status: "pending", ready: after.readyPlayerIds ?? []};
+  return {
+    status: "pending",
+    ready: after.readyPlayerIds ?? [],
+    lastSeenAt: after.lastSeenAt ?? {},
+  };
+}
+
+/** How long without a heartbeat before an opponent counts as gone.
+ * Comfortably more than the client's heartbeat interval, so one dropped
+ * call or a slow network never ejects someone who is still there. */
+const PRESENCE_STALE_MS = 75 * 1000;
+
+/**
+ * Whether the caller is stuck waiting on an opponent who has left.
+ *
+ * THIS IS WHAT MAKES A LONG BIO REVEAL SAFE. The reveal ends as soon as
+ * both players tap Ready, so its maximum only ever matters when one of
+ * them does not - which means the real cost of a 10-minute window is ten
+ * minutes of being held hostage by somebody who walked away, ending in a
+ * no-contest. Bounding that by PRESENCE rather than by the clock lets the
+ * window be as long as the developer wants without that cost.
+ *
+ * Judged on heartbeats, deliberately, NOT on readiness: a player thinking
+ * hard about their material for five minutes is using the feature exactly
+ * as intended and must never be thrown out for it.
+ *
+ * Pure, so the rule is testable without Firestore or a clock.
+ */
+function opponentUnresponsive({match, uid, nowMs, staleMs = PRESENCE_STALE_MS}) {
+  if (!match || match.status !== "pending") return false;
+  const opponentId = match.player1Id === uid ? match.player2Id :
+    match.player2Id === uid ? match.player1Id : null;
+  if (!opponentId) return false;
+  // Never bail on someone who has already committed - at that point the
+  // match is about to start regardless.
+  if ((match.readyPlayerIds ?? []).includes(opponentId)) return false;
+  const seen = Number(match.lastSeenAt?.[opponentId]);
+  // No heartbeat at all yet is not evidence of absence until enough time
+  // has passed since PAIRING for one to have arrived. createdAt is a
+  // Firestore Timestamp, so it has to be converted - reading it as a
+  // number would give NaN, fall through to 0, and silently disable the
+  // fallback entirely, meaning a player who never sent a single heartbeat
+  // could never be released. Exactly the class of bug that only shows up
+  // for the case the feature exists to handle.
+  const reference = Number.isFinite(seen) && seen > 0 ?
+    seen : toMillis(match.createdAt) ?? 0;
+  if (reference <= 0) return false;
+  return nowMs - reference > staleMs;
+}
+
+/**
+ * Leaves a match whose opponent has gone, WITHOUT spending a skip.
+ *
+ * A skip is for declining someone you were offered; this is for someone
+ * who never turned up, and charging the daily allowance for their absence
+ * would punish the wrong person. Nobody is forfeited either - failing to
+ * arrive at a bio reveal is not the broken promise that an accepted-then-
+ * abandoned challenge is.
+ */
+async function releaseUnresponsiveMatch(auth, data) {
+  const {matchRef, match} = await loadPendingMatch(auth, data?.matchId);
+  if (match.status !== "pending") {
+    return {released: false, reason: "already-settled"};
+  }
+  if (!opponentUnresponsive({match, uid: auth.uid, nowMs: Date.now()})) {
+    throw new HttpsError("failed-precondition",
+        "Your opponent is still there.");
+  }
+  await matchRef.update({
+    status: "abandoned",
+    voteFinalized: true,
+    abandonedReason: "opponent-unresponsive",
+    completedAt: FieldValue.serverTimestamp(),
+  });
+  return {released: true};
 }
 
 /**
@@ -975,6 +1057,9 @@ module.exports = {
   // keeping its own list that could silently drift out of step.
   MODES,
   setMatchReady,
+  releaseUnresponsiveMatch,
+  opponentUnresponsive,
+  PRESENCE_STALE_MS,
   skipMatch,
   getSkipAllowance,
   utcDayKey,

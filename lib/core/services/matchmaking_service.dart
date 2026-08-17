@@ -248,6 +248,38 @@ class MatchmakingService {
     await _call('setMatchReady', {'matchId': matchId});
   }
 
+  /// Tells the backend this player is still on the bio reveal screen,
+  /// without marking them ready.
+  ///
+  /// This is what lets a long reveal window be safe. The window ends as
+  /// soon as both players tap Ready, so its maximum only ever matters when
+  /// one of them doesn't - and the difference between "still reading their
+  /// bio" and "walked away" cannot be told from readiness alone. Failures
+  /// are swallowed: a missed heartbeat is not worth interrupting someone
+  /// preparing for a battle, and the threshold tolerates several.
+  Future<void> sendPresence(String matchId) async {
+    try {
+      await _call('setMatchReady', {'matchId': matchId, 'ready': false});
+    } catch (_) {
+      // Best-effort by design.
+    }
+  }
+
+  /// Leaves a match whose opponent never turned up, without spending a
+  /// skip - they declined nobody, they were stood up.
+  Future<bool> releaseUnresponsive(String matchId) async {
+    try {
+      final result = await _functions
+          .httpsCallable('releaseUnresponsiveMatch')
+          .call<Map<String, dynamic>>({'matchId': matchId});
+      return result.data['released'] == true;
+    } catch (_) {
+      // The server is the authority on whether a release is allowed; a
+      // refusal means the opponent is still there, which is good news.
+      return false;
+    }
+  }
+
   /// Declines a proposed match after seeing the opponent's bio. Spends one
   /// of the player's daily skips and settles the match as abandoned.
   ///

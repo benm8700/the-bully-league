@@ -770,6 +770,17 @@ exports.requestMatchClip = onCall((request) => {
   return requestMatchClip(request.auth, request.data);
 });
 
+/**
+ * Leaves a bio reveal whose opponent has walked away, without spending a
+ * skip. This is what makes a long reveal window safe: the maximum only
+ * ever bites when one player never taps Ready, so bounding that by
+ * presence rather than by the clock lets the window be as long as wanted.
+ */
+exports.releaseUnresponsiveMatch = onCall((request) => {
+  const {releaseUnresponsiveMatch} = require("./matchmaking");
+  return releaseUnresponsiveMatch(request.auth, request.data);
+});
+
 /** What the client needs to render the request honestly: whether the
  * opt-out window is still open, and how many requests are left. */
 exports.getTakedownOptions = onCall((request) => {

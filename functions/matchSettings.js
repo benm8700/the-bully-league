@@ -63,7 +63,12 @@ const LIMITS = {
   roundCount: {min: 1, max: 10},
   roundLengthSeconds: {min: 5, max: 120},
   countdownSeconds: {min: 0, max: 30},
-  bioRevealSeconds: {min: 0, max: 300},
+  // Raised from 300 so the developer's chosen 10 minutes is settable. A
+  // long reveal is safe ONLY because of the unresponsive-opponent release
+  // (see matchmaking.js): the maximum is not a target, it is how long an
+  // absent opponent could otherwise hold someone hostage, and that is now
+  // bounded by presence rather than by this number.
+  bioRevealSeconds: {min: 0, max: 900},
   // At least 1 (0 would make every result count for nothing), and capped
   // well above any plausible per-match vote count so it can grow with the
   // platform without needing a code change.
