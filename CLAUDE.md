@@ -716,6 +716,16 @@ tournaments/{tournamentId} (extended)
   - windowStart, windowEnd  // per-round deadline for async bracket play
 ```
 
+## Testing — two layers, and why both exist
+- **`functions/test/*.test.js` — pure, no emulator, no credentials.** Policy and arithmetic extracted into pure functions and exercised with plain `node`. This is what caught the tournament bye collision, the standing-challenge ghost entry, and the `Number(null)` epoch bug before any of them reached a device.
+- **`functions/live/*.js` — the real deployed backend and real Firestore.** Run manually. They create throwaway accounts, exercise the real callables, assert the real effects, and delete everything they made in a `finally` block so a mid-run failure still cleans up.
+- **Both are needed, and the reason is specific: this project keeps getting bitten in the SEAM between things, where a pure test cannot see.**
+  - `publishOnlineCount` threw on every run because `MODES` was never exported — its pure helper had 12 passing tests, and the break was in the import.
+  - `voteReminders` needed a composite index that did not exist. It would have thrown every run and been swallowed by the scheduler's own try/catch, appearing as a job that silently did nothing.
+  - `FieldValue` was used but never imported in `matchFinalization.js`. `require()` succeeded because the reference is only reached at runtime inside a transaction, so every ranked finalization would have thrown.
+  - **A green deploy proves none of this. Only running the thing does.**
+- **`functions/live/coreLoop.js` is the critical-path regression**: queue → pair → complete → vote → finalize, then rating, wins/losses, both points numbers, rating history, rank change, entitlement, clip eligibility and the judge feed. **Run it after touching `enterQueue`, `pollMatchmaking`, `completeMatch`, `finalizeMatch` or `awardPoints`** — each is depended on by several features, and a regression there breaks the whole app regardless of what is built on top. 18 checks; last run green after a session that changed several of those paths.
+
 ## Build Order (de-risking hardest/least-familiar parts first)
 1. Skeleton app + Firebase Auth (phone/email/password) + Play Age Signals check on signup.
 2. Agora video call integration — bare-bones 1:1 call working between two devices, behind the VideoCallService interface. Prove this works before building anything on top.
