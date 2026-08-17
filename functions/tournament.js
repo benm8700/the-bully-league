@@ -162,4 +162,111 @@ async function debugAdvanceRound(tournamentId) {
   return {status: "in_progress", roundNumber: currentRound.roundNumber + 1};
 }
 
-module.exports = {generateBracket, debugAdvanceRound, DEFAULT_MIN_ENTRANTS};
+/**
+ * Applies a real match result to a bracket, and advances the round once
+ * every matchup in it is settled.
+ *
+ * THIS IS THE PIECE THAT MAKES BRACKETS REAL. Until now the only way a
+ * round advanced was `debugAdvanceRound`, which picks winners with
+ * Math.random() - it exists to prove the advancement mechanics, not to
+ * decide anything. A tournament whose results are coin flips is a bracket
+ * simulator, not a competition, and prizes eventually ride on this.
+ *
+ * PURE, taking and returning the rounds array, so the whole advancement
+ * can be exercised without Firestore - the same approach that caught the
+ * bye-collision bug before it reached a device.
+ *
+ * Idempotent: a matchup that already has a winner is left alone. Match
+ * finalization can be retried, and a second application must not
+ * overwrite a settled result or push a duplicate round.
+ */
+function applyResultToBracket(rounds, {roundNumber, matchupIndex, winnerId}) {
+  if (!Array.isArray(rounds) || rounds.length === 0) {
+    return {rounds, changed: false, reason: "no-bracket"};
+  }
+  const roundPos = rounds.findIndex((r) => r.roundNumber === roundNumber);
+  if (roundPos < 0) return {rounds, changed: false, reason: "no-such-round"};
+
+  const round = rounds[roundPos];
+  const matchup = round.matchups?.[matchupIndex];
+  if (!matchup) return {rounds, changed: false, reason: "no-such-matchup"};
+  if (matchup.winnerId) return {rounds, changed: false, reason: "already-settled"};
+
+  // The winner must be one of the two players in THIS matchup. Without
+  // this a mis-stamped match could advance someone who was never in the
+  // tournament, and a bracket is exactly the place that must not happen.
+  if (winnerId !== matchup.player1Id && winnerId !== matchup.player2Id) {
+    return {rounds, changed: false, reason: "winner-not-in-matchup"};
+  }
+
+  const next = rounds.map((r) => ({...r, matchups: [...r.matchups]}));
+  next[roundPos].matchups[matchupIndex] = {...matchup, winnerId};
+
+  // Only the LATEST round can advance. A late result for an earlier round
+  // fills its gap without rebuilding rounds that already exist.
+  if (roundPos !== next.length - 1) {
+    return {rounds: next, changed: true, advanced: false};
+  }
+
+  const settled = next[roundPos].matchups.every((m) => m.winnerId);
+  if (!settled) return {rounds: next, changed: true, advanced: false};
+
+  const winners = next[roundPos].matchups.map((m) => m.winnerId);
+  if (winners.length === 1) {
+    return {rounds: next, changed: true, advanced: true,
+      completed: true, tournamentWinnerId: winners[0]};
+  }
+  next.push(buildNextRound(next[roundPos].matchups, roundNumber + 1));
+  return {rounds: next, changed: true, advanced: true, completed: false};
+}
+
+/**
+ * Records a finalized tournament match against its bracket.
+ *
+ * Best-effort by design: a bracket that fails to advance is recoverable
+ * by an admin, whereas throwing here would fail the finalization that
+ * already applied real rating changes.
+ */
+async function recordTournamentResult(match, winnerId) {
+  const link = match?.tournament;
+  if (!link?.tournamentId || !winnerId) return {applied: false};
+  // A tie leaves the matchup open rather than advancing nobody - the
+  // no-rating-change tie rule makes sense for ranked, but a bracket needs
+  // somebody to progress, so this is left for an admin to settle.
+  const db = getFirestore();
+  const ref = db.collection("tournaments").doc(link.tournamentId);
+
+  try {
+    return await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return {applied: false, reason: "not-found"};
+      const tournament = snap.data();
+      if (tournament.status !== "in_progress") {
+        return {applied: false, reason: "not-in-progress"};
+      }
+      const result = applyResultToBracket(tournament.bracket?.rounds ?? [], {
+        roundNumber: link.roundNumber,
+        matchupIndex: link.matchupIndex,
+        winnerId,
+      });
+      if (!result.changed) return {applied: false, reason: result.reason};
+
+      const update = {bracket: {rounds: result.rounds}};
+      if (result.completed) {
+        update.status = "completed";
+        update.winnerId = result.tournamentWinnerId;
+      }
+      tx.update(ref, update);
+      return {applied: true, advanced: result.advanced === true,
+        completed: result.completed === true};
+    });
+  } catch (e) {
+    console.error(`tournament result for ${link.tournamentId} failed:`, e.message);
+    return {applied: false, reason: "error"};
+  }
+}
+
+module.exports = {
+  generateBracket, debugAdvanceRound, recordTournamentResult,
+  applyResultToBracket, buildNextRound, DEFAULT_MIN_ENTRANTS,
+};

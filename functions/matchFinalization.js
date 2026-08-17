@@ -195,6 +195,23 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     }
   }
 
+  // A tournament match's result belongs to its bracket, not just to the
+  // two players' ratings. Without this the only thing that ever advanced
+  // a round was debugAdvanceRound's coin flip.
+  if (match.mode === "tournament" && winnerId) {
+    try {
+      const {recordTournamentResult} = require("./tournament");
+      const applied = await recordTournamentResult(match, winnerId);
+      if (applied.applied) {
+        console.log(`tournament advance for ${matchId}:`, JSON.stringify(applied));
+      }
+    } catch (e) {
+      // A bracket an admin can fix beats a finalization that failed after
+      // already applying rating changes.
+      console.error(`tournament result for ${matchId} failed:`, e.message);
+    }
+  }
+
   const goat = await syncGoatTier();
 
   // Announced AFTER the GOAT sync, so a player who moved up a tier and
