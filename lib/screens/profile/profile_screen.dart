@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/services/visual_moderation_service.dart';
 import '../account/delete_account_screen.dart';
+import 'form_card.dart';
 
 const int kRequiredPhotoCount = 5;
 
@@ -208,6 +209,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Above the profile fields, because this is what a
+                    // returning player opens the screen for - the profile
+                    // itself is filled in once and rarely touched again.
+                    const FormCard(),
                     Text(
                       'Give opponents some ammo - it\'s funnier if it\'s true.',
                       style: Theme.of(context).textTheme.bodyMedium,
