@@ -204,9 +204,24 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         res.status === 200 && res.body.ranked?.allowed === true,
         JSON.stringify(res.body).slice(0, 160));
 
+    // A brand-new player has never taken their free clip, so this must be
+    // granted at zero cost - a fresh account being asked for 250 points it
+    // cannot possibly have is precisely the dead end the free clip exists
+    // to remove.
     res = await call(p1, "requestMatchClip", {matchId, source: "points"});
-    check("the clip path answers coherently (priced, not crashed)",
-        res.status === 200 || JSON.stringify(res.raw).includes("insufficient-points"),
+    check("A NEW PLAYER'S FIRST CLIP IS FREE",
+        res.status === 200 && res.body.cost === 0 &&
+        res.body.source === "free",
+        JSON.stringify(res.raw).slice(0, 200));
+
+    const afterFree = await db.collection("users").doc(p1).get();
+    check("...and the free clip is recorded as spent",
+        afterFree.data().freeClipUsed === true);
+
+    // The SECOND one must cost, or "first clip free" is just "clips free".
+    res = await call(p2, "requestMatchClip", {matchId, source: "points"});
+    const p2Free = res.body?.source === "free";
+    check("the opponent gets their own free clip, independently", p2Free,
         JSON.stringify(res.raw).slice(0, 160));
 
     res = await call(judge, "getWatchFeed", {limit: 5});

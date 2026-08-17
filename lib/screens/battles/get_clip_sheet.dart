@@ -44,6 +44,7 @@ class _GetClipSheetState extends State<GetClipSheet> {
 
   int _balance = 0;
   int _price = 250;
+  bool _freeClipAvailable = false;
   bool _subscriber = false;
   bool _alreadyOwned = false;
   int? _availableAfterMs;
@@ -81,6 +82,10 @@ class _GetClipSheetState extends State<GetClipSheet> {
         _price = (settings['clipPrice'] as num?)?.toInt() ?? 250;
         _subscriber = (user['subscription']
             as Map<String, dynamic>?)?['active'] == true;
+        // Mirrors hasUsedFreeClip in functions/clipGrants.js: only an
+        // explicit true counts, so an account predating the free clip
+        // still has one rather than being told it is spent.
+        _freeClipAvailable = user['freeClipUsed'] != true;
         _alreadyOwned = grants?[uid] != null;
         _loading = false;
       });
@@ -115,7 +120,12 @@ class _GetClipSheetState extends State<GetClipSheet> {
         _done = data['deliverable'] == true
             ? 'Captions are being added. Your clip will be ready shortly.'
             : 'Booked. Your clip arrives once voting closes.';
-        if (source == 'points') _balance -= _price;
+        // The server decides what it actually cost - it grants the free
+        // clip regardless of what the client asked for, so deducting the
+        // price here would show a balance that never left the account.
+        final cost = (data['cost'] as num?)?.toInt() ?? 0;
+        _balance -= cost;
+        if (data['source'] == 'free') _freeClipAvailable = false;
       });
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
@@ -236,7 +246,25 @@ class _GetClipSheetState extends State<GetClipSheet> {
                       icon: const Icon(Icons.workspace_premium_outlined),
                       label: const Text('Included with your subscription'),
                     )
-                  else ...[
+                  else if (_freeClipAvailable) ...[
+                    // The first one is free, and saying so plainly matters:
+                    // someone with 30 points who sees "Use 250 points"
+                    // closes the sheet and never learns they could have had
+                    // this one. The whole point is that everybody posts a
+                    // clip once.
+                    FilledButton.icon(
+                      onPressed: _busy ? null : () => _request('points'),
+                      icon: const Icon(Icons.card_giftcard_outlined),
+                      label: const Text('Get it free'),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Your first one is on us. After this they cost '
+                      '$_price points.',
+                      style: text.bodySmall,
+                      textAlign: TextAlign.center,
+                    ),
+                  ] else ...[
                     FilledButton(
                       onPressed: _busy || _balance < _price
                           ? null

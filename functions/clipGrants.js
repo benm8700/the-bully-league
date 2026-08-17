@@ -44,6 +44,9 @@ const {readEventWindowConfig} = require("./eventWindow");
 const DEFAULT_CLIP_POINTS_PRICE = 250;
 const CLIP_PRICE_LIMITS = {min: 1, max: 100000};
 
+/** What a client may ASK for. "free" is deliberately absent - the first
+ * free clip is something the server grants when it applies, never
+ * something a client can claim. */
 const SOURCES = ["subscription", "points", "purchase"];
 
 const DENY = {
@@ -89,6 +92,19 @@ function spendableBalance(user) {
 }
 
 /**
+ * Has this account already taken its one free clip?
+ *
+ * Only an explicit `true` counts. Every account predating this feature
+ * has no such field, and reading a missing field as "used" would quietly
+ * deny the free clip to the entire existing userbase - the same
+ * missing-field trap as accountStatus, createdAt and pointsBalance before
+ * it, which this project has now hit four times.
+ */
+function hasUsedFreeClip(user) {
+  return user?.freeClipUsed === true;
+}
+
+/**
  * Whether this user may claim the captioned clip of this match, and what
  * it costs them.
  *
@@ -127,6 +143,22 @@ function resolveClipGrant({user, match, uid, source, price, entitlement}) {
       {allowed: true, cost: 0, source} :
       {allowed: false, reason: DENY.subscriptionRequired,
         message: "Subscribe to get every ranked battle captioned."};
+  }
+
+  // THE FIRST ONE IS FREE, and this is distribution rather than
+  // generosity. Every clip a player posts is acquisition nobody paid for,
+  // and at 250 points almost nobody in a private beta ever reaches one -
+  // so with no free clip the app would learn nothing about whether clips
+  // spread, which is the entire growth thesis. Everyone gets to experience
+  // having a clip and posting it once; that is what creates the desire to
+  // buy the next.
+  //
+  // Checked AFTER the subscription branch on purpose: a subscriber or
+  // trial user already gets every clip included, so spending their free
+  // one there would silently burn it for nothing. It is only consumed
+  // where it actually saves someone something.
+  if (!hasUsedFreeClip(user)) {
+    return {allowed: true, cost: 0, source: "free"};
   }
 
   if (source === "points") {
@@ -206,6 +238,22 @@ async function spendPoints(uid, {reason, sourceId, amount}) {
 }
 
 /**
+ * Takes this account's one free clip, if it still has it.
+ *
+ * @return {Promise<boolean>} true if this call is the one that took it
+ */
+async function claimFreeClip(uid) {
+  const db = getFirestore();
+  const ref = db.collection("users").doc(uid);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (hasUsedFreeClip(snap.data() ?? {})) return false;
+    tx.set(ref, {freeClipUsed: true}, {merge: true});
+    return true;
+  });
+}
+
+/**
  * Claim the captioned clip of one of your own battles.
  */
 async function requestMatchClip(auth, data) {
@@ -235,9 +283,25 @@ async function requestMatchClip(auth, data) {
     user, mode: "ranked", nowMs, windowConfig, config: monetization,
   });
 
-  const verdict = resolveClipGrant({
+  let verdict = resolveClipGrant({
     user, match, uid, source: source ?? "subscription", price, entitlement,
   });
+
+  // Claimed in a transaction rather than trusted from the read above,
+  // because two taps on two different battles in the same instant would
+  // otherwise each see an unused free clip and both take it.
+  if (verdict.allowed && verdict.source === "free") {
+    const claimed = await claimFreeClip(uid);
+    if (!claimed) {
+      // Somebody's other request won it. Re-decide as an ordinary
+      // purchase rather than handing out a second free clip.
+      verdict = resolveClipGrant({
+        user: {...user, freeClipUsed: true}, match, uid,
+        source: source ?? "subscription", price, entitlement,
+      });
+    }
+  }
+
   if (!verdict.allowed) {
     if (verdict.reason === DENY.alreadyGranted) {
       return {granted: true, alreadyOwned: true, cost: 0};
@@ -337,6 +401,14 @@ async function refundClipGrants(matchId, match, objectorUid) {
             pointsBalance: spendableBalance(userSnap.data() ?? {}) + cost,
           }, {merge: true});
         });
+      } else if (grant?.source === "free") {
+        // Give the free clip BACK. Losing your one free clip to somebody
+        // else's objection - having never received anything - is exactly
+        // the unfairness this whole function exists to prevent, and it
+        // would land on a brand-new player at the first battle they ever
+        // tried to keep.
+        await db.collection("users").doc(uid)
+            .set({freeClipUsed: false}, {merge: true});
       } else if (grant?.source === "purchase") {
         await db.collection("users").doc(uid)
             .set({clipCredits: FieldValue.increment(1)}, {merge: true});
@@ -464,6 +536,7 @@ module.exports = {
   clipDeliverable,
   spendPoints,
   spendableBalance,
+  hasUsedFreeClip,
   readClipPointsPrice,
   DENY,
   SOURCES,

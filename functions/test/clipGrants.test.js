@@ -1,7 +1,7 @@
 const assert = require("assert");
 const {
   resolveClipGrant, clipDeliverable, spendableBalance,
-  DENY, DEFAULT_CLIP_POINTS_PRICE,
+  DENY, DEFAULT_CLIP_POINTS_PRICE, hasUsedFreeClip,
 } = require("../clipGrants");
 
 let passed = 0;
@@ -27,8 +27,12 @@ const matchOf = (extra = {}) => ({
   ...extra,
 });
 
+// freeClipUsed is set here deliberately: everything below tests the PAID
+// path, and the first clip being free would otherwise make every one of
+// these cost nothing and assert nothing. The free clip has its own
+// section at the end.
 const grant = (over = {}) => resolveClipGrant({
-  user: {points: 1000, pointsBalance: 1000},
+  user: {points: 1000, pointsBalance: 1000, freeClipUsed: true},
   match: matchOf(),
   uid: ME,
   source: "points",
@@ -85,13 +89,13 @@ check("a lapsed user cannot claim via subscription", () => {
 });
 
 check("points buy a clip when the balance covers it", () => {
-  const v = grant({user: {pointsBalance: PRICE}});
+  const v = grant({user: {pointsBalance: PRICE, freeClipUsed: true}});
   assert.strictEqual(v.allowed, true);
   assert.strictEqual(v.cost, PRICE);
 });
 
 check("one point short is refused, and says so", () => {
-  const v = grant({user: {pointsBalance: PRICE - 1}});
+  const v = grant({user: {pointsBalance: PRICE - 1, freeClipUsed: true}});
   assert.strictEqual(v.allowed, false);
   assert.strictEqual(v.reason, DENY.insufficientPoints);
   assert.ok(v.message.includes(String(PRICE)));
@@ -123,14 +127,14 @@ check("MIGRATION: a legacy account's balance is its career total", () => {
   // before spending existed - the same missing-field trap as
   // accountStatus and createdAt.
   assert.strictEqual(spendableBalance({points: 800}), 800);
-  assert.strictEqual(grant({user: {points: 800}}).allowed, true);
+  assert.strictEqual(grant({user: {points: 800, freeClipUsed: true}}).allowed, true);
 });
 
 check("an explicit balance wins over the career total", () => {
   // Someone who has earned 800 lifetime and spent 700 has 100 to spend,
   // not 800 - otherwise spending would be free.
   assert.strictEqual(spendableBalance({points: 800, pointsBalance: 100}), 100);
-  assert.strictEqual(grant({user: {points: 800, pointsBalance: 100}}).allowed, false);
+  assert.strictEqual(grant({user: {points: 800, pointsBalance: 100, freeClipUsed: true}}).allowed, false);
 });
 
 check("a negative balance can never be spent from", () => {
@@ -175,6 +179,84 @@ check("the default price is sane", () => {
   // real goal but not a month of grinding.
   assert.ok(DEFAULT_CLIP_POINTS_PRICE <= 1000,
       "a sink nobody can reach is not a sink");
+});
+
+// ------------------------------------------------------ the first free
+//
+// The first captioned clip is free, and that is a distribution decision
+// rather than a generous one: every clip a player posts is acquisition
+// nobody paid for, and at 250 points almost nobody in a beta reaches one -
+// so with no free clip the app would learn nothing about whether clips
+// spread at all.
+check("A BRAND-NEW PLAYER'S FIRST CLIP IS FREE, with no points at all", () => {
+  const v = grant({user: {}, source: "points"});
+  assert.strictEqual(v.allowed, true);
+  assert.strictEqual(v.cost, 0);
+  assert.strictEqual(v.source, "free");
+});
+
+check("MIGRATION: an existing account still has its free clip", () => {
+  // Every account predating this has no freeClipUsed field. Reading a
+  // missing field as "used" would silently deny the free clip to the
+  // entire userbase - the fourth time this project has met that trap,
+  // after accountStatus, createdAt and pointsBalance.
+  assert.strictEqual(hasUsedFreeClip({}), false);
+  assert.strictEqual(hasUsedFreeClip({points: 900, wins: 12}), false);
+});
+
+check("only an explicit true counts as used", () => {
+  assert.strictEqual(hasUsedFreeClip({freeClipUsed: true}), true);
+  assert.strictEqual(hasUsedFreeClip({freeClipUsed: "true"}), false);
+  assert.strictEqual(hasUsedFreeClip({freeClipUsed: 1}), false);
+});
+
+check("the SECOND clip costs the full price", () => {
+  const v = grant({user: {freeClipUsed: true, pointsBalance: PRICE}});
+  assert.strictEqual(v.cost, PRICE);
+  assert.strictEqual(v.source, "points");
+});
+
+check("and is refused outright with no points", () => {
+  const v = grant({user: {freeClipUsed: true, pointsBalance: 0}});
+  assert.strictEqual(v.allowed, false);
+  assert.strictEqual(v.reason, DENY.insufficientPoints);
+});
+
+check("A SUBSCRIBER DOES NOT BURN THEIR FREE CLIP", () => {
+  // It is included for them anyway, so consuming it here would silently
+  // spend something valuable on nothing - and it would be gone the day
+  // their subscription lapsed.
+  const v = grant({user: {}, source: "subscription",
+    entitlement: {state: "subscriber"}});
+  assert.strictEqual(v.source, "subscription");
+  assert.notStrictEqual(v.source, "free");
+});
+
+check("nor does a trial user, who also gets it included", () => {
+  const v = grant({user: {}, source: "subscription",
+    entitlement: {state: "trial"}});
+  assert.strictEqual(v.source, "subscription");
+});
+
+check("the free clip does NOT bypass the participant boundary", () => {
+  // The safety rule outranks the giveaway: a stranger must never get a
+  // clip of two other people's battle, free or otherwise.
+  const v = grant({uid: "stranger", user: {}, source: "points"});
+  assert.strictEqual(v.allowed, false);
+  assert.strictEqual(v.reason, DENY.notParticipant);
+});
+
+check("nor does it resurrect an unfinished battle", () => {
+  const v = grant({user: {}, match: matchOf({status: "pending"})});
+  assert.strictEqual(v.allowed, false);
+  assert.strictEqual(v.reason, DENY.matchNotReady);
+});
+
+check("a repeat tap on an already-granted clip stays idempotent", () => {
+  const owned = matchOf({clipGrants: {[ME]: {source: "free", cost: 0}}});
+  const v = grant({user: {}, match: owned});
+  assert.strictEqual(v.reason, DENY.alreadyGranted);
+  assert.strictEqual(v.cost, 0);
 });
 
 console.log(`\n${passed} checks passed.`);

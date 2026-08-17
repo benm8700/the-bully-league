@@ -91,6 +91,15 @@ service cloud.firestore {
         // simply grant itself the paid tier.
         request.resource.data.get('subscription', null) ==
           resource.data.get('subscription', null) &&
+        // The one-free-clip flag, and any clip credits owed. Captions cost
+        // real transcription money per clip, so a client that could reset
+        // either would mint them without limit - the same class of write
+        // as pointsBalance, and cheaper to abuse since it needs no points
+        // at all. Written only by requestMatchClip and refundClipGrants.
+        request.resource.data.get('freeClipUsed', null) ==
+          resource.data.get('freeClipUsed', null) &&
+        request.resource.data.get('clipCredits', null) ==
+          resource.data.get('clipCredits', null) &&
         // The username, and its lowercased search copy. Written only by
         // setUsername, which filters it, claims it for uniqueness and
         // enforces the change cooldown.
