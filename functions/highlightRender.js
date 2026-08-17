@@ -365,11 +365,14 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
       // Production quality bar), so the text has to be part of the
       // picture. A separate subtitle file per rendition because the font
       // scales to each canvas.
-      let subtitlePath = null;
-      if (cues.length > 0) {
-        subtitlePath = path.join(workDir, `captions-${name}.ass`);
-        await fs.writeFile(subtitlePath, buildAssFile(cues, rendition.canvas), "utf8");
-      }
+      // ALWAYS written, even with no cues, because the same file carries
+      // the burned-in watermark - and CLAUDE.md's decision is that every
+      // clip is watermarked, including the uncaptioned stage-1 renders
+      // that make up the large majority. `captioned` below stays keyed to
+      // real cues rather than to this file existing, or every clip would
+      // claim captions it does not have.
+      const subtitlePath = path.join(workDir, `captions-${name}.ass`);
+      await fs.writeFile(subtitlePath, buildAssFile(cues, rendition.canvas), "utf8");
 
       const outputPath = path.join(workDir, rendition.fileName);
       await runFfmpeg(ffmpegPath, buildFfmpegArgs(timeline, workDir, outputPath, {

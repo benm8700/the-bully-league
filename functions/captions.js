@@ -161,12 +161,54 @@ function escapeAssText(text) {
  * vertical and landscape renditions without being re-transcribed or
  * hand-tuned per shape.
  */
+/**
+ * The burned-in brand mark.
+ *
+ * WHY IT RIDES ALONG WITH THE CAPTIONS rather than being an ffmpeg
+ * `drawtext` filter, which is the obvious answer: drawtext needs a font
+ * file, and whether one resolves on the Cloud Functions runtime is not
+ * something this project can verify from a Windows dev machine. A missing
+ * font fails the whole render, so a cosmetic mark would take the entire
+ * clip pipeline down with it. libass is already rendering text
+ * successfully here for captions, so reusing it is the proven path.
+ *
+ * WHY IT MATTERS: CLAUDE.md's monetization decision is "watermark
+ * everything" — clips are the growth engine, and an unbranded clip posted
+ * to TikTok is free distribution for somebody else's feed. Removing the
+ * mark is deliberately NOT sold as a perk, because that would mean charging
+ * the most engaged users to strip the branding they are best placed to
+ * spread.
+ *
+ * TOP-LEFT, because the bottom and right of a short-form frame are where
+ * TikTok, Reels and Shorts stack their own UI, and the vertical centre is
+ * where captions sit on a stacked composite. Semi-transparent and small so
+ * it reads as a mark rather than an obstruction.
+ */
+const WATERMARK = {
+  text: "THE BULLY LEAGUE",
+  fontHeightRatio: 0.022,
+  // &H<alpha><blue><green><red>, so this is white at ~45% transparency.
+  colour: "&H4CFFFFFF",
+  outlineColour: "&H80000000",
+  alignment: 7,
+};
+
+/** Far beyond any real clip. An ASS event outstaying the video simply
+ * stops rendering, so this avoids threading a duration through purely to
+ * end a mark that should be there the whole time. */
+const WATERMARK_END = "9:59:59.99";
+
 function buildAssFile(cues, canvas, style = STYLE) {
   const fontSize = Math.round(canvas.height * style.fontHeightRatio);
   const outline = Math.max(2, Math.round(canvas.height * style.outlineRatio));
   const shadow = Math.max(1, Math.round(canvas.height * style.shadowRatio));
   const marginH = Math.round(canvas.width * 0.055);
   const marginV = Math.round(canvas.height * 0.02);
+  // Sized as a fraction of canvas height, like the captions, so the mark
+  // is proportionate in both the 1920-tall vertical cut and the 1080-tall
+  // landscape one rather than absurd in whichever it was not tuned for.
+  const wmSize = Math.round(canvas.height * WATERMARK.fontHeightRatio);
+  const wmMargin = Math.round(canvas.width * 0.03);
 
   const header = [
     "[Script Info]",
@@ -183,6 +225,9 @@ function buildAssFile(cues, canvas, style = STYLE) {
       `&H00000000,-1,0,1,${outline},${shadow},${style.alignment},${marginH},${marginH},${marginV},1`,
     `Style: P2,${style.fontName},${fontSize},${style.player2Colour},&H00000000,` +
       `&H00000000,-1,0,1,${outline},${shadow},${style.alignment},${marginH},${marginH},${marginV},1`,
+    `Style: WM,${style.fontName},${wmSize},${WATERMARK.colour},` +
+      `${WATERMARK.outlineColour},&H00000000,-1,0,1,${Math.max(1, Math.round(outline / 2))},0,` +
+      `${WATERMARK.alignment},${wmMargin},${wmMargin},${wmMargin},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -193,7 +238,12 @@ function buildAssFile(cues, canvas, style = STYLE) {
     `${c.uid === "2" ? "P2" : "P1"},,0,0,0,,${escapeAssText(c.text)}`,
   );
 
-  return [...header, ...events].join("\n") + "\n";
+  // Layer 1 so it always draws above a caption that happens to reach it.
+  const watermark =
+    `Dialogue: 1,0:00:00.00,${WATERMARK_END},WM,,0,0,0,,` +
+    escapeAssText(WATERMARK.text);
+
+  return [...header, watermark, ...events].join("\n") + "\n";
 }
 
 /**

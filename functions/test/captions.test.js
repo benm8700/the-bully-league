@@ -170,10 +170,69 @@ test("dialogue lines carry the caption text last, after nine commas", () => {
   // rest as text - getting the field count wrong silently drops captions.
   const ass = buildAssFile([{uid: "1", start: 0, end: 1, text: "hello there"}],
       {width: 1080, height: 1920});
-  const line = ass.split("\n").find((l) => l.startsWith("Dialogue:"));
+  // The first Dialogue line is the watermark now, so pick the caption by
+  // its style rather than by position.
+  const line = ass.split("\n")
+      .find((l) => l.startsWith("Dialogue:") && l.includes(",P1,"));
   const fields = line.slice("Dialogue: ".length).split(",");
   assert.ok(fields.length >= 10, "a dialogue line needs its full field set");
   assert.strictEqual(fields.slice(9).join(","), "hello there");
+});
+
+// --- Watermark ------------------------------------------------------------
+
+test("EVERY clip is watermarked, including one with no captions at all", () => {
+  // The large majority of renders are uncaptioned stage-1 clips, and the
+  // decision is "watermark everything" - so a mark that only appeared
+  // alongside captions would miss almost every clip.
+  const ass = buildAssFile([], {width: 1080, height: 1920});
+  assert.ok(ass.includes("THE BULLY LEAGUE"), "no watermark on a bare clip");
+  assert.ok(ass.includes("Style: WM,"), "watermark style missing");
+});
+
+test("the watermark spans the whole clip, from the very first frame", () => {
+  const ass = buildAssFile([], {width: 1080, height: 1920});
+  const line = ass.split("\n")
+      .find((l) => l.startsWith("Dialogue:") && l.includes(",WM,"));
+  assert.ok(line.includes("0:00:00.00"), "must start at zero");
+  // Deliberately outlasts any real clip: an ASS event running past the
+  // video simply stops rendering, which avoids threading a duration
+  // through just to end a mark that should never end.
+  assert.ok(line.includes("9:59:59"), "must outlast the clip");
+});
+
+test("the watermark scales with the canvas, like the captions do", () => {
+  // A size tuned for the 1920-tall vertical cut would be absurd in the
+  // 1080-tall landscape one.
+  const sizeIn = (h) => {
+    const styleLine = buildAssFile([], {width: 1080, height: h})
+        .split("\n").find((l) => l.startsWith("Style: WM,"));
+    return Number(styleLine.split(",")[2]);
+  };
+  const tall = sizeIn(1920);
+  const wide = sizeIn(1080);
+  assert.ok(tall > wide, `${tall} should exceed ${wide}`);
+  assert.ok(wide > 8, "a watermark nobody can read is not a watermark");
+});
+
+test("the watermark sits top-left, clear of platform UI and captions", () => {
+  // Alignment 7 = top-left. The bottom and right of a short-form frame are
+  // where TikTok and Reels stack their own controls, and the vertical
+  // centre is where captions sit on a stacked composite.
+  const styleLine = buildAssFile([], {width: 1080, height: 1920})
+      .split("\n").find((l) => l.startsWith("Style: WM,"));
+  assert.strictEqual(Number(styleLine.split(",")[11]), 7);
+});
+
+test("the watermark draws above captions, never under them", () => {
+  const ass = buildAssFile([{uid: "1", start: 0, end: 1, text: "hi"}],
+      {width: 1080, height: 1920});
+  const wm = ass.split("\n")
+      .find((l) => l.startsWith("Dialogue:") && l.includes(",WM,"));
+  const caption = ass.split("\n")
+      .find((l) => l.startsWith("Dialogue:") && l.includes(",P1,"));
+  assert.strictEqual(wm.slice("Dialogue: ".length).split(",")[0], "1");
+  assert.strictEqual(caption.slice("Dialogue: ".length).split(",")[0], "0");
 });
 
 console.log(`captions: ${passed} checks passed`);
