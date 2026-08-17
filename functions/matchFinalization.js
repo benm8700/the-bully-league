@@ -227,6 +227,12 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     } catch (e) {
       console.error(`win points for ${matchId} failed:`, e.message);
     }
+    try {
+      const {recordQuestEvent} = require("./quests");
+      await recordQuestEvent(winnerId, "wins");
+    } catch (e) {
+      console.error(`quest win event for ${matchId} failed:`, e.message);
+    }
   }
 
   // A tournament match's result belongs to its bracket, not just to the

@@ -825,6 +825,15 @@ async function completeMatch(auth, data, creds = null) {
       console.error(`referral check for ${matchId} failed:`, e.message);
     }
 
+    // Daily quests, from the same completion event the referral uses.
+    try {
+      const {recordQuestEvent} = require("./quests");
+      await Promise.all([match.player1Id, match.player2Id]
+          .map((uid) => recordQuestEvent(uid, "matches")));
+    } catch (e) {
+      console.error(`quest match event for ${matchId} failed:`, e.message);
+    }
+
     const countsTowardUnlock = match.mode === "exhibition";
     await Promise.all([match.player1Id, match.player2Id].map((uid, i) => {
       const opponent = i === 0 ? match.player2Id : match.player1Id;

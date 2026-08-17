@@ -7,6 +7,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/entitlement_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/push_notification_service.dart';
+import '../../widgets/daily_quests.dart';
 import '../../widgets/event_window_banner.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
@@ -113,6 +114,7 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     const _ActiveMatchBanner(),
                     const EventWindowBanner(),
+                    const DailyQuests(),
                     const _TrialStatus(),
                     const SizedBox(height: 4),
                     // Ranked is available immediately - the unlock gate is

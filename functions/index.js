@@ -226,6 +226,7 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   let pointsAwarded = 0;
   let pointsMultiplier = 1;
   let streak = null;
+  let quests = null;
   try {
     const {awardPoints, pointsSettings, awardAmount} = require("./points");
     const rates = await pointsSettings();
@@ -251,6 +252,9 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     // proves this account has actually judged something.
     const {grantReferralIfEarned} = require("./referral");
     await grantReferralIfEarned(voterId, "spectator");
+
+    const {recordQuestEvent} = require("./quests");
+    quests = await recordQuestEvent(voterId, "votes");
   } catch (e) {
     console.error(`vote points for ${voterId} failed:`, e.message);
   }
@@ -261,7 +265,7 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   // The streak goes back too, so the app can show a run landing rather
   // than leaving a silent bonus in the ledger. A reward nobody notices
   // motivates nobody.
-  return {success: true, weight, pointsAwarded, pointsMultiplier, streak};
+  return {success: true, weight, pointsAwarded, pointsMultiplier, streak, quests};
 });
 
 /**
@@ -889,6 +893,12 @@ exports.requestMatchClip = onCall((request) => {
  * and the reward only lands when they actually play one - paying at
  * signup would make throwaway accounts directly profitable.
  */
+/** Today's three quests and how far along they are. */
+exports.getMyQuests = onCall((request) => {
+  const {getMyQuests} = require("./quests");
+  return getMyQuests(request.auth, request.data);
+});
+
 exports.setReferrer = onCall((request) => {
   const {setReferrer} = require("./referral");
   return setReferrer(request.auth, request.data);
