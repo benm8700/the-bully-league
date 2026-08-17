@@ -157,8 +157,33 @@ async function deleteAccount(auth) {
     summary.profilePhotosDeleted++;
   }
 
-  // 4. The user document - the personal data itself.
-  await db.collection("users").doc(userId).delete().catch(() => {});
+  // 4. The user document AND everything beneath it.
+  //
+  // recursiveDelete, NOT delete(). Deleting a Firestore document does not
+  // touch its subcollections - they survive as orphans, reachable by
+  // anyone who knows the uid and invisible in the console because the
+  // parent is gone. For this user that would leave `pointsLedger` (what
+  // they earned and spent, and when) and `ratingHistory` (every rated
+  // match, its date, and their opponent's id) behind after they had
+  // asked to be erased.
+  //
+  // This is the shape of bug that only appears when a new subcollection
+  // is added months after the deletion flow was written and verified, so
+  // recursion is used deliberately rather than naming the two known
+  // subcollections - a list would silently go stale the next time one is
+  // added.
+  const userRef = db.collection("users").doc(userId);
+  try {
+    await db.recursiveDelete(userRef);
+    summary.subcollectionsPurged = true;
+  } catch (e) {
+    // Fall back to at least removing the document itself. Leaving the
+    // profile in place because a subcollection sweep failed would be the
+    // worse outcome by far.
+    console.error(`recursive delete for ${userId} failed:`, e.message);
+    summary.subcollectionsPurged = false;
+    await userRef.delete().catch(() => {});
+  }
 
   // 5. A record that the deletion happened, holding no personal data.
   // Useful as compliance evidence, and harmless: once the user document
