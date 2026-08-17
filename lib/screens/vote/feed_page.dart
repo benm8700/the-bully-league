@@ -3,6 +3,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../core/services/watch_feed_service.dart';
 import '../../widgets/clip_reactions.dart';
+import '../moderation/report_screen.dart';
 import '../../widgets/live_tally.dart';
 
 /// One battle, full screen, with the choice laid over the players' faces.
@@ -168,6 +169,7 @@ class _FeedPageState extends State<FeedPage> {
           if (_choiceVisible) ..._choiceOverlay(context),
           if (_chosenPlayerId != null) _afterChoice(context),
           _header(context),
+          _reportButton(context),
           // Sits low and out of the way of both faces, and stays available
           // whether or not the choice has been made - reacting is not a
           // judgement and should not wait on one.
@@ -302,6 +304,89 @@ class _FeedPageState extends State<FeedPage> {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Flagging a battle from the feed.
+  ///
+  /// REQUIRED, not a nicety. Apple's Guideline 1.2 names random and
+  /// anonymous chat apps directly and requires a mechanism for users to
+  /// flag objectionable content. This feed is the app's primary content
+  /// surface and one of five bottom-nav tabs - it was previously possible
+  /// to report only by finishing a match, taking the post-match prompt
+  /// into the vote queue and opening a specific battle, which a spectator
+  /// scrolling clips would never find. A reviewer opening this tab and
+  /// seeing no way to report is a rejection.
+  ///
+  /// Deliberately quiet: a small icon opposite the header rather than a
+  /// prominent control, because this is a video-first screen and the
+  /// report flow's own copy is careful that harsh roasting is EXPECTED
+  /// and not reportable. It needs to be findable, not inviting.
+  Widget _reportButton(BuildContext context) {
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 8,
+      right: 8,
+      // On a dark scrim, like the header. A bare white icon disappears
+      // entirely against a bright clip - seen on a device, where it was
+      // invisible over a pale background. A report control a reviewer
+      // cannot find is the same as not having one.
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.5),
+          shape: BoxShape.circle,
+        ),
+        child: IconButton(
+          icon: const Icon(Icons.flag_outlined, color: Colors.white, size: 20),
+          tooltip: 'Report',
+          onPressed: () => _openReport(context),
+        ),
+      ),
+    );
+  }
+
+  /// A battle has two people in it, so reporting has to ask which - the
+  /// alternative is guessing, and filing against the wrong person is
+  /// worse than asking one extra question.
+  Future<void> _openReport(BuildContext context) async {
+    final m = widget.match;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+              child: Text(
+                'Who are you reporting?',
+                style: Theme.of(sheetContext).textTheme.titleMedium,
+              ),
+            ),
+            ListTile(
+              title: Text(m.player1Username),
+              onTap: () => Navigator.of(sheetContext).pop(m.player1Id),
+            ),
+            ListTile(
+              title: Text(m.player2Username),
+              onTap: () => Navigator.of(sheetContext).pop(m.player2Id),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(sheetContext).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ReportScreen(
+          reportedUserId: choice,
+          matchId: m.matchId,
         ),
       ),
     );
