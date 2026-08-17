@@ -40,12 +40,19 @@ function readEventWindowConfig(data) {
   // Bounds-checked per field for the same reason match settings are: this
   // document is hand-edited in the Firebase console with no validation in
   // between, and one bad value must not discard a good rest.
-  const hour = (key) => {
+  // The END may be 24, meaning midnight, so a window can cover the final
+  // hour of the day. With a ceiling of 23 the range [23, end) had no legal
+  // end at all, making 11pm-midnight inexpressible - found when a test
+  // tried to arm the window at 23:00 Pacific and it silently fell back to
+  // the default. The window still cannot WRAP past midnight; a late-night
+  // window would need a second range, which nothing has asked for.
+  const hour = (key, max) => {
     const v = data[key];
-    return (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 23) ? v : null;
+    return (typeof v === "number" && Number.isInteger(v) &&
+      v >= 0 && v <= max) ? v : null;
   };
-  const start = hour("startHourPacific");
-  const end = hour("endHourPacific");
+  const start = hour("startHourPacific", 23);
+  const end = hour("endHourPacific", 24);
   if (start !== null) out.startHourPacific = start;
   if (end !== null && end > out.startHourPacific) out.endHourPacific = end;
   return out;

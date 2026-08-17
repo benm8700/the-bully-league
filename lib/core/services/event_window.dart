@@ -49,15 +49,20 @@ class EventWindowConfig {
     // between, and a start hour of 47 would produce a countdown to a moment
     // that never arrives. Each field falls back independently so one bad
     // value never discards a good rest.
-    int hour(String key, int fallbackValue) {
+    // The END may be 24, meaning midnight, so a window can cover the final
+    // hour of the day - with a ceiling of 23 the range [23, end) had no
+    // legal end at all. MUST match functions/eventWindow.js: if the two
+    // disagree the app counts down to one time and the server notifies at
+    // another, and nothing would surface it.
+    int hour(String key, int fallbackValue, int max) {
       final raw = data[key];
       if (raw is! num) return fallbackValue;
       final value = raw.toInt();
-      return (value >= 0 && value <= 23) ? value : fallbackValue;
+      return (value >= 0 && value <= max) ? value : fallbackValue;
     }
 
-    final start = hour('startHourPacific', fallback.startHourPacific);
-    var end = hour('endHourPacific', fallback.endHourPacific);
+    final start = hour('startHourPacific', fallback.startHourPacific, 23);
+    var end = hour('endHourPacific', fallback.endHourPacific, 24);
     // An end at or before the start would make every window zero-length or
     // negative. Fall back rather than render nonsense.
     if (end <= start) end = fallback.endHourPacific;

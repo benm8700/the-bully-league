@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/auth_service.dart';
+import '../../core/services/entitlement_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../widgets/event_window_banner.dart';
@@ -111,6 +112,7 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     const _ActiveMatchBanner(),
                     const EventWindowBanner(),
+                    const _TrialStatus(),
                     const SizedBox(height: 4),
                     // Ranked is available immediately - the unlock gate is
                     // gone (see CLAUDE.md's Modes section). The tutorial
@@ -208,6 +210,19 @@ class HomeScreen extends StatelessWidget {
 /// Ranked unlock gate can start the flow without one reaching into the
 /// other's widget.
 Future<void> _startMatch(BuildContext context, String mode) async {
+  // Asked FIRST, before anything that costs the player effort. Without
+  // this a lapsed player sits through the tutorial gate, the recording
+  // consent screen and the entire camera-and-mic check, and only then gets
+  // turned away by the queue - the worst possible moment to say no, and it
+  // reads as a bug rather than a price. The server still enforces; this
+  // just turns a late refusal into an early offer.
+  final entitlement = await EntitlementService().current();
+  if (!context.mounted) return;
+  if (!entitlement.allows(mode)) {
+    await _showBlockedSheet(context, entitlement, mode);
+    return;
+  }
+
   // The tutorial is a mandatory one-time gate before a first match
   // (CLAUDE.md's Onboarding tutorial decision). Checked here rather than
   // on Home so it fires at the moment it's relevant - someone browsing
@@ -223,6 +238,127 @@ Future<void> _startMatch(BuildContext context, String mode) async {
   await Navigator.of(
     context,
   ).push(MaterialPageRoute(builder: (_) => PreMatchScreen(mode: mode)));
+}
+
+/// Says where this player stands: how much trial is left, or what a
+/// lapsed account still gets for free.
+///
+/// A trial only converts if people KNOW it is ending, so this is not
+/// decoration - it is the mechanism. Equally, someone whose trial has
+/// ended must be told what they still have (ranked, free, every night)
+/// rather than just losing access and guessing why.
+///
+/// Renders NOTHING while enforcement is off, which is the current state:
+/// counting down a trial that expires into no restriction at all would be
+/// a threat the app has no intention of carrying out.
+class _TrialStatus extends StatefulWidget {
+  const _TrialStatus();
+
+  @override
+  State<_TrialStatus> createState() => _TrialStatusState();
+}
+
+class _TrialStatusState extends State<_TrialStatus> {
+  Entitlement? _entitlement;
+
+  @override
+  void initState() {
+    super.initState();
+    EntitlementService().current().then((e) {
+      if (mounted) setState(() => _entitlement = e);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final e = _entitlement;
+    if (e == null || !e.enforced || e.state == 'subscriber') {
+      return const SizedBox.shrink();
+    }
+
+    final windowName = e.windowName ?? 'the daily window';
+    final daysLeft = e.trialDaysLeft;
+    final String message;
+    if (e.state == 'trial') {
+      if (daysLeft == null) return const SizedBox.shrink();
+      message = daysLeft <= 1
+          ? 'Last day of full access. After that, ranked stays free during '
+              '$windowName.'
+          : '$daysLeft days of full access left.';
+    } else {
+      message = e.inWindow
+          ? '$windowName is live - ranked is free right now.'
+          : 'Ranked is free every night during $windowName.';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    );
+  }
+}
+
+/// Explains why a battle isn't available, and what to do instead.
+///
+/// Deliberately never a dead end. Practice being closed during the window
+/// points at Ranked, which is free for everyone right then; being lapsed
+/// outside the window points at the window, which is free tonight. Both
+/// are real alternatives available today, not just a subscribe button - a
+/// paywall with no free path is how an app teaches people to close it.
+Future<void> _showBlockedSheet(
+    BuildContext context, Entitlement entitlement, String mode) {
+  final windowName = entitlement.windowName ?? 'the daily window';
+  final practiceDuringWindow = mode != 'ranked' && entitlement.inWindow;
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            practiceDuringWindow ? '$windowName is live' : 'Battle any time',
+            style: Theme.of(sheetContext).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            entitlement.blockedMessage ??
+                'Ranked is free every night during $windowName. '
+                    'Subscribe to battle whenever you like.',
+            style: Theme.of(sheetContext).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 24),
+          if (practiceDuringWindow)
+            FilledButton(
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                _startMatch(context, 'ranked');
+              },
+              child: const Text('Battle ranked instead'),
+            )
+          else
+            FilledButton(
+              // Nothing to sell yet - there is no IAP and no Play Console
+              // account, so promising a purchase flow would be a lie.
+              // Says plainly when they can play for free instead.
+              onPressed: () => Navigator.of(sheetContext).pop(),
+              child: const Text('Got it'),
+            ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => Navigator.of(sheetContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// Shows the onboarding tutorial if this player hasn't done it, and

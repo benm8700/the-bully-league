@@ -1,5 +1,6 @@
 const {getFirestore} = require("firebase-admin/firestore");
-const {isWithinWindow} = require("./eventWindow");
+const {HttpsError} = require("firebase-functions/v2/https");
+const {isWithinWindow, readEventWindowConfig} = require("./eventWindow");
 
 /**
  * Who is allowed to battle, in which mode, right now.
@@ -188,7 +189,62 @@ function battleEntitlement({user, mode, nowMs, windowConfig, config}) {
   };
 }
 
+/**
+ * What this player may do right now, for the client to render honestly.
+ *
+ * WHY THIS EXISTS RATHER THAN LETTING THE QUEUE REFUSE. Without it a
+ * lapsed player taps Ranked, sits through the tutorial gate, the recording
+ * consent screen and the whole camera-and-mic check, and only then gets
+ * turned away by enterQueue. That is the worst possible moment to say no:
+ * they have done real work, and the refusal reads as a bug rather than a
+ * price. Asking first turns it into an offer.
+ *
+ * The server stays the authority - enterQueue still enforces, because a
+ * client check is a convenience and never a boundary.
+ */
+async function getMyEntitlement(auth) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const db = getFirestore();
+  const nowMs = Date.now();
+
+  const [userSnap, config, windowConfig] = await Promise.all([
+    db.collection("users").doc(auth.uid).get(),
+    readMonetizationConfig(db),
+    db.collection("config").doc("eventWindow").get()
+        .then((s) => readEventWindowConfig(s.data()))
+        .catch(() => ({enabled: false})),
+  ]);
+  const user = userSnap.data() ?? {};
+
+  const forMode = (mode) => {
+    const v = battleEntitlement({user, mode, nowMs, windowConfig, config});
+    return {allowed: v.allowed, reason: v.reason, message: v.message};
+  };
+
+  const createdMs = toMillis(user.createdAt);
+  const ranked = forMode("ranked");
+  const base = battleEntitlement({
+    user, mode: "ranked", nowMs, windowConfig, config,
+  });
+
+  return {
+    state: base.state,
+    inWindow: base.inWindow,
+    enforced: config.enabled === true,
+    // Null when unknown rather than a guessed date - an account with no
+    // signup date is treated as in trial indefinitely, and inventing an
+    // end for it would show a countdown that never runs out.
+    trialEndsAtMs: createdMs === null ?
+      null : createdMs + config.trialDays * DAY_MS,
+    trialDays: config.trialDays,
+    windowName: windowConfig?.name ?? null,
+    ranked,
+    exhibition: forMode("exhibition"),
+  };
+}
+
 module.exports = {
+  getMyEntitlement,
   DEFAULTS,
   DENY,
   DAY_MS,

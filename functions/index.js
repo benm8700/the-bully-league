@@ -784,6 +784,13 @@ exports.requestMatchClip = onCall((request) => {
  * that entirely, so the gate has to sit on every path that hands over
  * bytes.
  */
+/** What this player may do right now, so the client can offer rather
+ * than refuse after they have done the whole camera check. */
+exports.getMyEntitlement = onCall((request) => {
+  const {getMyEntitlement} = require("./entitlement");
+  return getMyEntitlement(request.auth);
+});
+
 exports.getClipDownload = onCall((request) => {
   const {getClipDownload} = require("./clipGrants");
   return getClipDownload(request.auth, request.data);
