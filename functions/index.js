@@ -353,6 +353,26 @@ exports.startTournamentMatch = onCall((request) => {
  * Closes rounds whose window has expired. Without this the window is
  * decoration and a bracket stalls the first time somebody loses interest.
  */
+/**
+ * Tells players their round has opened, and warns anyone who has not
+ * checked in before it closes.
+ *
+ * Justified more than any other notification here: every other one is an
+ * invitation, but missing an async round window is a FORFEIT - out of a
+ * tournament you paid to enter, without ever playing.
+ */
+exports.tournamentNotifications = onSchedule("every 30 minutes", async () => {
+  const {sweepTournamentNotifications} = require("./tournamentNotify");
+  try {
+    const result = await sweepTournamentNotifications();
+    if (result.notified > 0) {
+      console.log("tournamentNotifications:", JSON.stringify(result));
+    }
+  } catch (err) {
+    console.error("tournamentNotifications failed:", err);
+  }
+});
+
 exports.tournamentForfeits = onSchedule("every 30 minutes", async () => {
   const {sweepTournamentForfeits} = require("./tournamentPlay");
   try {
