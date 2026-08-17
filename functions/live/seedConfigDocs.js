@@ -45,6 +45,21 @@ const DOCS = {
       "accounts with no createdAt are treated as in-trial forever rather " +
       "than locked out.",
   },
+  serviceStatus: {
+    active: false,
+    severity: "info",
+    message: "",
+    updatedAtMs: 0,
+    _note: "A notice shown at the top of every screen in the app. Set " +
+      "active:true and write a message when Agora or Firebase is down, or " +
+      "to broadcast anything (\"no Sixes and Sevens tonight\"). severity " +
+      "is info | warning | outage and only changes the colour. IMPORTANT: " +
+      "set updatedAtMs to the current epoch millis whenever you edit the " +
+      "message - a notice with no timestamp is not shown at all, and one " +
+      "with no expiresAtMs disappears on its own 24h after updatedAtMs so " +
+      "a forgotten banner cannot become permanent. Set expiresAtMs " +
+      "explicitly for anything shorter or longer.",
+  },
   usernamePolicy: {
     changeCooldownDays: 30,
     extraBlocked: [],

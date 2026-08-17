@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/rank_change_popup.dart';
+import '../../widgets/service_status_banner.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import '../profile/profile_screen.dart';
 import '../vote/my_battles_screen.dart';
@@ -58,7 +59,17 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
+      // Above the tabs rather than on Home, deliberately: an outage
+      // affects every screen, and someone stuck on the Judge tab watching
+      // nothing load is exactly who needs to be told it is us and not
+      // them. It renders nothing at all when there is no notice, so it
+      // costs a zero-height widget the rest of the time.
+      body: Column(
+        children: [
+          const ServiceStatusBanner(),
+          Expanded(child: IndexedStack(index: _index, children: _screens)),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
