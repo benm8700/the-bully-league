@@ -83,6 +83,12 @@ class _SignupScreenState extends State<SignupScreen> {
         // review - see CLAUDE.md's Admin/moderation tooling notes.
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
           'username': username,
+          // Lowercased copy, written because Firestore has no
+          // case-insensitive or substring search: the player directory
+          // does a prefix query against this. Kept alongside rather than
+          // replacing `username`, since the display name's original
+          // casing is what people chose.
+          'usernameLower': username.toLowerCase(),
           'rating': 1200,
           'rankTitle': 'Average Joe',
           'rankedMatchesPlayed': 0,

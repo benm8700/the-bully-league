@@ -45,6 +45,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   bool _loading = true;
   bool _saving = false;
+
+  /// Listed unless explicitly opted out, mirroring the server's rule that
+  /// only a literal `false` hides someone. Defaulting to hidden would
+  /// leave the directory permanently empty for every existing account.
+  bool _directoryListed = true;
   String? _statusMessage;
   List<String> _photoUrls = [];
 
@@ -71,11 +76,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _favoriteFoodController.text = profile['favoriteFood'] as String? ?? '';
     _ammoTextController.text = profile['ammoText'] as String? ?? '';
     final photoUrls = (profile['photoUrls'] as List<dynamic>?)?.cast<String>() ?? [];
+    final listed = snapshot.data()?['directoryListed'];
     if (mounted) {
       setState(() {
         _photoUrls = photoUrls;
+        _directoryListed = listed != false;
         _loading = false;
       });
+    }
+  }
+
+  /// Written immediately rather than waiting for Save. Someone switching
+  /// this off wants to stop being findable now, not after they remember
+  /// to press a button at the bottom of the screen.
+  Future<void> _setDirectoryListed(bool value) async {
+    setState(() {
+      _directoryListed = value;
+      _saving = true;
+      _statusMessage = null;
+    });
+    try {
+      await _userRef.update({'directoryListed': value});
+      if (mounted) {
+        setState(() => _statusMessage = value
+            ? 'People can find you by name.'
+            : 'You no longer appear in search.');
+      }
+    } catch (e) {
+      // Reverted on failure, so the switch never claims a state the
+      // server does not have.
+      if (mounted) {
+        setState(() {
+          _directoryListed = !value;
+          _statusMessage = 'Could not change that. Try again.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -271,7 +308,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             )
                           : const Text('Save'),
                     ),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 32),
+                    const Divider(),
+                    // Sits with the profile because being findable is a
+                    // property of the profile, and it is the one control
+                    // here that affects who can reach you rather than
+                    // what they see.
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _directoryListed,
+                      onChanged: _saving ? null : _setDirectoryListed,
+                      title: const Text('Let people find me by name'),
+                      subtitle: const Text(
+                        'Subscribers can search for your username and see '
+                        'your first photo and rank. Turn this off and you '
+                        'stop appearing in search entirely.',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                     const Divider(),
                     const SizedBox(height: 8),
                     // CCPA requires a user-facing way to delete an account

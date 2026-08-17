@@ -858,6 +858,16 @@ exports.requestMatchClip = onCall((request) => {
  * someone else's trend is competitive information, and opponent rating is
  * deliberately hidden.
  */
+/**
+ * Finds other players by name. Server-side because none of its safety
+ * rules - opt-out, two-way blocking, banned accounts - can be enforced by
+ * a client query.
+ */
+exports.searchPlayers = onCall((request) => {
+  const {searchPlayers} = require("./playerDirectory");
+  return searchPlayers(request.auth, request.data);
+});
+
 exports.getMyRatingHistory = onCall((request) => {
   const {getMyRatingHistory} = require("./ratingHistory");
   return getMyRatingHistory(request.auth, request.data);

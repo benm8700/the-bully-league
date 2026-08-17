@@ -14,6 +14,7 @@ import '../match/recording_consent_screen.dart';
 import '../onboarding/tutorial_screen.dart';
 import '../settings/notification_settings_screen.dart';
 import '../support/support_screen.dart';
+import '../directory/player_search_screen.dart';
 import '../tournament/tournament_list_screen.dart';
 import '../vote/finalize_test_screen.dart';
 
@@ -165,6 +166,15 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                       child: const Text('Finalize Match (test)'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const PlayerSearchScreen(),
+                        ),
+                      ),
+                      child: const Text('Find a Player'),
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton(
