@@ -251,6 +251,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // returning player opens the screen for - the profile
                     // itself is filled in once and rarely touched again.
                     const FormCard(),
+                    const ReferrerField(),
                     Text(
                       'Give opponents some ammo - it\'s funnier if it\'s true.',
                       style: Theme.of(context).textTheme.bodyMedium,

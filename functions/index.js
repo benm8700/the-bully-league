@@ -878,6 +878,16 @@ exports.requestMatchClip = onCall((request) => {
  * moderation action, and silent to the person blocked. Honoured by
  * matchmaking (two-way) and by the player directory.
  */
+/**
+ * Records who invited this player. Set once, before their first battle,
+ * and the reward only lands when they actually play one - paying at
+ * signup would make throwaway accounts directly profitable.
+ */
+exports.setReferrer = onCall((request) => {
+  const {setReferrer} = require("./referral");
+  return setReferrer(request.auth, request.data);
+});
+
 exports.setBlocked = onCall((request) => {
   const {setBlocked} = require("./blocking");
   return setBlocked(request.auth, request.data);

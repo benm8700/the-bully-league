@@ -813,6 +813,18 @@ async function completeMatch(auth, data, creds = null) {
     // on completion rather than on pairing so abandoning a match cannot
     // be used to speed-run the unlock.
     const now = Date.now();
+    // A referral pays on ACTIVATION, and this is the moment it happens -
+    // the referred player has now finished a real battle against a real
+    // opponent, which is the bar that makes throwaway accounts not worth
+    // farming. Best-effort: it must never fail the match that earned it.
+    try {
+      const {grantReferralIfEarned} = require("./referral");
+      await Promise.all([match.player1Id, match.player2Id]
+          .map((uid) => grantReferralIfEarned(uid)));
+    } catch (e) {
+      console.error(`referral check for ${matchId} failed:`, e.message);
+    }
+
     const countsTowardUnlock = match.mode === "exhibition";
     await Promise.all([match.player1Id, match.player2Id].map((uid, i) => {
       const opponent = i === 0 ? match.player2Id : match.player1Id;

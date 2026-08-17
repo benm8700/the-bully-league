@@ -1,4 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/entitlement_service.dart';
@@ -173,6 +175,127 @@ class _FormCardState extends State<FormCard> {
               ),
             );
           }),
+        ],
+      ),
+    );
+  }
+}
+
+/// Naming whoever invited you.
+///
+/// Shown only to players who have NOT yet played, because that is the
+/// only window in which it can be set - allowing it later would let
+/// someone attach a referrer retroactively once they knew it paid. It
+/// disappears entirely once used or once they battle, rather than
+/// lingering as a dead control.
+///
+/// The reward lands on THEIR side, not yours, and only once you have
+/// actually played - so this is worth surfacing honestly rather than
+/// dressing up as a bonus for the person filling it in.
+class ReferrerField extends StatefulWidget {
+  const ReferrerField({super.key});
+
+  @override
+  State<ReferrerField> createState() => _ReferrerFieldState();
+}
+
+class _ReferrerFieldState extends State<ReferrerField> {
+  final _controller = TextEditingController();
+  bool _visible = false;
+  bool _busy = false;
+  String? _message;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _check() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final snap =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final d = snap.data() ?? {};
+      final played = ((d['rankedMatchesPlayed'] as num?) ?? 0) +
+          ((d['exhibitionMatchesPlayed'] as num?) ?? 0);
+      if (mounted) {
+        setState(() =>
+            _visible = d['referredByUserId'] == null && played == 0);
+      }
+    } catch (_) {
+      // Not worth an error state - the field simply stays hidden.
+    }
+  }
+
+  Future<void> _submit() async {
+    final name = _controller.text.trim();
+    if (name.length < 2) return;
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('setReferrer')
+          .call<Map<String, dynamic>>({'username': name});
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _visible = false;
+        _message = '${result.data['referrer']} will get credit once you '
+            'play your first battle.';
+      });
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _message = e.message ?? "Couldn't save that.";
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_visible) {
+      if (_message == null) return const SizedBox.shrink();
+      return _Section(
+        title: 'Invited by',
+        child: Text(_message!,
+            style: Theme.of(context).textTheme.bodySmall),
+      );
+    }
+    return _Section(
+      title: 'Invited by',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Someone bring you here? Put their username in and they get '
+            'credit once you play your first battle.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _controller,
+            decoration: const InputDecoration(labelText: 'Their username'),
+          ),
+          if (_message != null) ...[
+            const SizedBox(height: 8),
+            Text(_message!, style: Theme.of(context).textTheme.bodySmall),
+          ],
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: _busy ? null : _submit,
+            child: const Text('Save'),
+          ),
         ],
       ),
     );
