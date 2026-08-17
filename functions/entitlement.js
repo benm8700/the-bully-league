@@ -1,6 +1,7 @@
 const {getFirestore} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {isWithinWindow, readEventWindowConfig} = require("./eventWindow");
+const {dayPassActive} = require("./dayPass");
 
 /**
  * Who is allowed to battle, in which mode, right now.
@@ -138,7 +139,14 @@ function battleEntitlement({user, mode, nowMs, windowConfig, config}) {
     isWithinWindow(new Date(nowMs), windowConfig);
   const subscriber = isSubscriber(user, nowMs);
   const trial = !subscriber && isInTrial(user, nowMs, config.trialDays);
-  const state = subscriber ? "subscriber" : trial ? "trial" : "lapsed";
+  // A pass bought with points. Deliberately checked here rather than as a
+  // special case further down, so it grants exactly what a subscription
+  // grants and cannot drift from it - including the rule below that closes
+  // Practice during the window for EVERYONE, which is a liquidity rule
+  // rather than a perk and must not be purchasable around.
+  const dayPass = !subscriber && !trial && dayPassActive(user, nowMs);
+  const state = subscriber ? "subscriber" :
+    trial ? "trial" : dayPass ? "daypass" : "lapsed";
 
   const allow = (extra = {}) =>
     ({allowed: true, reason: null, message: null, state, inWindow, ...extra});
@@ -172,7 +180,7 @@ function battleEntitlement({user, mode, nowMs, windowConfig, config}) {
     };
   }
 
-  if (subscriber || trial) return allow();
+  if (subscriber || trial || dayPass) return allow();
 
   // Lapsed. Ranked inside the window is theirs forever; nothing else is.
   if (mode === "ranked" && inWindow) return allow();

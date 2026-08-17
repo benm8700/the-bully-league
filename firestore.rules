@@ -98,6 +98,15 @@ service cloud.firestore {
         // at all. Written only by requestMatchClip and refundClipGrants.
         request.resource.data.get('freeClipUsed', null) ==
           resource.data.get('freeClipUsed', null) &&
+        // The day pass expiry, and the per-day award counters behind the
+        // vote cap. A client that could write the first would grant itself
+        // a permanent free subscription; one that could reset the second
+        // would restore its vote-points allowance at will and farm the
+        // currency that BUYS the pass. Two halves of the same hole.
+        request.resource.data.get('dayPassExpiresAtMs', null) ==
+          resource.data.get('dayPassExpiresAtMs', null) &&
+        request.resource.data.get('dailyAwards', null) ==
+          resource.data.get('dailyAwards', null) &&
         request.resource.data.get('clipCredits', null) ==
           resource.data.get('clipCredits', null) &&
         // The username, and its lowercased search copy. Written only by

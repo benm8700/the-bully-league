@@ -477,14 +477,21 @@ Future<void> _showBlockedSheet(
               },
               child: const Text('Battle ranked instead'),
             )
-          else
+          else ...[
+            // THE HIGHEST-INTENT MOMENT IN THE APP for this offer: they
+            // just tried to battle and were refused, so a day of anytime
+            // battling is worth more to them right now than at any other
+            // point. It is also the sample that makes the subscription
+            // legible - you cannot want what you have never had.
+            const _DayPassOffer(),
             FilledButton(
-              // Nothing to sell yet - there is no IAP and no Play Console
-              // account, so promising a purchase flow would be a lie.
-              // Says plainly when they can play for free instead.
+              // Still nothing to SELL - there is no IAP and no Play
+              // Console account, so promising a purchase flow would be a
+              // lie. Says plainly when they can play for free instead.
               onPressed: () => Navigator.of(sheetContext).pop(),
               child: const Text('Got it'),
             ),
+          ],
           const SizedBox(height: 8),
           // Always available, whatever the tier or the hour, because it
           // costs nothing to provide. It is what stops this sheet being a
@@ -561,6 +568,119 @@ Future<bool> _ensureTutorialCompleted(BuildContext context) async {
 /// alive. Doubles as the in-app "match found" indicator CLAUDE.md asks
 /// for alongside the push, though only in this recovery position - a
 /// live indicator while queueing isn't built.
+/// "Battle any time today for N points" - the points economy's recurring
+/// sink, offered at the moment it is worth most.
+///
+/// WHY THIS SINK AND NOT MORE CLIPS. A clip is terminal: you want one, you
+/// get it, and then you want nothing, so points go dead once someone has
+/// covered the win they cared about. Access recurs - you want another next
+/// week - so the grind never runs out of purpose. It is also the one thing
+/// a free player most wants and cannot otherwise have, which makes
+/// grinding for it a taste of the subscription rather than a substitute
+/// for it.
+///
+/// Renders NOTHING unless a pass can actually be bought right now. An
+/// offer someone cannot take is worse than no offer: it is a paywall with
+/// a price tag they cannot reach, at the exact moment they were already
+/// told no.
+class _DayPassOffer extends StatefulWidget {
+  const _DayPassOffer();
+
+  @override
+  State<_DayPassOffer> createState() => _DayPassOfferState();
+}
+
+class _DayPassOfferState extends State<_DayPassOffer> {
+  Map<String, dynamic>? _state;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = await FirebaseFunctions.instance
+          .httpsCallable('getDayPassState')
+          .call<Map<String, dynamic>>();
+      if (mounted) setState(() => _state = r.data);
+    } catch (_) {
+      // Nothing rather than an error - the sheet still works without it.
+    }
+  }
+
+  Future<void> _buy() async {
+    setState(() => _busy = true);
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('buyDayPass')
+          .call<Map<String, dynamic>>();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Day pass active. Battle whatever you like today.'),
+        ),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'Could not buy a pass.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = _state;
+    if (state == null) return const SizedBox.shrink();
+    final price = (state['price'] as num?)?.toInt() ?? 0;
+    final balance = (state['balance'] as num?)?.toInt() ?? 0;
+    final text = Theme.of(context).textTheme;
+
+    if (state['canBuy'] != true) {
+      // Short of the price, we show the GAP rather than nothing, because a
+      // visible target is the whole reason to keep earning. Already bought
+      // or already running shows nothing - there is nothing to offer.
+      if (state['active'] == true || state['boughtToday'] == true ||
+          balance >= price) {
+        return const SizedBox.shrink();
+      }
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Text(
+          '${price - balance} more points and you could battle any time '
+          'for a day.',
+          style: text.bodySmall,
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FilledButton.tonal(
+            onPressed: _busy ? null : _buy,
+            child: Text('Battle any time today - $price points'),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'You have $balance. One pass per day.',
+            style: text.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// "X challenged you" on Home.
 ///
 /// A challenge expires in an hour, so it has to be visible somewhere the

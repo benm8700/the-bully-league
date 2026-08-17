@@ -42,6 +42,35 @@ const DEFAULTS = {
    * only - never rating, which would give high-rated players a reason to
    * sit out the very hour it exists to fill. */
   eventWindowMultiplier: 2,
+  /** How many votes a day actually PAY. Votes beyond this still count in
+   * full - only the payment stops.
+   *
+   * Without a ceiling, judging is a farm: tap random winners as fast as
+   * the feed loads and mint unbounded currency. The points are the lesser
+   * problem. Careless votes are noise fed into the thing that decides
+   * rating, and vote confidence scales rating change by total vote weight -
+   * so a pile of thoughtless votes makes rating move MORE while meaning
+   * LESS, which is worse than those matches going unjudged.
+   *
+   * 10 is a placeholder like every other number here. It should be
+   * comfortably above what an honest judge does in a sitting and well
+   * below what a farmer would want. */
+  votePointsPerDay: 10,
+  /** What a day pass costs.
+   *
+   * THE POINT OF THIS SINK, and why it beats the clip: a clip is
+   * TERMINAL. You want one, you get it, and then you want nothing - so
+   * points go dead the moment someone has covered the win they cared
+   * about. Access is RECURRING. You want another one next week, and the
+   * week after, so the grind never runs out of purpose.
+   *
+   * It is also the one thing a free player most wants and cannot
+   * otherwise have, since free battling is confined to the daily window -
+   * which makes it a taste of the subscription rather than a substitute
+   * for it. At roughly 2-3 days of committed earning per pass, grinding is
+   * plainly a worse deal than subscribing for anyone who wants it
+   * regularly, which is exactly the comparison it should provoke. */
+  dayPassPrice: 300,
 };
 
 const LIMITS = {
@@ -52,6 +81,11 @@ const LIMITS = {
   referral: {min: 0, max: 100000},
   referralSpectator: {min: 0, max: 100000},
   eventWindowMultiplier: {min: 1, max: 10},
+  // 0 would mean judging pays nothing at all, which is the opposite of
+  // what the cap is for - it exists to bound a farm, not to switch off
+  // the incentive that gets matches judged in the first place.
+  votePointsPerDay: {min: 1, max: 1000},
+  dayPassPrice: {min: 1, max: 100000},
 };
 
 function readPointsSettings(data) {
@@ -106,7 +140,36 @@ function awardAmount(base, {multiplier = 1} = {}) {
  * entry already there and does nothing. The ledger doubles as the audit
  * trail - "where did these points come from" has an answer.
  */
-async function awardPoints(uid, {reason, sourceId, amount}) {
+/**
+ * Has this reason already paid out its daily allowance?
+ *
+ * PURE, and separated because it is the rule that stops judging being a
+ * points farm. Without a ceiling, paying per vote means a determined
+ * person can tap random winners as fast as the feed loads and mint an
+ * unbounded currency - and the damage is worse than the points, because
+ * careless votes are noise fed straight into the thing that decides
+ * rating. Vote confidence scales rating change by total vote weight, so a
+ * pile of thoughtless votes makes rating move MORE while meaning LESS.
+ *
+ * Votes over the cap still COUNT. Only the payment stops. Refusing the
+ * vote itself would punish the app's most active judges for being active,
+ * which is the opposite of what the incentive exists to encourage.
+ */
+function dailyAwardBlocked(user, reason, dayKey, max) {
+  if (!Number.isFinite(max) || max <= 0) return false;
+  const record = user?.dailyAwards?.[reason];
+  // A different day - or no record at all - means the allowance is fresh.
+  if (!record || record.day !== dayKey) return false;
+  return (Number(record.count) || 0) >= max;
+}
+
+/**
+ * @param {object} opts.dailyCap  optional {dayKey, max} - pays at most
+ *   `max` awards of this reason on this day, counted on the user document
+ *   inside the same transaction so two simultaneous votes cannot both
+ *   slip past the ceiling.
+ */
+async function awardPoints(uid, {reason, sourceId, amount, dailyCap}) {
   if (!uid || !reason || !sourceId) return {awarded: 0, reason: "invalid"};
   const points = awardAmount(amount);
   if (points === 0) return {awarded: 0, reason: "zero"};
@@ -122,6 +185,16 @@ async function awardPoints(uid, {reason, sourceId, amount}) {
         tx.get(entryRef), tx.get(userRef),
       ]);
       if (existing.exists) return {awarded: 0, reason: "duplicate"};
+
+      const userDataForCap = userSnap.data() ?? {};
+      if (dailyCap && dailyAwardBlocked(
+          userDataForCap, reason, dailyCap.dayKey, dailyCap.max)) {
+        // No ledger entry is written, so the same event can still pay
+        // tomorrow if it is somehow retried then - and, more importantly,
+        // nothing about the vote itself is undone.
+        return {awarded: 0, reason: "daily-cap"};
+      }
+
       tx.set(entryRef, {
         reason,
         sourceId,
@@ -142,10 +215,27 @@ async function awardPoints(uid, {reason, sourceId, amount}) {
       const user = userSnap.data() ?? {};
       const balance = Number.isFinite(Number(user.pointsBalance)) ?
         Number(user.pointsBalance) : (Number(user.points) || 0);
-      tx.set(userRef, {
+      const update = {
         points: FieldValue.increment(points),
         pointsBalance: Math.max(0, balance) + points,
-      }, {merge: true});
+      };
+      if (dailyCap) {
+        const record = user.dailyAwards?.[reason];
+        const sameDay = record?.day === dailyCap.dayKey;
+        // Written ABSOLUTELY rather than incremented, so a new day resets
+        // rather than carrying yesterday's count forward - the exact bug
+        // the vote reminders hit with FieldValue.increment across a day
+        // boundary, where being reminded once yesterday blocked you all
+        // of today.
+        update.dailyAwards = {
+          ...(user.dailyAwards ?? {}),
+          [reason]: {
+            day: dailyCap.dayKey,
+            count: (sameDay ? Number(record.count) || 0 : 0) + 1,
+          },
+        };
+      }
+      tx.set(userRef, update, {merge: true});
       return {awarded: points, reason};
     });
   } catch (e) {
@@ -159,6 +249,7 @@ async function awardPoints(uid, {reason, sourceId, amount}) {
 module.exports = {
   awardPoints,
   awardAmount,
+  dailyAwardBlocked,
   readPointsSettings,
   pointsSettings,
   DEFAULTS,

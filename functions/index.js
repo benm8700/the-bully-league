@@ -226,6 +226,7 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   let pointsAwarded = 0;
   let pointsMultiplier = 1;
   let streak = null;
+  let voteCapReached = false;
   let quests = null;
   try {
     const {awardPoints, pointsSettings, awardAmount} = require("./points");
@@ -234,12 +235,25 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     const cfgSnap = await db.collection("config").doc("eventWindow").get();
     const inWindow = isWithinWindow(new Date(), readEventWindowConfig(cfgSnap.data()));
     pointsMultiplier = inWindow ? rates.eventWindowMultiplier : 1;
+    // CAPPED PER DAY, and this is the rule that stops judging being a
+    // farm. Paying per vote with no ceiling means someone can tap random
+    // winners as fast as the feed loads - and the real damage is not the
+    // points, it is that careless votes are noise fed into the thing that
+    // decides rating. Votes past the cap still count in full; only the
+    // payment stops, because refusing the vote would punish the app's
+    // most active judges for being active.
+    const {pacificNow} = require("./eventWindow");
     const result = await awardPoints(voterId, {
       reason: "vote_cast",
       sourceId: matchId,
       amount: awardAmount(rates.voteCast, {multiplier: pointsMultiplier}),
+      dailyCap: {
+        dayKey: pacificNow(new Date()).dayKey,
+        max: rates.votePointsPerDay,
+      },
     });
     pointsAwarded = result.awarded;
+    voteCapReached = result.reason === "daily-cap";
 
     // The daily streak, paid on the first vote of each day. Kept inside
     // this try because it is a reward, never a precondition: a streak
@@ -265,7 +279,7 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   // The streak goes back too, so the app can show a run landing rather
   // than leaving a silent bonus in the ledger. A reward nobody notices
   // motivates nobody.
-  return {success: true, weight, pointsAwarded, pointsMultiplier, streak, quests};
+  return {success: true, weight, pointsAwarded, pointsMultiplier, streak, quests, voteCapReached};
 });
 
 /**
@@ -1021,6 +1035,22 @@ exports.getMyChallenges = onCall((request) => {
 exports.getChallengeMatch = onCall((request) => {
   const {getChallengeMatch} = require("./friendBattle");
   return getChallengeMatch(request.auth, request.data);
+});
+
+/**
+ * Day passes: 24 hours of anytime battling, bought with points.
+ *
+ * The points economy's recurring sink, and deliberately a taste of the
+ * subscription rather than a substitute for it - see functions/dayPass.js.
+ */
+exports.buyDayPass = onCall((request) => {
+  const {buyDayPass} = require("./dayPass");
+  return buyDayPass(request.auth);
+});
+
+exports.getDayPassState = onCall((request) => {
+  const {getDayPassState} = require("./dayPass");
+  return getDayPassState(request.auth);
 });
 
 exports.onVoteCast = onVoteCast;
