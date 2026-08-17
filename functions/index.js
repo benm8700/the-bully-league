@@ -853,6 +853,16 @@ exports.requestMatchClip = onCall((request) => {
  * than refuse after they have done the whole camera check. */
 /** The rank change this player has not been shown yet. Asking marks it
  * seen, so the popup fires exactly once. */
+/**
+ * This player's own rating history and a form summary. Own history only:
+ * someone else's trend is competitive information, and opponent rating is
+ * deliberately hidden.
+ */
+exports.getMyRatingHistory = onCall((request) => {
+  const {getMyRatingHistory} = require("./ratingHistory");
+  return getMyRatingHistory(request.auth, request.data);
+});
+
 exports.getPendingRankChange = onCall((request) => {
   const {getPendingRankChange} = require("./rankChange");
   return getPendingRankChange(request.auth);

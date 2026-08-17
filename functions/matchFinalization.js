@@ -1,4 +1,4 @@
-const {getFirestore} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {
   STARTING_RATING,
   GOAT_TITLE,
@@ -163,6 +163,40 @@ async function finalizeMatch(matchId, {force = false} = {}) {
       rankedMatchesPlayed: p2Matches,
       rankTitle: computeBaseRankTitle(p2NewRating, p2Matches),
     });
+    // RECORDED HERE, INSIDE THE SAME TRANSACTION, and this is the only
+    // chance to do it. A rating update overwrites the previous value, so
+    // any history not written at this moment is gone permanently - it can
+    // never be backfilled from anything, because nothing else remembers
+    // what the rating was before this match.
+    //
+    // A SUBCOLLECTION rather than an array on the user document: the user
+    // doc is read constantly (every entitlement check, every Home load,
+    // every matchmaking entry), and an unbounded array of every match a
+    // player has ever played would bloat all of them. This is written
+    // once and read only when someone actually looks at their history.
+    //
+    // Keyed by matchId so a retried finalization overwrites rather than
+    // duplicating, matching how the points ledger stays idempotent.
+    const historyEntry = (before, after, opponentId, won) => ({
+      matchId,
+      opponentId,
+      ratingBefore: before,
+      ratingAfter: after,
+      delta: after - before,
+      won,
+      // Stored so a flat result is explicable later - "why did that win
+      // barely move me" has an answer in the record itself.
+      voteConfidence: confidence,
+      mode: match.mode ?? "ranked",
+      at: FieldValue.serverTimestamp(),
+    });
+    tx.set(player1Ref.collection("ratingHistory").doc(matchId),
+        historyEntry(p1Rating, p1NewRating, match.player2Id,
+            winnerId === match.player1Id));
+    tx.set(player2Ref.collection("ratingHistory").doc(matchId),
+        historyEntry(p2Rating, p2NewRating, match.player1Id,
+            winnerId === match.player2Id));
+
     tx.update(matchRef, {
       voteFinalized: true,
       winnerId,

@@ -99,6 +99,16 @@ service cloud.firestore {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }
+
+      // Rating history: one entry per rated match, written inside the same
+      // transaction that changes the rating. Readable by its owner so a
+      // player can see their own form; never client-writable, for exactly
+      // the reason `rating` itself is not - a forgeable history would make
+      // any stat built on it meaningless.
+      match /ratingHistory/{entryId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
     }
 
     // Live match configuration (CLAUDE.md's config/matchSettings): round
