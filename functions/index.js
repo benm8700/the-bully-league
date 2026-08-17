@@ -776,6 +776,19 @@ exports.requestMatchClip = onCall((request) => {
  * ever bites when one player never taps Ready, so bounding that by
  * presence rather than by the clock lets the window be as long as wanted.
  */
+/**
+ * Hands over the file for a clip the caller is entitled to.
+ *
+ * The objection check inside is load-bearing: publishing already refuses
+ * while an objection stands, but a self-serve download would walk around
+ * that entirely, so the gate has to sit on every path that hands over
+ * bytes.
+ */
+exports.getClipDownload = onCall((request) => {
+  const {getClipDownload} = require("./clipGrants");
+  return getClipDownload(request.auth, request.data);
+});
+
 exports.releaseUnresponsiveMatch = onCall((request) => {
   const {releaseUnresponsiveMatch} = require("./matchmaking");
   return releaseUnresponsiveMatch(request.auth, request.data);

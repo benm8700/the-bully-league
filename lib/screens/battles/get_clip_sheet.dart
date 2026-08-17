@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Getting the shareable version of one of your own battles.
 ///
@@ -131,6 +132,48 @@ class _GetClipSheetState extends State<GetClipSheet> {
     }
   }
 
+  /// Fetches a short-lived signed URL and opens it.
+  ///
+  /// The server refuses if the clip is still rendering, still inside the
+  /// opponent's objection window, or was taken down - and its message says
+  /// which, so a refusal is informative rather than a dead end.
+  Future<void> _download() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('getClipDownload')
+          .call<Map<String, dynamic>>({'matchId': widget.matchId});
+      final urls = (result.data['urls'] as Map?)?.cast<String, dynamic>();
+      // Vertical first: this is the cut people actually post, and the
+      // landscape one is a letterboxed strip on a phone.
+      final url = urls?['vertical'] ?? urls?['landscape'];
+      if (url == null) throw Exception('no url');
+      final opened = await launchUrl(Uri.parse(url as String),
+          mode: LaunchMode.externalApplication);
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _done = opened ? 'Downloading your clip.' : null;
+        if (!opened) _error = "Couldn't open the download.";
+      });
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e.message ?? 'Your clip is not ready yet.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = "Couldn't start the download.";
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
@@ -171,6 +214,16 @@ class _GetClipSheetState extends State<GetClipSheet> {
                   const _Notice(
                     icon: Icons.check_circle_outline,
                     text: 'This clip is already yours.',
+                  ),
+                  const SizedBox(height: 16),
+                  if (_error != null) ...[
+                    _Notice(icon: Icons.error_outline, text: _error!),
+                    const SizedBox(height: 12),
+                  ],
+                  FilledButton.icon(
+                    onPressed: _busy ? null : _download,
+                    icon: const Icon(Icons.download_outlined),
+                    label: const Text('Download'),
                   ),
                 ] else ...[
                   if (_error != null) ...[

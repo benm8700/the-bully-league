@@ -358,6 +358,96 @@ async function refundClipGrants(matchId, match, objectorUid) {
   return {refunded};
 }
 
+/** How long a download link lives. Short, because this is an unpublished
+ * clip: a permanent URL would escape the review gate entirely and could be
+ * passed to anyone. Long enough to survive a slow mobile download. */
+const DOWNLOAD_URL_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Hands over the file for a clip this player is entitled to.
+ *
+ * THE OBJECTION CHECK HERE IS THE POINT, not a formality. Publishing
+ * already refuses while an objection stands, but a self-serve download
+ * would walk straight around that and let someone post a clip their
+ * opponent had explicitly objected to. The gate has to live on every path
+ * that hands over bytes, and this is one.
+ *
+ * Signed URLs rather than a Firebase download token, deliberately: a token
+ * mints a PERMANENT public URL, which for an unreviewed clip means anyone
+ * it is forwarded to has it forever, and revoking it later would be the
+ * only way back. Signing keeps `storage.rules` denying clients all read on
+ * match_highlights/** and makes this callable the only door.
+ */
+async function getClipDownload(auth, data) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const {matchId} = data || {};
+  if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
+
+  const db = getFirestore();
+  const uid = auth.uid;
+  const snap = await db.collection("matches").doc(matchId).get();
+  const match = snap.exists ? snap.data() : null;
+
+  if (!match || (match.player1Id !== uid && match.player2Id !== uid)) {
+    throw new HttpsError("permission-denied",
+        "You can only download clips of your own battles.");
+  }
+  const grant = match.clipGrants?.[uid];
+  if (!grant) {
+    throw new HttpsError("failed-precondition",
+        "You haven't got this clip yet.", {reason: "no-grant"});
+  }
+  // A refunded grant is NOT the same as never having bought it, and saying
+  // so matters: telling someone who paid, and whose clip was then taken
+  // down, that they "haven't got this clip yet" reads as the purchase
+  // having silently failed. They are owed the actual reason and the fact
+  // that they were already made whole.
+  if (grant.refundedAt) {
+    throw new HttpsError("failed-precondition",
+        "This clip was taken down at the other player's request, and your " +
+        "points have been returned.", {reason: "refunded"});
+  }
+
+  const delivery = clipDeliverable(match, Date.now());
+  if (!delivery.deliverable) {
+    const message = delivery.reason === "objected" ?
+      "This clip was taken down at the other player's request. " +
+        "Your points have been returned." :
+      delivery.reason === "window-open" ?
+        "Your clip unlocks once voting closes." :
+        "Your clip is still being prepared.";
+    throw new HttpsError("failed-precondition", message,
+        {reason: delivery.reason});
+  }
+
+  const {getStorage} = require("firebase-admin/storage");
+  const bucket = getStorage().bucket();
+  const expires = Date.now() + DOWNLOAD_URL_TTL_MS;
+  const urls = {};
+  for (const [name, rendition] of Object.entries(match.highlight?.renditions ?? {})) {
+    if (!rendition?.path) continue;
+    try {
+      const [url] = await bucket.file(rendition.path).getSignedUrl({
+        action: "read",
+        expires,
+        // Makes the browser and the OS save it rather than stream it -
+        // this endpoint exists so people can post the file elsewhere.
+        promptSaveAs: `bully-league-${matchId}-${name}.mp4`,
+      });
+      urls[name] = url;
+    } catch (e) {
+      // One unavailable shape must not deny the other. Vertical is the
+      // one people actually post.
+      console.error(`could not sign ${rendition.path}:`, e.message);
+    }
+  }
+
+  if (Object.keys(urls).length === 0) {
+    throw new HttpsError("internal", "Couldn't prepare your download.");
+  }
+  return {urls, expiresAtMs: expires, captioned: match.highlight?.captioned === true};
+}
+
 /** When the objection window closes, for client messaging only. */
 function voteCloseHint(match) {
   const {voteWindowEndMs} = require("./matchFinalization");
@@ -367,6 +457,8 @@ function voteCloseHint(match) {
 
 module.exports = {
   requestMatchClip,
+  getClipDownload,
+  DOWNLOAD_URL_TTL_MS,
   refundClipGrants,
   resolveClipGrant,
   clipDeliverable,
