@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/live_tally.dart';
+import '../battles/get_clip_sheet.dart';
 import '../moderation/clip_takedown_sheet.dart';
 
 /// Your own battles, with the vote count moving in real time.
@@ -148,6 +149,16 @@ class _MatchCard extends StatelessWidget {
                 // The only route to the takedown flow, and it belongs here:
                 // this is the screen showing your OWN battles, which is
                 // exactly where someone unhappy about their footage looks.
+                // Only for RECORDED modes - practice matches produce no
+                // footage, so offering a clip would promise nothing.
+                if ((match['mode'] as String? ?? '') != 'exhibition' &&
+                    status == 'completed')
+                  IconButton(
+                    icon: const Icon(Icons.movie_outlined, size: 18),
+                    tooltip: 'Get your clip',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => GetClipSheet.show(context, matchId),
+                  ),
                 IconButton(
                   icon: const Icon(Icons.more_horiz, size: 18),
                   tooltip: 'Clip options',

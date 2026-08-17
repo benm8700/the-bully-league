@@ -285,6 +285,79 @@ async function requestMatchClip(auth, data) {
   };
 }
 
+/**
+ * Makes buyers whole when an objection kills a clip they paid for.
+ *
+ * The delivery rule already means nothing revocable is ever handed over,
+ * so this is the remaining case: someone bought a clip, and before it
+ * could be delivered the other player objected. They must not simply lose
+ * what they paid.
+ *
+ * AN IN-APP CREDIT, NEVER A STORE REFUND. The refund support category was
+ * deliberately removed because Apple and Google own that process, so a
+ * refund path here could only route someone somewhere we cannot help.
+ * A credit makes them whole immediately and without leaving the app.
+ *
+ *   points   - refunded straight to the spendable balance
+ *   purchase - becomes a clip credit, spendable on any future battle
+ *
+ * The objecting player is never refunded: they caused the revocation, and
+ * a refund would turn objecting into a way to get clips free. Idempotent
+ * on the ledger id, so a repeated takedown never pays twice.
+ */
+async function refundClipGrants(matchId, match, objectorUid) {
+  const grants = match?.clipGrants;
+  if (!grants) return {refunded: 0};
+
+  const db = getFirestore();
+  let refunded = 0;
+  for (const [uid, grant] of Object.entries(grants)) {
+    if (uid === objectorUid) continue;
+    if (grant?.refundedAt) continue;
+    const cost = Number(grant?.cost) || 0;
+
+    try {
+      if (grant?.source === "points" && cost > 0) {
+        const userRef = db.collection("users").doc(uid);
+        const entryRef = userRef.collection("pointsLedger")
+            .doc(`clipRefund_${matchId}`);
+        await db.runTransaction(async (tx) => {
+          const [entry, userSnap] = await Promise.all([
+            tx.get(entryRef), tx.get(userRef),
+          ]);
+          if (entry.exists) return;
+          tx.set(entryRef, {
+            reason: "clipRefund", sourceId: matchId, amount: cost,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+          // Absolute, not an increment, for the same reason spendPoints
+          // is: a legacy account with no balance field must inherit its
+          // career total rather than starting from zero.
+          tx.set(userRef, {
+            pointsBalance: spendableBalance(userSnap.data() ?? {}) + cost,
+          }, {merge: true});
+        });
+      } else if (grant?.source === "purchase") {
+        await db.collection("users").doc(uid)
+            .set({clipCredits: FieldValue.increment(1)}, {merge: true});
+      } else {
+        // A subscription grant cost nothing, so there is nothing to
+        // return - they simply get their next one as usual.
+        continue;
+      }
+      await db.collection("matches").doc(matchId).set({
+        clipGrants: {[uid]: {refundedAt: FieldValue.serverTimestamp()}},
+      }, {merge: true});
+      refunded++;
+    } catch (e) {
+      // Never let a refund failure block a takedown. The takedown is the
+      // urgent, rights-affecting half; the refund can be retried.
+      console.error(`clip refund for ${uid} on ${matchId} failed:`, e.message);
+    }
+  }
+  return {refunded};
+}
+
 /** When the objection window closes, for client messaging only. */
 function voteCloseHint(match) {
   const {voteWindowEndMs} = require("./matchFinalization");
@@ -294,6 +367,7 @@ function voteCloseHint(match) {
 
 module.exports = {
   requestMatchClip,
+  refundClipGrants,
   resolveClipGrant,
   clipDeliverable,
   spendPoints,

@@ -154,6 +154,18 @@ async function requestTakedown(auth, data) {
     },
   }, {merge: true});
 
+  // Anyone who PAID for this clip must be made whole - the delivery rule
+  // means nothing revocable is ever handed over, so this covers the buyer
+  // whose clip was killed before it arrived. An in-app credit, never a
+  // store refund. Best-effort: a refund failure must never block a
+  // takedown, which is the urgent, rights-affecting half.
+  try {
+    const {refundClipGrants} = require("./clipGrants");
+    await refundClipGrants(matchId, match, auth.uid);
+  } catch (e) {
+    console.error("clip refunds failed for", matchId, e.message);
+  }
+
   // Revoke now if it is already out. Unconditional means unconditional.
   let revoked = false;
   if (match.highlight?.published === true) {
