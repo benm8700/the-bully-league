@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
 import '../../core/services/matchmaking_service.dart';
+import '../../core/services/capture_quality.dart';
 import '../../core/services/video_call_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../core/services/yuv_to_jpeg.dart';
@@ -67,6 +68,8 @@ class _MatchScreenState extends State<MatchScreen> {
   int? _opponentUid;
   StreamSubscription<Map<String, dynamic>>? _msgSub;
   StreamSubscription<RawVideoFrame>? _frameSampleSub;
+  StreamSubscription<RawVideoFrame>? _localFrameSub;
+  final CaptureQualityMonitor _quality = CaptureQualityMonitor();
   Completer<void>? _earlyEndCompleter;
   bool _processingFrame = false;
 
@@ -138,9 +141,61 @@ class _MatchScreenState extends State<MatchScreen> {
     // opponent's uid before this screen is even built, so that race is
     // structurally impossible rather than merely ordered around.
     _frameSampleSub = _videoCallService.remoteFrameSamples.listen(_onRemoteFrameSample);
+    // Your OWN camera and mic. Warning someone that their opponent is in
+    // the dark is information they can do nothing with; warning them
+    // about themselves is the only version they can act on.
+    _localFrameSub = _videoCallService.localFrameSamples.listen(_onLocalFrameSample);
+    _videoCallService.localAudioLevel.addListener(_onLocalAudioLevel);
     _videoCallService.localUid.addListener(_maybeElectHost);
     _videoCallService.remoteUid.addListener(_maybeElectHost);
     _maybeElectHost();
+  }
+
+  /// Your own camera, checked for the one failure nobody notices while it
+  /// is happening: being invisible.
+  ///
+  /// WARNS RATHER THAN CANCELS. CLAUDE.md's decision says a flagged match
+  /// is auto-cancelled and re-queued, and that is deliberately not done
+  /// here - a false positive would destroy a battle somebody was in the
+  /// middle of, and a no-penalty auto-cancel is a free escape from a
+  /// match that is going badly, which is precisely the dodge the doc's
+  /// own abuse-safeguard item worries about. A warning costs nothing when
+  /// wrong and cannot be used to duck an opponent.
+  void _onLocalFrameSample(RawVideoFrame frame) {
+    final luma = meanLuma(
+      frame.yBuffer,
+      width: frame.width,
+      height: frame.height,
+      yStride: frame.yStride,
+    );
+    final message = _quality.recordLuma(luma);
+    if (message != null) {
+      _quality.noteEpisode(dark: true, quiet: false);
+      _showQualityWarning(message);
+    }
+  }
+
+  void _onLocalAudioLevel() {
+    final message =
+        _quality.recordAudioLevel(_videoCallService.localAudioLevel.value);
+    if (message != null) {
+      _quality.noteEpisode(dark: false, quiet: true);
+      _showQualityWarning(message);
+    }
+  }
+
+  /// Shown as a snackbar rather than a dialog: this arrives mid-battle,
+  /// and a modal would take the screen away from someone who is currently
+  /// being roasted on camera.
+  void _showQualityWarning(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 4),
+        backgroundColor: Colors.orange.shade900,
+        content: Text(message),
+      ),
+    );
   }
 
   /// One sampled remote frame arrives here every few seconds (throttled by
@@ -396,6 +451,8 @@ class _MatchScreenState extends State<MatchScreen> {
     _ticker?.cancel();
     _msgSub?.cancel();
     _frameSampleSub?.cancel();
+    _localFrameSub?.cancel();
+    _videoCallService.localAudioLevel.removeListener(_onLocalAudioLevel);
     _videoCallService.localUid.removeListener(_maybeElectHost);
     _videoCallService.remoteUid.removeListener(_maybeElectHost);
     _videoCallService.dispose();

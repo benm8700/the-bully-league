@@ -30,6 +30,9 @@ class AgoraVideoCallService implements VideoCallService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<RawVideoFrame> _remoteFrameSamples =
       StreamController<RawVideoFrame>.broadcast();
+  final StreamController<RawVideoFrame> _localFrameSamples =
+      StreamController<RawVideoFrame>.broadcast();
+  DateTime? _lastLocalSampleTime;
 
   @override
   ValueListenable<int?> get remoteUid => _remoteUid;
@@ -48,6 +51,9 @@ class AgoraVideoCallService implements VideoCallService {
 
   @override
   Stream<RawVideoFrame> get remoteFrameSamples => _remoteFrameSamples.stream;
+
+  @override
+  Stream<RawVideoFrame> get localFrameSamples => _localFrameSamples.stream;
 
   /// What each player actually publishes.
   ///
@@ -104,6 +110,35 @@ class AgoraVideoCallService implements VideoCallService {
     // does throw UnimplementedError. See CLAUDE.md's step 3/9a status
     // notes for the full story.
     _frameObserver = VideoFrameObserver(
+      // The LOCAL camera, which is the only feed that can tell a player
+      // something they can act on about their own setup. Throttled
+      // separately from the remote sampler so a quality check and a
+      // moderation check never contend for the same interval.
+      onCaptureVideoFrame: (sourceType, videoFrame) {
+        final now = DateTime.now();
+        if (_lastLocalSampleTime != null &&
+            now.difference(_lastLocalSampleTime!) < _frameSampleInterval) {
+          return;
+        }
+        final width = videoFrame.width;
+        final height = videoFrame.height;
+        final yBuffer = videoFrame.yBuffer;
+        if (width == null || height == null || yBuffer == null) return;
+        _lastLocalSampleTime = now;
+        _localFrameSamples.add(RawVideoFrame(
+          remoteUid: 0,
+          width: width,
+          height: height,
+          yStride: videoFrame.yStride ?? width,
+          uStride: videoFrame.uStride ?? (width ~/ 2),
+          vStride: videoFrame.vStride ?? (width ~/ 2),
+          yBuffer: yBuffer,
+          // Only the Y plane is needed for brightness, and the chroma
+          // planes are the expensive half to carry around.
+          uBuffer: videoFrame.uBuffer ?? Uint8List(0),
+          vBuffer: videoFrame.vBuffer ?? Uint8List(0),
+        ));
+      },
       onRenderVideoFrame: (channelId, remoteUid, videoFrame) {
         final now = DateTime.now();
         if (_lastFrameSampleTime != null &&
@@ -278,6 +313,7 @@ class AgoraVideoCallService implements VideoCallService {
     _localUid.dispose();
     await _matchMessages.close();
     await _remoteFrameSamples.close();
+    await _localFrameSamples.close();
     await _engine.release();
   }
 }

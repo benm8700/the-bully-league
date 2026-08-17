@@ -85,4 +85,14 @@ abstract class VideoCallService {
   /// by the implementation - callers should not assume every frame is
   /// delivered, only an occasional sample.
   Stream<RawVideoFrame> get remoteFrameSamples;
+
+  /// Throttled samples of THIS device's own camera.
+  ///
+  /// Separate from [remoteFrameSamples] because they answer different
+  /// questions: the remote stream feeds content moderation of the person
+  /// you are watching, while this is the only way to tell a player
+  /// something ACTIONABLE about their own setup. Warning someone that
+  /// their opponent is in the dark is information they can do nothing
+  /// with.
+  Stream<RawVideoFrame> get localFrameSamples;
 }
