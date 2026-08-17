@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/event_window.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/presence.dart';
+import '../practice/solo_practice_screen.dart';
 import 'bio_reveal_screen.dart';
 
 /// The "finding you an opponent" step (Build Order step 4's missing half).
@@ -226,6 +227,25 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
           child: const Text('Done - notify me'),
         ),
         const SizedBox(height: 8),
+        // The best moment in the app to offer this: they have just been
+        // told nobody is around and that leaving is safe, so the honest
+        // alternative to waiting is rehearsing. Stands the challenge down
+        // exactly like the button above - it leaves the screen, never the
+        // queue, so a real opponent can still take it up while they warm
+        // up.
+        TextButton(
+          onPressed: _leaving
+              ? null
+              : () {
+                  if (!_standDown.isCompleted) _standDown.complete();
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => const SoloPracticeScreen(),
+                    ),
+                  );
+                },
+          child: const Text('Warm up while you wait'),
+        ),
         TextButton(
           onPressed: _leaving ? null : _onCancel,
           child: const Text('Cancel my challenge'),

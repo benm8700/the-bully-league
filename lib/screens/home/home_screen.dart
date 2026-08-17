@@ -13,6 +13,7 @@ import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import '../onboarding/tutorial_screen.dart';
+import '../practice/solo_practice_screen.dart';
 import '../settings/notification_settings_screen.dart';
 import '../support/support_screen.dart';
 import '../directory/player_search_screen.dart';
@@ -154,6 +155,21 @@ class HomeScreen extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Quieter still than Practice, and free at every tier
+                    // because it costs the platform nothing - no channel is
+                    // joined, so no Agora minutes are billed. Its real job
+                    // is the empty-pool case: someone who opens the app when
+                    // nobody is online needs something to do that is not a
+                    // consolation prize.
+                    TextButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const SoloPracticeScreen(),
+                        ),
+                      ),
+                      child: const Text('Warm up solo'),
                     ),
                     // Judging, My Battles, Ranks and Profile are bottom-nav
                     // destinations now (see MainShell), so they are
@@ -447,6 +463,20 @@ Future<void> _showBlockedSheet(
               child: const Text('Got it'),
             ),
           const SizedBox(height: 8),
+          // Always available, whatever the tier or the hour, because it
+          // costs nothing to provide. It is what stops this sheet being a
+          // dead end for someone who cannot battle right now.
+          TextButton(
+            onPressed: () {
+              Navigator.of(sheetContext).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SoloPracticeScreen(),
+                ),
+              );
+            },
+            child: const Text('Warm up solo instead'),
+          ),
           TextButton(
             onPressed: () => Navigator.of(sheetContext).pop(),
             child: const Text('Close'),
