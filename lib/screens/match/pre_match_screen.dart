@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -5,8 +6,10 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
+import '../../core/services/matchmaking_service.dart';
 import '../../core/services/video_call_service.dart';
 import '../tournament/tournament_lobby_screen.dart';
+import 'bio_reveal_screen.dart';
 import 'matchmaking_screen.dart';
 
 /// Camera/mic check before a match (Build Order step 3). Real per-check
@@ -27,7 +30,18 @@ import 'matchmaking_screen.dart';
 /// means a player sorting out their lighting or a denied permission isn't
 /// burning an already-paired opponent's time while they do it.
 class PreMatchScreen extends StatefulWidget {
-  const PreMatchScreen({super.key, required this.mode, this.tournamentId});
+  const PreMatchScreen({
+    super.key,
+    required this.mode,
+    this.tournamentId,
+    this.challengeMatchId,
+  });
+
+  /// Set when this check precedes an already-agreed FRIEND battle. Like a
+  /// tournament match there is no queue to join - the two players are
+  /// already named - so this goes straight to the bio reveal for that
+  /// match rather than to matchmaking.
+  final String? challengeMatchId;
 
   /// Set when this check precedes a TOURNAMENT match. The pairing is
   /// already decided by the bracket, so there is no queue to join - the
@@ -132,6 +146,34 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     await _videoCallService.dispose();
     if (!mounted) return;
     final tournamentId = widget.tournamentId;
+    final challengeMatchId = widget.challengeMatchId;
+
+    if (challengeMatchId != null) {
+      // The pairing already exists - fetch it and hand off to the same bio
+      // reveal every other match uses, which already handles both players
+      // arriving at different times.
+      try {
+        final result = await FirebaseFunctions.instance
+            .httpsCallable('getChallengeMatch')
+            .call<Map<String, dynamic>>({'matchId': challengeMatchId});
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => BioRevealScreen(
+              pairing: MatchPairing.fromMap(
+                result.data.cast<String, dynamic>(),
+                fallbackMode: 'friend',
+              ),
+            ),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _error = 'Could not join that battle: $e');
+      }
+      return;
+    }
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => tournamentId == null

@@ -100,6 +100,34 @@ async function finalizeMatch(matchId, {force = false} = {}) {
   // else: tie - winnerId stays null, no rating change for either player
   // (CLAUDE.md's Tie votes decision - NOT the standard Elo 0.5/0.5 treatment).
 
+  // A FRIEND BATTLE GETS A REAL VERDICT AND NOTHING ELSE.
+  //
+  // It is voted on and recorded like any other battle, because external
+  // judgement is the entire reason to use this app instead of a video
+  // call - but it moves no rating and pays no points, and both of those
+  // omissions are deliberate rather than unfinished.
+  //
+  // Rating: CLAUDE.md's explicit constraint. You choose your opponent, so
+  // counting it would open the collusion door the whole ranked design
+  // works to keep shut - two friends trading wins is a ladder.
+  //
+  // Points: the same argument, one step along. Ranked participation pays
+  // because you cannot choose who you meet and a cooldown stops you
+  // meeting them twice. Here you can pick the same person all evening, so
+  // paying per match would be a straight farm. What you get instead is the
+  // clip and the crowd's verdict, which is what the feature is for.
+  if (match.mode === "friend") {
+    await matchRef.update({
+      voteFinalized: true,
+      winnerId,
+      voteConfidence: voteConfidence(
+          player1Weight + player2Weight, match.settings?.fullConfidenceVotes),
+      player1FinalWeight: player1Weight,
+      player2FinalWeight: player2Weight,
+    });
+    return {skipped: "friend", winnerId};
+  }
+
   const player1Ref = db.collection("users").doc(match.player1Id);
   const player2Ref = db.collection("users").doc(match.player2Id);
 

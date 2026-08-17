@@ -15,7 +15,13 @@ const {stopRecording, writeRecordingState} = require("./cloudRecording");
  * Exhibition matches are casual, don't move rating, and are never posted,
  * so they're never recorded - which also keeps the per-match recording
  * cost off the mode people play most casually. */
-const RECORDED_MODES = ["ranked", "tournament"];
+// "friend" is here on purpose despite not affecting rating: CLAUDE.md
+// makes friend battles an explicit EXCEPTION to "exhibition is never
+// recorded", because being recorded, judged and clipped is precisely what
+// distinguishes a friend battle from a video call. Two separate questions,
+// answered differently: does it move rating (no), and does it produce
+// something (yes).
+const RECORDED_MODES = ["ranked", "tournament", "friend"];
 
 /**
  * Real matchmaking (Build Order step 4's missing half). Replaces the

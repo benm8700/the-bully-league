@@ -456,7 +456,17 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
             ),
           ],
           const SizedBox(height: 8),
-          if (skipsLeft == null || skipsLeft > 0)
+          // A friend battle cannot be skipped, and offering it would be
+          // nonsense: you chose this person by name and they said yes.
+          // The skip allowance exists to escape a stranger the matchmaker
+          // picked, and there is no queue here to be returned to.
+          if (widget.pairing.mode == 'friend')
+            Text(
+              'You challenged them. Leaving now just cancels the battle.',
+              style: Theme.of(context).textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            )
+          else if (skipsLeft == null || skipsLeft > 0)
             TextButton(
               onPressed: _busy ? null : _onSkip,
               child: Text(

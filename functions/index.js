@@ -999,5 +999,29 @@ exports.getUsernameState = onCall((request) => {
   return getUsernameState(request.auth);
 });
 
+/**
+ * Friend battles: challenge a specific person rather than a stranger.
+ * Free at every tier by decision, so none of these consult entitlement.
+ */
+exports.challengeFriend = onCall((request) => {
+  const {challengeFriend} = require("./friendBattle");
+  return challengeFriend(request.auth, request.data);
+});
+
+exports.respondToChallenge = onCall((request) => {
+  const {respondToChallenge} = require("./friendBattle");
+  return respondToChallenge(request.auth, request.data);
+});
+
+exports.getMyChallenges = onCall((request) => {
+  const {getMyChallenges} = require("./friendBattle");
+  return getMyChallenges(request.auth);
+});
+
+exports.getChallengeMatch = onCall((request) => {
+  const {getChallengeMatch} = require("./friendBattle");
+  return getChallengeMatch(request.auth, request.data);
+});
+
 exports.onVoteCast = onVoteCast;
 exports.onReactionWritten = onReactionWritten;

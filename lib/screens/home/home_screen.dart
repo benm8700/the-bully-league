@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +15,7 @@ import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import '../onboarding/tutorial_screen.dart';
+import '../friends/challenge_screen.dart';
 import '../practice/solo_practice_screen.dart';
 import '../settings/notification_settings_screen.dart';
 import '../support/support_screen.dart';
@@ -115,6 +117,7 @@ class HomeScreen extends StatelessWidget {
                     if (uid != null) _RankBadge(uid: uid),
                     const SizedBox(height: 24),
                     const _ActiveMatchBanner(),
+                    const _IncomingChallengeBanner(),
                     const EventWindowBanner(),
                     const DailyQuests(),
                     const _TrialStatus(),
@@ -156,6 +159,21 @@ class HomeScreen extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Sits with the battle actions rather than under
+                    // "Find a Player", because it IS a way to start a
+                    // battle - and with a thin pool it is the most
+                    // reliable one there is.
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ChallengeScreen(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.person_add_alt_1_outlined,
+                          size: 18),
+                      label: const Text('Battle a friend'),
                     ),
                     const SizedBox(height: 12),
                     // Quieter still than Practice, and free at every tier
@@ -543,6 +561,97 @@ Future<bool> _ensureTutorialCompleted(BuildContext context) async {
 /// alive. Doubles as the in-app "match found" indicator CLAUDE.md asks
 /// for alongside the push, though only in this recovery position - a
 /// live indicator while queueing isn't built.
+/// "X challenged you" on Home.
+///
+/// A challenge expires in an hour, so it has to be visible somewhere the
+/// player already looks - the push can be missed, muted, or denied at the
+/// permission prompt, and a challenge nobody notices is the same as one
+/// never sent. Renders nothing when there is none, so it costs a
+/// zero-height widget the rest of the time.
+class _IncomingChallengeBanner extends StatefulWidget {
+  const _IncomingChallengeBanner();
+
+  @override
+  State<_IncomingChallengeBanner> createState() =>
+      _IncomingChallengeBannerState();
+}
+
+class _IncomingChallengeBannerState extends State<_IncomingChallengeBanner>
+    with WidgetsBindingObserver {
+  Map<String, dynamic>? _challenge;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-checked on resume, because the most likely way to arrive here is
+    // tapping the push notification, which brings the app forward.
+    if (state == AppLifecycleState.resumed) _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = await FirebaseFunctions.instance
+          .httpsCallable('getMyChallenges')
+          .call<Map<String, dynamic>>();
+      final incoming = (r.data['incoming'] as List?) ?? const [];
+      if (!mounted) return;
+      setState(() => _challenge = incoming.isEmpty
+          ? null
+          : (incoming.first as Map).cast<String, dynamic>());
+    } catch (_) {
+      // Nothing rather than an error: a failed check must not make Home
+      // look broken.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final challenge = _challenge;
+    if (challenge == null) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      color: scheme.primaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '${challenge['fromUsername']} challenged you',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(color: scheme.onPrimaryContainer),
+            ),
+            const SizedBox(height: 8),
+            FilledButton(
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ChallengeScreen()),
+                );
+                if (mounted) _load();
+              },
+              child: const Text('Answer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ActiveMatchBanner extends StatefulWidget {
   const _ActiveMatchBanner();
 

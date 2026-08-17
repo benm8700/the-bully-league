@@ -144,6 +144,21 @@ service cloud.firestore {
       }
     }
 
+    // Friend-battle challenges. Written only by the challengeFriend and
+    // respondToChallenge Cloud Functions.
+    //
+    // Closed to clients in both directions. Writable would let anyone
+    // forge a challenge from someone else, or mark their own accepted and
+    // conjure a match. Readable is barely better: a challenge names two
+    // people who wanted to battle each other, and blocking is deliberately
+    // silent - a readable collection would let a blocked person see that
+    // their challenges exist but are never delivered, which is exactly
+    // what the silence protects against. getMyChallenges serves each side
+    // only what is theirs.
+    match /challenges/{challengeId} {
+      allow read, write: if false;
+    }
+
     // Username claims, one document per lowercased name, holding the uid
     // that owns it. This collection IS the uniqueness guarantee: setUsername
     // claims and releases inside a transaction, which is the only way two
