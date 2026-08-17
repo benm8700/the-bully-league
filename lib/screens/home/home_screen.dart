@@ -112,7 +112,16 @@ class HomeScreen extends StatelessWidget {
                     const _ActiveMatchBanner(),
                     const EventWindowBanner(),
                     const SizedBox(height: 4),
-                    const _RankedUnlockGate(),
+                    // Ranked is available immediately - the unlock gate is
+                    // gone (see CLAUDE.md's Modes section). The tutorial
+                    // already covers the mechanics, and under the
+                    // monetization model a free player's only battling is
+                    // ranked during the window, so a practice-first gate
+                    // would lock them out of the one thing they get.
+                    FilledButton(
+                      onPressed: () => _startMatch(context, 'ranked'),
+                      child: const Text('Find Ranked Match'),
+                    ),
                     // Ranked is the primary action and Practice is
                     // deliberately quieter. Everything durable lives in
                     // ranked - it is the only recorded mode, so the only
@@ -252,54 +261,6 @@ Future<bool> _ensureTutorialCompleted(BuildContext context) async {
 /// Shows real progress rather than a silent unlock - that decision is
 /// explicit, and a disabled button with no explanation reads as a bug.
 /// The server enforces the gate regardless; this is the honest UI for it.
-class _RankedUnlockGate extends StatefulWidget {
-  const _RankedUnlockGate();
-
-  @override
-  State<_RankedUnlockGate> createState() => _RankedUnlockGateState();
-}
-
-class _RankedUnlockGateState extends State<_RankedUnlockGate> {
-  final _service = MatchmakingService();
-  RankedUnlock? _state;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final state = await _service.rankedUnlock();
-    if (mounted) setState(() => _state = state);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = _state;
-    // Until the answer arrives, show the button enabled rather than
-    // flashing a lock at someone who has already unlocked it.
-    if (state == null || state.unlocked) {
-      return FilledButton(
-        onPressed: state == null ? null : () => _startMatch(context, 'ranked'),
-        child: const Text('Find Ranked Match'),
-      );
-    }
-
-    return Column(
-      children: [
-        const FilledButton(onPressed: null, child: Text('Ranked locked')),
-        const SizedBox(height: 6),
-        Text(
-          state.progressLabel,
-          style: Theme.of(context).textTheme.bodySmall,
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-}
-
 /// Shows a way back into a match the player was paired into but never
 /// collected, and renders nothing at all when there isn't one.
 ///

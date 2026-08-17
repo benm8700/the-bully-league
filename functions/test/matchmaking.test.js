@@ -27,8 +27,6 @@ const {
   REPEAT_OPPONENT_COOLDOWN_MS,
   STALE_ENTRY_MS,
   MAX_SKIPS_PER_DAY,
-  rankedUnlockState,
-  EXHIBITION_MATCHES_TO_UNLOCK_RANKED,
 } = require("../matchmaking");
 
 const NOW = 1_700_000_000_000;
@@ -333,46 +331,6 @@ test("an exhausted allowance reports zero, never negative", () => {
 test("utcDayKey is a stable YYYY-MM-DD that rolls at UTC midnight", () => {
   assert.strictEqual(utcDayKey(Date.UTC(2026, 7, 13, 23, 59, 59)), "2026-08-13");
   assert.strictEqual(utcDayKey(Date.UTC(2026, 7, 14, 0, 0, 1)), "2026-08-14");
-});
-
-// --- Ranked unlock gate ---------------------------------------------------
-
-test("a brand-new account has Ranked locked", () => {
-  const state = rankedUnlockState({});
-  assert.strictEqual(state.unlocked, false);
-  assert.strictEqual(state.remaining, EXHIBITION_MATCHES_TO_UNLOCK_RANKED);
-});
-
-test("Ranked unlocks once enough exhibition matches are done", () => {
-  const justShort = rankedUnlockState({
-    exhibitionMatchesPlayed: EXHIBITION_MATCHES_TO_UNLOCK_RANKED - 1,
-  });
-  assert.strictEqual(justShort.unlocked, false);
-  assert.strictEqual(justShort.remaining, 1);
-
-  const exactly = rankedUnlockState({
-    exhibitionMatchesPlayed: EXHIBITION_MATCHES_TO_UNLOCK_RANKED,
-  });
-  assert.strictEqual(exactly.unlocked, true);
-  assert.strictEqual(exactly.remaining, 0);
-});
-
-test("an existing ranked player is grandfathered in - the regression that matters", () => {
-  // Introducing this gate must not retroactively lock out accounts that
-  // predate the exhibition counter. Their counter has never been written,
-  // so it reads as zero even for someone who has played ranked for weeks.
-  // Same class of trap as the missing-accountStatus bug that locked
-  // pre-existing accounts out of matchmaking entirely.
-  const veteran = rankedUnlockState({rankedMatchesPlayed: 1});
-  assert.strictEqual(veteran.unlocked, true, "a player who has ranked before stays unlocked");
-  assert.strictEqual(veteran.remaining, 0);
-});
-
-test("the requirement stays in the 'a few matches' range CLAUDE.md describes", () => {
-  assert.ok(
-      EXHIBITION_MATCHES_TO_UNLOCK_RANKED >= 1 && EXHIBITION_MATCHES_TO_UNLOCK_RANKED <= 5,
-      `${EXHIBITION_MATCHES_TO_UNLOCK_RANKED} is not "a few" - this gate should not feel like a grind`,
-  );
 });
 
 // --- Concurrency: the property that actually matters ----------------------

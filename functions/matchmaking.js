@@ -6,6 +6,7 @@ const {HttpsError} = require("firebase-functions/v2/https");
 const {STARTING_RATING, RANK_TIERS, GOAT_TITLE, computeBaseRankTitle} = require("./rating");
 const {getMatchSettings} = require("./matchSettings");
 const {readEventWindowConfig, qualifiesForWindow} = require("./eventWindow");
+const {readMonetizationConfig, battleEntitlement} = require("./entitlement");
 const {shouldBecomeStanding, isLive} = require("./standingChallenge");
 const {stopRecording, writeRecordingState} = require("./cloudRecording");
 
@@ -15,40 +16,6 @@ const {stopRecording, writeRecordingState} = require("./cloudRecording");
  * so they're never recorded - which also keeps the per-match recording
  * cost off the mode people play most casually. */
 const RECORDED_MODES = ["ranked", "tournament"];
-
-/**
- * How many exhibition matches a player must finish before Ranked unlocks
- * (CLAUDE.md's Modes decision: "unlocked only after completing a few
- * exhibition matches first, exact number TBD, lets new users get
- * comfortable before results count").
- *
- * PLACEHOLDER VALUE - the decision says "a few" and explicitly leaves the
- * number open, so this wants tuning against real data like the rank
- * thresholds do.
- */
-const EXHIBITION_MATCHES_TO_UNLOCK_RANKED = 3;
-
-/**
- * Whether Ranked is available to this player yet, and how far off it is.
- *
- * Anyone who has already played a ranked match is grandfathered in
- * regardless of their exhibition count. Without that, introducing this
- * gate would retroactively lock out every existing account - their
- * exhibition counter has never been written, so it reads as zero even for
- * players who have been playing ranked for weeks. Same class of trap as
- * the missing-accountStatus bug this file already carries a fix for.
- */
-function rankedUnlockState(user) {
-  const played = user?.exhibitionMatchesPlayed ?? 0;
-  const alreadyRanked = (user?.rankedMatchesPlayed ?? 0) > 0;
-  const unlocked = alreadyRanked || played >= EXHIBITION_MATCHES_TO_UNLOCK_RANKED;
-  return {
-    unlocked,
-    played,
-    required: EXHIBITION_MATCHES_TO_UNLOCK_RANKED,
-    remaining: unlocked ? 0 : EXHIBITION_MATCHES_TO_UNLOCK_RANKED - played,
-  };
-}
 
 /**
  * Real matchmaking (Build Order step 4's missing half). Replaces the
@@ -229,22 +196,33 @@ async function enterQueue(auth, data) {
     throw new HttpsError("permission-denied", "This account can't join matches.");
   }
 
-  // Ranked stays locked until a few exhibition matches are done, so a new
-  // player's first experiences don't move their rating while they're still
-  // working out the format. Enforced here rather than only in the UI - the
+  // The ranked unlock gate is GONE - Ranked is available immediately. The
+  // tutorial already does its job (a real practice round with live turn
+  // machinery, mandatory before a first match), and under the monetization
+  // model a free player's only battling is ranked during Sixes and Sevens,
+  // so a gate demanding practice matches first would lock them out of the
+  // one thing they get. See CLAUDE.md's Modes section.
+  //
+  // What replaces it is the entitlement check: who may battle, in which
+  // mode, right now. Enforced here rather than only in the UI - the
   // client's button state is a convenience, this is the actual gate.
-  if (mode === "ranked") {
-    const unlock = rankedUnlockState(user);
-    if (!unlock.unlocked) {
-      throw new HttpsError(
-          "failed-precondition",
-          // "Practice" in copy, `exhibition` in data - the mode id is
-          // baked into queue entries, match documents and the unlock
-          // counter, so only the user-facing name changed.
-          `Play ${unlock.remaining} more practice match` +
-        `${unlock.remaining === 1 ? "" : "es"} to unlock Ranked.`,
-      );
-    }
+  const [monetization, windowConfig] = await Promise.all([
+    readMonetizationConfig(),
+    // Best-effort, same as resolveEventWindow: an unreadable window config
+    // must never stop someone queueing, so it degrades to "no window",
+    // which the entitlement check treats as no ranked-only hour.
+    getFirestore().collection("config").doc("eventWindow").get()
+        .then((snap) => readEventWindowConfig(snap.data()))
+        .catch(() => ({enabled: false})),
+  ]);
+  const entitlement = battleEntitlement({
+    user, mode, nowMs: Date.now(), windowConfig, config: monetization,
+  });
+  if (!entitlement.allowed) {
+    throw new HttpsError("failed-precondition", entitlement.message, {
+      reason: entitlement.reason,
+      state: entitlement.state,
+    });
   }
 
   // recentOpponentIds is documented in CLAUDE.md's user schema as "[array
@@ -984,18 +962,6 @@ async function getSkipAllowance(auth) {
   return {remaining: Math.max(0, MAX_SKIPS_PER_DAY - used), max: MAX_SKIPS_PER_DAY};
 }
 
-/**
- * Read-only: whether Ranked is unlocked for the caller and how far off it
- * is, so Home can show real progress ("2 matches until Ranked unlocks")
- * rather than a silent unlock - CLAUDE.md explicitly asks for the progress
- * to be visible.
- */
-async function getRankedUnlock(auth) {
-  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-  const snap = await getFirestore().collection("users").doc(auth.uid).get();
-  return rankedUnlockState(snap.data() ?? {});
-}
-
 module.exports = {
   enterQueue,
   leaveQueue,
@@ -1011,9 +977,6 @@ module.exports = {
   setMatchReady,
   skipMatch,
   getSkipAllowance,
-  getRankedUnlock,
-  rankedUnlockState,
-  EXHIBITION_MATCHES_TO_UNLOCK_RANKED,
   utcDayKey,
   MAX_SKIPS_PER_DAY,
   tierIndexFor,
