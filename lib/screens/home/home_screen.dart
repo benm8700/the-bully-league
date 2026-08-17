@@ -8,7 +8,6 @@ import '../../core/services/entitlement_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../widgets/event_window_banner.dart';
-import '../leaderboard/career_tab.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
@@ -303,6 +302,90 @@ class _TrialStatusState extends State<_TrialStatus> {
   }
 }
 
+/// The spendable points balance, framed by what it actually buys.
+///
+/// A bare count says nothing about whether the number is going anywhere,
+/// and points are only worth caring about because they convert into a
+/// captioned clip of your own battle. So this states the distance to that,
+/// which also means a LOSS still visibly moves you forward - playing earns
+/// points win or lose, and that is the retention job the currency exists
+/// to do.
+///
+/// Renders nothing at zero: "0 points" is an argument against bothering.
+class _PointsBalance extends StatefulWidget {
+  const _PointsBalance({required this.balance});
+
+  final num? balance;
+
+  @override
+  State<_PointsBalance> createState() => _PointsBalanceState();
+}
+
+class _PointsBalanceState extends State<_PointsBalance> {
+  /// Mirrors DEFAULT_CLIP_POINTS_PRICE in functions/clipGrants.js, used
+  /// until the live value arrives so the line never renders a wrong number
+  /// and then corrects itself jarringly.
+  int _clipPrice = 250;
+
+  @override
+  void initState() {
+    super.initState();
+    FirebaseFirestore.instance
+        .collection('config')
+        .doc('pointsSettings')
+        .get()
+        .then((snap) {
+      final price = (snap.data()?['clipPrice'] as num?)?.toInt();
+      if (mounted && price != null && price > 0) {
+        setState(() => _clipPrice = price);
+      }
+    }).catchError((_) {
+      // The default is a fine answer; never block Home on this.
+      return null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final balance = (widget.balance ?? 0).toInt();
+    if (balance <= 0) return const SizedBox.shrink();
+
+    final enough = balance >= _clipPrice;
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 6, 32, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '$balance points',
+            textAlign: TextAlign.center,
+            style: text.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          if (!enough)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: balance / _clipPrice,
+                minHeight: 5,
+              ),
+            ),
+          const SizedBox(height: 4),
+          Text(
+            enough
+                ? 'Enough for the captioned cut of one of your battles.'
+                : '${_clipPrice - balance} more for the captioned cut of one '
+                    'of your battles.',
+            textAlign: TextAlign.center,
+            style: text.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Explains why a battle isn't available, and what to do instead.
 ///
 /// Deliberately never a dead end. Practice being closed during the window
@@ -532,13 +615,20 @@ class _RankBadge extends StatelessWidget {
             // is the number that only ever climbs, so a player on a losing
             // streak still has something going up next to something going
             // down - which is the reason the currency exists at all.
-            // The career TITLE and its progress bar, not just a bare count.
-            // A number alone says nothing about whether it is going
-            // anywhere; a bar visibly filling toward a named title is what
-            // makes a losing streak survivable, and this is the one ladder
-            // that cannot go backwards.
-            if ((data['points'] as num? ?? 0) > 0)
-              CareerStandingCard(points: data['points'] as num?),
+            // Shown right under a rating that can fall, deliberately, and
+            // shown as progress toward something REAL rather than as a
+            // bare count or an abstract title.
+            //
+            // A second ladder of point-earned titles was built here and
+            // removed: rank is the app's one status system, and a
+            // competing set of titles diluted it for the player and
+            // doubled the tuning for the developer. What survives is the
+            // part that was actually doing the work - a loss still earns
+            // points, so it still moves you toward a clip you can post.
+            // That beats a title because it converts into something.
+            _PointsBalance(
+              balance: (data['pointsBalance'] ?? data['points']) as num?,
+            ),
           ],
         );
       },
