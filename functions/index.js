@@ -330,6 +330,27 @@ exports.sendEventWindowPush = onSchedule("every 5 minutes", async () => {
  * media work, and /tmp is memory-backed on Cloud Functions so the working
  * files count against memory too.
  */
+/**
+ * Nudges people to judge battles that are close to closing with too few
+ * votes - the scarce resource the whole ladder runs on.
+ *
+ * Every two hours rather than more often, and capped at one reminder per
+ * person per day inside the sweep. Fatigue is the real risk here: a
+ * repeated notification is how an app earns an OS-level block, which
+ * silences every other category too.
+ */
+exports.voteReminders = onSchedule("every 120 minutes", async () => {
+  const {sweepVoteReminders} = require("./voteReminder");
+  try {
+    const result = await sweepVoteReminders();
+    // Logged even when it sends nothing, so a scheduled job that quietly
+    // never fires is distinguishable from one deciding not to.
+    console.log("voteReminders:", JSON.stringify(result));
+  } catch (err) {
+    console.error("voteReminders failed:", err);
+  }
+});
+
 exports.autoRenderHighlights = onSchedule(
     {schedule: "every 5 minutes", memory: "4GiB", cpu: 2, timeoutSeconds: 540},
     async () => {
