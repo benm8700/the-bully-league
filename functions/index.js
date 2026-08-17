@@ -339,6 +339,30 @@ exports.sendEventWindowPush = onSchedule("every 5 minutes", async () => {
  * repeated notification is how an app earns an OS-level block, which
  * silences every other category too.
  */
+/**
+ * Starts (or joins) the caller's current bracket matchup. Ordinary
+ * matchmaking pairs out of a queue; a bracket matchup is two named
+ * players who must face each other, so it needs its own path.
+ */
+exports.startTournamentMatch = onCall((request) => {
+  const {startTournamentMatch} = require("./tournamentPlay");
+  return startTournamentMatch(request.auth, request.data);
+});
+
+/**
+ * Closes rounds whose window has expired. Without this the window is
+ * decoration and a bracket stalls the first time somebody loses interest.
+ */
+exports.tournamentForfeits = onSchedule("every 30 minutes", async () => {
+  const {sweepTournamentForfeits} = require("./tournamentPlay");
+  try {
+    const result = await sweepTournamentForfeits();
+    if (result.swept > 0) console.log("tournamentForfeits:", JSON.stringify(result));
+  } catch (err) {
+    console.error("tournamentForfeits failed:", err);
+  }
+});
+
 exports.voteReminders = onSchedule("every 120 minutes", async () => {
   const {sweepVoteReminders} = require("./voteReminder");
   try {

@@ -66,14 +66,33 @@ function buildNextRound(previousRoundMatchups, roundNumber) {
   const winners = previousRoundMatchups.map((m) => m.winnerId);
   const matchups = [];
   for (let i = 0; i < winners.length; i += 2) {
-    matchups.push({
-      player1Id: winners[i],
-      player2Id: winners[i + 1],
-      winnerId: null,
-      isBye: false,
-    });
+    const p1 = winners[i] ?? null;
+    const p2 = winners[i + 1] ?? null;
+
+    // A null arrives when BOTH players in the feeding matchup no-showed
+    // and were eliminated together, so nobody came out of that slot.
+    // Whoever faces an empty slot advances unopposed, exactly like a
+    // round-1 bye - making them play nobody would strand the bracket.
+    if (p1 && !p2) {
+      matchups.push({player1Id: p1, player2Id: null, winnerId: p1, isBye: true});
+    } else if (!p1 && p2) {
+      matchups.push({player1Id: p2, player2Id: null, winnerId: p2, isBye: true});
+    } else if (!p1 && !p2) {
+      // Two empty slots meet. Nobody can ever win this, so it is marked
+      // dead rather than left open - an unsettleable matchup would block
+      // its round from ever advancing.
+      matchups.push({player1Id: null, player2Id: null, winnerId: null,
+        isBye: false, isDead: true});
+    } else {
+      matchups.push({player1Id: p1, player2Id: p2, winnerId: null, isBye: false});
+    }
   }
   return {roundNumber, matchups};
+}
+
+/** A matchup nobody is waiting on: decided, or impossible to decide. */
+function isSettled(matchup) {
+  return Boolean(matchup.winnerId) || matchup.isDead === true;
 }
 
 /**
@@ -106,7 +125,13 @@ async function generateBracket(tournamentId) {
     return {status: "cancelled", entrantCount: entrantIds.length, minEntrants};
   }
 
-  const firstRound = {roundNumber: 1, matchups: buildFirstRound(entrantIds)};
+  // Round 1 gets its window here, and every later round gets one as it is
+  // built. Without a window nothing is ever forfeitable and a bracket
+  // stalls the first time somebody loses interest.
+  const {roundWindow} = require("./tournamentPlay");
+  const firstRound = Object.assign(
+      {roundNumber: 1, matchups: buildFirstRound(entrantIds)},
+      roundWindow(Date.now(), tournament.roundWindowHours));
   await tournamentRef.update({
     status: "in_progress",
     bracket: {rounds: [firstRound]},
@@ -180,7 +205,8 @@ async function debugAdvanceRound(tournamentId) {
  * finalization can be retried, and a second application must not
  * overwrite a settled result or push a duplicate round.
  */
-function applyResultToBracket(rounds, {roundNumber, matchupIndex, winnerId}) {
+function applyResultToBracket(rounds, {roundNumber, matchupIndex, winnerId,
+  nowMs = Date.now(), roundWindowHours} = {}) {
   if (!Array.isArray(rounds) || rounds.length === 0) {
     return {rounds, changed: false, reason: "no-bracket"};
   }
@@ -208,15 +234,20 @@ function applyResultToBracket(rounds, {roundNumber, matchupIndex, winnerId}) {
     return {rounds: next, changed: true, advanced: false};
   }
 
-  const settled = next[roundPos].matchups.every((m) => m.winnerId);
+  const settled = next[roundPos].matchups.every(isSettled);
   if (!settled) return {rounds: next, changed: true, advanced: false};
 
-  const winners = next[roundPos].matchups.map((m) => m.winnerId);
+  // Dead slots are excluded: they carry nobody forward, so counting them
+  // would make a one-real-winner round look unfinished.
+  const winners = next[roundPos].matchups.map((m) => m.winnerId).filter(Boolean);
   if (winners.length === 1) {
     return {rounds: next, changed: true, advanced: true,
       completed: true, tournamentWinnerId: winners[0]};
   }
-  next.push(buildNextRound(next[roundPos].matchups, roundNumber + 1));
+  const {roundWindow} = require("./tournamentPlay");
+  next.push(Object.assign(
+      buildNextRound(next[roundPos].matchups, roundNumber + 1),
+      roundWindow(nowMs, roundWindowHours)));
   return {rounds: next, changed: true, advanced: true, completed: false};
 }
 
@@ -248,6 +279,7 @@ async function recordTournamentResult(match, winnerId) {
         roundNumber: link.roundNumber,
         matchupIndex: link.matchupIndex,
         winnerId,
+        roundWindowHours: tournament.roundWindowHours,
       });
       if (!result.changed) return {applied: false, reason: result.reason};
 
@@ -268,5 +300,5 @@ async function recordTournamentResult(match, winnerId) {
 
 module.exports = {
   generateBracket, debugAdvanceRound, recordTournamentResult,
-  applyResultToBracket, buildNextRound, DEFAULT_MIN_ENTRANTS,
+  applyResultToBracket, buildNextRound, isSettled, DEFAULT_MIN_ENTRANTS,
 };
