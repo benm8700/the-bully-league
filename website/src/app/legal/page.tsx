@@ -25,7 +25,7 @@ export default function LegalPage() {
     <main className="flex-1 px-6 py-16">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold mb-2">Terms of Service & Privacy Policy</h1>
-        <p className="text-sm text-foreground/50 mb-1">Last updated: August 13, 2026</p>
+        <p className="text-sm text-foreground/50 mb-1">Last updated: August 17, 2026</p>
 
         <div className="border border-yellow-600/40 bg-yellow-600/10 rounded-lg px-4 py-3 my-6 text-sm text-foreground/80">
           <strong>Placeholder notice:</strong> this document was drafted to accurately reflect
@@ -85,32 +85,79 @@ export default function LegalPage() {
           platforms. This license is separate from and in addition to your consent to being
           recorded in the first place.
         </P>
+        <P>
+          That license does not oblige us to give you a produced copy. A finished clip - edited,
+          captioned and cut together - is something we make, and access to it may be included
+          with a subscription, bought with points, or purchased. The one exception is a legal
+          one: if you are in the UK, your right of access under UK GDPR still applies, and you
+          can request a copy of footage of yourself regardless of any of the above. That is a
+          data request, not a produced clip, and we will respond to it within the period the law
+          requires.
+        </P>
 
-        <H3>6. Points, ranking, and prizes</H3>
+        <H3>6. Removing a clip</H3>
+        <P>
+          You can ask us to take down a clip of a battle you were in, and we will - it is not at
+          our discretion. There are two routes and they behave differently on purpose:
+        </P>
+        <ul className="list-disc pl-5 mb-3">
+          <Li>
+            <strong>&quot;I&apos;d rather this wasn&apos;t posted.&quot;</strong> A preference. Available
+            until voting on that battle closes, so the decision is made before you know the
+            result, and limited to a small number per month.
+          </Li>
+          <Li>
+            <strong>&quot;This is harming me.&quot;</strong> Harassment, doxxing, a false factual claim, or
+            brigading. <strong>No deadline, no limit, and no friction, ever.</strong> Harm often
+            surfaces weeks later precisely because a clip spread.
+          </Li>
+        </ul>
+        <P>
+          Removing a clip does not change the result of the battle. And there is a limit worth
+          stating plainly rather than leaving you to discover it: if the other player already
+          downloaded the clip before your request, we cannot recall their copy. That is true of
+          any takedown anywhere, but you should know it up front.
+        </P>
+
+        <H3>7. Points, ranking, and prizes</H3>
         <P>
           Your rank and rating reflect competitive performance and cannot be purchased. Points
-          are a separate currency, earned only (not currently purchasable), spent on cosmetic
-          items that have no effect on gameplay or matchmaking. Tournaments are skill contests -
-          winners are determined by community vote on comedic performance, not chance. As of this
-          writing, tournament prizes are points only; no real-money prizes are active. If cash
-          prizes are activated in the future, eligibility will be limited by your state or
-          country&apos;s laws, and additional terms will apply.
+          are a separate currency, earned only (not currently purchasable), by playing battles,
+          winning them, judging other people&apos;s battles, keeping a daily judging streak,
+          completing daily quests, and inviting people who go on to use the app. Points are spent
+          on the captioned, downloadable version of your own battles. They have no effect on
+          gameplay, matchmaking, or your rating. Tournaments are skill contests - winners are
+          determined by community vote on comedic performance, not chance. As of this writing,
+          tournament prizes are points only; no real-money prizes are active. If cash prizes are
+          activated in the future, eligibility will be limited by your state or country&apos;s
+          laws, and additional terms will apply.
         </P>
 
-        <H3>7. Subscriptions</H3>
+        <H3>8. Subscriptions</H3>
         <P>
-          Optional premium subscriptions unlock features like unwatermarked clip downloads and a
-          stats dashboard, billed through Apple&apos;s or Google&apos;s standard subscription
-          systems. Ranked play, titles, and rating always stay free.
+          New accounts get full access for a trial period. After it ends, watching, judging and
+          voting stay free permanently, and you can still play ranked battles free during the
+          daily prime-time window. An optional subscription lets you battle at any time and adds
+          features such as automatic captioned clips of your ranked battles, a stats dashboard,
+          and player search - billed through Apple&apos;s or Google&apos;s standard subscription
+          systems. No subscription changes anything between the moment you are paired and the
+          verdict: the match itself is identical for everyone.
+        </P>
+        <P>
+          <strong>Every clip is watermarked, for everyone.</strong> Removing the watermark is not
+          something we sell.
+        </P>
+        <P>
+          Subscriptions are not currently on sale, and nothing in the app charges money today.
         </P>
 
-        <H3>8. Termination</H3>
+        <H3>9. Termination</H3>
         <P>
           We may suspend or terminate your account at any time, for any reason, including
           violation of these terms. You may delete your account at any time from the app.
         </P>
 
-        <H3>9. Disclaimers</H3>
+        <H3>10. Disclaimers</H3>
         <P>
           The app is provided &quot;as is.&quot; We don&apos;t guarantee uninterrupted service,
           and we&apos;re not liable for the content other users say during a match - you use the
@@ -125,7 +172,12 @@ export default function LegalPage() {
           <Li>An age-bracket signal from Google Play Age Signals (not your birthdate).</Li>
           <Li>Battler profile info: profession, education, hometown, and interests (required); relationship status, pets, and favorite food (optional); a free-text &quot;ammo&quot; field (optional); at least 5 profile photos, one of which must clearly show your face.</Li>
           <Li>Match recordings (video and audio), deleted after 7 days unless posted as a highlight.</Li>
-          <Li>Device identifiers, logged to help detect multi-account abuse.</Li>
+          <Li>Transcripts of what was said during your recorded matches, produced automatically so clips can be captioned.</Li>
+          <Li>Competitive history: your rating over time, wins and losses, and a record of each rated match&apos;s effect on your rating.</Li>
+          <Li>Activity used to run the points economy: a ledger of every points award and every points spend, your daily judging streak, and your quest progress.</Li>
+          <Li>Your block list, and whether you have opted out of appearing in the player directory.</Li>
+          <Li>Referral attribution - who invited you, if anyone, and who you invited.</Li>
+          <Li>Device identifiers and push notification tokens, logged to deliver alerts and to help detect multi-account abuse.</Li>
           <Li>Usage and crash data via Firebase Analytics and Crashlytics.</Li>
         </ul>
 
@@ -134,48 +186,76 @@ export default function LegalPage() {
           Firebase (authentication, database, storage, push notifications, analytics) by Google;
           Agora for live video calls; Cloudflare Turnstile to verify votes aren&apos;t automated;
           Google Cloud Vision to automatically detect and block nudity or explicit content during
-          matches and in profile photos. Each of these processes some of your data as part of
-          providing the app&apos;s functionality.
+          matches and in profile photos; and Google Cloud Speech-to-Text, which transcribes the
+          audio of recorded matches so highlight clips can be captioned. Each of these processes
+          some of your data as part of providing the app&apos;s functionality.
         </P>
 
-        <H3>3. How we use your information</H3>
+        <H3>3. What other people can see</H3>
+        <P>
+          Your username, rank, and win-loss record are public - they appear on leaderboards and on
+          the website. Your Battler profile (including your photos and your &quot;ammo&quot; field)
+          is shown to your opponent before a battle, and a limited version of it - your username,
+          one photo, and your rank - can appear to other signed-in users in the player directory.
+          You can opt out of the directory entirely at any time, and people you have blocked never
+          see you there regardless. Your rating and rank are deliberately <em>not</em> shown to an
+          opponent before a match.
+        </P>
+        <P>
+          Ballots are private: nobody can see who voted for whom, including the two players.
+        </P>
+
+        <H3>4. How we use your information</H3>
         <P>
           To operate matchmaking, ranking, voting, and moderation; to verify your age and
           identity as needed; to detect abuse (fake accounts, vote manipulation, collusion); and
           to communicate with you (match alerts, vote reminders, support responses).
         </P>
 
-        <H3>4. Your rights</H3>
+        <H3>5. Your rights</H3>
         <P>
           If you&apos;re a California resident, you can request deletion of your account and
           personal data (CCPA). If you&apos;re in the UK, you have rights to access, correct, or
-          erase your data (UK GDPR). You can request deletion from within the app. One exception:
-          if a highlight clip from your match was already posted publicly before your deletion
-          request, we&apos;ll delete your profile data and stop future use of your identity, but
-          we won&apos;t retroactively unpublish content that was already live and consented-to at
-          the time it was posted.
+          erase your data (UK GDPR). You can delete your account from within the app, and it takes
+          effect immediately - there is no waiting period and no undo.
+        </P>
+        <P>
+          Deleting removes your profile and photos, your ammo text, your push tokens, your points
+          ledger, your rating history, your quest and streak state, any queue entry, your own raw
+          match footage, any rendered clip that was never published, and your login itself.
+        </P>
+        <P>
+          Some things survive, because a battle has two people in it and erasing one must not
+          erase the other. We keep: the match records and results, since your opponent&apos;s
+          competitive history depends on them (you appear in them as an unnamed deleted account);
+          the ballots you cast, since removing them would retroactively change other people&apos;s
+          results; moderation reports involving you, so that deleting and re-registering cannot
+          wipe a record; and any highlight clip that was already published before you asked - it
+          was consented-to at the time and already publicly distributed, and we will not
+          retroactively unpublish it. If you want a published clip taken down, that is the clip
+          removal process described in the Terms above, and it is available to you separately.
         </P>
 
-        <H3>5. Children&apos;s privacy</H3>
+        <H3>6. Children&apos;s privacy</H3>
         <P>
           The Bully League is not intended for anyone under 18, and we block account creation for
           any account signaling as underage. We do not knowingly collect data from minors.
         </P>
 
-        <H3>6. Data security</H3>
+        <H3>7. Data security</H3>
         <P>
           Data is encrypted in transit and at rest via our infrastructure providers (Firebase,
           Google Cloud). No system is perfectly secure, and we can&apos;t guarantee absolute
           security of your information.
         </P>
 
-        <H3>7. Changes to this policy</H3>
+        <H3>8. Changes to this policy</H3>
         <P>
           We may update this document as the app changes. Material changes will be reflected
           here with an updated &quot;Last updated&quot; date.
         </P>
 
-        <H3>8. Contact</H3>
+        <H3>9. Contact</H3>
         <P>
           Questions about these terms or your data can be sent through the Support & Feedback
           option in the app.
