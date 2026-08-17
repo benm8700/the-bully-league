@@ -3,6 +3,10 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../match/pre_match_screen.dart';
+import '../match/recording_consent_screen.dart';
+import 'tournament_lobby_screen.dart';
+
 class TournamentDetailScreen extends StatefulWidget {
   const TournamentDetailScreen({super.key, required this.tournamentId});
 
@@ -22,6 +26,50 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   CollectionReference<Map<String, dynamic>> get _entrantsRef => _tournamentRef.collection('entrants');
 
   String get _uid => FirebaseAuth.instance.currentUser!.uid;
+
+  /// The "play your match" block, or a plain statement of why there is
+  /// nothing to play.
+  List<Widget> _playSection(Map<String, dynamic> tournament) {
+    final state = tournamentPlayState(tournament, _uid);
+    if (!state.canPlay) {
+      if (state.note == null) return const [];
+      return [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(state.note!,
+              style: Theme.of(context).textTheme.bodyMedium),
+        ),
+      ];
+    }
+    return [
+      const SizedBox(height: 8),
+      FilledButton(
+        onPressed: _busy ? null : _playMatch,
+        child: const Text('Play your match'),
+      ),
+      const SizedBox(height: 8),
+    ];
+  }
+
+  /// Recording consent and the camera check first, exactly as an ordinary
+  /// match does. A tournament match is still recorded and still eligible
+  /// for the highlight pipeline, so the consent step is not optional -
+  /// and the camera check is worth more here, not less, since a bracket
+  /// match cannot simply be requeued if the setup is bad.
+  Future<void> _playMatch() async {
+    final consented = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
+    );
+    if (consented != true || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PreMatchScreen(
+          mode: 'tournament',
+          tournamentId: widget.tournamentId,
+        ),
+      ),
+    );
+  }
 
   Future<void> _join() async {
     setState(() {
@@ -123,6 +171,13 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                       onPressed: _busy ? null : () => _callDebugFunction('generateTournamentBracket'),
                       child: const Text('Generate Bracket (test)'),
                     ),
+                  // The way into an actual bracket match. Shown only when
+                  // this player genuinely has one to play, so the button
+                  // never appears for someone with a bye, someone already
+                  // knocked out, or a round whose window has closed - the
+                  // server refuses all three anyway, and offering an
+                  // action that is certain to fail reads as a bug.
+                  if (status == 'in_progress') ..._playSection(tournament),
                   if (status == 'in_progress')
                     OutlinedButton(
                       onPressed: _busy ? null : () => _callDebugFunction('debugAdvanceTournamentRound'),

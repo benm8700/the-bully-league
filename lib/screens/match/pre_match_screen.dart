@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
 import '../../core/services/video_call_service.dart';
+import '../tournament/tournament_lobby_screen.dart';
 import 'matchmaking_screen.dart';
 
 /// Camera/mic check before a match (Build Order step 3). Real per-check
@@ -26,7 +27,12 @@ import 'matchmaking_screen.dart';
 /// means a player sorting out their lighting or a denied permission isn't
 /// burning an already-paired opponent's time while they do it.
 class PreMatchScreen extends StatefulWidget {
-  const PreMatchScreen({super.key, required this.mode});
+  const PreMatchScreen({super.key, required this.mode, this.tournamentId});
+
+  /// Set when this check precedes a TOURNAMENT match. The pairing is
+  /// already decided by the bracket, so there is no queue to join - the
+  /// player goes to the lobby to meet a named opponent instead.
+  final String? tournamentId;
 
   /// Carried through to matchmaking - 'exhibition' or 'ranked'.
   final String mode;
@@ -125,8 +131,13 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     _serviceDisposed = true;
     await _videoCallService.dispose();
     if (!mounted) return;
+    final tournamentId = widget.tournamentId;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => MatchmakingScreen(mode: widget.mode)),
+      MaterialPageRoute(
+        builder: (_) => tournamentId == null
+            ? MatchmakingScreen(mode: widget.mode)
+            : TournamentLobbyScreen(tournamentId: tournamentId),
+      ),
     );
   }
 
