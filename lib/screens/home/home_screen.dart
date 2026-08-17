@@ -641,6 +641,11 @@ class _DayPassOfferState extends State<_DayPassOffer> {
     final balance = (state['balance'] as num?)?.toInt() ?? 0;
     final text = Theme.of(context).textTheme;
 
+    // Switched off entirely from config - show nothing at all, including
+    // the "N more points" nudge, or we would be advertising something
+    // nobody can ever buy.
+    if (state['enabled'] == false) return const SizedBox.shrink();
+
     if (state['canBuy'] != true) {
       // Short of the price, we show the GAP rather than nothing, because a
       // visible target is the whole reason to keep earning. Already bought

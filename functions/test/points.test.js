@@ -113,11 +113,21 @@ check("winning pays more than merely turning up", () => {
   assert.ok(DEFAULTS.matchWon > DEFAULTS.matchPlayed);
 });
 
-check("every configurable rate has a bound", () => {
+check("every configurable NUMBER has a bound", () => {
   // An unbounded rate is one console typo away from breaking the economy.
-  for (const key of Object.keys(DEFAULTS)) {
+  // Restricted to numbers on purpose: a boolean switch cannot be out of
+  // range, and readPointsSettings handles those separately by requiring an
+  // explicit false. Anything numeric added to DEFAULTS still has to
+  // declare limits, which is what this guards.
+  for (const [key, value] of Object.entries(DEFAULTS)) {
+    if (typeof value !== "number") continue;
     assert.ok(LIMITS[key], `no bounds for ${key}`);
   }
+});
+
+check("a boolean switch is not silently treated as a rate", () => {
+  assert.strictEqual(typeof DEFAULTS.dayPassEnabled, "boolean");
+  assert.strictEqual(LIMITS.dayPassEnabled, undefined);
 });
 
 console.log(`\n${checks} checks passed.`);

@@ -69,8 +69,25 @@ const DEFAULTS = {
    * which makes it a taste of the subscription rather than a substitute
    * for it. At roughly 2-3 days of committed earning per pass, grinding is
    * plainly a worse deal than subscribing for anyone who wants it
-   * regularly, which is exactly the comparison it should provoke. */
-  dayPassPrice: 300,
+   * regularly, which is exactly the comparison it should provoke.
+   *
+   * DELIBERATELY SET HIGH TO BEGIN WITH. Nobody can experience a pass
+   * until enforcement is switched on - with it off, everyone already
+   * battles any time - so starting low buys no information and costs
+   * optionality. Raising a price later is the most damaging pricing move
+   * available; lowering one reads as generosity. Start expensive, come
+   * down if the economy feels dead. */
+  dayPassPrice: 500,
+  /** Whether day passes can be bought at all.
+   *
+   * THE OFF SWITCH MATTERS MORE THAN THE PRICE. The whole worry about
+   * this sink is that it might cannibalise subscriptions, and that cannot
+   * be known until real money is on the table. A price is a guess; a
+   * kill switch is insurance. If passes turn out to be eating
+   * subscriptions, this is one console edit rather than a release - and
+   * removing a feature people already rely on is exactly the move that
+   * needs to be instant. */
+  dayPassEnabled: true,
 };
 
 const LIMITS = {
@@ -91,6 +108,10 @@ const LIMITS = {
 function readPointsSettings(data) {
   const out = {...DEFAULTS};
   if (!data) return out;
+  // Booleans are not range-checked like the numbers below, and only an
+  // explicit false switches this off - a typo must not silently disable a
+  // live feature.
+  if (data.dayPassEnabled === false) out.dayPassEnabled = false;
   for (const [key, limit] of Object.entries(LIMITS)) {
     const value = data[key];
     // Per-field fallback, so one bad value never discards a whole good

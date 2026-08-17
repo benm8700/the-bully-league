@@ -165,6 +165,18 @@ test("the new rates are bounds-checked like every other", () => {
       .votePointsPerDay, 25, "a sane override must still apply");
 });
 
+test("the kill switch needs an explicit false", () => {
+  // A typo, a missing field or a stray string must never silently
+  // disable a live feature - only a deliberate `false` does.
+  assert.strictEqual(readPointsSettings({}).dayPassEnabled, true);
+  assert.strictEqual(readPointsSettings({dayPassEnabled: "false"})
+      .dayPassEnabled, true);
+  assert.strictEqual(readPointsSettings({dayPassEnabled: 0})
+      .dayPassEnabled, true);
+  assert.strictEqual(readPointsSettings({dayPassEnabled: false})
+      .dayPassEnabled, false);
+});
+
 test("the pass is priced well above a day's capped judging", () => {
   // The whole conversion argument rests on this: grinding a pass has to be
   // a plainly worse deal than subscribing, or it becomes a substitute for

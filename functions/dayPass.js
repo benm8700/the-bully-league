@@ -69,6 +69,15 @@ async function buyDayPass(auth) {
   const settings = await pointsSettings();
   const price = settings.dayPassPrice;
 
+  // Checked server-side rather than only hidden in the UI: if this sink
+  // ever has to be switched off, it must actually stop, including for a
+  // client that still has the old screen.
+  if (settings.dayPassEnabled === false) {
+    throw new HttpsError("failed-precondition",
+        "Day passes aren't available right now.",
+        {reason: "disabled"});
+  }
+
   const userRef = db.collection("users").doc(uid);
   const dayKey = pacificNow(new Date(nowMs)).dayKey;
   const entryRef = userRef.collection("pointsLedger").doc(`dayPass_${dayKey}`);
@@ -147,12 +156,15 @@ async function getDayPassState(auth) {
   const dayKey = pacificNow(new Date(nowMs)).dayKey;
   const boughtToday = (await db.collection("users").doc(auth.uid)
       .collection("pointsLedger").doc(`dayPass_${dayKey}`).get()).exists;
+  const enabled = settings.dayPassEnabled !== false;
   return {
     active,
     expiresAtMs: active ? Number(user.dayPassExpiresAtMs) : null,
     price: settings.dayPassPrice,
     balance,
-    canBuy: !active && !boughtToday && balance >= settings.dayPassPrice,
+    enabled,
+    canBuy: enabled && !active && !boughtToday &&
+      balance >= settings.dayPassPrice,
     boughtToday,
   };
 }
