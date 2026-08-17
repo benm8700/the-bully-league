@@ -23,28 +23,63 @@ const {HttpsError} = require("firebase-functions/v2/https");
  */
 
 /**
- * Whether a referral is now owed, given the referred player's state.
+ * TWO TIERS, per CLAUDE.md: a smaller reward when a referred friend
+ * becomes an active SPECTATOR (casts their first vote), and the full
+ * reward when they become an active BATTLER (plays their first match).
+ *
+ * They are ADDITIVE milestones rather than alternatives, because they
+ * measure different things: someone who only ever judges is genuinely
+ * worth something (votes are the scarce resource), and someone who goes
+ * on to battle is worth more. Paying the second instead of the first
+ * would mean a friend who watched and voted for a month earned their
+ * referrer less than one who played once and vanished.
+ *
+ * Deliberately NOT satisfied by merely existing. Signing up, filling in a
+ * profile and queueing all leave both false, which is what stops
+ * throwaway accounts being profitable.
  *
  * Pure, so the rule is testable without Firestore.
- *
- * Deliberately NOT satisfied by merely existing: signing up, filling in a
- * profile, or queueing all leave this false. Only a finished match counts.
  */
-function referralOutcome(user, referredUid) {
+const TIERS = {
+  battler: {
+    flag: "referralRewardGranted",
+    rate: "referral",
+    ledger: "referral",
+  },
+  spectator: {
+    flag: "referralSpectatorGranted",
+    rate: "referralSpectator",
+    ledger: "referralSpectator",
+  },
+};
+
+function referralOutcome(user, referredUid, tier = "battler") {
+  const spec = TIERS[tier];
+  if (!spec) return {owed: false, reason: "unknown-tier"};
+
   const referrer = user?.referredByUserId;
   if (!referrer) return {owed: false, reason: "no-referrer"};
-  if (user.referralRewardGranted === true) {
+  if (user[spec.flag] === true) {
     return {owed: false, reason: "already-granted"};
   }
   // Belt and braces - setReferrer refuses this too, but a hand-edited
   // document must not be able to pay someone for inviting themselves.
   if (referrer === referredUid) return {owed: false, reason: "self-referral"};
 
-  const played = (Number(user.rankedMatchesPlayed) || 0) +
-    (Number(user.exhibitionMatchesPlayed) || 0);
-  if (played < 1) return {owed: false, reason: "not-activated"};
+  if (tier === "battler") {
+    const played = (Number(user.rankedMatchesPlayed) || 0) +
+      (Number(user.exhibitionMatchesPlayed) || 0);
+    if (played < 1) return {owed: false, reason: "not-activated"};
+  } else {
+    // A vote is the spectator's activation. `voteStreak` is written on
+    // every vote, so its presence is the cheapest honest proof that this
+    // account has actually judged something.
+    if (!user.voteStreak?.dayKey) {
+      return {owed: false, reason: "not-activated"};
+    }
+  }
 
-  return {owed: true, referrerId: referrer};
+  return {owed: true, referrerId: referrer, tier, spec};
 }
 
 /**
@@ -107,20 +142,21 @@ async function setReferrer(auth, data) {
  * points ledger keyed by the referred player's uid, so even a lost flag
  * cannot pay the same referral twice.
  */
-async function grantReferralIfEarned(referredUid) {
+async function grantReferralIfEarned(referredUid, tier = "battler") {
   try {
     const db = getFirestore();
     const ref = db.collection("users").doc(referredUid);
     const snap = await ref.get();
-    const outcome = referralOutcome(snap.data(), referredUid);
+    const outcome = referralOutcome(snap.data(), referredUid, tier);
     if (!outcome.owed) return {granted: false, reason: outcome.reason};
+    const {flag, rate, ledger} = outcome.spec;
 
     // Claimed before paying, so two matches finishing at once cannot both
     // see an ungranted referral.
     const claimed = await db.runTransaction(async (tx) => {
       const fresh = await tx.get(ref);
-      if (fresh.data()?.referralRewardGranted === true) return false;
-      tx.set(ref, {referralRewardGranted: true}, {merge: true});
+      if (fresh.data()?.[flag] === true) return false;
+      tx.set(ref, {[flag]: true}, {merge: true});
       return true;
     });
     if (!claimed) return {granted: false, reason: "already-granted"};
@@ -128,13 +164,13 @@ async function grantReferralIfEarned(referredUid) {
     const {awardPoints, pointsSettings, awardAmount} = require("./points");
     const rates = await pointsSettings();
     const result = await awardPoints(outcome.referrerId, {
-      reason: "referral",
-      // Keyed by the person referred, so one invite pays exactly once
-      // however many times this runs.
+      reason: ledger,
+      // Keyed by the person referred, so one invite pays exactly once per
+      // tier however many times this runs.
       sourceId: referredUid,
-      amount: awardAmount(rates.referral),
+      amount: awardAmount(rates[rate]),
     });
-    return {granted: true, referrerId: outcome.referrerId,
+    return {granted: true, referrerId: outcome.referrerId, tier,
       awarded: result.awarded};
   } catch (e) {
     console.error(`referral for ${referredUid} failed:`, e.message);

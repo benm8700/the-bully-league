@@ -34,6 +34,10 @@ const DEFAULTS = {
   voteCast: 5,
   dailyStreak: 15,
   referral: 100,
+  /** The smaller SPECTATOR tier: paid when a referred friend casts their
+   * first vote. Lower than the battler tier because battling is worth
+   * more, but real, because votes are the scarce resource. */
+  referralSpectator: 25,
   /** Multiplier applied during the prime-time window. A POINTS multiplier
    * only - never rating, which would give high-rated players a reason to
    * sit out the very hour it exists to fill. */
@@ -46,6 +50,7 @@ const LIMITS = {
   voteCast: {min: 0, max: 10000},
   dailyStreak: {min: 0, max: 10000},
   referral: {min: 0, max: 100000},
+  referralSpectator: {min: 0, max: 100000},
   eventWindowMultiplier: {min: 1, max: 10},
 };
 

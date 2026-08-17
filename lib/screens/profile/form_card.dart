@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/services/entitlement_service.dart';
 
@@ -295,6 +296,90 @@ class _ReferrerFieldState extends State<ReferrerField> {
           OutlinedButton(
             onPressed: _busy ? null : _submit,
             child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Your own invite, ready to send.
+///
+/// WITHOUT THIS THE REFERRAL SYSTEM IS BARELY USABLE. Attribution is by
+/// username, so inviting someone means them being TOLD a username,
+/// remembering it through an install and a signup, and typing it
+/// correctly. A one-tap copy removes most of that.
+///
+/// Deliberately NOT a deep link. A real one needs link infrastructure
+/// (Firebase Dynamic Links is gone) plus install-time attribution, which
+/// is a genuine project rather than a detail - and a copyable line works
+/// today, in any app someone already talks to their friends in.
+class InviteCard extends StatefulWidget {
+  const InviteCard({super.key});
+
+  @override
+  State<InviteCard> createState() => _InviteCardState();
+}
+
+class _InviteCardState extends State<InviteCard> {
+  String? _username;
+  bool _copied = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final snap =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (mounted) {
+        setState(() => _username = snap.data()?['username'] as String?);
+      }
+    } catch (_) {
+      // No card rather than an error - this is an extra, not a feature
+      // the profile depends on.
+    }
+  }
+
+  String get _message =>
+      'Come get roasted on The Bully League. Put "$_username" in as who '
+      'invited you.';
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _username;
+    if (name == null || name.isEmpty) return const SizedBox.shrink();
+    return _Section(
+      title: 'Invite someone',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            // States the condition honestly rather than implying the
+            // reward lands on signup - it does not, deliberately.
+            'You earn points when someone you invited actually judges a '
+            'battle, and more when they play one.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: _message));
+              if (!mounted) return;
+              setState(() => _copied = true);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Invite copied. Go paste it.')),
+                );
+              }
+            },
+            icon: Icon(_copied ? Icons.check : Icons.copy, size: 18),
+            label: Text(_copied ? 'Copied' : 'Copy your invite'),
           ),
         ],
       ),

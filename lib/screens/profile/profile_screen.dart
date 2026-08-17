@@ -252,6 +252,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // itself is filled in once and rarely touched again.
                     const FormCard(),
                     const ReferrerField(),
+                    const InviteCard(),
                     Text(
                       'Give opponents some ammo - it\'s funnier if it\'s true.',
                       style: Theme.of(context).textTheme.bodyMedium,

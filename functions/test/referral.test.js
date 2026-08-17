@@ -1,5 +1,6 @@
 const assert = require("assert");
 const {referralOutcome} = require("../referral");
+const {DEFAULTS: POINT_RATES} = require("../points");
 
 let passed = 0;
 function check(name, fn) {
@@ -81,6 +82,64 @@ check("non-numeric match counts do not accidentally activate", () => {
       user({rankedMatchesPlayed: "lots", exhibitionMatchesPlayed: null}), ME);
   assert.strictEqual(r.owed, false);
   assert.strictEqual(r.reason, "not-activated");
+});
+
+// -------------------------------------------------- the spectator tier
+check("a vote activates the SPECTATOR tier", () => {
+  const r = referralOutcome(
+      user({rankedMatchesPlayed: 0, voteStreak: {dayKey: "2026-08-17"}}),
+      ME, "spectator");
+  assert.strictEqual(r.owed, true);
+  assert.strictEqual(r.tier, "spectator");
+});
+
+check("having never voted does not activate it", () => {
+  const r = referralOutcome(user({rankedMatchesPlayed: 0}), ME, "spectator");
+  assert.strictEqual(r.owed, false);
+  assert.strictEqual(r.reason, "not-activated");
+});
+
+check("THE TIERS ARE INDEPENDENT - one paid does not block the other", () => {
+  // They measure different things, and are additive milestones. Someone
+  // who watched and voted for a month should not earn their referrer
+  // less than someone who played once and vanished.
+  const votedAndPlayed = user({
+    rankedMatchesPlayed: 1,
+    voteStreak: {dayKey: "2026-08-17"},
+    referralSpectatorGranted: true,
+  });
+  assert.strictEqual(referralOutcome(votedAndPlayed, ME, "spectator").owed,
+      false, "spectator already paid");
+  assert.strictEqual(referralOutcome(votedAndPlayed, ME, "battler").owed,
+      true, "battler must still be payable");
+});
+
+check("each tier uses its own flag, rate and ledger key", () => {
+  const s = referralOutcome(
+      user({voteStreak: {dayKey: "d"}}), ME, "spectator");
+  const b = referralOutcome(user(), ME, "battler");
+  assert.notStrictEqual(s.spec.flag, b.spec.flag);
+  assert.notStrictEqual(s.spec.rate, b.spec.rate);
+  assert.notStrictEqual(s.spec.ledger, b.spec.ledger);
+});
+
+check("the spectator reward is SMALLER than the battler one", () => {
+  // Battling is worth more, but a judge is worth something real.
+  assert.ok(POINT_RATES.referralSpectator < POINT_RATES.referral);
+  assert.ok(POINT_RATES.referralSpectator > 0);
+});
+
+check("an unknown tier is refused rather than defaulting to the big one", () => {
+  const r = referralOutcome(user(), ME, "whatever");
+  assert.strictEqual(r.owed, false);
+  assert.strictEqual(r.reason, "unknown-tier");
+});
+
+check("self-referral is refused on the spectator tier too", () => {
+  const r = referralOutcome(
+      user({referredByUserId: ME, voteStreak: {dayKey: "d"}}), ME, "spectator");
+  assert.strictEqual(r.owed, false);
+  assert.strictEqual(r.reason, "self-referral");
 });
 
 console.log(`\n${passed} checks passed.`);

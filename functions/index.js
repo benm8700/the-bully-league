@@ -245,6 +245,12 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     // failure must not fail the vote that earned it.
     const {recordVoteForStreak} = require("./voteStreak");
     streak = await recordVoteForStreak(voterId, {multiplier: pointsMultiplier});
+
+    // A vote is SPECTATOR activation - the smaller of the two referral
+    // tiers. Run after the streak, because the streak write is what
+    // proves this account has actually judged something.
+    const {grantReferralIfEarned} = require("./referral");
+    await grantReferralIfEarned(voterId, "spectator");
   } catch (e) {
     console.error(`vote points for ${voterId} failed:`, e.message);
   }
