@@ -195,7 +195,26 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     }
   }
 
-  await syncGoatTier();
+  const goat = await syncGoatTier();
+
+  // Announced AFTER the GOAT sync, so a player who moved up a tier and
+  // then into the top five is told about the one promotion they actually
+  // experienced rather than being pushed twice.
+  //
+  // Includes anyone the sync DISPLACED, who may not be in this match at
+  // all: a sixth player rising pushes someone out of the top five without
+  // them losing anything, and they deserve to hear that honestly.
+  try {
+    const {notifyRankChanges} = require("./rankChange");
+    await notifyRankChanges(
+        [match.player1Id, match.player2Id, ...(goat?.displaced ?? [])],
+        {displacedFromGoat: goat?.displaced ?? []});
+  } catch (e) {
+    // Never fail a finalization over an announcement - the rating change
+    // is the thing that matters and it has already happened.
+    console.error(`rank change notifications for ${matchId} failed:`, e.message);
+  }
+
   return {winnerId, player1Weight, player2Weight};
 }
 
@@ -231,17 +250,24 @@ async function syncGoatTier() {
       dirty = true;
     }
   }
+  // Collected so the notifier can tell these players the truth - that
+  // somebody else got better rather than that they got worse. Without
+  // this the only honest message in the whole rank-change set could never
+  // actually fire.
+  const displaced = [];
   for (const doc of currentGoatSnap.docs) {
     if (!newGoatIds.has(doc.id)) {
       const data = doc.data();
       batch.update(doc.ref, {
         rankTitle: computeBaseRankTitle(data.rating ?? STARTING_RATING, data.rankedMatchesPlayed ?? 0),
       });
+      displaced.push(doc.id);
       dirty = true;
     }
   }
 
   if (dirty) await batch.commit();
+  return {displaced};
 }
 
 module.exports = {

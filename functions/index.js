@@ -786,6 +786,13 @@ exports.requestMatchClip = onCall((request) => {
  */
 /** What this player may do right now, so the client can offer rather
  * than refuse after they have done the whole camera check. */
+/** The rank change this player has not been shown yet. Asking marks it
+ * seen, so the popup fires exactly once. */
+exports.getPendingRankChange = onCall((request) => {
+  const {getPendingRankChange} = require("./rankChange");
+  return getPendingRankChange(request.auth);
+});
+
 exports.getMyEntitlement = onCall((request) => {
   const {getMyEntitlement} = require("./entitlement");
   return getMyEntitlement(request.auth);

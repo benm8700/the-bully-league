@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/rank_change_popup.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import '../profile/profile_screen.dart';
 import '../vote/my_battles_screen.dart';
@@ -30,6 +31,18 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Checked here rather than on Home so it fires once per app launch,
+    // not every time someone taps back to the first tab. Deferred past the
+    // first frame because it shows a dialog and needs a mounted route to
+    // put one on.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) RankChangePopup.maybeShow(context);
+    });
+  }
 
   /// Kept alive across tab switches via IndexedStack rather than rebuilt,
   /// so the vote queue doesn't refetch and the live tallies don't drop
