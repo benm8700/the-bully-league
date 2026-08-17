@@ -113,7 +113,9 @@ async function awardPoints(uid, {reason, sourceId, amount}) {
 
   try {
     return await db.runTransaction(async (tx) => {
-      const existing = await tx.get(entryRef);
+      const [existing, userSnap] = await Promise.all([
+        tx.get(entryRef), tx.get(userRef),
+      ]);
       if (existing.exists) return {awarded: 0, reason: "duplicate"};
       tx.set(entryRef, {
         reason,
@@ -121,7 +123,24 @@ async function awardPoints(uid, {reason, sourceId, amount}) {
         amount: points,
         createdAt: FieldValue.serverTimestamp(),
       });
-      tx.set(userRef, {points: FieldValue.increment(points)}, {merge: true});
+      // TWO NUMBERS. `points` is the CAREER total and only ever rises -
+      // that is the progression ladder this file exists to guarantee, and
+      // spending must never be able to pull it back down into a second
+      // rating. `pointsBalance` is what is left to spend.
+      //
+      // The balance is written absolutely rather than incremented, because
+      // an account that predates spending has no balance field at all and
+      // has, by definition, spent nothing - so its balance is its career
+      // total. Incrementing from a missing field would start it at zero
+      // and quietly confiscate everything earned so far, the same
+      // missing-field trap as accountStatus and createdAt before it.
+      const user = userSnap.data() ?? {};
+      const balance = Number.isFinite(Number(user.pointsBalance)) ?
+        Number(user.pointsBalance) : (Number(user.points) || 0);
+      tx.set(userRef, {
+        points: FieldValue.increment(points),
+        pointsBalance: Math.max(0, balance) + points,
+      }, {merge: true});
       return {awarded: points, reason};
     });
   } catch (e) {

@@ -759,6 +759,17 @@ exports.requestTakedown = onCall((request) => {
   return requestTakedown(request.auth, request.data);
 });
 
+/**
+ * Claim the captioned, shareable version of one of your own battles -
+ * included with a subscription, bought with points, or (once IAP exists)
+ * purchased outright. See functions/clipGrants.js for why captions rather
+ * than the clip itself are what is actually being sold.
+ */
+exports.requestMatchClip = onCall((request) => {
+  const {requestMatchClip} = require("./clipGrants");
+  return requestMatchClip(request.auth, request.data);
+});
+
 /** What the client needs to render the request honestly: whether the
  * opt-out window is still open, and how many requests are left. */
 exports.getTakedownOptions = onCall((request) => {

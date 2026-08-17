@@ -71,7 +71,19 @@ service cloud.firestore {
         // the store outright. Written only by awardPoints, which credits
         // it inside a transaction alongside a ledger entry so the same
         // event can never pay twice.
-        request.resource.data.get('points', null) == resource.data.get('points', null);
+        request.resource.data.get('points', null) == resource.data.get('points', null) &&
+        // The SPENDABLE balance, protected separately because it is now
+        // the one points actually buy things with - a client able to set
+        // it could mint itself unlimited captioned clips, which cost real
+        // transcription money. `points` above stays the career total and
+        // only ever rises; this is what spending draws down.
+        request.resource.data.get('pointsBalance', null) ==
+          resource.data.get('pointsBalance', null) &&
+        // Subscription state decides who battles outside Sixes and Sevens
+        // and who gets clips included - a client that could write it would
+        // simply grant itself the paid tier.
+        request.resource.data.get('subscription', null) ==
+          resource.data.get('subscription', null);
 
       allow delete: if false;
 
