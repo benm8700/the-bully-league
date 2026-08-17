@@ -8,6 +8,7 @@ import '../../core/services/entitlement_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../widgets/event_window_banner.dart';
+import '../leaderboard/career_tab.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
@@ -531,17 +532,13 @@ class _RankBadge extends StatelessWidget {
             // is the number that only ever climbs, so a player on a losing
             // streak still has something going up next to something going
             // down - which is the reason the currency exists at all.
+            // The career TITLE and its progress bar, not just a bare count.
+            // A number alone says nothing about whether it is going
+            // anywhere; a bar visibly filling toward a named title is what
+            // makes a losing streak survivable, and this is the one ladder
+            // that cannot go backwards.
             if ((data['points'] as num? ?? 0) > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '${data['points']} points',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ),
+              CareerStandingCard(points: data['points'] as num?),
           ],
         );
       },

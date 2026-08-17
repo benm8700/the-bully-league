@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'career_tab.dart';
 import 'hall_of_fame_tab.dart';
 
 /// Top players by rating - the in-app equivalent of the website homepage's
@@ -26,8 +27,11 @@ class LeaderboardScreen extends StatelessWidget {
     // who is the best PLAYER, and what were the best BATTLES. Tabs rather
     // than one scrolling page, because a hall of fame buried under fifty
     // leaderboard rows would never be seen.
+    // Three questions, three tabs: who is best right now (rating, which
+    // goes down), who has done the most ever (career points, which only
+    // rise), and what were the best battles.
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Ranks'),
@@ -35,12 +39,17 @@ class LeaderboardScreen extends StatelessWidget {
           bottom: const TabBar(
             tabs: [
               Tab(text: 'Players'),
+              Tab(text: 'Career'),
               Tab(text: 'Hall of Fame'),
             ],
           ),
         ),
         body: TabBarView(
-          children: [_buildPlayers(context, query), const HallOfFameTab()],
+          children: [
+            _buildPlayers(context, query),
+            const CareerTab(),
+            const HallOfFameTab(),
+          ],
         ),
       ),
     );
