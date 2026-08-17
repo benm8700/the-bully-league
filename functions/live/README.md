@@ -45,4 +45,19 @@ made** — accounts, match, ballots, and the `ratingHistory` /
 `pointsLedger` subcollections underneath — in a `finally` block, so a
 failure part-way through still cleans up.
 
+It also asserts the **referral hook fires from inside completeMatch** - the
+unit test calls the grant function directly and would not notice the hook
+being removed or never wired up. That assertion was deliberately checked
+by sabotage: with the attribution removed it fails, so it is not passing
+for an unrelated reason.
+
+## Known coverage gap
+
+The ballot is written directly to Firestore rather than through
+`castVote`, because voting requires a Turnstile solve or an existing vote
+session and Turnstile deliberately refuses automated browsers. That is the
+anti-bot protection working as intended, so the vote callable - and with
+it the daily voting streak - cannot be driven from a script and is
+covered by its own unit and live checks instead.
+
 Needs `website/.env.local` for Admin SDK credentials.

@@ -97,6 +97,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       {createdAt: Timestamp.fromMillis(Date.now() - 5 * 86400000)});
 
   try {
+    // p2 was invited by p1, so completing this match should pay p1. This
+    // exercises the referral hook INSIDE completeMatch - the unit test
+    // calls grantReferralIfEarned directly and would not notice the hook
+    // being removed or never wired up.
+    await db.collection("users").doc(p2).update({referredByUserId: p1});
+
     // ---- 1. QUEUE AND PAIR -------------------------------------------
     let res = await call(p1, "enterMatchmakingQueue", {mode: "ranked"});
     check("STEP 1: a player can still enter the queue",
@@ -134,7 +140,25 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         JSON.stringify({p: afterPlay.data().points,
           b: afterPlay.data().pointsBalance}));
 
+    // Asserted on the LEDGER ENTRY, not on a points comparison. p1 wins
+    // this match, so "p1 has more points than p2" would be true whether
+    // or not the referral fired - a check that cannot fail proves
+    // nothing.
+    const referralEntry = await db.collection("users").doc(p1)
+        .collection("pointsLedger").doc(`referral_${p2}`).get();
+    const invitee = await db.collection("users").doc(p2).get();
+    check("THE REFERRAL HOOK FIRES from completeMatch, not just in a unit",
+        referralEntry.exists &&
+          invitee.data().referralRewardGranted === true,
+        `ledger=${referralEntry.exists} flag=${invitee.data().referralRewardGranted}`);
+
     // ---- 4. VOTE ------------------------------------------------------
+    // Written directly rather than through castVote: voting requires a
+    // Turnstile solve or an existing vote session, and Turnstile
+    // deliberately refuses automated browsers. That is the anti-bot
+    // protection working, so this path - and with it the daily voting
+    // streak - cannot be driven from a script and is covered by its own
+    // unit and live checks instead.
     await db.collection("votes").doc(matchId).collection("ballots")
         .doc(judge).set({votedForPlayerId: p1, weight: 1,
           timestamp: Timestamp.now()});
