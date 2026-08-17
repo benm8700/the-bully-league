@@ -160,14 +160,19 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
         // was built and nothing ever mentioned it - a bonus nobody
         // notices motivates nobody.
         if (reward.points > 0) {
+          // The streak leads when it just paid, because a run is the more
+          // motivating number and it only lands once a day - the per-vote
+          // points show up on every single vote and say nothing new.
+          final message = reward.extendedStreak
+              ? '${reward.streakDays} day streak - '
+                  '+${reward.points + reward.streakPoints} points'
+              : reward.boosted
+                  ? '+${reward.points} points - ${_x(reward.multiplier)}x bonus'
+                  : '+${reward.points} points';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              duration: const Duration(seconds: 2),
-              content: Text(
-                reward.boosted
-                    ? '+${reward.points} points - ${_x(reward.multiplier)}x bonus'
-                    : '+${reward.points} points',
-              ),
+              duration: Duration(seconds: reward.extendedStreak ? 3 : 2),
+              content: Text(message),
             ),
           );
         }

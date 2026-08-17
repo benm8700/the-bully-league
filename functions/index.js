@@ -225,6 +225,7 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   // actually moves.
   let pointsAwarded = 0;
   let pointsMultiplier = 1;
+  let streak = null;
   try {
     const {awardPoints, pointsSettings, awardAmount} = require("./points");
     const rates = await pointsSettings();
@@ -238,6 +239,12 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
       amount: awardAmount(rates.voteCast, {multiplier: pointsMultiplier}),
     });
     pointsAwarded = result.awarded;
+
+    // The daily streak, paid on the first vote of each day. Kept inside
+    // this try because it is a reward, never a precondition: a streak
+    // failure must not fail the vote that earned it.
+    const {recordVoteForStreak} = require("./voteStreak");
+    streak = await recordVoteForStreak(voterId, {multiplier: pointsMultiplier});
   } catch (e) {
     console.error(`vote points for ${voterId} failed:`, e.message);
   }
@@ -245,7 +252,10 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   // Returned so the app can show the reward landing rather than leaving
   // the multiplier to be inferred. A bonus nobody notices motivates
   // nobody.
-  return {success: true, weight, pointsAwarded, pointsMultiplier};
+  // The streak goes back too, so the app can show a run landing rather
+  // than leaving a silent bonus in the ledger. A reward nobody notices
+  // motivates nobody.
+  return {success: true, weight, pointsAwarded, pointsMultiplier, streak};
 });
 
 /**

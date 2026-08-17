@@ -186,8 +186,15 @@ class WatchFeedService {
       // ignore: use_null_aware_elements
       if (turnstileToken != null) 'turnstileToken': turnstileToken,
     });
+    final streak = (result.data['streak'] as Map?)?.cast<String, dynamic>();
     return VoteReward(
       points: (result.data['pointsAwarded'] as num?)?.toInt() ?? 0,
+      // Only reported when the streak actually PAID, so a running total
+      // is announced once a day rather than after every single vote.
+      streakDays: (streak?['awarded'] as num? ?? 0) > 0
+          ? (streak?['days'] as num?)?.toInt()
+          : null,
+      streakPoints: (streak?['awarded'] as num?)?.toInt() ?? 0,
       multiplier: (result.data['pointsMultiplier'] as num?)?.toDouble() ?? 1,
     );
   }
@@ -195,10 +202,21 @@ class WatchFeedService {
 
 /// What a vote paid, and whether the window bonus was applied.
 class VoteReward {
-  const VoteReward({required this.points, required this.multiplier});
+  const VoteReward({
+    required this.points,
+    required this.multiplier,
+    this.streakDays,
+    this.streakPoints = 0,
+  });
 
   final int points;
   final double multiplier;
 
+  /// The run length, but ONLY on the day it was paid - null otherwise, so
+  /// the streak is announced once a day rather than on every vote.
+  final int? streakDays;
+  final int streakPoints;
+
   bool get boosted => multiplier > 1;
+  bool get extendedStreak => streakDays != null && streakPoints > 0;
 }
