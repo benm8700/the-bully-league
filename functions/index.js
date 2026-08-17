@@ -972,10 +972,32 @@ exports.getMatchesNeedingVotes = onCall((request) => {
 });
 
 /**
- * Whether Ranked has unlocked for the caller, and how many exhibition
- * matches remain if not. CLAUDE.md asks for this progress to be visible
- * ("3 matches until Ranked unlocks") rather than a silent unlock.
+ * Usernames. These are the ONLY writers of `username`/`usernameLower` -
+ * firestore.rules refuses the client both fields, because a name that a
+ * client could set at will is a filter that only inconveniences the
+ * honest. See functions/username.js for why a permissive comedy app
+ * filters names at all.
+ *
+ * checkUsername deliberately allows an unauthenticated caller: it is used
+ * by the signup form BEFORE the account exists, so that a taken or
+ * refused name never leaves someone holding an account they cannot
+ * finish setting up. It reveals only whether a name is free, which every
+ * signup form in the world reveals.
  */
+exports.checkUsername = onCall((request) => {
+  const {checkUsername} = require("./username");
+  return checkUsername(request.data, request.auth);
+});
+
+exports.setUsername = onCall((request) => {
+  const {setUsername} = require("./username");
+  return setUsername(request.data, request.auth);
+});
+
+exports.getUsernameState = onCall((request) => {
+  const {getUsernameState} = require("./username");
+  return getUsernameState(request.auth);
+});
 
 exports.onVoteCast = onVoteCast;
 exports.onReactionWritten = onReactionWritten;

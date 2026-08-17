@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -40,6 +41,24 @@ class _SignupScreenState extends State<SignupScreen> {
     });
 
     try {
+      // The name is checked BEFORE the account exists, deliberately. A
+      // taken or refused name discovered afterwards would leave someone
+      // holding a half-made account with no name on it, which reads as a
+      // broken signup rather than as "pick another".
+      final username = _usernameController.text.trim();
+      final check = await FirebaseFunctions.instance
+          .httpsCallable('checkUsername')
+          .call<Map<String, dynamic>>({'username': username});
+      if (!mounted) return;
+      if (check.data['available'] != true) {
+        setState(() {
+          _errorMessage =
+              check.data['reason'] as String? ?? 'Pick a different username.';
+          _isSubmitting = false;
+        });
+        return;
+      }
+
       final ageService = context.read<AgeVerificationService>();
       final isAdult = await ageService.isAdult();
       if (!mounted) return;
@@ -69,7 +88,6 @@ class _SignupScreenState extends State<SignupScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      final username = _usernameController.text.trim();
       await user?.updateDisplayName(username);
       await user?.reload();
       if (user != null) {
@@ -81,14 +99,13 @@ class _SignupScreenState extends State<SignupScreen> {
         // unbanning (accountStatus) is an admin-only action via the
         // Firebase console, same pattern as profile approval and report
         // review - see CLAUDE.md's Admin/moderation tooling notes.
+        // Note what is NOT here: the username. firestore.rules refuses the
+        // client both `username` and `usernameLower`, at create as well as
+        // update, so the slur filter, the uniqueness claim and the change
+        // cooldown cannot be routed around by a modified client. The name
+        // is written by the setUsername callable immediately below, which
+        // owns all three.
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'username': username,
-          // Lowercased copy, written because Firestore has no
-          // case-insensitive or substring search: the player directory
-          // does a prefix query against this. Kept alongside rather than
-          // replacing `username`, since the display name's original
-          // casing is what people chose.
-          'usernameLower': username.toLowerCase(),
           'rating': 1200,
           'rankTitle': 'Average Joe',
           'rankedMatchesPlayed': 0,
@@ -102,6 +119,33 @@ class _SignupScreenState extends State<SignupScreen> {
           'isAdmin': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
+
+        // Claims the name. Runs AFTER the document exists so that its
+        // merge write is an update rather than a create - the create rule
+        // requires the exact starting defaults above, which this write
+        // does not carry.
+        //
+        // A failure here is survivable rather than fatal: the account is
+        // real and signed in, and every screen already falls back to
+        // "Roaster" for a missing name. Profile has a Change username
+        // control that doubles as the recovery path, which is where the
+        // message points.
+        try {
+          await FirebaseFunctions.instance
+              .httpsCallable('setUsername')
+              .call<Map<String, dynamic>>({'username': username});
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  "Your account is ready, but that username was just taken. "
+                  'Pick one from Profile.',
+                ),
+              ),
+            );
+          }
+        }
       }
       // AuthGate's StreamBuilder rebuilds to HomeScreen on its own root
       // route as soon as signUp() resolves. That's enough when this
@@ -131,7 +175,16 @@ class _SignupScreenState extends State<SignupScreen> {
             children: [
               TextFormField(
                 controller: _usernameController,
-                decoration: const InputDecoration(labelText: 'Username'),
+                decoration: const InputDecoration(
+                  labelText: 'Username',
+                  helperText: 'Public. Shown on the leaderboard and on clips.',
+                ),
+                maxLength: 20,
+                // Only the empty case is checked here. The real rules live
+                // in the checkUsername callable, deliberately in one place:
+                // a second copy on the client is a copy that drifts, and it
+                // would ship the blocklist to anyone curious enough to
+                // decompile it and work out what to type instead.
                 validator: (value) =>
                     (value == null || value.trim().isEmpty) ? 'Username is required' : null,
               ),

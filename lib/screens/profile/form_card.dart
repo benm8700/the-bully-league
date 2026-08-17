@@ -387,6 +387,148 @@ class _InviteCardState extends State<InviteCard> {
   }
 }
 
+/// Your public name, and the only way to change it.
+///
+/// This is also the RECOVERY PATH for a signup whose name claim failed -
+/// someone else taking the name in the same second leaves an account with
+/// no username at all, and every other screen quietly falls back to
+/// "Roaster". Without this control that account could never be fixed.
+///
+/// The cooldown is stated up front rather than discovered on submit,
+/// because a change you cannot undo for a month is a decision, not a
+/// tweak.
+class UsernameCard extends StatefulWidget {
+  const UsernameCard({super.key});
+
+  @override
+  State<UsernameCard> createState() => _UsernameCardState();
+}
+
+class _UsernameCardState extends State<UsernameCard> {
+  Map<String, dynamic>? _state;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('getUsernameState')
+          .call<Map<String, dynamic>>();
+      if (mounted) setState(() => _state = result.data);
+    } catch (_) {
+      // Renders nothing. A profile that will not load its name control is
+      // still a working profile.
+    }
+  }
+
+  Future<void> _change() async {
+    final controller = TextEditingController(
+      text: _state?['username'] as String? ?? '',
+    );
+    final cooldownDays = (_state?['cooldownDays'] as num?)?.toInt() ?? 30;
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Change username'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              maxLength: 20,
+              decoration: const InputDecoration(labelText: 'New username'),
+            ),
+            Text(
+              'After this you have to wait $cooldownDays days before '
+              'changing it again.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Change it'),
+          ),
+        ],
+      ),
+    );
+    if (chosen == null || chosen.isEmpty || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('setUsername')
+          .call<Map<String, dynamic>>({'username': chosen});
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('You are $chosen now.')),
+        );
+      }
+    } on FirebaseFunctionsException catch (e) {
+      // The server's own message is shown verbatim - it is the one that
+      // knows whether this was taken, refused or too soon.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'Could not change that.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = _state;
+    if (state == null) return const SizedBox.shrink();
+    final name = state['username'] as String?;
+    final canChange = state['canChange'] == true;
+    final locked = state['message'] as String?;
+
+    return _Section(
+      title: 'Username',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            name?.isNotEmpty == true ? name! : 'You have not picked one yet.',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            locked ??
+                'Public - it appears on the leaderboard, in the feed and on '
+                    'any clip of yours that gets posted.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton(
+            // Never picked one is always changeable, whatever the
+            // cooldown says - otherwise a failed signup claim would lock
+            // someone out of having a name at all.
+            onPressed: _busy || !(canChange || name == null) ? null : _change,
+            child: Text(name == null ? 'Pick a username' : 'Change username'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Section extends StatelessWidget {
   const _Section({required this.title, required this.child});
 

@@ -251,6 +251,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // returning player opens the screen for - the profile
                     // itself is filled in once and rarely touched again.
                     const FormCard(),
+                    const UsernameCard(),
                     const ReferrerField(),
                     const InviteCard(),
                     Text(

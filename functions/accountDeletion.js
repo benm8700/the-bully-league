@@ -157,7 +157,29 @@ async function deleteAccount(auth) {
     summary.profilePhotosDeleted++;
   }
 
-  // 4. The user document AND everything beneath it.
+  // 4. The username claim, so the name returns to the pool.
+  //
+  // Read BEFORE the user document is deleted, since the claim key comes
+  // from it. Held claims would make every deleted account's name
+  // permanently unusable by anyone - and the claim is itself a record
+  // tying a name to this uid, which is exactly the kind of thing that
+  // must not survive an erasure request.
+  const preDelete = await db.collection("users").doc(userId).get();
+  const claimKey = (preDelete.data()?.usernameLower ??
+    preDelete.data()?.username ?? "").trim().toLowerCase();
+  if (claimKey) {
+    const claimRef = db.collection("usernames").doc(claimKey);
+    const claim = await claimRef.get();
+    // Only if it is genuinely theirs. A claim pointing elsewhere means
+    // someone else already holds the name, and deleting it would free a
+    // live player's name out from under them.
+    if (claim.exists && claim.data()?.uid === userId) {
+      await claimRef.delete().catch(() => {});
+      summary.usernameReleased = true;
+    }
+  }
+
+  // 5. The user document AND everything beneath it.
   //
   // recursiveDelete, NOT delete(). Deleting a Firestore document does not
   // touch its subcollections - they survive as orphans, reachable by
@@ -185,7 +207,7 @@ async function deleteAccount(auth) {
     await userRef.delete().catch(() => {});
   }
 
-  // 5. A record that the deletion happened, holding no personal data.
+  // 6. A record that the deletion happened, holding no personal data.
   // Useful as compliance evidence, and harmless: once the user document
   // and auth account are gone, the uid maps to nobody.
   await db.collection("deletedAccounts").doc(userId).set({
@@ -193,7 +215,7 @@ async function deleteAccount(auth) {
     summary,
   }).catch(() => {});
 
-  // 6. The auth account last, so a failure earlier still leaves an
+  // 7. The auth account last, so a failure earlier still leaves an
   // account that can sign in and retry rather than an orphaned identity.
   await getAuth().deleteUser(userId);
 

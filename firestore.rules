@@ -20,7 +20,14 @@ service cloud.firestore {
         request.resource.data.wins == 0 &&
         request.resource.data.losses == 0 &&
         request.resource.data.accountStatus == 'active' &&
-        request.resource.data.isAdmin == false;
+        request.resource.data.isAdmin == false &&
+        // The username is NOT written here. Signup creates this document
+        // without one and then calls setUsername, which is the only thing
+        // that filters and claims a name. Allowing it at create would
+        // leave the filter bypassable at the exact moment it matters
+        // most - the moment the name is chosen.
+        !('username' in request.resource.data) &&
+        !('usernameLower' in request.resource.data);
 
       // Uses .get(field, default) rather than direct field access - a
       // direct `resource.data.rating` on a doc missing that key throws a
@@ -83,7 +90,24 @@ service cloud.firestore {
         // and who gets clips included - a client that could write it would
         // simply grant itself the paid tier.
         request.resource.data.get('subscription', null) ==
-          resource.data.get('subscription', null);
+          resource.data.get('subscription', null) &&
+        // The username, and its lowercased search copy. Written only by
+        // setUsername, which filters it, claims it for uniqueness and
+        // enforces the change cooldown.
+        //
+        // A client that could write this directly would route around all
+        // three at once: it could put a slur on the public leaderboard
+        // and the website (which is why the filter exists at all - see
+        // functions/username.js), it could take a name already claimed by
+        // someone else and make two accounts indistinguishable, and it
+        // could rename itself hourly to shake off recognition after a bad
+        // match, which is precisely what the cooldown prevents.
+        request.resource.data.get('username', null) ==
+          resource.data.get('username', null) &&
+        request.resource.data.get('usernameLower', null) ==
+          resource.data.get('usernameLower', null) &&
+        request.resource.data.get('usernameChangedAt', null) ==
+          resource.data.get('usernameChangedAt', null);
 
       allow delete: if false;
 
@@ -109,6 +133,19 @@ service cloud.firestore {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }
+    }
+
+    // Username claims, one document per lowercased name, holding the uid
+    // that owns it. This collection IS the uniqueness guarantee: setUsername
+    // claims and releases inside a transaction, which is the only way two
+    // people submitting the same name in the same second can be resolved.
+    //
+    // Closed to clients entirely. Writable would obviously defeat it; even
+    // readable is pointless here, since it is a complete name-to-account
+    // map and the player directory already answers the only legitimate
+    // question ("does this person exist") under its own visibility rules.
+    match /usernames/{usernameKey} {
+      allow read, write: if false;
     }
 
     // Live match configuration (CLAUDE.md's config/matchSettings): round
