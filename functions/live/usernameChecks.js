@@ -178,6 +178,52 @@ async function userWrite(token, uid, fields) {
       /\d+ days|tomorrow/.test(r.body.result?.message ?? ""),
       JSON.stringify(r.body.result));
 
+  console.log("\nthe real signup sequence, as a CLIENT");
+  // Everything above creates user documents with the Admin SDK, which
+  // bypasses firestore.rules - so none of it exercises the CREATE rule
+  // that signup actually hits. If that rule is wrong, every new signup
+  // fails and no test above would notice.
+  const sUid = `un-s-${stamp}`;
+  const sName = `Fresh${stamp}`.slice(0, 20);
+  await auth.createUser({uid: sUid, email: `${sUid}@example.com`,
+    password: "Test12345!"});
+  const sTok = await idToken(sUid);
+
+  const createDoc = async (extra) => {
+    const fields = {
+      rating: {integerValue: "1200"},
+      rankTitle: {stringValue: "Average Joe"},
+      rankedMatchesPlayed: {integerValue: "0"},
+      wins: {integerValue: "0"},
+      losses: {integerValue: "0"},
+      accountStatus: {stringValue: "active"},
+      isAdmin: {booleanValue: false},
+      ...extra,
+    };
+    const r2 = await fetch(
+        `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/users?documentId=${sUid}`,
+        {method: "POST",
+          headers: {"Content-Type": "application/json",
+            Authorization: "Bearer " + sTok},
+          body: JSON.stringify({fields})});
+    return r2.status;
+  };
+
+  const withName = await createDoc({username: {stringValue: sName}});
+  check("a create carrying a username is REFUSED", withName === 403,
+      `got ${withName}`);
+  const without = await createDoc({});
+  check("the shape signup actually writes is accepted", without === 200,
+      `got ${without}`);
+  r = await callable("setUsername", sTok, {username: sName});
+  check("and the name lands on it afterwards",
+      r.body.result?.username === sName, JSON.stringify(r.body));
+
+  await db.collection("users").doc(sUid).delete().catch(() => {});
+  await db.collection("usernames").doc(sName.toLowerCase())
+      .delete().catch(() => {});
+  await auth.deleteUser(sUid).catch(() => {});
+
   console.log("\ndeletion releases the name");
   const cUid = `un-c-${stamp}`;
   const nameC = `Gone${stamp}`.slice(0, 20);
