@@ -113,6 +113,14 @@ function verdictFor(match) {
 
 /** A short-lived URL the client can hand straight to a video player. */
 async function clipUrl(match) {
+  // A published clip already carries a permanent public URL, minted by
+  // publishHighlight with a Storage download token. Prefer it: it costs no
+  // signing call, and it works even where signing is unavailable.
+  const published = match.highlight?.published === true ?
+    (match.highlight.publicUrls?.vertical ??
+     match.highlight.publicUrls?.landscape) : null;
+  if (published) return published;
+
   const path = match.highlight?.renditions?.vertical?.path ??
     match.highlight?.renditions?.landscape?.path;
   if (!path) return null;
