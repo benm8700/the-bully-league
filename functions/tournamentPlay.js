@@ -131,6 +131,12 @@ function playability(slot, nowMs) {
  * client can reuse the whole existing match path rather than growing a
  * second one.
  */
+/** The live vote window as a spreadable fragment - empty for async. */
+function liveVote(tournament) {
+  const {isLive, liveVoteMs} = require("./liveTournament");
+  return isLive(tournament) ? {voteWindowMs: liveVoteMs(tournament)} : {};
+}
+
 async function startTournamentMatch(auth, data) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
   const {tournamentId} = data || {};
@@ -185,6 +191,15 @@ async function startTournamentMatch(auth, data) {
       player2Id: slot.matchup.player2Id,
       mode: "tournament",
       settings,
+      // A LIVE tournament closes voting in about a minute so the bracket
+      // can advance while the crowd is still watching. Absent for the
+      // async format, which falls back to the standard day.
+      //
+      // This shortens VOTING only. The chance to object to the clip stays
+      // a full day either way - see objectionWindowEndMs. Tying the two
+      // together would have given a player sixty seconds to decide whether
+      // video of themselves may be published.
+      ...(liveVote(tournament)),
       // Entry was already bought; this never counts toward the daily
       // window bonus, which is about turning up to Sixes and Sevens.
       eventWindow: {qualified: false, name: null},

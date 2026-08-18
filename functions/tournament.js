@@ -206,7 +206,7 @@ async function debugAdvanceRound(tournamentId) {
  * overwrite a settled result or push a duplicate round.
  */
 function applyResultToBracket(rounds, {roundNumber, matchupIndex, winnerId,
-  nowMs = Date.now(), roundWindowHours} = {}) {
+  nowMs = Date.now(), roundWindowHours, roundWindowMs} = {}) {
   if (!Array.isArray(rounds) || rounds.length === 0) {
     return {rounds, changed: false, reason: "no-bracket"};
   }
@@ -244,10 +244,18 @@ function applyResultToBracket(rounds, {roundNumber, matchupIndex, winnerId,
     return {rounds: next, changed: true, advanced: true,
       completed: true, tournamentWinnerId: winners[0]};
   }
+  // A LIVE tournament passes an explicit millisecond window; the async
+  // format keeps its hours. Without this the second round of a live
+  // bracket would open with a 24-hour window and the show would end after
+  // round one - the audience is still there, and the bracket would sit
+  // waiting until tomorrow.
   const {roundWindow} = require("./tournamentPlay");
+  const window = Number.isFinite(Number(roundWindowMs)) && roundWindowMs > 0 ?
+    {windowStartMs: nowMs, windowEndMs: nowMs + Number(roundWindowMs)} :
+    roundWindow(nowMs, roundWindowHours);
   next.push(Object.assign(
       buildNextRound(next[roundPos].matchups, roundNumber + 1),
-      roundWindow(nowMs, roundWindowHours)));
+      window));
   return {rounds: next, changed: true, advanced: true, completed: false};
 }
 
@@ -275,11 +283,15 @@ async function recordTournamentResult(match, winnerId) {
       if (tournament.status !== "in_progress") {
         return {applied: false, reason: "not-in-progress"};
       }
+      const {isLive, liveRoundMs} = require("./liveTournament");
       const result = applyResultToBracket(tournament.bracket?.rounds ?? [], {
         roundNumber: link.roundNumber,
         matchupIndex: link.matchupIndex,
         winnerId,
         roundWindowHours: tournament.roundWindowHours,
+        // Only live tournaments get a minute-scale window. Passing
+        // undefined leaves the async path exactly as it was.
+        roundWindowMs: isLive(tournament) ? liveRoundMs(tournament) : undefined,
       });
       if (!result.changed) return {applied: false, reason: result.reason};
 

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/admin_only.dart';
+import '../../widgets/live_checkin.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import 'tournament_lobby_screen.dart';
@@ -159,6 +160,14 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                   Text('Status: $status'),
                   Text('Prize: $prizeType'),
                   Text('Entrants: ${entrantIds.length} (min $minEntrants)'),
+                  const SizedBox(height: 12),
+                  // Live events only - renders nothing for the async
+                  // format, which has no check-in at all.
+                  LiveCheckIn(
+                    tournamentId: widget.tournamentId,
+                    tournament: tournament,
+                    isEntrant: isEntrant,
+                  ),
                   if (winnerId != null) Text('Winner: ${_short(winnerId)}'),
                   const SizedBox(height: 24),
                   if (isOpen)

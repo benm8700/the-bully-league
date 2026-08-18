@@ -299,7 +299,21 @@ async function sweepLiveTournaments() {
       results.push({tournamentId: doc.id, action: "error", error: e.message});
     }
   }
-  return {examined: open.size, acted: results};
+  // Expired ROUNDS are forfeited here too, not just started tournaments.
+  // The existing sweep is generic over windowEndMs so it already handles
+  // live rounds correctly - but it runs every thirty minutes, and a
+  // ten-minute round cannot wait that long for a no-show. Both are
+  // idempotent (a settled round is skipped), so running it from two
+  // schedules costs a duplicate read at worst.
+  let forfeits = null;
+  try {
+    const {sweepTournamentForfeits} = require("./tournamentPlay");
+    forfeits = await sweepTournamentForfeits();
+  } catch (e) {
+    console.error("live forfeit sweep failed:", e.message);
+  }
+
+  return {examined: open.size, acted: results, forfeits};
 }
 
 module.exports = {
