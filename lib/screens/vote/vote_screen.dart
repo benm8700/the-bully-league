@@ -35,6 +35,23 @@ class VoteScreen extends StatefulWidget {
 }
 
 class _VoteScreenState extends State<VoteScreen> {
+  /// The vote button stays locked until the clip has actually played for
+  /// a few seconds.
+  ///
+  /// WHAT THIS IS AND IS NOT. It is not a security boundary - a modified
+  /// client skips it in a line, and `castVote` enforces a minimum interval
+  /// between votes server-side for exactly that reason. It is a PRICE ON
+  /// SPEED. The whole farming exploit is that a careless vote takes two
+  /// seconds and an honest one takes thirty; this closes most of that gap
+  /// and costs an honest judge nothing, because they were watching anyway.
+  ///
+  /// Deliberately short. The goal is not to make someone watch a whole
+  /// battle before forming a view - people decide fast and that is fine -
+  /// it is to stop a vote being cheaper than a glance.
+  static const kWatchSecondsBeforeVote = 12;
+
+  bool _watchedEnough = false;
+
   String? _selectedPlayerId;
   String? _turnstileToken;
   bool _submitting = false;
@@ -148,7 +165,13 @@ class _VoteScreenState extends State<VoteScreen> {
               // watchable before anyone is asked to pick a winner.
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: MatchClipPlayer(videoUrl: widget.videoUrl),
+                child: MatchClipPlayer(
+                  videoUrl: widget.videoUrl,
+                  watchSecondsRequired: kWatchSecondsBeforeVote,
+                  onWatchedEnough: () {
+                    if (mounted) setState(() => _watchedEnough = true);
+                  },
+                ),
               ),
               const SizedBox(height: 20),
               if (canVote) ...[
@@ -170,9 +193,18 @@ class _VoteScreenState extends State<VoteScreen> {
                 TurnstileChallenge(
                     onToken: (token) => setState(() => _turnstileToken = token)),
                 const SizedBox(height: 16),
+                if (!_watchedEnough) ...[
+                  Text(
+                    'Watch a bit of it first.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 FilledButton(
                   onPressed: (_selectedPlayerId != null &&
                           _turnstileToken != null &&
+                          _watchedEnough &&
                           !_submitting)
                       ? _submitVote
                       : null,

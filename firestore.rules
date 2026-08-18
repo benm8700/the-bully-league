@@ -107,6 +107,11 @@ service cloud.firestore {
           resource.data.get('dayPassExpiresAtMs', null) &&
         request.resource.data.get('dailyAwards', null) ==
           resource.data.get('dailyAwards', null) &&
+        // When they last voted, which enforces the minimum gap between
+        // votes. A client that could rewind it would vote as fast as it
+        // liked, which is the exact behaviour the gap exists to price up.
+        request.resource.data.get('lastVoteAtMs', null) ==
+          resource.data.get('lastVoteAtMs', null) &&
         request.resource.data.get('clipCredits', null) ==
           resource.data.get('clipCredits', null) &&
         // The username, and its lowercased search copy. Written only by

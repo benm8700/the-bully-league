@@ -14,9 +14,29 @@ import 'package:video_player/video_player.dart';
 /// is a deliberate human gate, so most matches have nothing to show yet.
 /// Saying so is better than an endless spinner.
 class MatchClipPlayer extends StatefulWidget {
-  const MatchClipPlayer({super.key, required this.videoUrl});
+  const MatchClipPlayer({
+    super.key,
+    required this.videoUrl,
+    this.onWatchedEnough,
+    this.watchSecondsRequired = 0,
+  });
 
   final String? videoUrl;
+
+  /// Called once the clip has genuinely played for [watchSecondsRequired]
+  /// seconds, so a caller can unlock a vote button.
+  ///
+  /// FIRES IMMEDIATELY when there is nothing to watch - no clip, a clip
+  /// that failed to load, or a requirement of zero. **Failing open is the
+  /// whole design here.** Most matches still have no published clip, so a
+  /// gate that waited for a video that will never arrive would not slow
+  /// down careless voting, it would stop judging altogether - and votes
+  /// are the scarce resource the entire ladder runs on.
+  final VoidCallback? onWatchedEnough;
+
+  /// How much of the clip must actually play first. Capped at the clip's
+  /// own length, so a short clip is never ungateable.
+  final int watchSecondsRequired;
 
   @override
   State<MatchClipPlayer> createState() => _MatchClipPlayerState();
@@ -26,11 +46,50 @@ class _MatchClipPlayerState extends State<MatchClipPlayer> {
   VideoPlayerController? _controller;
   bool _initialising = false;
   String? _error;
+  bool _watchedEnough = false;
+
+  /// Measured from the player's own reported position rather than a wall
+  /// clock, so leaving it paused, or backgrounding the app, does not
+  /// count. That is the point: the exploit being priced up is SPEED.
+  Duration _furthestReached = Duration.zero;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // Nothing to watch means nothing to wait for.
+    if (widget.watchSecondsRequired <= 0 ||
+        (widget.videoUrl?.isEmpty ?? true)) {
+      _satisfy();
+    }
+  }
+
+  void _satisfy() {
+    if (_watchedEnough) return;
+    _watchedEnough = true;
+    // Deferred so a caller can safely setState in response, including
+    // when this fires during initState.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onWatchedEnough?.call();
+    });
+  }
+
+  void _onTick() {
+    final controller = _controller;
+    if (controller == null || _watchedEnough) return;
+    final position = controller.value.position;
+    // The clip loops, so position resets - keep the furthest point rather
+    // than the current one, or a loop would reset progress toward the
+    // requirement.
+    if (position > _furthestReached) _furthestReached = position;
+    final duration = controller.value.duration;
+    // Capped at the clip's length: a 12-second clip cannot be watched for
+    // 15, and requiring the impossible would lock voting on short clips.
+    final required = Duration(
+      seconds: widget.watchSecondsRequired,
+    ) > duration && duration > Duration.zero ?
+      duration : Duration(seconds: widget.watchSecondsRequired);
+    if (_furthestReached >= required) _satisfy();
   }
 
   @override
@@ -60,6 +119,7 @@ class _MatchClipPlayerState extends State<MatchClipPlayer> {
         await controller.dispose();
         return;
       }
+      controller.addListener(_onTick);
       setState(() {
         _controller = controller;
         _initialising = false;
@@ -71,11 +131,15 @@ class _MatchClipPlayerState extends State<MatchClipPlayer> {
         _initialising = false;
         _error = 'Could not load this clip.';
       });
+      // A clip that will not load must not block judging - the same
+      // fail-open rule as having no clip at all.
+      _satisfy();
     }
   }
 
   @override
   void dispose() {
+    _controller?.removeListener(_onTick);
     _controller?.dispose();
     super.dispose();
   }

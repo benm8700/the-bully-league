@@ -101,6 +101,36 @@ mid-ladder, not at the bottom — check that it does.
 
 ---
 
+## 2b. Beta pass bar — "no hard blockers"
+
+Your call. It's a **floor rather than a bar**: cheap to hit and it tells
+you the app works, not that the loop does. Worth being clear-eyed that
+clearing it says nothing about whether people come back, whether matches
+get judged, or whether anyone shares a clip.
+
+Made concrete so it's tickable:
+
+- [ ] Someone can sign up, complete the tutorial and reach a match without
+      help.
+- [ ] Two people can complete a full ranked battle on real devices, and it
+      settles as `completed`.
+- [ ] That battle gets recorded, rendered, and is watchable in the Judge
+      tab.
+- [ ] A third person can judge it, and the result finalizes with a winner.
+- [ ] Rating, wins/losses and points all move as expected afterwards.
+- [ ] Nothing on Home, Judge, My Battles, Ranks or Profile errors or
+      shows a control that doesn't work.
+- [ ] A report submitted from the Judge feed lands in `reports`.
+- [ ] Someone can delete their account and it actually goes.
+
+> **A path with no live check is a path nobody is checking.** `castVote`
+> was found throwing on every call — voting was dead in production —
+> because the core-loop regression writes ballots directly to bypass the
+> CAPTCHA and therefore never called it. The suite was green throughout.
+> When ticking the list above, exercise the real path, not a proxy for it.
+
+---
+
 ## 3. Never verified with real users
 
 These are not "probably fine" — they are genuinely unknown.

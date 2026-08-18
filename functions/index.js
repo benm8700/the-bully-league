@@ -82,6 +82,12 @@ function recordingCreds(channelName) {
 const ACCOUNT_AGE_FULL_WEIGHT_MS = 24 * 60 * 60 * 1000;
 const REDUCED_VOTE_WEIGHT = 0.5;
 
+/** The shortest gap allowed between one account's votes. Deliberately
+ * modest: it exists to price up speed, not to ration honest judging, and
+ * anything long enough to inconvenience a real judge would cost more
+ * genuine votes than it saves fake ones. */
+const MIN_VOTE_INTERVAL_MS = 4000;
+
 async function verifyTurnstileToken(token, secret) {
   const params = new URLSearchParams({secret, response: token});
   const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
@@ -167,6 +173,17 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   }
 
   const db = getFirestore();
+  // One moment for the whole call, so the window check, the account-age
+  // weighting and the vote-interval floor all agree about "now".
+  //
+  // THIS WAS MISSING, and it is worth recording why nothing caught it:
+  // `now` was read further down without ever being declared, so castVote
+  // threw a ReferenceError on EVERY call - in-app and website voting were
+  // both dead. The core-loop regression writes ballots directly to
+  // sidestep the CAPTCHA, so it exercised finalization and rating
+  // without once going through this function. A path with no live check
+  // is a path nobody is checking, however green the suite looks.
+  const now = Date.now();
   const matchRef = db.collection("matches").doc(matchId);
   const matchSnap = await matchRef.get();
   if (!matchSnap.exists) {
@@ -204,10 +221,27 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     throw new HttpsError("already-exists", "You've already voted on this match.");
   }
 
+  // A FLOOR ON VOTING SPEED, enforced here because the client-side
+  // watch gate is friction rather than a boundary - a modified client
+  // skips that in a line, and this is the half it cannot.
+  //
+  // It is not a rate limit on judging: nobody honest votes twice in four
+  // seconds, because they have to watch two different battles in between.
+  // It is aimed squarely at the only thing that makes random voting worth
+  // doing, which is doing it fast.
+  const voterRef = db.collection("users").doc(voterId);
+  const lastVoteAtMs = Number((await voterRef.get()).data()?.lastVoteAtMs);
+  if (Number.isFinite(lastVoteAtMs) && now - lastVoteAtMs < MIN_VOTE_INTERVAL_MS) {
+    throw new HttpsError("failed-precondition",
+        "Slow down - watch the battle before judging it.",
+        {reason: "too-fast"});
+  }
+
   const voterRecord = await getAuth().getUser(voterId);
   const accountAgeMs = now - new Date(voterRecord.metadata.creationTime).getTime();
   const weight = accountAgeMs >= ACCOUNT_AGE_FULL_WEIGHT_MS ? 1 : REDUCED_VOTE_WEIGHT;
 
+  await voterRef.set({lastVoteAtMs: now}, {merge: true});
   await ballotRef.set({
     votedForPlayerId,
     weight,
