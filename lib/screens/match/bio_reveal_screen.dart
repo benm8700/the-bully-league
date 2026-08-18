@@ -45,6 +45,10 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
   String? _loadError;
   late int _secondsLeft = _revealSeconds;
   int? _skipsLeft;
+
+  /// How many of today's allowance judging paid for. Shown only when
+  /// non-zero, since for most players there is nothing to explain.
+  int _skipsEarned = 0;
   bool _iAmReady = false;
   bool _bothReady = false;
   bool _busy = false;
@@ -106,8 +110,13 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
 
   Future<void> _loadSkips() async {
     try {
-      final remaining = await _service.skipsRemaining();
-      if (mounted) setState(() => _skipsLeft = remaining);
+      final allowance = await _service.skipsRemaining();
+      if (mounted) {
+        setState(() {
+          _skipsLeft = allowance.remaining;
+          _skipsEarned = allowance.earned;
+        });
+      }
     } catch (_) {
       // Non-fatal: the button just won't show a count. Skipping itself is
       // still enforced server-side.
@@ -472,7 +481,14 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
               child: Text(
                 skipsLeft == null
                     ? 'Skip this opponent'
-                    : 'Skip this opponent ($skipsLeft left today)',
+                    // Judging is named only when it actually paid for
+                    // something. For most players the count is just the
+                    // base allowance, and an unexplained mention of
+                    // judging would be noise.
+                    : _skipsEarned > 0
+                        ? 'Skip this opponent ($skipsLeft left today, '
+                            '$_skipsEarned from judging)'
+                        : 'Skip this opponent ($skipsLeft left today)',
               ),
             )
           else

@@ -164,6 +164,20 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        // Confirms the reward landed, for the small number of people who
+        // earned one. Deliberately NOT shown to everyone else as a nudge
+        // to go and judge: this screen already carries the quiet-queue
+        // hint pointing at the daily window, and two competing calls to
+        // action in front of somebody who is waiting to battle is one
+        // too many.
+        if (_progress?.hasJudgePriority ?? false) ...[
+          const SizedBox(height: 12),
+          Text(
+            'You judged today, so you are ahead of anyone who just queued.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
         // The highest-conversion place in the whole app to mention the
         // daily window: someone staring at a spinner during a quiet hour
         // has just discovered the problem the window exists to solve, and

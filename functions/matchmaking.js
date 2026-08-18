@@ -264,7 +264,10 @@ async function enterQueue(auth, data) {
     canNotify: Array.isArray(user.fcmTokens) && user.fcmTokens.length > 0,
   });
 
-  return {queued: true, mode};
+  // Reported so the waiting screen can confirm the reward landed. A perk
+  // nobody is told about changes no behaviour, which is the whole reason
+  // to surface it at all.
+  return {queued: true, mode, judgePriorityMs: judgePriorityFor(user)};
 }
 
 /** Leaves the queue. Safe to call when not queued (idempotent) - the

@@ -175,7 +175,15 @@ async function setVotes(uid, n) {
         "rather than a separate queue", bonus < STANDING_AFTER_MS,
     `${bonus} vs ${STANDING_AFTER_MS}`);
 
-    await call(IDLE, "enterMatchmakingQueue", {mode: "ranked"});
+    // The client reads this straight off the enterQueue response to
+    // decide whether to confirm the reward on the waiting screen.
+    check("THE CLIENT IS TOLD about its head start on the way in",
+        r.body?.judgePriorityMs > 0, JSON.stringify(r.body));
+
+    const idleEnter = await call(IDLE, "enterMatchmakingQueue", {mode: "ranked"});
+    check("...and a non-judge is told zero, not left guessing",
+        idleEnter.body?.judgePriorityMs === 0,
+        JSON.stringify(idleEnter.body));
     const idleSnap = await getDatabase()
         .ref(`matchmakingQueue/ranked/${IDLE}`).get();
     check("a non-judge's entry carries no head start",

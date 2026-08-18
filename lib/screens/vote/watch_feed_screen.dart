@@ -159,7 +159,25 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
         // Show the reward landing. The window bonus has been paid since it
         // was built and nothing ever mentioned it - a bonus nobody
         // notices motivates nobody.
-        if (reward.points > 0) {
+        // An earned SKIP leads over everything, including the streak.
+        // It is the rarest of these, it is the one that is genuinely
+        // useful to a competitive player who will never spend a point,
+        // and it is announced on exactly the vote that crossed the
+        // threshold - a line repeated on every vote afterwards is one
+        // people stop reading.
+        //
+        // Shown even when the vote paid no points, since the daily
+        // points cap and the skip threshold are separate ceilings and a
+        // capped voter can still be earning skips.
+        if (reward.skipJustEarned) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              duration: Duration(seconds: 4),
+              content: Text('Skip earned - judging just bought you an '
+                  'extra skip today.'),
+            ),
+          );
+        } else if (reward.points > 0) {
           // The streak leads when it just paid, because a run is the more
           // motivating number and it only lands once a day - the per-vote
           // points show up on every single vote and say nothing new.

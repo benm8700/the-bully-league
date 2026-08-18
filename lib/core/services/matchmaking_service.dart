@@ -97,10 +97,20 @@ class MatchPairing {
 /// rather than showing an indefinite spinner - [tierBand] is how far the
 /// search has widened past the player's own tier (0 = same tier only).
 class MatchmakingProgress {
-  const MatchmakingProgress({required this.waited, required this.tierBand});
+  const MatchmakingProgress({
+    required this.waited,
+    required this.tierBand,
+    this.judgePriorityMs = 0,
+  });
 
   final Duration waited;
   final int tierBand;
+
+  /// The head start today's judging earned, in milliseconds. Zero for
+  /// almost everyone, so the UI only mentions it when it is real.
+  final int judgePriorityMs;
+
+  bool get hasJudgePriority => judgePriorityMs > 0;
 }
 
 /// Client half of real matchmaking (Build Order step 4's missing half).
@@ -125,8 +135,11 @@ class MatchmakingService {
 
   static const pollInterval = Duration(seconds: 3);
 
-  Future<void> _call(String name, Map<String, dynamic> args) async {
-    await _functions.httpsCallable(name).call<Map<String, dynamic>>(args);
+  Future<Map<String, dynamic>> _call(
+      String name, Map<String, dynamic> args) async {
+    final result =
+        await _functions.httpsCallable(name).call<Map<String, dynamic>>(args);
+    return result.data;
   }
 
   /// Joins the queue, then polls until paired or until [cancel] completes.
@@ -157,7 +170,12 @@ class MatchmakingService {
     }));
 
     try {
-      await _call('enterMatchmakingQueue', {'mode': mode});
+      // Any head start today's judging earned. Read once at entry - it
+      // is fixed for the life of this queue entry, so re-reading it on
+      // every poll would cost a round trip to learn nothing.
+      final entered = await _call('enterMatchmakingQueue', {'mode': mode});
+      final judgePriorityMs =
+          (entered['judgePriorityMs'] as num?)?.toInt() ?? 0;
 
       while (!cancelled) {
         final result = await _functions
@@ -177,6 +195,7 @@ class MatchmakingService {
             onProgress?.call(MatchmakingProgress(
               waited: Duration(milliseconds: (data['waitedMs'] as num?)?.toInt() ?? 0),
               tierBand: (data['tierBand'] as num?)?.toInt() ?? 0,
+              judgePriorityMs: judgePriorityMs,
             ));
         }
 
@@ -293,12 +312,19 @@ class MatchmakingService {
     return (result.data['skipsRemaining'] as num?)?.toInt() ?? 0;
   }
 
-  /// How many skips the player has left today, so the UI can show the
-  /// count and hide the button at zero.
-  Future<int> skipsRemaining() async {
+  /// How many skips the player has left today, and how many of today's
+  /// allowance came from judging.
+  ///
+  /// The breakdown matters because an allowance that silently grows is a
+  /// reward nobody knows they got - and the skip button is the one place
+  /// the reward is actually spent.
+  Future<SkipAllowance> skipsRemaining() async {
     final result =
         await _functions.httpsCallable('getSkipAllowance').call<Map<String, dynamic>>();
-    return (result.data['remaining'] as num?)?.toInt() ?? 0;
+    return SkipAllowance(
+      remaining: (result.data['remaining'] as num?)?.toInt() ?? 0,
+      earned: (result.data['earned'] as num?)?.toInt() ?? 0,
+    );
   }
 
   /// Marks a paired match finished. [outcome] is 'completed' for a match
@@ -323,4 +349,15 @@ class MatchmakingService {
       'quality': ?quality,
     });
   }
+}
+
+/// Today's skip allowance, and how much of it judging paid for.
+class SkipAllowance {
+  const SkipAllowance({required this.remaining, required this.earned});
+
+  final int remaining;
+
+  /// Extra skips earned by judging today. Zero for most players, so the
+  /// UI only mentions it when it is actually non-zero.
+  final int earned;
 }

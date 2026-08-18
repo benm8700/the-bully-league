@@ -262,6 +262,9 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   let streak = null;
   let voteCapReached = false;
   let quests = null;
+  // What this vote earned besides points. Null when nothing could be
+  // computed, so the client shows nothing rather than a wrong zero.
+  let judge = null;
   try {
     const {awardPoints, pointsSettings, awardAmount} = require("./points");
     const rates = await pointsSettings();
@@ -300,13 +303,26 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     // that somebody judged something. The rewards have their own,
     // separate ceilings.
     try {
-      const {judgeVoteUpdate} = require("./judgeRewards");
+      const {judgeVoteUpdate, earnedSkips} = require("./judgeRewards");
       const {utcDayKey} = require("./matchmaking");
       const dayKey = utcDayKey(Date.now());
       const userRef = db.collection("users").doc(voterId);
       await db.runTransaction(async (tx) => {
         const snap = await tx.get(userRef);
-        tx.update(userRef, judgeVoteUpdate(snap.data() ?? {}, dayKey));
+        const before = snap.data() ?? {};
+        const after = judgeVoteUpdate(before, dayKey);
+        // Compared across the SAME transaction that writes it, so the
+        // "just earned" moment cannot be missed or double-reported by
+        // two votes landing together. Reported rather than stored: it
+        // is true for exactly one response and nothing needs it after.
+        judge = {
+          votesToday: after.judgeVotesToday,
+          earnedSkips: earnedSkips({...before, ...after}, dayKey),
+          skipJustEarned:
+            earnedSkips({...before, ...after}, dayKey) >
+            earnedSkips(before, dayKey),
+        };
+        tx.update(userRef, after);
       });
     } catch (e) {
       // A reward, never a precondition. A failure here must not fail
@@ -338,7 +354,8 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   // The streak goes back too, so the app can show a run landing rather
   // than leaving a silent bonus in the ledger. A reward nobody notices
   // motivates nobody.
-  return {success: true, weight, pointsAwarded, pointsMultiplier, streak, quests, voteCapReached};
+  return {success: true, weight, pointsAwarded, pointsMultiplier,
+    streak, quests, voteCapReached, judge};
 });
 
 /**

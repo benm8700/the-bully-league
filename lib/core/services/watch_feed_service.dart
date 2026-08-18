@@ -187,6 +187,7 @@ class WatchFeedService {
       if (turnstileToken != null) 'turnstileToken': turnstileToken,
     });
     final streak = (result.data['streak'] as Map?)?.cast<String, dynamic>();
+    final judge = (result.data['judge'] as Map?)?.cast<String, dynamic>();
     return VoteReward(
       points: (result.data['pointsAwarded'] as num?)?.toInt() ?? 0,
       // Only reported when the streak actually PAID, so a running total
@@ -196,6 +197,8 @@ class WatchFeedService {
           : null,
       streakPoints: (streak?['awarded'] as num?)?.toInt() ?? 0,
       multiplier: (result.data['pointsMultiplier'] as num?)?.toDouble() ?? 1,
+      skipJustEarned: judge?['skipJustEarned'] == true,
+      earnedSkips: (judge?['earnedSkips'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -207,6 +210,8 @@ class VoteReward {
     required this.multiplier,
     this.streakDays,
     this.streakPoints = 0,
+    this.skipJustEarned = false,
+    this.earnedSkips = 0,
   });
 
   final int points;
@@ -216,6 +221,17 @@ class VoteReward {
   /// the streak is announced once a day rather than on every vote.
   final int? streakDays;
   final int streakPoints;
+
+  /// True for the single vote that crossed the threshold.
+  ///
+  /// Announced ONCE, at the moment it happens, rather than on every
+  /// vote afterwards - the whole reason to surface a reward is that it
+  /// changes behaviour, and a line repeated on every vote is one people
+  /// stop reading.
+  final bool skipJustEarned;
+
+  /// How many skips today's judging has earned in total.
+  final int earnedSkips;
 
   bool get boosted => multiplier > 1;
   bool get extendedStreak => streakDays != null && streakPoints > 0;
