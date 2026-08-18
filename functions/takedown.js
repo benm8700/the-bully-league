@@ -1,6 +1,6 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
-const {voteWindowEndMs} = require("./matchFinalization");
+const {objectionWindowEndMs} = require("./matchFinalization");
 
 /**
  * A participant's objection to their own match footage being public.
@@ -45,7 +45,11 @@ function monthKey(nowMs) {
  * Pure, so the deadline is testable without Firestore.
  */
 function preferenceWindowOpen(match, nowMs) {
-  return nowMs < voteWindowEndMs(match);
+  // The OBJECTION window, not the voting one. They were the same thing
+  // until live tournaments needed voting to close in a minute - tying
+  // them together would have given a player sixty seconds to decide
+  // whether video of themselves may be published.
+  return nowMs < objectionWindowEndMs(match);
 }
 
 /**
@@ -240,7 +244,7 @@ async function getTakedownOptions(auth, data) {
     preferenceRemaining: preferenceRemaining(userSnap.data(), nowMs),
     preferenceCap: PREFERENCE_CAP_PER_MONTH,
     published: match.highlight?.published === true,
-    windowEndMs: voteWindowEndMs(match),
+    windowEndMs: objectionWindowEndMs(match),
   };
 }
 

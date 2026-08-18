@@ -522,8 +522,12 @@ async function getClipDownload(auth, data) {
 
 /** When the objection window closes, for client messaging only. */
 function voteCloseHint(match) {
-  const {voteWindowEndMs} = require("./matchFinalization");
-  const end = voteWindowEndMs(match);
+  // The objection window, because that is what delivery actually waits
+  // for - a live tournament decides its winner in a minute but a clip
+  // still cannot be handed over until the other player's full chance to
+  // object has passed.
+  const {objectionWindowEndMs} = require("./matchFinalization");
+  const end = objectionWindowEndMs(match);
   return Number.isFinite(end) ? end : null;
 }
 

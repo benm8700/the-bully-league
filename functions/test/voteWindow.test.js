@@ -116,4 +116,51 @@ check("the queue falls back to pairing time exactly as the server does", () => {
   assert.strictEqual(msRemaining(noCompletion, PAIRED), VOTE_WINDOW_MS);
 });
 
-console.log(`\n${checks} checks passed.`);
+
+// ------------------- voting and objecting are separate clocks now --------
+//
+// They were the same thing until live tournaments needed voting to close
+// in about a minute. Tying them together would have given a player SIXTY
+// SECONDS to decide whether video of themselves may be published - and
+// that is worse now that withdrawing by preference only works before a
+// clip is public, because missing the minute leaves claiming harm as the
+// only route.
+const {voteWindowMs, objectionWindowEndMs} = require("../matchFinalization");
+const NOW = COMPLETED;
+
+check("a match with no stamp votes for the standard day", () => {
+  assert.strictEqual(voteWindowMs({}), VOTE_WINDOW_MS);
+});
+
+check("a live match can close voting in a minute", () => {
+  assert.strictEqual(voteWindowMs({voteWindowMs: 60_000}), 60_000);
+});
+
+check("THE SPLIT: a one-minute vote window still gets a full day to object", () => {
+  const live = {completedAt: ts(NOW), voteWindowMs: 60_000};
+  assert.strictEqual(voteWindowEndMs(live) - NOW, 60_000);
+  assert.strictEqual(objectionWindowEndMs(live) - NOW, VOTE_WINDOW_MS,
+      "the chance to stop a clip must never shrink with the vote window");
+});
+
+check("the objection window ignores the stamp entirely", () => {
+  // Whatever a tournament sets, nobody gets less than a day to object.
+  for (const ms of [30_000, 60_000, 5 * 60_000, VOTE_WINDOW_MS]) {
+    assert.strictEqual(
+        objectionWindowEndMs({completedAt: ts(NOW), voteWindowMs: ms}) - NOW,
+        VOTE_WINDOW_MS, `stamp of ${ms} changed the objection window`);
+  }
+});
+
+check("a nonsense vote window falls back rather than breaking a bracket", () => {
+  // Arrives from a document. Zero would close voting before anyone could
+  // vote; a huge value would hold a live round open forever.
+  for (const bad of [0, -1, 1000, "soon", null, undefined, NaN,
+    VOTE_WINDOW_MS * 10]) {
+    assert.strictEqual(voteWindowMs({voteWindowMs: bad}), VOTE_WINDOW_MS,
+        `bad value ${String(bad)} was accepted`);
+  }
+});
+
+console.log(`
+${checks} checks passed.`);

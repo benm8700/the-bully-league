@@ -33,10 +33,52 @@ function voteWindowStartMs(match) {
   return match?.completedAt?.toMillis?.() ?? match?.createdAt?.toMillis?.() ?? 0;
 }
 
+/** How long voting lasts, in milliseconds.
+ *
+ * Stamped on the match at creation, like its round timings, so a match is
+ * judged by the rules in force when it was played. Defaults to the
+ * standard day for everything that does not say otherwise.
+ *
+ * A LIVE tournament sets this to about a minute, because the whole point
+ * of a live bracket is that the crowd decides and the round moves on. That
+ * only works because the audience is already assembled, so a minute of a
+ * full room can carry more ballots than a quiet day does.
+ *
+ * Bounded rather than trusted: this arrives from a document, and a zero
+ * would close voting before anyone could vote while a nonsense value could
+ * hold a bracket open forever.
+ */
+function voteWindowMs(match) {
+  const raw = Number(match?.voteWindowMs);
+  const MIN = 30 * 1000;
+  return Number.isFinite(raw) && raw >= MIN && raw <= VOTE_WINDOW_MS ?
+    raw : VOTE_WINDOW_MS;
+}
+
 /** When voting closes. Single source of truth - the client shows this
  * countdown, castVote enforces it, and finalizeMatch acts on it, so they
  * must not drift apart. */
 function voteWindowEndMs(match) {
+  return voteWindowStartMs(match) + voteWindowMs(match);
+}
+
+/**
+ * When the chance to object to a clip closes.
+ *
+ * DELIBERATELY NOT THE VOTING DEADLINE, and this is the whole reason it
+ * exists as a separate function. Those two were the same thing until live
+ * tournaments needed voting to close in a minute - at which point tying
+ * them together would have given a player SIXTY SECONDS to decide whether
+ * a video of themselves may be published, which is the one place in this
+ * app where rushing someone is genuinely unfair. It is worse now that
+ * withdrawing by preference only works before a clip is public: miss the
+ * minute and the only route left is claiming harm.
+ *
+ * So voting can be as short as a live show needs, and the objection window
+ * stays a full day whatever the format. Publishing is gated on THIS, not
+ * on the result being known.
+ */
+function objectionWindowEndMs(match) {
   return voteWindowStartMs(match) + VOTE_WINDOW_MS;
 }
 
@@ -361,4 +403,6 @@ module.exports = {
   VOTE_WINDOW_MS,
   voteWindowStartMs,
   voteWindowEndMs,
+  voteWindowMs,
+  objectionWindowEndMs,
 };
