@@ -28,6 +28,13 @@ it quotes can't drift out of sync. Tick items off as they're settled.
       is a download you didn't get. **This is the single highest-leverage
       item in this file once the app is public, and it takes about thirty
       seconds.**
+- [ ] **Cloudflare Stream (or Mux) account** - the only thing blocking live
+      tournaments. Everything else about them is built and verified:
+      scheduled start, check-in, bracket-from-arrivals, live round windows,
+      short vote windows, forfeits. What is missing is the stream itself,
+      spectator playback and the audience view. Cloudflare Stream is the
+      simpler pick: flat ~$1 per 1,000 delivered minutes, live included, no
+      separate encoding bill. Needs an account ID and an API token.
 - [ ] **Real legal review** of the Terms/Privacy page. It is live at
       `/legal` and marked on the page itself as a non-lawyer-reviewed
       placeholder. It is accurate to the product, which is a different
@@ -139,6 +146,35 @@ Made concrete so it's tickable:
 > because the core-loop regression writes ballots directly to bypass the
 > CAPTCHA and therefore never called it. The suite was green throughout.
 > When ticking the list above, exercise the real path, not a proxy for it.
+
+---
+
+## 2c. Live tournaments - what to watch on the first real event
+
+Built and verified against the backend, but no live event has ever run.
+The failure modes here are all about people not turning up, and none of
+them throw an error - the show just quietly does not happen.
+
+- [ ] **Did enough people check in?** The bracket is built from arrivals,
+      not entries, and below the minimum it cancels and refunds. If real
+      events keep cancelling, the check-in lead (15 min) or the minimum is
+      wrong - not the format.
+- [ ] **Did the bracket advance between rounds?** Round two opening with a
+      24-hour window instead of minutes would end the show after round one
+      with the audience still watching, and nothing would error. Verified
+      against the backend, but never with real players.
+- [ ] **Was 90 seconds enough for the crowd to vote?** Too short and
+      results are thin; too long and the show drags. `liveVoteMs` per
+      tournament.
+- [ ] **Did anyone get forfeited unfairly?** A 10-minute round is not much
+      if someone hits a camera-permission prompt. `liveRoundMs`.
+- [ ] **Confirm nobody was rushed on the clip decision.** Voting closes in
+      about a minute; the objection window is deliberately still a full
+      day. If a player says they had no chance to opt out, that split has
+      regressed.
+
+All four timings are per-tournament config, so they are tunable between
+events without a release.
 
 ---
 
