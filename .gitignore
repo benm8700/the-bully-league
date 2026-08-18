@@ -62,3 +62,6 @@ website/.env.local
 functions/node_modules/
 functions/.env
 functions/.env.*
+
+# Generated sting prototypes - regenerate with tools/makeStingCandidates.js
+sting_candidates/
