@@ -61,3 +61,28 @@ it the daily voting streak - cannot be driven from a script and is
 covered by its own unit and live checks instead.
 
 Needs `website/.env.local` for Admin SDK credentials.
+
+## Health scans
+
+Two scans that exist because of failures this project has actually had,
+not hypothetical ones. Both are safe to re-run and worth running before
+any release.
+
+- **`scheduledJobScan.js`** - runs every scheduled job against real
+  Firestore and reports which ones throw. Three scheduled functions have
+  been silently dead in production here (the `MODES` export, the
+  `voteReminders` index, and `finalizeExpiredMatches`, which had therefore
+  never settled a single ranked match). Every one had a green deploy, a
+  firing schedule, and a try/catch that ate the error. A unit test cannot
+  see any of it, because the break is in the seam between the function and
+  the database.
+  Note it does real work - settling, pushing, purging - so run it
+  deliberately.
+
+- **`callableHealthScan.js`** - probes every deployed callable and reports
+  any whose Cloud Run IAM binding is missing. That binding failed on four
+  separate functions in a single day. The symptom is a 401 with Google's
+  HTML page returned *before* the function runs, so every real user is
+  rejected and the function's own auth check never executes. The scan
+  distinguishes it from a healthy callable's own JSON 401 by checking the
+  response shape rather than the status code. A plain redeploy fixes it.
