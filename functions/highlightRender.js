@@ -119,6 +119,26 @@ function classifyFile(filePath) {
 const MIN_SEGMENT_BYTES = 8 * 1024;
 
 /**
+ * Total seconds an HLS playlist covers, summed from its #EXTINF lines.
+ *
+ * Pure, and the cheapest correct source of a clip's duration: the
+ * playlists are already downloaded, so this needs no probe, no second
+ * decode and no extra dependency. Guessing the duration instead would
+ * be worse than useless here - it is what decides whether trailing dead
+ * air exists at all, and what the bail-out guard measures against.
+ */
+function sumExtinfSeconds(playlistText) {
+  let total = 0;
+  for (const line of String(playlistText ?? "").split(/\r?\n/)) {
+    const m = line.match(/^#EXTINF:\s*([0-9.]+)/);
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n > 0) total += n;
+  }
+  return total;
+}
+
+/**
  * Turns a flat list of recorded files into a time-aligned plan.
  *
  * `t0` is the earliest moment any track started; every offset below is
@@ -220,7 +240,18 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
   // filling the frame alone rather than stacking.
   // Captions are burned on AFTER stacking, so one subtitle track spans the
   // whole frame rather than being scaled differently inside each tile.
-  const stacked = options.subtitlePath ? "[vstacked]" : "[vout]";
+  // Dead-air cuts sit BETWEEN the stack and the subtitles, which is the
+  // only correct place for them. Trimming after the burn-in would cut
+  // through already-painted text; trimming before the stack would need
+  // the same plan applied per input, and the two players' tracks start
+  // at different offsets, so one plan could not fit both.
+  //
+  // The cues handed in are ALREADY remapped onto the trimmed timeline
+  // by the caller - see remapCues - so the burn-in lands correctly on
+  // the shortened video.
+  const trim = options.trimFilters ?? null;
+  const stacked = trim ? "[vstacked]" :
+    options.subtitlePath ? "[vpainted]" : "[vout]";
   if (videoLabels.length === 1) {
     filters.push(`${videoLabels[0]}scale=${canvas.width}:${canvas.height}:` +
       `force_original_aspect_ratio=increase,crop=${canvas.width}:${canvas.height}${stacked}`);
@@ -228,6 +259,15 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
     filters.push(
         `${videoLabels.join("")}${rendition.stackFilter}=inputs=${videoLabels.length}${stacked}`,
     );
+  }
+
+  // Emitted here rather than later purely for legibility: filter_complex
+  // is a graph wired by labels, so ffmpeg does not care about the order
+  // of stages in the string - but anybody reading it does, and a graph
+  // whose stages run backwards is one nobody can check by eye.
+  if (trim) {
+    filters.push(`[vstacked]${trim.video}` +
+      `${options.subtitlePath ? "[vpainted]" : "[vout]"}`);
   }
 
   if (options.subtitlePath) {
@@ -239,14 +279,20 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
         .replace(/\\/g, "/")
         .replace(/:/g, "\\:")
         .replace(/'/g, "\\'");
-    filters.push(`[vstacked]subtitles='${escaped}'[vout]`);
+    filters.push(`[vpainted]subtitles='${escaped}'[vout]`);
   }
 
   // normalize=0 because the segments do not overlap - normalising would
   // duck each player's volume by the number of inputs for no reason.
   if (audioLabels.length > 0) {
+    // Audio is cut with the SAME intervals as the video. Anything else
+    // desynchronises the clip, which is a worse outcome than not
+    // trimming at all - a silent mismatch nobody would spot until
+    // watching the finished file.
+    const mixOut = trim ? "[amixed]" : "[aout]";
     filters.push(`${audioLabels.join("")}amix=inputs=${audioLabels.length}:` +
-      `normalize=0:dropout_transition=0[aout]`);
+      `normalize=0:dropout_transition=0${mixOut}`);
+    if (trim) filters.push(`[amixed]${trim.audio}[aout]`);
   }
 
   const args = [
@@ -338,12 +384,16 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
     // bills per audio minute, so transcribing per rendition would double
     // the cost for identical words.
     let cues = [];
+    // Kept alongside the cues because dead-air trimming is driven by the
+    // word timings rather than by audio analysis - see trimSilence.js.
+    let transcript = {words: [], failures: []};
     if (captions) {
       const {transcribeSegments, groupWordsIntoCues} = require("./captions");
       const audioSegs = timeline.segments.filter((s) => s.kind === "audio");
       const {words, failures} = await transcribeSegments(
           audioSegs, workDir, ffmpegPath, workDir,
       );
+      transcript = {words, failures};
       if (failures.length > 0) {
         warnings.push(`${failures.length} audio segment(s) could not be transcribed`);
       }
@@ -352,6 +402,56 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
         // Rendering without captions beats failing the whole clip - a
         // match with no intelligible speech is unusual but not an error.
         warnings.push("no speech was transcribed, so the clips have no captions");
+      }
+    }
+
+    // DEAD-AIR TRIMMING. Planned once, here, and applied to every
+    // rendition, so the two shapes of the same battle are cut
+    // identically - a viewer who sees the vertical clip and then the
+    // landscape one must not find them different edits.
+    //
+    // Only possible when captions ran: the plan is built from word
+    // timings. An uncaptioned stage-1 render is left untrimmed, which
+    // is the right trade - those exist so the judge feed has something
+    // to play, and cutting them would mean trusting an audio-level
+    // heuristic to decide what footage to destroy.
+    let trimFilters = null;
+    let trimmedSeconds = 0;
+    if (captions && transcript.words.length > 0) {
+      const {planKeeps, remapCues, removedSeconds, buildTrimFilters} =
+        require("./trimSilence");
+      // Duration from the playlists themselves, which are already
+      // downloaded - the longest player's track, measured from its own
+      // offset into the composite timeline.
+      let duration = 0;
+      for (const uid of timeline.uids) {
+        const seg = timeline.segments.find(
+            (x) => x.uid === uid && x.kind === "video");
+        if (!seg) continue;
+        const playlist = objects.find((o) =>
+          o.name.endsWith(".m3u8") && o.name.includes(`__uid_s_${uid}__uid_e`) &&
+          o.name.includes("_video"));
+        if (!playlist) continue;
+        const text = await fs.readFile(
+            path.join(workDir, playlist.name.split("/").pop()), "utf8")
+            .catch(() => "");
+        duration = Math.max(duration,
+            seg.offsetMs / 1000 + sumExtinfSeconds(text));
+      }
+
+      const keeps = planKeeps(transcript.words,
+          {duration, failures: transcript.failures});
+      trimFilters = buildTrimFilters(keeps, duration);
+      if (trimFilters) {
+        trimmedSeconds = removedSeconds(keeps, duration);
+        // THE CUES MUST MOVE WITH THE CUTS. Burning captions at their
+        // original times onto shortened video drifts them further out
+        // of sync with every cut, and a clip whose subtitles lag the
+        // mouth looks broken rather than merely unsubtitled.
+        cues = remapCues(cues, keeps);
+      } else if (duration <= 0) {
+        warnings.push("clip duration could not be measured, so dead air " +
+          "was left in");
       }
     }
 
@@ -376,7 +476,7 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
 
       const outputPath = path.join(workDir, rendition.fileName);
       await runFfmpeg(ffmpegPath, buildFfmpegArgs(timeline, workDir, outputPath, {
-        subtitlePath, rendition,
+        subtitlePath, rendition, trimFilters,
       }));
 
       const destination = `${HIGHLIGHT_PREFIX}/${matchId}/${rendition.fileName}`;
@@ -397,6 +497,10 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
         renderedAt: FieldValue.serverTimestamp(),
         captioned: cues.length > 0,
         cueCount: cues.length,
+        // Recorded so a short clip is explicable after the fact, and so
+        // the thresholds can be tuned against what they actually did
+        // rather than against a guess.
+        trimmedSeconds: Math.round(trimmedSeconds * 10) / 10,
         // Same human gate as the raw recording: rendering something
         // watchable is not the same as approving it for an audience.
         reviewStatus: "pending",
@@ -412,6 +516,7 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
 }
 
 module.exports = {
+  sumExtinfSeconds,
   renderMatchHighlight,
   parseSegmentTimeMs,
   classifyFile,

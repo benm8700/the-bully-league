@@ -268,4 +268,102 @@ test("tiles tile exactly, leaving no dead space in either rendition", () => {
   }
 });
 
+// --- dead-air trimming in the filter graph -------------------------------
+
+/** Every filter label a graph produces, and every one it consumes. */
+function labelsOf(args) {
+  const graph = args[args.indexOf("-filter_complex") + 1];
+  const produced = new Set();
+  const consumed = new Set();
+  for (const stage of graph.split(";")) {
+    // Outputs are the trailing [x] runs; inputs are the leading ones.
+    const outs = stage.match(/(\[[a-z0-9]+\])+$/i);
+    const ins = stage.match(/^(\[[a-z0-9]+\])+/i);
+    for (const m of (outs?.[0] ?? "").matchAll(/\[([a-z0-9]+)\]/gi)) {
+      produced.add(m[1]);
+    }
+    for (const m of (ins?.[0] ?? "").matchAll(/\[([a-z0-9]+)\]/gi)) {
+      consumed.add(m[1]);
+    }
+  }
+  return {graph, produced, consumed};
+}
+
+const TRIM = {
+  video: "select='between(t,0.000,5.000)',setpts=N/FRAME_RATE/TB",
+  audio: "aselect='between(t,0.000,5.000)',asetpts=N/SR/TB",
+};
+
+function trimArgs(extra = {}) {
+  const timeline = buildTimeline([
+    // Real 17-digit recorder stamps - anything else fails to parse and
+    // silently yields an empty timeline.
+    seg("1", "video", "20260813234113076"),
+    seg("1", "audio", "20260813234113076"),
+    seg("2", "video", "20260813234113076"),
+    seg("2", "audio", "20260813234115076"),
+  ]);
+  return buildFfmpegArgs(timeline, "/tmp/work", "/tmp/out.mp4",
+      {subtitlePath: "/tmp/c.ass", ...extra});
+}
+
+test("the graph is still fully connected once trimming is added", () => {
+  // The class of bug this catches has already happened once here: a
+  // mis-wired label produces a graph ffmpeg rejects outright, and the
+  // only symptom is a render that fails long after deploy.
+  const {produced, consumed} = labelsOf(trimArgs({trimFilters: TRIM}));
+  assert.ok(produced.has("vout"), "nothing produces [vout]");
+  assert.ok(produced.has("aout"), "nothing produces [aout]");
+  for (const label of consumed) {
+    if (/^\d+:[av]$/.test(label)) continue; // a real input stream
+    assert.ok(produced.has(label),
+        `[${label}] is consumed but never produced`);
+  }
+});
+
+test("AUDIO IS CUT WITH THE SAME INTERVALS AS VIDEO", () => {
+  // Cutting one and not the other desynchronises the clip, which is a
+  // worse outcome than not trimming at all - and it is silent until
+  // somebody watches the finished file.
+  const {graph} = labelsOf(trimArgs({trimFilters: TRIM}));
+  assert.ok(graph.includes(TRIM.video), "video was not trimmed");
+  assert.ok(graph.includes(TRIM.audio), "audio was not trimmed");
+});
+
+test("trimming happens BEFORE the captions are burned in", () => {
+  // The cues are remapped onto the trimmed timeline by the caller, so
+  // the burn-in has to come after the cut. Burning first would also mean
+  // cutting through already-painted text.
+  const {graph} = labelsOf(trimArgs({trimFilters: TRIM}));
+  assert.ok(graph.indexOf(TRIM.video) < graph.indexOf("subtitles"),
+      "captions are burned in before the cut");
+});
+
+test("an untrimmed render's graph is unchanged", () => {
+  // The large majority of clips are stage-1 renders with no transcript
+  // and therefore no trimming. They must not pay for a no-op pass.
+  const {graph} = labelsOf(trimArgs());
+  assert.ok(!graph.includes("select="), graph);
+  assert.ok(!graph.includes("aselect="), graph);
+});
+
+// --- duration from the playlists ----------------------------------------
+
+test("clip duration is summed from #EXTINF", () => {
+  const {sumExtinfSeconds} = require("../highlightRender");
+  assert.strictEqual(sumExtinfSeconds(
+      "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.004,\na.ts\n#EXTINF:2.000,\nb.ts\n"),
+  6.004);
+});
+
+test("an unreadable playlist measures zero rather than guessing", () => {
+  // A guessed duration would decide whether trailing dead air exists and
+  // what the bail-out guard measures against, so a wrong number is worse
+  // than none: zero disables trimming.
+  const {sumExtinfSeconds} = require("../highlightRender");
+  for (const junk of ["", null, undefined, "#EXTM3U\nnot a playlist"]) {
+    assert.strictEqual(sumExtinfSeconds(junk), 0);
+  }
+});
+
 console.log(`highlightRender: ${passed} checks passed`);
