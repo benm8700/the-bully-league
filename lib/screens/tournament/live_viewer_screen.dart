@@ -128,18 +128,39 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
               : Column(
                   children: [
                     Expanded(
-                      child: ValueListenableBuilder<Set<int>>(
-                        valueListenable: _spectator.presentUids,
-                        builder: (context, present, _) => Column(
-                          children: [
-                            // Players publish as fixed uids 1 and 2,
-                            // assigned server-side at pairing, so the
-                            // layout never has to negotiate who is who.
-                            Expanded(child: _tile(1, present)),
-                            const SizedBox(height: 2),
-                            Expanded(child: _tile(2, present)),
-                          ],
-                        ),
+                      child: ValueListenableBuilder<String?>(
+                        valueListenable: _spectator.failure,
+                        builder: (context, failure, _) {
+                          // A rejected or expired token is otherwise
+                          // indistinguishable from two players who have
+                          // not started - both are a screen that says
+                          // "waiting" forever.
+                          if (failure != null) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Text(failure,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                        color: Colors.white70)),
+                              ),
+                            );
+                          }
+                          return ValueListenableBuilder<Set<int>>(
+                            valueListenable: _spectator.presentUids,
+                            builder: (context, present, _) => Column(
+                              children: [
+                                // Players publish as fixed uids 1 and 2,
+                                // assigned server-side at pairing, so the
+                                // layout never has to negotiate who is
+                                // who.
+                                Expanded(child: _tile(1, present)),
+                                const SizedBox(height: 2),
+                                Expanded(child: _tile(2, present)),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                     ),
                     // Renders nothing until the battle ends, then becomes

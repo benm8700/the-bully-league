@@ -25,12 +25,16 @@ class AgoraSpectatorService implements SpectatorService {
 
   final _present = ValueNotifier<Set<int>>({});
   final _watching = ValueNotifier<bool>(false);
+  final _failure = ValueNotifier<String?>(null);
 
   @override
   ValueListenable<Set<int>> get presentUids => _present;
 
   @override
   ValueListenable<bool> get isWatching => _watching;
+
+  @override
+  ValueListenable<String?> get failure => _failure;
 
   @override
   Future<void> initialize() async {
@@ -47,6 +51,23 @@ class AgoraSpectatorService implements SpectatorService {
     engine.registerEventHandler(RtcEngineEventHandler(
       onJoinChannelSuccess: (connection, elapsed) {
         _watching.value = true;
+        _failure.value = null;
+      },
+      // Without this a rejected token is completely silent: the join call
+      // returns fine and the screen waits forever for video that will
+      // never arrive.
+      onError: (err, msg) {
+        if (err == ErrorCodeType.errInvalidToken ||
+            err == ErrorCodeType.errTokenExpired) {
+          _failure.value = 'This stream expired. Reopen it to keep watching.';
+        } else if (!_watching.value) {
+          _failure.value = 'Could not connect to the battle.';
+        }
+      },
+      onRequestToken: (connection) {
+        // An hour-long token outlasts any single battle, so reaching this
+        // means something is wrong rather than merely stale.
+        _failure.value = 'This stream expired. Reopen it to keep watching.';
       },
       onUserJoined: (connection, remoteUid, elapsed) {
         _present.value = {..._present.value, remoteUid};
@@ -96,6 +117,12 @@ class AgoraSpectatorService implements SpectatorService {
     _present.value = {};
   }
 
+  void _disposeNotifiers() {
+    _present.dispose();
+    _watching.dispose();
+    _failure.dispose();
+  }
+
   @override
   Future<void> dispose() async {
     // leaveChannel before release, in that order. Releasing an engine
@@ -104,8 +131,7 @@ class AgoraSpectatorService implements SpectatorService {
     await stopWatching();
     await _engine?.release();
     _engine = null;
-    _present.dispose();
-    _watching.dispose();
+    _disposeNotifiers();
   }
 
   @override

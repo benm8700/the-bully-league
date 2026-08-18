@@ -52,4 +52,15 @@ abstract class SpectatorService {
 
   /// Whether the viewer is currently connected to the battle.
   ValueListenable<bool> get isWatching;
+
+  /// A human-readable reason the stream is not playing, or null.
+  ///
+  /// EXISTS BECAUSE THE FAILURE IS OTHERWISE SILENT. Joining a channel
+  /// succeeds locally and is then accepted or rejected asynchronously by
+  /// the provider - so a bad or expired token leaves the screen sitting on
+  /// "waiting for the battle" indefinitely, which is indistinguishable
+  /// from two players who simply have not started yet. Found by watching
+  /// exactly that screen during a device test and being unable to tell
+  /// which of the two it was.
+  ValueListenable<String?> get failure;
 }
