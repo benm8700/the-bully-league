@@ -17,12 +17,48 @@ class PlayerSearchScreen extends StatefulWidget {
   State<PlayerSearchScreen> createState() => _PlayerSearchScreenState();
 }
 
+/// The per-row challenge control.
+///
+/// Becomes inert once a challenge has been sent rather than staying
+/// tappable: the server caps outstanding challenges at three from one
+/// sender, so a repeat tap would spend that allowance on the same person
+/// and then start failing for no visible reason.
+class _ChallengeButton extends StatelessWidget {
+  const _ChallengeButton({required this.state, required this.onPressed});
+
+  final String? state;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (state == 'sending') {
+      return const SizedBox(
+        height: 20,
+        width: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+    if (state == 'sent') {
+      return const Icon(Icons.check);
+    }
+    return TextButton(onPressed: onPressed, child: const Text('Challenge'));
+  }
+}
+
 class _PlayerSearchScreenState extends State<PlayerSearchScreen> {
   final _controller = TextEditingController();
   Timer? _debounce;
   bool _searching = false;
   String? _message;
   List<Map<String, dynamic>> _results = const [];
+
+  /// Per-row challenge state, keyed by username: 'sending', 'sent', or
+  /// the server's own error message.
+  ///
+  /// Kept per row rather than as one screen-wide flag because the
+  /// results are a list of people and a single banner could not say
+  /// WHICH of them it was about.
+  final Map<String, String> _challengeState = {};
 
   @override
   void dispose() {
@@ -79,6 +115,34 @@ class _PlayerSearchScreenState extends State<PlayerSearchScreen> {
     }
   }
 
+  /// Challenges a specific player, by name.
+  ///
+  /// THIS IS DELIBERATELY UNRATED. Choosing your own opponent is
+  /// exactly the collusion vector the random pairing exists to prevent,
+  /// so a friend battle moves no rating and pays no points - it is
+  /// recorded, judged and clippable instead. The button says so, because
+  /// somebody who found a specific person and challenged them would
+  /// otherwise reasonably assume it counted.
+  Future<void> _challenge(String username) async {
+    setState(() => _challengeState[username] = 'sending');
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('challengeFriend')
+          .call<Map<String, dynamic>>({'username': username});
+      if (!mounted) return;
+      setState(() => _challengeState[username] = 'sent');
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      // The server's message verbatim. It is the one that knows whether
+      // this was a block, a ban, an unknown name or the outstanding cap,
+      // and it phrases a block identically to a missing player ON
+      // PURPOSE - saying otherwise here would leak exactly what blocking
+      // is silent in order to hide.
+      setState(() =>
+          _challengeState[username] = e.message ?? 'Could not send that.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -115,14 +179,34 @@ class _PlayerSearchScreenState extends State<PlayerSearchScreen> {
               itemBuilder: (context, i) {
                 final r = _results[i];
                 final photo = r['photoUrl'] as String?;
+                final username = r['username'] as String? ?? 'Unknown';
+                final state = _challengeState[username];
                 return ListTile(
                   leading: CircleAvatar(
                     backgroundImage:
                         photo != null ? NetworkImage(photo) : null,
                     child: photo == null ? const Icon(Icons.person) : null,
                   ),
-                  title: Text(r['username'] as String? ?? 'Unknown'),
-                  subtitle: Text(r['rankTitle'] as String? ?? ''),
+                  title: Text(username),
+                  // The rank, plus whatever happened when you challenged
+                  // them. A failure belongs on the row it came from, not
+                  // in a snackbar that outlives the row it described.
+                  subtitle: Text(
+                    state == null || state == 'sending'
+                        ? (r['rankTitle'] as String? ?? '')
+                        : state == 'sent'
+                            ? 'Challenged. They have an hour to answer.'
+                            : state,
+                    style: state != null && state != 'sending' &&
+                            state != 'sent'
+                        ? TextStyle(
+                            color: Theme.of(context).colorScheme.error)
+                        : null,
+                  ),
+                  trailing: _ChallengeButton(
+                    state: state,
+                    onPressed: () => _challenge(username),
+                  ),
                 );
               },
             ),
@@ -133,7 +217,7 @@ class _PlayerSearchScreenState extends State<PlayerSearchScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
             child: Text(
-              'You can remove yourself from search on your profile.',
+              'Challenges are unrated - no rating, no points. They are still recorded, judged and clippable.\n\nYou can remove yourself from search on your profile.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),
