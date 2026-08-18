@@ -1124,5 +1124,26 @@ exports.advanceLiveTournaments = onSchedule("every 1 minutes", async () => {
   }
 });
 
+/**
+ * Spectating a LIVE tournament match.
+ *
+ * Deliberately a narrower door than generateAgoraToken, which refuses a
+ * token for any match the caller is not playing in - a rule that exists
+ * to stop people dropping in on strangers' battles and must not be
+ * reopened. See functions/spectator.js for the three conditions and why
+ * the token is a SUBSCRIBER one.
+ */
+exports.watchLiveMatch = onCall({secrets: [agoraAppCertificate]},
+    (request) => {
+      const {watchLiveMatch} = require("./spectator");
+      return watchLiveMatch(request.auth, request.data,
+          agoraAppCertificate.value());
+    });
+
+exports.liveMatchesFor = onCall((request) => {
+  const {liveMatchesFor} = require("./spectator");
+  return liveMatchesFor(request.auth, request.data);
+});
+
 exports.onVoteCast = onVoteCast;
 exports.onReactionWritten = onReactionWritten;
