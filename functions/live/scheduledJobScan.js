@@ -70,11 +70,41 @@ const JOBS = [
   {name: "weeklyRecap", mod: "../weeklyRecap", fn: "sweepWeeklyRecap"},
   {name: "stopRunawayRecordings", mod: "../cloudRecording",
     fn: "stopRunawayRecordings", needsSecret: true},
+  {name: "finalizeExpiredMatches", mod: "../finalizeSweep",
+    fn: "sweepExpiredMatches"},
 ];
+
+/**
+ * Fails if a deployed schedule is missing from JOBS above.
+ *
+ * WITHOUT THIS THE SCAN QUIETLY SHRINKS. finalizeExpiredMatches - the
+ * job that motivated this whole tool, and the one that had been
+ * throwing on every run since it was written - was absent from the list
+ * for months while the scan cheerfully reported everything working.
+ * A scanner that cannot tell you what it is NOT looking at is worse
+ * than no scanner, because it reads as an all-clear.
+ */
+function coverageGap() {
+  const src = fs.readFileSync("index.js", "utf8");
+  const deployed = [...src.matchAll(/^exports\.(\w+) = onSchedule/gm)]
+      .map((m) => m[1]);
+  const covered = new Set(JOBS.map((j) => j.name));
+  return deployed.filter((n) => !covered.has(n));
+}
 
 (async () => {
   let ok = 0; let broken = 0; let skipped = 0;
   console.log("Running every scheduled job against real Firestore.\n");
+
+  const gaps = coverageGap();
+  if (gaps.length) {
+    broken += gaps.length;
+    for (const name of gaps) {
+      console.log(`  UNSCANNED  ${name}  - deployed on a schedule but ` +
+        "not in this scan's JOBS list, so nothing has ever run it");
+    }
+    console.log("");
+  }
 
   for (const job of JOBS) {
     let mod;

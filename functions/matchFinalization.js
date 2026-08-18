@@ -175,13 +175,30 @@ async function finalizeMatch(matchId, {force = false} = {}) {
 
   await db.runTransaction(async (tx) => {
     const [p1Snap, p2Snap] = await Promise.all([tx.get(player1Ref), tx.get(player2Ref)]);
-    if (!p1Snap.exists || !p2Snap.exists) {
-      throw new Error(`Missing user doc for match ${matchId}'s players.`);
-    }
-    const p1 = p1Snap.data();
-    const p2 = p2Snap.data();
-    const p1Rating = p1.rating ?? STARTING_RATING;
-    const p2Rating = p2.rating ?? STARTING_RATING;
+
+    // A MISSING USER DOCUMENT MEANS A DELETED ACCOUNT, NOT A BUG, and
+    // it must not throw. CCPA deletion deliberately keeps the match
+    // document while removing the user, so every deletion used to leave
+    // a match that could never finalize - re-examined and re-thrown by
+    // the hourly sweep forever, and never recording the result for the
+    // opponent who is still here. Found by extracting that sweep so it
+    // could actually be run: six real matches, none of them settleable.
+    const p1Gone = !p1Snap.exists;
+    const p2Gone = !p2Snap.exists;
+
+    const p1 = p1Snap.data() ?? {};
+    const p2 = p2Snap.data() ?? {};
+    // For a departed player, fall back to the rating stamped on the
+    // match at pairing time. Elo is only meaningful relative to a KNOWN
+    // opponent, so where no stamp exists (matches predating it) the
+    // rating change is skipped rather than computed against a guess - a
+    // fabricated opponent rating could hand somebody a large undeserved
+    // gain or loss, which is worse than no change at all.
+    const p1Stamped = Number(match.player1Rating);
+    const p2Stamped = Number(match.player2Rating);
+    const p1Rating = p1Gone ? p1Stamped : (p1.rating ?? STARTING_RATING);
+    const p2Rating = p2Gone ? p2Stamped : (p2.rating ?? STARTING_RATING);
+    const ratable = Number.isFinite(p1Rating) && Number.isFinite(p2Rating);
 
     let p1NewRating = p1Rating;
     let p2NewRating = p2Rating;
@@ -204,12 +221,12 @@ async function finalizeMatch(matchId, {force = false} = {}) {
         match.settings?.fullConfidenceVotes,
     );
 
-    if (winnerId === match.player1Id) {
+    if (ratable && winnerId === match.player1Id) {
       p1NewRating = applyEloChange(p1Rating, p2Rating, 1, confidence);
       p2NewRating = applyEloChange(p2Rating, p1Rating, 0, confidence);
       p1Wins += 1;
       p2Losses += 1;
-    } else if (winnerId === match.player2Id) {
+    } else if (ratable && winnerId === match.player2Id) {
       p2NewRating = applyEloChange(p2Rating, p1Rating, 1, confidence);
       p1NewRating = applyEloChange(p1Rating, p2Rating, 0, confidence);
       p2Wins += 1;
@@ -227,7 +244,7 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     const p2Career = (Number.isFinite(Number(p2.careerRankedMatches)) ?
       Number(p2.careerRankedMatches) : (p2.rankedMatchesPlayed ?? 0)) + 1;
 
-    tx.update(player1Ref, {
+    if (!p1Gone) tx.update(player1Ref, {
       rating: p1NewRating,
       wins: p1Wins,
       losses: p1Losses,
@@ -235,7 +252,7 @@ async function finalizeMatch(matchId, {force = false} = {}) {
       careerRankedMatches: p1Career,
       rankTitle: computeBaseRankTitle(p1NewRating, p1Matches),
     });
-    tx.update(player2Ref, {
+    if (!p2Gone) tx.update(player2Ref, {
       rating: p2NewRating,
       wins: p2Wins,
       losses: p2Losses,
@@ -270,12 +287,20 @@ async function finalizeMatch(matchId, {force = false} = {}) {
       mode: match.mode ?? "ranked",
       at: FieldValue.serverTimestamp(),
     });
-    tx.set(player1Ref.collection("ratingHistory").doc(matchId),
-        historyEntry(p1Rating, p1NewRating, match.player2Id,
-            winnerId === match.player1Id));
-    tx.set(player2Ref.collection("ratingHistory").doc(matchId),
-        historyEntry(p2Rating, p2NewRating, match.player1Id,
-            winnerId === match.player2Id));
+    // NEVER written under a deleted account. A subcollection write
+    // would resurrect personal data beneath a document erased on
+    // request, and leave exactly the kind of orphan the deletion flow
+    // has already had to be fixed once for missing.
+    if (!p1Gone) {
+      tx.set(player1Ref.collection("ratingHistory").doc(matchId),
+          historyEntry(p1Rating, p1NewRating, match.player2Id,
+              winnerId === match.player1Id));
+    }
+    if (!p2Gone) {
+      tx.set(player2Ref.collection("ratingHistory").doc(matchId),
+          historyEntry(p2Rating, p2NewRating, match.player1Id,
+              winnerId === match.player2Id));
+    }
 
     tx.update(matchRef, {
       voteFinalized: true,

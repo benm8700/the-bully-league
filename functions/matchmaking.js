@@ -452,6 +452,11 @@ async function attemptPairing(uid, mode, matchId, channelName, now) {
     ...mine,
     opponentJoinedAt: queue?.[mine.opponentId]?.joinedAt ?? null,
     opponentWasStanding: queue?.[mine.opponentId]?.wasStanding === true,
+    // Carried out so the match can record BOTH ratings as they stood at
+    // pairing. This transaction is the only place both are visible at
+    // once, and by finalization time either player may have deleted
+    // their account - see the missing-user branch in finalizeMatch.
+    opponentRating: queue?.[mine.opponentId]?.rating ?? null,
   };
 }
 
@@ -590,6 +595,17 @@ async function pollMatchmaking(auth, data) {
     await matchRef.set({
       player1Id: uid,
       player2Id: paired.opponentId,
+      // Both ratings as they stood at pairing.
+      //
+      // Recorded because a player can DELETE THEIR ACCOUNT before the
+      // voting window closes, and CCPA deletion deliberately keeps the
+      // match document while removing the user. Without this stamp the
+      // departed player's rating becomes unknowable, and the survivor
+      // is silently denied the rating change from a match they really
+      // played - which is exactly the history the match document is
+      // kept in order to protect.
+      player1Rating: paired.rating ?? STARTING_RATING,
+      player2Rating: paired.opponentRating ?? STARTING_RATING,
       mode,
       settings,
       eventWindow,
@@ -621,6 +637,10 @@ async function pollMatchmaking(auth, data) {
       queueRef(mode).child(uid).update({status: "waiting", matchId: null, channelName: null, opponentId: null}),
       queueRef(mode).child(paired.opponentId).update({status: "waiting", matchId: null, channelName: null, opponentId: null}),
     ]).catch(() => {});
+    // Logged with the stack, because this catch swallowed a plain
+    // ReferenceError in the object literal above and the only visible
+    // symptom was matchmaking quietly never pairing anyone.
+    console.error(`match creation failed for ${matchRef.id}:`, e);
     throw new HttpsError("internal", `Could not create the match: ${e.message}`);
   }
 

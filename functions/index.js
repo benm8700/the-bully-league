@@ -515,28 +515,17 @@ exports.purgeExpiredRecordings = onSchedule("every 24 hours", async () => {
 });
 
 exports.finalizeExpiredMatches = onSchedule("every 60 minutes", async () => {
-  const db = getFirestore();
-  // Still queried on createdAt even though the window is now measured from
-  // completedAt. That's deliberate and correct: completedAt is always >=
-  // createdAt, so this is a strict SUPERSET of the matches whose window has
-  // actually closed. finalizeMatch re-checks the real window itself and
-  // returns "window-open" for anything caught early, which the next hourly
-  // run picks up again. Keeping the query on createdAt avoids a second
-  // composite index and avoids missing abandoned matches entirely, which
-  // never get a completedAt at all.
-  const cutoff = new Date(Date.now() - VOTE_WINDOW_MS);
-  const snap = await db
-      .collection("matches")
-      .where("createdAt", "<=", cutoff)
-      .where("voteFinalized", "==", false)
-      .get();
-
-  for (const doc of snap.docs) {
-    try {
-      await finalizeMatch(doc.id);
-    } catch (e) {
-      console.error(`finalizeExpiredMatches: failed for match ${doc.id}`, e);
-    }
+  // The body lives in finalizeSweep.js so it can actually be RUN. This
+  // job threw on every run for the life of the project - a missing
+  // composite index, swallowed by the scheduler's own error handling -
+  // and the scan that exists to catch exactly that could not reach it
+  // while it was inline here.
+  const {sweepExpiredMatches} = require("./finalizeSweep");
+  try {
+    const result = await sweepExpiredMatches();
+    console.log("finalizeExpiredMatches:", JSON.stringify(result));
+  } catch (err) {
+    console.error("finalizeExpiredMatches failed:", err);
   }
 });
 

@@ -123,6 +123,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     check("the match carries settings and a window verdict, stamped",
         Boolean(paired.settings) && paired.eventWindow !== undefined,
         JSON.stringify({s: !!paired.settings, w: paired.eventWindow}));
+    // Both ratings as they stood at pairing. Without these, a player who
+    // deletes their account before voting closes leaves an opponent whose
+    // rating change can never be computed - the match document is kept
+    // precisely to protect that history.
+    check("BOTH RATINGS ARE STAMPED at pairing",
+        Number.isFinite(paired.player1Rating) &&
+        Number.isFinite(paired.player2Rating),
+        JSON.stringify({p1: paired.player1Rating, p2: paired.player2Rating}));
 
     // ---- 3. COMPLETE --------------------------------------------------
     res = await call(p1, "completeMatch", {matchId});
