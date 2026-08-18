@@ -135,12 +135,20 @@ class _LiveCheckInState extends State<LiveCheckIn> {
             ),
             const SizedBox(height: 6),
             Text(
+              // Seen on a device: telling somebody to "check in now" while
+              // the only button on screen says Join is a small
+              // contradiction, and small contradictions are what make an
+              // app feel unfinished. A non-entrant is told what they
+              // actually have to do first.
               started
                   ? 'Under way.'
-                  : open
-                      ? 'Starts in ${_countdown(until)}. Check in now.'
-                      : 'Starts in ${_countdown(until)}. Check-in opens '
-                          '$_leadMinutes minutes before.',
+                  : !open
+                      ? 'Starts in ${_countdown(until)}. Check-in opens '
+                          '$_leadMinutes minutes before.'
+                      : widget.isEntrant
+                          ? 'Starts in ${_countdown(until)}. Check in now.'
+                          : 'Starts in ${_countdown(until)}. Join, then '
+                              'check in to play.',
               style: text.bodyMedium,
             ),
             if (widget.isEntrant && !started) ...[
