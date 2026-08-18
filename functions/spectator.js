@@ -139,12 +139,22 @@ async function watchLiveMatch(auth, data, appCertificate) {
       EXPIRE_SECONDS,
   );
 
+  const [p1, p2] = await Promise.all([
+    db.collection("users").doc(match.player1Id).get(),
+    db.collection("users").doc(match.player2Id).get(),
+  ]);
+
   return {
     channelName: match.channelName,
     token,
     agoraUid: uid,
     player1Id: match.player1Id,
     player2Id: match.player2Id,
+    // Sent with the token so the viewer can label the vote buttons the
+    // moment the battle ends, rather than fetching names during the
+    // ninety seconds when every round trip is visible.
+    player1Name: p1.data()?.username ?? "Player 1",
+    player2Name: p2.data()?.username ?? "Player 2",
     tournamentId,
   };
 }
@@ -175,6 +185,17 @@ async function liveMatchesFor(auth, data) {
   if (!round?.matchups) return {matches: []};
 
   const {tournamentMatchId} = require("./tournamentPlay");
+  // Names resolved here rather than by the client, which would otherwise
+  // do two document reads per matchup just to draw a list.
+  const names = new Map();
+  const nameOf = async (uid) => {
+    if (!uid) return null;
+    if (names.has(uid)) return names.get(uid);
+    const snap = await db.collection("users").doc(uid).get();
+    const name = snap.data()?.username ?? "Unknown";
+    names.set(uid, name);
+    return name;
+  };
   const out = [];
   for (const [i, m] of round.matchups.entries()) {
     // A settled matchup is over, and a bye was never played.
@@ -188,6 +209,8 @@ async function liveMatchesFor(auth, data) {
       matchId: id,
       player1Id: match.player1Id,
       player2Id: match.player2Id,
+      player1Name: await nameOf(match.player1Id),
+      player2Name: await nameOf(match.player2Id),
       roundNumber: round.roundNumber,
       // Both players present means it is actually under way rather than
       // waiting for someone to arrive.

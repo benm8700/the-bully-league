@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/admin_only.dart';
 import '../../widgets/live_checkin.dart';
+import '../../widgets/watch_live_list.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import 'tournament_lobby_screen.dart';
@@ -194,6 +195,16 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                   // knocked out, or a round whose window has closed - the
                   // server refuses all three anyway, and offering an
                   // action that is certain to fail reads as a bug.
+                  // The way IN to watching. Without it a live event is
+                  // perfect and unwatchable, because the only route to a
+                  // battle was already knowing its match id - the same
+                  // class of gap as a report button reachable only after
+                  // finishing a match.
+                  WatchLiveList(
+                    tournamentId: widget.tournamentId,
+                    isLiveAndRunning: tournament['format'] == 'live' &&
+                        status == 'in_progress',
+                  ),
                   if (status == 'in_progress') ..._playSection(tournament),
                   if (status == 'in_progress')
                     AdminOnly(

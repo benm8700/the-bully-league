@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/agora_spectator_service.dart';
 import '../../core/services/spectator_service.dart';
+import '../../widgets/live_vote_panel.dart';
 
 /// Watching a live tournament battle.
 ///
@@ -35,6 +36,10 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
   final SpectatorService _spectator = AgoraSpectatorService();
   bool _loading = true;
   String? _error;
+  String? _player1Id;
+  String? _player2Id;
+  String _player1Name = 'Player 1';
+  String _player2Name = 'Player 2';
 
   @override
   void initState() {
@@ -62,7 +67,15 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
         token: data['token'] as String,
         uid: (data['agoraUid'] as num).toInt(),
       );
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _player1Id = data['player1Id'] as String?;
+          _player2Id = data['player2Id'] as String?;
+          _player1Name = data['player1Name'] as String? ?? 'Player 1';
+          _player2Name = data['player2Name'] as String? ?? 'Player 2';
+        });
+      }
     } on FirebaseFunctionsException catch (e) {
       // The server's message is shown verbatim - it is the one that knows
       // whether this is a finished battle, a private match, or a
@@ -112,18 +125,34 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
             )
           : _loading
               ? const Center(child: CircularProgressIndicator())
-              : ValueListenableBuilder<Set<int>>(
-                  valueListenable: _spectator.presentUids,
-                  builder: (context, present, _) => Column(
-                    children: [
-                      // Players publish as fixed uids 1 and 2, assigned
-                      // server-side at pairing, so the layout never has to
-                      // negotiate who is who.
-                      Expanded(child: _tile(1, present)),
-                      const SizedBox(height: 2),
-                      Expanded(child: _tile(2, present)),
-                    ],
-                  ),
+              : Column(
+                  children: [
+                    Expanded(
+                      child: ValueListenableBuilder<Set<int>>(
+                        valueListenable: _spectator.presentUids,
+                        builder: (context, present, _) => Column(
+                          children: [
+                            // Players publish as fixed uids 1 and 2,
+                            // assigned server-side at pairing, so the
+                            // layout never has to negotiate who is who.
+                            Expanded(child: _tile(1, present)),
+                            const SizedBox(height: 2),
+                            Expanded(child: _tile(2, present)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Renders nothing until the battle ends, then becomes
+                    // the ballot, then the count, then the verdict.
+                    if (_player1Id != null && _player2Id != null)
+                      LiveVotePanel(
+                        matchId: widget.matchId,
+                        player1Id: _player1Id!,
+                        player2Id: _player2Id!,
+                        player1Name: _player1Name,
+                        player2Name: _player2Name,
+                      ),
+                  ],
                 ),
     );
   }
