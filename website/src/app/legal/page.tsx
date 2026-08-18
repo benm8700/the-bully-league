@@ -25,7 +25,7 @@ export default function LegalPage() {
     <main className="flex-1 px-6 py-16">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold mb-2">Terms of Service & Privacy Policy</h1>
-        <p className="text-sm text-foreground/50 mb-1">Last updated: August 17, 2026</p>
+        <p className="text-sm text-foreground/50 mb-1">Last updated: August 18, 2026</p>
 
         <div className="border border-yellow-600/40 bg-yellow-600/10 rounded-lg px-4 py-3 my-6 text-sm text-foreground/80">
           <strong>Placeholder notice:</strong> this document was drafted to accurately reflect
@@ -102,14 +102,18 @@ export default function LegalPage() {
         </P>
         <ul className="list-disc pl-5 mb-3">
           <Li>
-            <strong>&quot;I&apos;d rather this wasn&apos;t posted.&quot;</strong> A preference. Available
-            until voting on that battle closes, so the decision is made before you know the
-            result, and limited to a small number per month.
+            <strong>&quot;I&apos;d rather this wasn&apos;t posted.&quot;</strong> A preference, and it
+            works <em>before</em> a clip is public. It is available until voting on that battle
+            closes - which is also the point before which nothing can be posted - so the decision
+            is made before you know the result, and it is limited to a small number per month.
+            Once a clip is public this route is closed: withdrawing by preference is about
+            stopping something going out, not unpublishing something people have already seen.
           </Li>
           <Li>
             <strong>&quot;This is harming me.&quot;</strong> Harassment, doxxing, a false factual claim, or
-            brigading. <strong>No deadline, no limit, and no friction, ever.</strong> Harm often
-            surfaces weeks later precisely because a clip spread.
+            brigading. <strong>No deadline, no limit, and no friction, ever</strong> - and this
+            one <em>does</em> take down a clip that is already public. Harm often surfaces weeks
+            later precisely because a clip spread, so it is the route with no time limit on it.
           </Li>
         </ul>
         <P>
@@ -117,6 +121,11 @@ export default function LegalPage() {
           stating plainly rather than leaving you to discover it: if the other player already
           downloaded the clip before your request, we cannot recall their copy. That is true of
           any takedown anywhere, but you should know it up front.
+        </P>
+        <P>
+          If you are in the UK, your right to withdraw consent under UK GDPR is separate from all
+          of the above and is not limited by the deadline or the monthly cap. Contact us through
+          the app&apos;s support form and we will deal with it.
         </P>
 
         <H3>7. Points, ranking, and prizes</H3>

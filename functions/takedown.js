@@ -126,6 +126,29 @@ async function requestTakedown(auth, data) {
           "causing you harm, report it instead - that has no deadline.",
       );
     }
+    // PREFERENCE CAN NEVER PULL A CLIP THAT IS ALREADY PUBLIC.
+    //
+    // Today this is unreachable, because publishing is refused while the
+    // objection window is open and that window IS the preference deadline -
+    // so by the time a clip is live, preference has already expired. It is
+    // stated here anyway, explicitly, because that guarantee is currently
+    // EMERGENT from two separate rules composing, and the day someone
+    // relaxes publishBlockedReason it would silently disappear with nothing
+    // to catch it. A pinned test guards the same property.
+    //
+    // The rule itself is the developer's decision (2026-08-18): stopping a
+    // clip before it goes out is the part that earns trust; pulling one
+    // after it has been seen destroys content that cost real money to make.
+    // Genuine harm is not subject to any of this - it has no deadline, no
+    // cap, and it DOES revoke.
+    if (match.highlight?.published === true) {
+      throw new HttpsError(
+          "failed-precondition",
+          "This clip is already public, so it can't be withdrawn by " +
+          "preference. If it is causing you harm, report it instead - that " +
+          "has no deadline and it will be taken down.",
+      );
+    }
     const userSnap = await userRef.get();
     if (preferenceRemaining(userSnap.data(), nowMs) <= 0) {
       throw new HttpsError(
@@ -166,9 +189,13 @@ async function requestTakedown(auth, data) {
     console.error("clip refunds failed for", matchId, e.message);
   }
 
-  // Revoke now if it is already out. Unconditional means unconditional.
+  // Revoke now if it is already out - HARM ONLY. A takedown that merely
+  // prevented future publishing would do nothing for the person whose clip
+  // is already out, which is exactly when someone in real trouble asks.
+  // Preference never reaches this: it is refused outright above once a clip
+  // is public.
   let revoked = false;
-  if (match.highlight?.published === true) {
+  if (channel === "harm" && match.highlight?.published === true) {
     const {unpublishHighlight} = require("./publishHighlight");
     await unpublishHighlight(matchId);
     revoked = true;

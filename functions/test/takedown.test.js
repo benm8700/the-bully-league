@@ -145,4 +145,46 @@ check("the cap is small enough to be a courtesy, not a policy", () => {
   assert.ok(PREFERENCE_CAP_PER_MONTH <= 5, `cap too generous: ${PREFERENCE_CAP_PER_MONTH}`);
 });
 
-console.log(`\n${checks} checks passed.`);
+
+// --------------------------------------- preference never pulls a live clip
+//
+// The developer's rule (2026-08-18): stopping a clip BEFORE it goes out is
+// the part that earns trust; pulling one after it has been seen destroys
+// content that cost real money to make. Genuine harm is exempt from all of
+// it.
+//
+// These pin a guarantee that is currently EMERGENT rather than designed:
+// publishing is refused while the objection window is open, and that window
+// is the preference deadline - so the two states cannot overlap. If either
+// rule is ever relaxed independently, preference silently regains the power
+// to revoke a live clip. That is what these catch.
+check("a clip cannot be published while preference is still available", () => {
+  const open = {completedAt: ts(NOW - 60 * 1000)};
+  assert.strictEqual(preferenceWindowOpen(open, NOW), true);
+  assert.strictEqual(publishBlockedReason(open, NOW), "objection-window-open",
+      "if this ever returns null while preference is open, a preference " +
+      "request could pull a published clip");
+});
+
+check("once a clip CAN be published, preference has already expired", () => {
+  const shut = closedMatch;
+  assert.strictEqual(publishBlockedReason(shut, NOW), null);
+  assert.strictEqual(preferenceWindowOpen(shut, NOW), false,
+      "preference must be closed by the time publishing opens");
+});
+
+check("THE INVARIANT: the two windows never overlap, at any moment", () => {
+  // Walked across the whole lifetime rather than spot-checked, because the
+  // failure would be a narrow overlap at one boundary.
+  const m = {completedAt: ts(NOW)};
+  for (let h = 0; h <= 48; h += 1) {
+    const t = NOW + h * 60 * 60 * 1000;
+    const canPreference = preferenceWindowOpen(m, t);
+    const canPublish = publishBlockedReason(m, t) === null;
+    assert.ok(!(canPreference && canPublish),
+        `at +${h}h both preference and publishing were available`);
+  }
+});
+
+console.log(`
+${checks} checks passed.`);
