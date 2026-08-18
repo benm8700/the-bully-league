@@ -169,7 +169,20 @@ function battleEntitlement({user, mode, nowMs, windowConfig, config}) {
     // push fires as the window opens, so this hour brings the most fresh
     // installs of the day - a brand-new player must never find every mode
     // closed on their first ever session, at the busiest moment there is.
-    const neverRanked = (user?.rankedMatchesPlayed ?? 0) === 0;
+    // CAREER matches, not the season counter. A season reset zeroes
+    // rankedMatchesPlayed to create a placement period, and reading that
+    // here would hand the brand-new-player carve-out to the ENTIRE
+    // userbase on reset day - quietly suspending the window's ranked-only
+    // rule for everyone until they had each replayed a match.
+    //
+    // Falls back to the season counter for accounts that predate the
+    // career field, which is every account created before the first
+    // reset. Reading a missing career total as zero would say "never
+    // played" about someone with a hundred matches.
+    const career = Number(user?.careerRankedMatches);
+    const played = Number.isFinite(career) ?
+      career : (Number(user?.rankedMatchesPlayed) || 0);
+    const neverRanked = played === 0;
     if (neverRanked) return allow();
     return {
       allowed: false,

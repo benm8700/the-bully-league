@@ -218,12 +218,21 @@ async function finalizeMatch(matchId, {force = false} = {}) {
 
     const p1Matches = (p1.rankedMatchesPlayed ?? 0) + 1;
     const p2Matches = (p2.rankedMatchesPlayed ?? 0) + 1;
+    // The career total, which a season reset preserves while zeroing the
+    // season counter above. Seeded from the season counter for accounts
+    // that predate it, so nobody's history starts again at the moment
+    // this field was introduced.
+    const p1Career = (Number.isFinite(Number(p1.careerRankedMatches)) ?
+      Number(p1.careerRankedMatches) : (p1.rankedMatchesPlayed ?? 0)) + 1;
+    const p2Career = (Number.isFinite(Number(p2.careerRankedMatches)) ?
+      Number(p2.careerRankedMatches) : (p2.rankedMatchesPlayed ?? 0)) + 1;
 
     tx.update(player1Ref, {
       rating: p1NewRating,
       wins: p1Wins,
       losses: p1Losses,
       rankedMatchesPlayed: p1Matches,
+      careerRankedMatches: p1Career,
       rankTitle: computeBaseRankTitle(p1NewRating, p1Matches),
     });
     tx.update(player2Ref, {
@@ -231,6 +240,7 @@ async function finalizeMatch(matchId, {force = false} = {}) {
       wins: p2Wins,
       losses: p2Losses,
       rankedMatchesPlayed: p2Matches,
+      careerRankedMatches: p2Career,
       rankTitle: computeBaseRankTitle(p2NewRating, p2Matches),
     });
     // RECORDED HERE, INSIDE THE SAME TRANSACTION, and this is the only

@@ -1165,5 +1165,18 @@ exports.weeklyRecap = onSchedule("every 60 minutes", async () => {
   }
 });
 
+/**
+ * Closes a season: archives the standings, then pulls every rating
+ * partway back toward the centre.
+ *
+ * ADMIN ONLY AND DELIBERATELY NOT SCHEDULED - a cron that silently
+ * rewrites every player's rating on a timer is the most destructive
+ * thing this codebase could contain. Supports dryRun.
+ */
+exports.runSeasonReset = onCall(async (request) => {
+  const {runSeasonReset} = require("./seasonReset");
+  return runSeasonReset(request.auth, request.data, {requireAdmin});
+});
+
 exports.onVoteCast = onVoteCast;
 exports.onReactionWritten = onReactionWritten;
