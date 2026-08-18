@@ -1,14 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import type { FeedMatch } from "@/lib/matches";
 
+// No longer a link. It used to open a browser voting page, which required
+// sign-in - and accounts can only be created in the app, so the visitor
+// this feed exists for could never actually vote. The clip plays right
+// here instead, and judging lives in the app where the judge already has
+// an account.
 function MatchCard({ match }: { match: FeedMatch }) {
   return (
-    <Link
-      href={`/vote/${match.id}`}
-      className="flex flex-col rounded-lg border border-foreground/10 overflow-hidden hover:border-accent transition-colors"
+    <div
+      className="flex flex-col rounded-lg border border-foreground/10 overflow-hidden"
     >
       {match.videoUrl && (
         // preload="metadata" rather than "auto": a feed of twenty cards
@@ -40,7 +43,7 @@ function MatchCard({ match }: { match: FeedMatch }) {
           {match.voteCount} {match.voteCount === 1 ? "vote" : "votes"}
         </span>
       </div>
-    </Link>
+    </div>
   );
 }
 

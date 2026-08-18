@@ -1,4 +1,5 @@
 import { getTopRoasters } from "@/lib/leaderboard";
+import { StoreCta } from "@/components/StoreCta";
 
 // Revalidate rather than force-dynamic: this page has no per-request input
 // (no cookies/params), so Next would otherwise statically render it once
@@ -20,6 +21,13 @@ export default async function Home() {
         <p className="text-lg text-foreground/70">
           Live 1-on-1 video roast battles. Random pairing, community-judged, no mercy.
         </p>
+        {/* The site's whole job for an arriving visitor. Above the
+            leaderboard because someone who clicked a shared clip is here
+            for about four seconds, and the top five means nothing to them
+            yet. */}
+        <div className="mt-4">
+          <StoreCta />
+        </div>
       </div>
 
       <section className="max-w-2xl w-full mt-20">

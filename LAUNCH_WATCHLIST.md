@@ -17,6 +17,17 @@ it quotes can't drift out of sync. Tick items off as they're settled.
 - [ ] **Play Console listing + internal testing track**: content rating
       questionnaire, data safety section, upload the signed AAB, invite
       testers by email.
+- [ ] **⚠️ THE MOMENT THE LISTING GOES LIVE: link the website's download
+      button.** Set `NEXT_PUBLIC_APP_STORE_URL` to the Play listing URL in
+      Vercel → Project Settings → Environment Variables (Production +
+      Preview), then redeploy. **No code change and no release — one
+      setting.**
+      Until it is set, the homepage and the match feed show a greyed-out
+      "Coming soon to Android" instead of a link, so nothing is broken in
+      the meantime — but every visitor who clicks a shared clip until then
+      is a download you didn't get. **This is the single highest-leverage
+      item in this file once the app is public, and it takes about thirty
+      seconds.**
 - [ ] **Real legal review** of the Terms/Privacy page. It is live at
       `/legal` and marked on the page itself as a non-lawyer-reviewed
       placeholder. It is accurate to the product, which is a different
