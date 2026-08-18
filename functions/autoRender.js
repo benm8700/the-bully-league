@@ -1,5 +1,6 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {RECORDED_MODES} = require("./matchmaking");
+const {qualityFactor} = require("./captureQuality");
 
 /**
  * Turns finished matches into watchable clips automatically, in two
@@ -96,6 +97,12 @@ function voteMargin(match) {
  * userbase growth, weekday-versus-weekend activity, and any day where
  * turnout happened to be unusual. Then a decisive result gets a boost.
  *
+ * CAPTURE QUALITY DISCOUNTS THE WHOLE THING, because captions are the
+ * expensive stage and a clip nobody can see or hear is the worst
+ * possible thing to spend them on. It is a discount rather than a veto:
+ * a dark clip with overwhelming votes may still be the best thing that
+ * happened all week.
+ *
  * THE HONEST LIMITATION: this measures how many people judged a clip,
  * which is a proxy for quality, not quality itself. The real signal is
  * watch-through - did people watch to the end, did they replay it - and
@@ -105,7 +112,9 @@ function voteMargin(match) {
 function captionScore(match, dayMedianVotes) {
   const votes = Number(match?.voteCount) || 0;
   const median = dayMedianVotes > 0 ? dayMedianVotes : 1;
-  return (votes / median) * (1 + MARGIN_BOOST * voteMargin(match));
+  return (votes / median) *
+    (1 + MARGIN_BOOST * voteMargin(match)) *
+    qualityFactor(match?.captureQuality);
 }
 
 /** UTC calendar day of a timestamp in millis, for grouping peers. */

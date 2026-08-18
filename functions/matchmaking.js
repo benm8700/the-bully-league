@@ -3,6 +3,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {wantsCategory} = require("./notifications");
 const {HttpsError} = require("firebase-functions/v2/https");
+const {sanitiseQualityReport} = require("./captureQuality");
 const {STARTING_RATING, RANK_TIERS, GOAT_TITLE, computeBaseRankTitle} = require("./rating");
 const {getMatchSettings} = require("./matchSettings");
 const {readEventWindowConfig, qualifiesForWindow} = require("./eventWindow");
@@ -761,7 +762,7 @@ async function getActiveMatch(auth) {
  */
 async function completeMatch(auth, data, creds = null) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-  const {matchId, outcome = "completed"} = data || {};
+  const {matchId, outcome = "completed", quality} = data || {};
   if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
   if (!["completed", "abandoned"].includes(outcome)) {
     throw new HttpsError("invalid-argument", "outcome must be 'completed' or 'abandoned'.");
@@ -775,6 +776,22 @@ async function completeMatch(auth, data, creds = null) {
 
   if (auth.uid !== match.player1Id && auth.uid !== match.player2Id) {
     throw new HttpsError("permission-denied", "Only a participant can complete this match.");
+  }
+
+  // The caller's own capture-quality summary, recorded BEFORE the settle
+  // claim below and deliberately outside it. Both devices call this and
+  // only one wins the claim - so writing the report inside would keep
+  // whichever player raced faster and silently discard the other, who is
+  // quite often the one who actually had the problem.
+  //
+  // Keyed by uid because each player reports on their OWN camera and mic;
+  // there is no single number for a match. Never fatal: a bad report must
+  // not stop a battle being settled.
+  const cleanQuality = sanitiseQualityReport(quality);
+  if (cleanQuality) {
+    await matchRef.update({
+      ["captureQuality." + auth.uid]: cleanQuality,
+    }).catch((e) => console.error("quality report failed:", e.message));
   }
 
   // Claim the settle in a TRANSACTION, not a read-then-write. Both

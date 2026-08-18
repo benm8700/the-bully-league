@@ -361,7 +361,13 @@ class _MatchScreenState extends State<MatchScreen> {
     if (_violationEnded || _completeRequested) return;
     _completeRequested = true;
     try {
-      await _matchmakingService.completeMatch(widget.pairing.matchId);
+      // Sent with the settle rather than written separately, since the
+      // client cannot write the match document at all - and sent from
+      // BOTH devices, because each only knows about its own capture.
+      await _matchmakingService.completeMatch(
+        widget.pairing.matchId,
+        quality: _quality.summary,
+      );
       if (mounted) setState(() => _matchCompleted = true);
     } catch (e) {
       if (mounted) setState(() => _matchSaveError = 'Could not save match: $e');

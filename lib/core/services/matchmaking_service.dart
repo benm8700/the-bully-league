@@ -305,7 +305,22 @@ class MatchmakingService {
   /// played to a verdict, or 'abandoned' when it ended without a real
   /// contest (currently the live content-violation auto-end) - abandoned
   /// matches are never voted on or rated.
-  Future<void> completeMatch(String matchId, {String outcome = 'completed'}) async {
-    await _call('completeMatch', {'matchId': matchId, 'outcome': outcome});
+  /// Settles the match, optionally carrying this device's own
+  /// capture-quality summary.
+  ///
+  /// The report describes THIS player's camera and mic, so both devices
+  /// send their own and the server keys them by uid. It is advisory: it
+  /// only deprioritises the clip for captions and never touches the
+  /// result, so a missing or wrong report costs nothing that matters.
+  Future<void> completeMatch(
+    String matchId, {
+    String outcome = 'completed',
+    Map<String, Object?>? quality,
+  }) async {
+    await _call('completeMatch', {
+      'matchId': matchId,
+      'outcome': outcome,
+      'quality': ?quality,
+    });
   }
 }
