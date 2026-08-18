@@ -299,6 +299,48 @@ async function sweepLiveTournaments() {
       results.push({tournamentId: doc.id, action: "error", error: e.message});
     }
   }
+  // FINISHED LIVE MATCHES ARE SETTLED HERE, and without this the whole
+  // format is broken in a way nothing would report.
+  //
+  // finalizeExpiredMatches queries createdAt <= now - 24h, so a match
+  // played five minutes ago is INVISIBLE to it for a day. Nothing else
+  // settled them: settleLiveMatch existed but was only ever a client
+  // nudge, and the client was not calling it. The consequence is not a
+  // slow result - it is that no winner is ever recorded, so
+  // recordTournamentResult never fires, so the bracket never advances and
+  // the event stalls after its first match with the audience watching.
+  //
+  // Found by asking which code path actually finalizes a live match,
+  // rather than assuming the hourly sweep covered everything.
+  const settled = [];
+  try {
+    const {voteWindowEndMs, finalizeMatch} = require("./matchFinalization");
+    // Only live tournament matches: bounded by the tournaments actually
+    // running, so this stays a handful of reads however big the app gets.
+    const running = await db.collection("tournaments")
+        .where("status", "==", "in_progress").get();
+    const {tournamentMatchId} = require("./tournamentPlay");
+    for (const tDoc of running.docs) {
+      if (!isLive(tDoc.data())) continue;
+      const rounds = tDoc.data().bracket?.rounds ?? [];
+      const round = rounds[rounds.length - 1];
+      if (!round?.matchups) continue;
+      for (const [i, m] of round.matchups.entries()) {
+        if (m.winnerId || !m.player1Id || !m.player2Id) continue;
+        const id = tournamentMatchId(tDoc.id, round.roundNumber, i);
+        const snap = await db.collection("matches").doc(id).get();
+        if (!snap.exists) continue;
+        const match = snap.data();
+        if (match.voteFinalized || match.status !== "completed") continue;
+        if (Date.now() <= voteWindowEndMs(match)) continue;
+        const result = await finalizeMatch(id);
+        settled.push({matchId: id, result});
+      }
+    }
+  } catch (e) {
+    console.error("live settle sweep failed:", e.message);
+  }
+
   // Expired ROUNDS are forfeited here too, not just started tournaments.
   // The existing sweep is generic over windowEndMs so it already handles
   // live rounds correctly - but it runs every thirty minutes, and a
@@ -313,7 +355,7 @@ async function sweepLiveTournaments() {
     console.error("live forfeit sweep failed:", e.message);
   }
 
-  return {examined: open.size, acted: results, forfeits};
+  return {examined: open.size, acted: results, settled, forfeits};
 }
 
 module.exports = {

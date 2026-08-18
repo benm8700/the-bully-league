@@ -120,7 +120,10 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
                 milliseconds: endMs - DateTime.now().millisecondsSinceEpoch);
         final closed = left != null && left.isNegative;
 
-        if (closed) return _counting(context);
+        if (closed) {
+          _nudgeSettle();
+          return _counting(context);
+        }
         return _ballot(context, left);
       },
     );
@@ -196,6 +199,31 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
   /// Voting has closed but the result has not landed yet. Says so, rather
   /// than showing a dead ballot or an empty space - the settle is
   /// client-nudged and server-verified, so this is a real few seconds.
+  /// Asks the server to settle the moment the countdown reaches zero.
+  ///
+  /// The per-minute sweep is the reliable backstop and settles this
+  /// regardless; this is purely so a crowd watching a countdown hit zero
+  /// does not then wait up to another minute for the result they are
+  /// watching for. The server re-checks the window itself, so asking
+  /// early cannot rush a verdict.
+  ///
+  /// Asked once per panel. Retrying on a timer would have every spectator
+  /// hammering the same callable for the same match.
+  bool _nudged = false;
+  Future<void> _nudgeSettle() async {
+    if (_nudged) return;
+    _nudged = true;
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('settleLiveMatch')
+          .call<Map<String, dynamic>>({'matchId': widget.matchId});
+    } catch (_) {
+      // Silent by design: the per-minute sweep settles this anyway, so a
+      // failed nudge costs a few seconds and must never put an error in
+      // front of an audience.
+    }
+  }
+
   Widget _counting(BuildContext context) => _shell(context, [
         Text('Voting closed. Counting...',
             style: Theme.of(context).textTheme.titleSmall),
