@@ -1087,5 +1087,42 @@ exports.getDayPassState = onCall((request) => {
   return getDayPassState(request.auth);
 });
 
+/**
+ * LIVE tournaments. The async format is untouched; these only ever act on
+ * tournaments marked format: "live".
+ */
+exports.checkInToTournament = onCall((request) => {
+  const {checkInToTournament} = require("./liveTournament");
+  return checkInToTournament(request.auth, request.data);
+});
+
+exports.settleLiveMatch = onCall((request) => {
+  const {settleLiveMatch} = require("./liveTournament");
+  return settleLiveMatch(request.auth, request.data);
+});
+
+/**
+ * Starts live tournaments whose scheduled time has arrived, or cancels
+ * them if too few people checked in.
+ *
+ * Every minute, because a scheduled show that starts up to half an hour
+ * late is not a scheduled show. Cheap: it is one indexed query returning
+ * the handful of open tournaments, and it writes nothing when there is
+ * nothing to start.
+ */
+exports.advanceLiveTournaments = onSchedule("every 1 minutes", async () => {
+  const {sweepLiveTournaments} = require("./liveTournament");
+  try {
+    const result = await sweepLiveTournaments();
+    // Logged only when something happened - a sweep that reports every
+    // quiet minute buries the one that mattered.
+    if (result.acted.length > 0) {
+      console.log("advanceLiveTournaments:", JSON.stringify(result));
+    }
+  } catch (err) {
+    console.error("advanceLiveTournaments failed:", err);
+  }
+});
+
 exports.onVoteCast = onVoteCast;
 exports.onReactionWritten = onReactionWritten;

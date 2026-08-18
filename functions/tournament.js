@@ -301,4 +301,5 @@ async function recordTournamentResult(match, winnerId) {
 module.exports = {
   generateBracket, debugAdvanceRound, recordTournamentResult,
   applyResultToBracket, buildNextRound, isSettled, DEFAULT_MIN_ENTRANTS,
+  buildFirstRound,
 };
