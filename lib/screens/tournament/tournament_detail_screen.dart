@@ -118,6 +118,24 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     }
   }
 
+  /// What a player is told about how full a tournament is.
+  ///
+  /// A phrase rather than a number: the point is to convey momentum and
+  /// the cancellation risk without publishing a discouraging integer.
+  String _entrantStatus(String status, int count, num min) {
+    if (status == 'cancelled') {
+      return 'Cancelled - not enough entrants. Any fee is refunded.';
+    }
+    if (status == 'completed') return 'Finished.';
+    if (status == 'in_progress') return 'Under way.';
+    // Still open. Deliberately only two states, so nobody can infer the
+    // exact count by watching the wording change.
+    return count >= min
+        ? 'Ready to run - enough people are in.'
+        : 'Filling up. This only runs if enough people enter, and if it '
+            'does not, entry is refunded.';
+  }
+
   String _short(String? uid) {
     if (uid == null) return 'BYE';
     return uid.length > 8 ? uid.substring(0, 8) : uid;
@@ -160,7 +178,31 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                   ],
                   Text('Status: $status'),
                   Text('Prize: $prizeType'),
-                  Text('Entrants: ${entrantIds.length} (min $minEntrants)'),
+                  // THE ENTRANT COUNT IS HIDDEN FROM PLAYERS, on purpose.
+                  //
+                  // "3 entrants" reads as dead and stops the fourth person
+                  // entering, which is a real cold-start problem when a
+                  // tournament needs a minimum to run at all. With a FIXED
+                  // prize nobody needs the number to know what they are
+                  // playing for - every raffle and contest works this way.
+                  //
+                  // It would stop being fair the moment the prize became a
+                  // share of the pool, because then entrants genuinely
+                  // could not evaluate what they were buying. If prizes
+                  // ever go pari-mutuel, this has to come back.
+                  //
+                  // What must NOT be hidden is that a tournament can be
+                  // cancelled below its minimum - that is the entrant's
+                  // real risk, so it is stated in words instead.
+                  Text(_entrantStatus(status, entrantIds.length, minEntrants)),
+                  // The developer sees the real number, since running an
+                  // event means knowing whether it will actually fill.
+                  AdminOnly(
+                    child: Text(
+                      'Admin: ${entrantIds.length} entrants (min $minEntrants)',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   // Live events only - renders nothing for the async
                   // format, which has no check-in at all.
