@@ -246,6 +246,14 @@ async function enterQueue(auth, data) {
     blockedUserIds: user.blockedUserIds ?? [],
     recentOpponentIds: recent,
     joinedAt: Date.now(),
+    // An active judge's effective head start, resolved HERE from the
+    // user document rather than read during pairing: the pairing
+    // transaction sees only the queue node, and reading a user doc per
+    // candidate would turn one transaction into a fan-out over the
+    // whole queue. Fixed for the life of this queue entry, which is
+    // also fairer - judging while already waiting cannot jump you past
+    // people who were queued before you.
+    judgePriorityMs: judgePriorityFor(user),
     status: "waiting",
     // Whether this player can be woken by a push, which decides whether a
     // long wait may become a STANDING challenge. A standing challenge
@@ -379,12 +387,40 @@ function selectOpponent(queue, uid, now) {
   // be woken by a push and may not answer for minutes, or at all. Pairing
   // against a sleeper while a live player sits in the same queue would
   // make the app feel slower precisely when it is busiest.
+  //
+  // An active judge gets a bounded head start on the LAST of those
+  // terms only. Deliberately not on the tier match: widening decides
+  // how skill-appropriate a pairing is allowed to be, and rewarding
+  // judging with worse-matched opponents would be a punishment dressed
+  // as a perk. Nobody is ever excluded, only re-ordered - so this can
+  // never starve a non-judge, and when the pool is thick enough for
+  // instant pairing it changes nothing at all.
   pool.sort((a, b) =>
     (a.status === "standing" ? 1 : 0) - (b.status === "standing" ? 1 : 0) ||
     Math.abs(a.rating - me.rating) - Math.abs(b.rating - me.rating) ||
-    a.joinedAt - b.joinedAt,
+    effectiveWaitFrom(a) - effectiveWaitFrom(b),
   );
   return pool[0];
+}
+
+/**
+ * A queue entry's effective join time, earlier for an active judge.
+ *
+ * Expressed as wait time so it rides the tiebreak that already exists
+ * rather than adding a new axis to matchmaking. A malformed or absent
+ * bonus is simply no bonus.
+ */
+function effectiveWaitFrom(entry) {
+  const bonus = Number(entry?.judgePriorityMs);
+  const clean = Number.isFinite(bonus) && bonus > 0 ?
+    Math.min(bonus, MAX_PRIORITY_MS) : 0;
+  return (entry?.joinedAt ?? 0) - clean;
+}
+
+/** The caller's judging head start, from their user document. */
+function judgePriorityFor(user) {
+  const {priorityBonusMs} = require("./judgeRewards");
+  return priorityBonusMs(user, utcDayKey(Date.now()));
 }
 
 /**
@@ -921,6 +957,10 @@ async function completeMatch(auth, data, creds = null) {
  */
 const MAX_SKIPS_PER_DAY = 3;
 
+/** Re-declared here so the pairing comparator can clamp a queue entry's
+ * stored bonus without requiring judgeRewards on every sort comparison. */
+const {MAX_PRIORITY_MS} = require("./judgeRewards");
+
 /** UTC calendar day, used to reset the daily skip allowance. Deliberately
  * UTC rather than the player's local midnight: it needs to agree between
  * the server and every device, and a per-user timezone isn't stored. The
@@ -1076,14 +1116,20 @@ async function skipMatch(auth, data) {
     const user = snap.data() ?? {};
     const sameDay = user.skipsResetDate === today;
     const used = sameDay ? (user.skipsUsedToday ?? 0) : 0;
-    if (used >= MAX_SKIPS_PER_DAY) {
+    // Base plus whatever today's judging earned, under one hard
+    // ceiling. The ceiling is the point: skips are worth MORE to a
+    // rating-manipulator than to an honest player, so an uncapped mint
+    // would reintroduce the opponent cherry-picking the cap prevents.
+    const {skipAllowance} = require("./judgeRewards");
+    const allowed = skipAllowance(user, today, MAX_SKIPS_PER_DAY);
+    if (used >= allowed) {
       throw new HttpsError(
           "resource-exhausted",
-          `You've used all ${MAX_SKIPS_PER_DAY} of today's skips.`,
+          `You've used all ${allowed} of today's skips.`,
       );
     }
     tx.update(userRef, {skipsUsedToday: used + 1, skipsResetDate: today});
-    return MAX_SKIPS_PER_DAY - (used + 1);
+    return allowed - (used + 1);
   });
 
   await matchRef.update({
@@ -1104,8 +1150,19 @@ async function getSkipAllowance(auth) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
   const snap = await getFirestore().collection("users").doc(auth.uid).get();
   const user = snap.data() ?? {};
-  const used = user.skipsResetDate === utcDayKey(Date.now()) ? (user.skipsUsedToday ?? 0) : 0;
-  return {remaining: Math.max(0, MAX_SKIPS_PER_DAY - used), max: MAX_SKIPS_PER_DAY};
+  const today = utcDayKey(Date.now());
+  const used = user.skipsResetDate === today ? (user.skipsUsedToday ?? 0) : 0;
+  // Must agree with the transaction above, or the UI offers a skip the
+  // server then refuses - or hides one the player has actually earned.
+  const {skipAllowance, earnedSkips} = require("./judgeRewards");
+  const max = skipAllowance(user, today, MAX_SKIPS_PER_DAY);
+  return {
+    remaining: Math.max(0, max - used),
+    max,
+    // Broken out so the client can say WHERE the extra came from. An
+    // allowance that silently grows is a reward nobody knows they got.
+    earned: earnedSkips(user, today),
+  };
 }
 
 module.exports = {
@@ -1128,6 +1185,9 @@ module.exports = {
   getSkipAllowance,
   utcDayKey,
   MAX_SKIPS_PER_DAY,
+  // Exported so judging rewards expire on exactly the same boundary
+  // the skip allowance resets on - see judgeRewards.js.
+  utcDayKey,
   tierIndexFor,
   // Exported for test/matchmaking.test.js - the pairing rules are the part
   // worth exercising directly, independently of RTDB.

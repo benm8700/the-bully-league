@@ -416,4 +416,73 @@ test("an odd player out stays queued rather than being dropped", () => {
   assertQueueConsistent(q, "odd player out");
 });
 
+// --- Judging priority in the pairing tiebreak ----------------------------
+
+test("an active judge is paired ahead of an equal candidate", () => {
+  // Both identical in tier and rating, both waiting the same length of
+  // time. The only difference is that one of them judged today.
+  const q = queueOf(
+      entry("me"),
+      entry("idle", {joinedAt: NOW - 1000}),
+      entry("judge", {joinedAt: NOW - 1000, judgePriorityMs: 60000}),
+  );
+  assert.strictEqual(selectOpponent(q, "me", NOW).uid, "judge");
+});
+
+test("PRIORITY NEVER BEATS A CLOSER RATING - it is the LAST term", () => {
+  // The whole point of the ladder is skill-appropriate pairing. A
+  // reward that degraded match quality would be a punishment dressed as
+  // a perk, for both players.
+  const q = queueOf(
+      entry("me", {rating: 1200}),
+      entry("close", {rating: 1205, joinedAt: NOW}),
+      entry("judge", {rating: 1400, joinedAt: NOW, judgePriorityMs: 120000}),
+  );
+  assert.strictEqual(selectOpponent(q, "me", NOW).uid, "close");
+});
+
+test("priority never beats a LIVE opponent for a standing challenge", () => {
+  // A live player can battle in thirty seconds; a standing one has to be
+  // woken by a push and may never answer. That ordering must survive.
+  const q = queueOf(
+      entry("me"),
+      entry("live", {joinedAt: NOW}),
+      entry("sleeper", {status: "standing", joinedAt: NOW - 9999999,
+        judgePriorityMs: 120000}),
+  );
+  assert.strictEqual(selectOpponent(q, "me", NOW).uid, "live");
+});
+
+test("A LONG-WAITING NON-JUDGE STILL WINS - nobody is starved", () => {
+  // 70 seconds, chosen deliberately: still a LIVE entry (past 90 it
+  // becomes a standing challenge and is sorted behind every live waiter
+  // anyway, which would make this test pass for the wrong reason), and
+  // longer than the maximum bonus can ever be.
+  const q = queueOf(
+      entry("me"),
+      entry("patient", {joinedAt: NOW - 70 * 1000}),
+      entry("judge", {joinedAt: NOW, judgePriorityMs: 45 * 1000}),
+  );
+  assert.strictEqual(selectOpponent(q, "me", NOW).uid, "patient");
+});
+
+test("a forged priority cannot exceed the bound", () => {
+  // Queue entries are written only by the server, but the value is
+  // stored data and clamping it costs nothing. Without the clamp a
+  // single bad number would outrank every real player forever.
+  const q = queueOf(
+      entry("me"),
+      entry("patient", {joinedAt: NOW - 70 * 1000}),
+      entry("cheat", {joinedAt: NOW, judgePriorityMs: Number.MAX_SAFE_INTEGER}),
+  );
+  assert.strictEqual(selectOpponent(q, "me", NOW).uid, "patient");
+});
+
+test("an entry with no priority field pairs exactly as before", () => {
+  // Every queue entry written before this existed.
+  const q = queueOf(entry("me"), entry("old", {joinedAt: NOW - 5000}),
+      entry("newer", {joinedAt: NOW}));
+  assert.strictEqual(selectOpponent(q, "me", NOW).uid, "old");
+});
+
 console.log(`matchmaking: ${passed} checks passed`);

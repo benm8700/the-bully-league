@@ -289,6 +289,31 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     pointsAwarded = result.awarded;
     voteCapReached = result.reason === "daily-cap";
 
+    // What judging earns BESIDES points: priority in matchmaking and,
+    // at a hard ceiling, an extra skip. Points are a weak motivator for
+    // exactly the competitive players whose votes matter most, so both
+    // of these are deliberately useful to somebody who will never spend
+    // a point.
+    //
+    // Recorded on EVERY vote, including votes past the points cap - the
+    // cap exists to stop farming the currency, not to stop counting
+    // that somebody judged something. The rewards have their own,
+    // separate ceilings.
+    try {
+      const {judgeVoteUpdate} = require("./judgeRewards");
+      const {utcDayKey} = require("./matchmaking");
+      const dayKey = utcDayKey(Date.now());
+      const userRef = db.collection("users").doc(voterId);
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+        tx.update(userRef, judgeVoteUpdate(snap.data() ?? {}, dayKey));
+      });
+    } catch (e) {
+      // A reward, never a precondition. A failure here must not fail
+      // the vote that earned it.
+      console.error(`judge reward for ${voterId} failed:`, e.message);
+    }
+
     // The daily streak, paid on the first vote of each day. Kept inside
     // this try because it is a reward, never a precondition: a streak
     // failure must not fail the vote that earned it.
