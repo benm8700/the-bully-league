@@ -1145,5 +1145,25 @@ exports.liveMatchesFor = onCall((request) => {
   return liveMatchesFor(request.auth, request.data);
 });
 
+/**
+ * The weekly recap, Sunday evening Pacific.
+ *
+ * Polled hourly rather than pinned to an exact cron, for the same reason
+ * the event-window push is: the schedule is one source of drift and the
+ * marker is keyed by Pacific week, so repeated firing inside the window
+ * is harmless and a missed hour is recoverable.
+ */
+exports.weeklyRecap = onSchedule("every 60 minutes", async () => {
+  const {sweepWeeklyRecap} = require("./weeklyRecap");
+  try {
+    const result = await sweepWeeklyRecap();
+    if (!result.skipped) {
+      console.log("weeklyRecap:", JSON.stringify(result));
+    }
+  } catch (err) {
+    console.error("weeklyRecap failed:", err);
+  }
+});
+
 exports.onVoteCast = onVoteCast;
 exports.onReactionWritten = onReactionWritten;

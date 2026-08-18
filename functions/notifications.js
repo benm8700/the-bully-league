@@ -15,7 +15,7 @@ const {getMessaging} = require("firebase-admin/messaging");
 /** Every category a user can mute. Match-found is deliberately included:
  * it is the most useful notification in the app, but forcing it on anyone
  * is how an app earns a system-level block, which silences everything. */
-const CATEGORIES = ["match_found", "event_window", "vote_reminder", "tournament", "rank_change"];
+const CATEGORIES = ["match_found", "event_window", "vote_reminder", "tournament", "rank_change", "weekly_recap"];
 
 /** FCM's documented per-request ceiling for multicast sends. */
 const MULTICAST_LIMIT = 500;
@@ -43,8 +43,39 @@ function wantsCategory(user, category) {
  * Returns counts rather than throwing: every caller here is best-effort,
  * and a push failing must never fail the thing that triggered it.
  */
-async function sendToUsers(userDocs, {title, body, category, data = {}}) {
+/**
+ * Accepts either user document snapshots or plain uid strings.
+ *
+ * THREE CALLERS GOT THIS WRONG before it was tolerant, which makes it an
+ * API problem rather than three mistakes. Passing a uid threw "doc.data
+ * is not a function" inside the caller's try/catch, so the push simply
+ * never arrived and nothing surfaced it - the friend-challenge
+ * notification, which is how somebody learns they were challenged at all,
+ * had never once fired.
+ *
+ * Fetching here rather than demanding snapshots also puts the read where
+ * it is cheapest to reason about: a caller that already holds the
+ * document passes it and pays nothing extra.
+ */
+async function resolveUserDocs(userDocsOrIds) {
   const db = getFirestore();
+  const out = [];
+  for (const entry of userDocsOrIds) {
+    if (typeof entry === "string") {
+      const snap = await db.collection("users").doc(entry).get();
+      if (snap.exists) out.push(snap);
+    } else if (entry && typeof entry.data === "function") {
+      out.push(entry);
+    }
+    // Anything else is silently skipped: a malformed recipient must never
+    // stop the rest of a batch being notified.
+  }
+  return out;
+}
+
+async function sendToUsers(userDocsOrIds, {title, body, category, data = {}}) {
+  const db = getFirestore();
+  const userDocs = await resolveUserDocs(userDocsOrIds);
   const targets = [];
   for (const doc of userDocs) {
     const user = doc.data();
@@ -91,4 +122,5 @@ async function sendToUsers(userDocs, {title, body, category, data = {}}) {
   return {sent, failed, recipients: targets.length};
 }
 
-module.exports = {CATEGORIES, wantsCategory, sendToUsers, MULTICAST_LIMIT};
+module.exports = {CATEGORIES, wantsCategory, sendToUsers, resolveUserDocs,
+  MULTICAST_LIMIT};
