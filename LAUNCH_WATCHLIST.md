@@ -46,6 +46,41 @@ it quotes can't drift out of sync. Tick items off as they're settled.
 
 ---
 
+## 0b. Audio branding — pick a direction, then buy the asset
+
+**Decided (2026-08-19):** a short sting plays in two places — the last
+second of every rendered clip, and the rank-change popup. **No background
+music bed** (ruled out, not pending) and **no other in-app sound**, because
+every other moment in the app has a hot mic and a sound played there ends
+up inside the recording the clip is cut from.
+
+**Nothing is built.** Four directions were synthesised so they could be
+heard — regenerate with `node tools/makeStingCandidates.js`, outputs land
+in `sting_candidates/` and are gitignored. The producer-tag shape is the
+recommendation; **no direction has been chosen**.
+
+**Before launch, in order:**
+
+1. **Listen to the four and pick a direction.** Judge them as an OUTRO, at
+   phone-speaker quality, played five times in a row — the one that excites
+   on first play is often the one you hate by the fortieth, and you will
+   hear this on every clip you ever post.
+2. **Get a real asset.** Ship the synthesised sketch (free, and with no
+   licensing question at all since it is generated from raw tones),
+   commission one (~$50-150, owned outright), or subscribe to Epidemic
+   Sound / Artlist (~$15-25/mo, licence usually ends with the
+   subscription). **Never use "royalty free" audio pulled from YouTube** —
+   that is not a licence, and music is one of the commonest ways a
+   marketing account gets muted or struck.
+3. **Then the burn-in is a small change** to the render, and the in-app
+   half needs an audio dependency de-risked with a real Android build
+   first, a mute toggle, and respect for the device silent switch.
+
+**Watch for:** a sting is the kind of thing that seems charming for a week
+and grating for a year. If you find yourself muting your own clips, that is
+the signal to cut it — the visual watermark is already carrying the
+attribution job on its own.
+
 ## 1. Switches that ship OFF
 
 Nothing below is live today. Each is a deliberate decision to flip, not an
