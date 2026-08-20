@@ -106,6 +106,12 @@ class _FormCardState extends State<FormCard> {
     final form = summary['form'] as String?;
     final streak = (summary['streak'] as Map?)?.cast<String, dynamic>();
     final peak = (summary['peakRating'] as num?)?.toInt();
+    // ratingAfter on the newest rated match IS the current rating, so
+    // deriving it here beats adding a second server field that could
+    // disagree with the user document.
+    final current = _entries.isEmpty
+        ? null
+        : (_entries.first['ratingAfter'] as num?)?.toInt();
 
     return _Section(
       title: 'Your form',
@@ -145,6 +151,14 @@ class _FormCardState extends State<FormCard> {
                   : '${streak['count']} losses in a row. It happens.',
               style: text.bodySmall,
             ),
+          ],
+          // The raw rating, which Home deliberately no longer shows.
+          // This is the "detailed stats view" the Laugh Meter decision
+          // names as the place precision belongs - the gauge is for
+          // everyone, the number is for people who came looking.
+          if (current != null) ...[
+            const SizedBox(height: 4),
+            Text('Rating: $current', style: text.bodySmall),
           ],
           if (peak != null) ...[
             const SizedBox(height: 6),

@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../../widgets/laugh_meter.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/auth_service.dart';
@@ -877,17 +879,20 @@ class _RankBadge extends StatelessWidget {
           return const SizedBox.shrink();
         }
         final data = snapshot.data!.data()!;
-        final rankTitle = data['rankTitle'] as String? ?? 'Average Joe';
-        final rating = data['rating'] as num? ?? 1200;
+        // Handed to the meter so a failed or slow gauge still shows who
+        // the player is. This document is already streamed here.
+        final rankTitle = data['rankTitle'] as String?;
         final wins = data['wins'] as num? ?? 0;
         final losses = data['losses'] as num? ?? 0;
         return Column(
           children: [
-            Text(rankTitle, style: Theme.of(context).textTheme.titleLarge),
-            Text(
-              'Rating: $rating',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            // The Laugh Meter carries the rank title and the climb
+            // toward the next one. The raw Elo number is deliberately
+            // NOT here: CLAUDE.md's Display decision makes it invisible
+            // plumbing, exposed only in the detailed stats view on the
+            // profile for players who want precision.
+            LaughMeter(fallbackTitle: rankTitle),
+            const SizedBox(height: 6),
             Text(
               '$wins wins, $losses losses',
               style: Theme.of(context).textTheme.bodySmall,

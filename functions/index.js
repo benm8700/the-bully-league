@@ -1009,6 +1009,24 @@ exports.getPendingRankChange = onCall((request) => {
   return getPendingRankChange(request.auth);
 });
 
+/**
+ * The Laugh Meter: rank title plus a gauge filling toward the next tier.
+ *
+ * Served rather than computed on the client because the ladder lives on
+ * the server, and this project has already been bitten by duplicating it -
+ * the rank-change copy was first written client-side with a hand-copied
+ * tier order that omitted Headliner.
+ */
+exports.getLaughMeter = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const {laughMeter} = require("./laughMeter");
+  const snap = await getFirestore().collection("users")
+      .doc(request.auth.uid).get();
+  return laughMeter(snap.data() ?? {});
+});
+
 exports.getMyEntitlement = onCall((request) => {
   const {getMyEntitlement} = require("./entitlement");
   return getMyEntitlement(request.auth);
