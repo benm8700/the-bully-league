@@ -711,6 +711,28 @@ A deliberate sweep across the classes of failure this project has actually had, 
 **The one real find was operational rather than code**: leftover probe data from live-check scripts that had thrown before their cleanup ran. Three orphan tournaments, six matches and fifteen accounts - and `tournamentNotifications` had picked them up and sent real pushes about a probe event. Cleaned, with a reusable prefix-matched sweep. **A live check that dies mid-run leaves production data behind, and the scheduled jobs will act on it.**
 
 
+## Rules audit (2026-08-23) — TWO REAL SECURITY HOLES, one of them mine
+
+A bug sweep over the axes that have actually caught things here. The scheduled jobs (13/13), the callables (54/54), the core loop (22) and every local suite were clean. **The security rules were not.**
+
+**THE SHAPE OF THE BUG: `firestore.rules`'s `users` update rule is an IMMUTABILITY LIST, so any field it does not name is freely writable by the client.** Adding a field that grants something and forgetting to list it is therefore silent, and nothing fails - the app works perfectly, and so does the exploit.
+
+1. **`judgeVotesToday` / `judgeDayKey` were unprotected — mine, from the judging rewards built days earlier.** A modified client could write `judgeVotesToday: 9999` and mint itself the maximum earned skips and the maximum matchmaking head start without judging anything. That defeats the entire ceiling design, and it matters because **skips are worth more to a rating manipulator than to an honest player** — the cap exists to stop opponent cherry-picking.
+2. **`careerRankedMatches` was unprotected** — writing zero grants the new-player carve-out, i.e. Practice during Sixes and Sevens forever, when that hour is deliberately ranked-only for everyone including subscribers.
+3. **PRE-EXISTING AND WORSE: every protected field could be SEEDED AT SIGNUP.** The create rule pinned a handful of values and forbade the username, but said nothing about the rest — so a modified client could create its own user document with `subscription.active: true`, a million points, or a full day of judging it never did. **The update rule would then FREEZE those forged values in place.** Immutable-but-attacker-chosen is strictly worse than mutable. Confirmed live: the forged create returned 200 before the fix.
+
+**Fixed** by naming the three fields in the update rule and adding a `keys().hasAny([...])` guard to create that refuses every grant-field outright. Checked against `signup_screen.dart` first — it writes only rating, rankTitle, rankedMatchesPlayed, wins, losses, accountStatus, isAdmin and createdAt, so forbidding the rest costs a real signup nothing.
+
+**`functions/live/rulesAuditChecks.js` is the permanent tool**, run as a real CLIENT over REST rather than through the Admin SDK, which bypasses rules entirely. 11 checks. Two properties make it trustworthy:
+  - **A CONTROL WRITE** proves an ordinary field IS writable on the same request path, so a refusal cannot pass merely because the request was malformed.
+  - **A SIGNUP CONTROL** writes exactly what signup writes and asserts it still succeeds. Tightening a create rule is worthless if it also breaks account creation, and that failure would not show up until a real new user tried.
+
+**TWO OF MY OWN CHECKS FIRST PASSED FOR THE WRONG REASON**, which is the lesson worth carrying: the rule pins fields by IMMUTABILITY, so re-writing the SAME value is legitimately allowed. Writing `accountStatus: 'active'` onto a doc already reading `active`, and `careerRankedMatches: 0` onto a zero, both returned 200 and looked like holes; and conversely a check that writes an unchanged value would "pass" against a completely unprotected field. **Every refusal check must write a CHANGED value.**
+
+**A scan with the wrong path reports whatever you fear.** The read-but-never-written pass initially reported every new field as never written — because the glob was `functions/*.js` while already inside `functions/`. Re-run correctly, all fields have real read and write paths. `captureQuality` still shows as unwritten and is a false positive: it is written with a computed key (`["captureQuality." + uid]`) that a `field:` regex cannot match, the same shape the previous sweep hit with `player1Votes`.
+
+**One leftover probe account** (`lm-mt0skyg3`) from a Laugh Meter check that threw before its cleanup ran, removed. A live check that dies mid-run leaves production data behind and the scheduled jobs will act on it — that has already happened once here.
+
 ## The finalize sweep, extracted (2026-08-18) — and the bug it immediately found
 
 `finalizeExpiredMatches` is the production path that settles every ranked match, and it has the worst track record in this project: its query needed a composite index that was never declared, so it threw on every run for the project's entire life, swallowed by the scheduler's own try/catch.

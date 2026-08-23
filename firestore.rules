@@ -27,7 +27,29 @@ service cloud.firestore {
         // leave the filter bypassable at the exact moment it matters
         // most - the moment the name is chosen.
         !('username' in request.resource.data) &&
-        !('usernameLower' in request.resource.data);
+        !('usernameLower' in request.resource.data) &&
+        // NOTHING THAT GRANTS ANYTHING MAY BE SEEDED HERE.
+        //
+        // The update rule below freezes these fields by requiring them
+        // to be unchanged - but that only protects a value that was
+        // never forged in the first place. Without this, a modified
+        // client could create its own user document at signup with
+        // `subscription.active: true`, a million points, or a full day
+        // of judging it never did, and the update rule would then hold
+        // those forged values in place permanently. Immutable-but-
+        // attacker-chosen is strictly worse than mutable.
+        //
+        // Verified against signup_screen.dart, which writes only rating,
+        // rankTitle, rankedMatchesPlayed, wins, losses, accountStatus,
+        // isAdmin and createdAt - so forbidding all of these costs a
+        // real signup nothing.
+        !request.resource.data.keys().hasAny([
+          'subscription', 'points', 'pointsBalance', 'freeClipUsed',
+          'clipCredits', 'dayPassExpiresAtMs', 'dailyAwards',
+          'judgeVotesToday', 'judgeDayKey', 'judgeCalls',
+          'careerRankedMatches', 'skipsUsedToday', 'skipsResetDate',
+          'takedowns', 'lastNotifiedRankTitle', 'lastSeenRankTitle',
+        ]);
 
       // Uses .get(field, default) rather than direct field access - a
       // direct `resource.data.rating` on a doc missing that key throws a
@@ -69,6 +91,25 @@ service cloud.firestore {
         // recordCalls, which checks every call against the match's actual
         // recorded winner.
         request.resource.data.get('judgeCalls', null) == resource.data.get('judgeCalls', null) &&
+        // How much this account judged today, and the day that count
+        // belongs to. A client able to write these mints itself the
+        // maximum earned skips and the maximum matchmaking head start
+        // without judging anything - which defeats the whole point of
+        // the skip ceiling, since skips are worth MORE to a rating
+        // manipulator than to an honest player. Written only by
+        // castVote, inside the transaction that records the vote.
+        request.resource.data.get('judgeVotesToday', null) ==
+          resource.data.get('judgeVotesToday', null) &&
+        request.resource.data.get('judgeDayKey', null) ==
+          resource.data.get('judgeDayKey', null) &&
+        // The career match count, which survives a season reset and is
+        // what the entitlement carve-out reads to decide who counts as
+        // a genuinely new player. A client able to zero it would grant
+        // itself Practice during Sixes and Sevens forever, when that
+        // hour is deliberately ranked-only for everyone including
+        // subscribers.
+        request.resource.data.get('careerRankedMatches', null) ==
+          resource.data.get('careerRankedMatches', null) &&
         // Monthly takedown allowance, for the same reason the skip counter
         // is protected: a client that could reset it would have unlimited
         // opt-outs, which is precisely what the published cap prevents.
