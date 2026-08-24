@@ -711,6 +711,26 @@ A deliberate sweep across the classes of failure this project has actually had, 
 **The one real find was operational rather than code**: leftover probe data from live-check scripts that had thrown before their cleanup ran. Three orphan tournaments, six matches and fifteen accounts - and `tournamentNotifications` had picked them up and sent real pushes about a probe event. Cleaned, with a reusable prefix-matched sweep. **A live check that dies mid-run leaves production data behind, and the scheduled jobs will act on it.**
 
 
+## Rankings board and friend-battle rewards (2026-08-23)
+
+**FRIEND BATTLES NOW REALLY DO MOVE NOTHING.** The developer asked to confirm the mode is unranked. It already skipped rating, wins/losses and the win bonus - but `completeMatch` still paid the **turn-up award** and advanced the **daily play quest** for every mode including friend. Both are farmable there in a way they are not in ranked: you choose your own opponent and no cooldown stops you choosing the same one all evening. The quest is worse than it looks despite its daily cap, because a quest exists to pull people into the shared queue and into judging, and clearing it against a friend by appointment does neither.
+  - **THE LIVE CHECK COULD NOT SEE EITHER, AND THAT IS THE LESSON.** `friendBattleChecks.js` wrote `status: "completed"` straight to Firestore instead of calling `completeMatch` - so it exercised finalization only, and proved exactly the half that was already correct. It now settles through the real callable.
+  - **The check also reports WHICH ledger entry paid** when it fails. The first failure read `{a:15}`, which says nothing; with reasons it read `quest_2026-08-23_play1=15` and named the culprit immediately.
+  - Unchanged and still deliberate: a friend battle IS recorded, judged and clippable. That is the whole answer to "why not just FaceTime", and it is separate from the rating question.
+
+**THE RANKS BOARD NOW SHOWS THE VIEWER THEIR OWN POSITION** (`leaderboard_screen.dart`). Top 100 rather than 50, the viewer's row highlighted when they are on it, and when they are not, their real position appended after the hundredth under a "YOU" divider - `387  User5  Door Guy · 12-9`.
+  - **A scoreboard you cannot find yourself on is a list of other people.** That is the whole point of the change, and it is what makes a Rankings entry worth putting on Home at all.
+  - **COUNTED, NOT PAGED TO.** Finding position 387 by reading 387 documents would be absurd, so it is one aggregation query - how many players out-rate me, plus one. That is standard competition ranking, so tied players share a position rather than being ordered arbitrarily.
+  - **The aggregation runs on the DEVICE and is therefore subject to `firestore.rules`**, which is exactly the kind of thing that fails silently: a refused count would leave the board looking perfectly normal with the self row simply never appearing. `functions/live/rankPositionChecks.js` runs the real `runAggregationQuery` as a CLIENT, cross-checks the number against the truth computed with the Admin SDK, and confirms an unauthenticated caller cannot count the userbase. 5 checks.
+  - **A player with no rating gets NO row rather than a made-up one.** The board is not where somebody should learn they are unranked.
+  - **The break above the self row is visible on purpose.** That row is not the 101st player, it is a jump of unknown distance, and running it straight on from the board would misrepresent where they stand.
+
+**A RECORDED DECISION WAS DELIBERATELY OVERRIDDEN, on request**: Home gained a **Rankings** button even though the Ranks bottom-nav tab already reaches the same screen, and the nav redesign explicitly removed duplicate routes so "there aren't two routes to the same place". The justification for the exception is that the board is now a personal question ("where am I?") rather than a browse list. Worth re-reading if Home starts growing back toward the eight stacked buttons the nav was built to cure.
+
+**KNOWN GAP, not fixed**: the board does not exclude banned accounts, so a banned player could sit on the public ladder. Harmless at current scale and easy to filter, but it is a public surface.
+
+**NOT verified on a device.** The change is ordinary `ListTile` rows rather than custom painting, so the layout risk is far lower than the Laugh Meter's - but this project has already had one gauge that only looked wrong when looked at.
+
 ## Rules audit (2026-08-23) — TWO REAL SECURITY HOLES, one of them mine
 
 A bug sweep over the axes that have actually caught things here. The scheduled jobs (13/13), the callables (54/54), the core loop (22) and every local suite were clean. **The security rules were not.**

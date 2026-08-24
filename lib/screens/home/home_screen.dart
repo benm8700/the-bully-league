@@ -22,6 +22,7 @@ import '../practice/solo_practice_screen.dart';
 import '../settings/notification_settings_screen.dart';
 import '../support/support_screen.dart';
 import '../directory/player_search_screen.dart';
+import '../leaderboard/leaderboard_screen.dart';
 import '../tournament/tournament_list_screen.dart';
 import '../vote/finalize_test_screen.dart';
 
@@ -218,6 +219,21 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                       child: const Text('Find a Player'),
+                    ),
+                    const SizedBox(height: 12),
+                    // A second route to the Ranks tab, which the bottom
+                    // nav already reaches. Added on request: the board now
+                    // shows the viewer's OWN position, which makes it a
+                    // personal question ("where am I?") rather than a
+                    // list of other people, and that is worth a prompt
+                    // from the screen people actually land on.
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const LeaderboardScreen(),
+                        ),
+                      ),
+                      child: const Text('Rankings'),
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton(
