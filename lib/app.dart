@@ -10,6 +10,7 @@ import 'core/services/auth_service.dart';
 import 'core/services/cloud_vision_moderation_service.dart';
 import 'core/services/push_notification_service.dart';
 import 'core/services/visual_moderation_service.dart';
+import 'theme/house_theme.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/home/main_shell.dart';
 import 'screens/moderation/banned_screen.dart';
@@ -28,9 +29,13 @@ class BullyLeagueApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'The Bully League',
+        // Dark only, deliberately. The app already defaults to dark, and
+        // "House Lights Down" is a room with the lights off - a venue with
+        // the house lights up is a different room, so a light variant needs
+        // its own pass rather than an inverted palette.
         themeMode: ThemeMode.dark,
-        darkTheme: ThemeData.dark(useMaterial3: true),
-        theme: ThemeData(useMaterial3: true),
+        darkTheme: House.dark(),
+        theme: House.dark(),
         home: const AuthGate(),
       ),
     );

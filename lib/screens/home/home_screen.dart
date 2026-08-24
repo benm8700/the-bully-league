@@ -112,11 +112,20 @@ class HomeScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      'Welcome, $username',
-                      style: Theme.of(context).textTheme.headlineMedium,
+                    // Quiet on purpose. A greeting is furniture - the
+                    // player already knows who they are - and the first
+                    // pass had it as the loudest thing on the screen,
+                    // above their own rank. The rank is the identity
+                    // here, so the Laugh Meter below carries the size.
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        username.toUpperCase(),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     if (uid != null) _RankBadge(uid: uid),
                     const SizedBox(height: 24),
                     const _ActiveMatchBanner(),

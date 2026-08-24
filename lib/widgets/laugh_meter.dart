@@ -1,6 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/house_theme.dart';
+
 /// The Laugh Meter - the user-facing face of the rating system.
 ///
 /// CLAUDE.md's Display decision: the Elo number is invisible plumbing, and
@@ -99,18 +101,23 @@ class _LaughMeterState extends State<LaughMeter> {
       children: [
         Text(
           title,
-          style: text.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
+          style: text.headlineLarge?.copyWith(
             // GOAT gets the one piece of special treatment in the whole
             // display, because it is the one rank that is genuinely scarce
             // rather than a threshold anybody can eventually cross.
-            color: isGoat ? _hot : null,
+            color: isGoat ? House.brass : null,
           ),
           textAlign: TextAlign.center,
         ),
+        const SizedBox(height: 12),
+        // The bar ran edge to edge on the first pass, which read as a
+        // rendering fault rather than a gauge. It needs the same
+        // margin as everything else on the screen.
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40),
+          child: _Gauge(fill: fill, glow: isGoat),
+        ),
         const SizedBox(height: 10),
-        _Gauge(fill: fill, glow: isGoat),
-        const SizedBox(height: 8),
         Text(
           caption,
           style: text.bodySmall,
@@ -121,12 +128,14 @@ class _LaughMeterState extends State<LaughMeter> {
   }
 }
 
-/// Cold at the bottom, hot at the top - the heat gauge CLAUDE.md's Laugh
-/// Meter concept describes.
-const _cold = Color(0xFF3D7EFF);
-const _warm = Color(0xFFFFA726);
-const _hot = Color(0xFFFF3D3D);
-
+/// The meter's palette comes from the room, not from fire.
+///
+/// A heat gradient - cold blue through orange to red - is the first
+/// thing anyone reaches for on a roast app, and the first version of
+/// this widget used exactly that. It says "spicy" and nothing else, and
+/// it fought the identity the rest of the app now has. This is the
+/// spotlight instead: the bar fills with the same brass the app uses
+/// everywhere to mean live, lit, yours.
 class _Gauge extends StatelessWidget {
   const _Gauge({required this.fill, this.glow = false});
 
@@ -134,76 +143,86 @@ class _Gauge extends StatelessWidget {
   final bool glow;
 
   static const _height = 14.0;
-  static const _radius = BorderRadius.all(Radius.circular(7));
+  static const _radius = BorderRadius.all(Radius.circular(3));
 
   @override
   Widget build(BuildContext context) {
-    final track = Theme.of(context).colorScheme.surfaceContainerHighest;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        return SizedBox(
-          // The TRACK is explicitly full width. Without this the whole
-          // gauge sized itself to the filled portion, so a half-full
-          // meter rendered as a short stub with nothing to compare it
-          // against - which reads as a loading bar rather than progress.
-          width: width,
-          height: _height,
-          child: Stack(
-            children: [
-              // Positioned.fill, because a bare child of a Stack sizes to
-              // ITSELF - which is how the coloured bar came out with zero
-              // height and painted nothing at all.
-              Positioned.fill(
+    return SizedBox(
+      height: _height,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: House.house,
+                borderRadius: _radius,
+                border: Border.all(color: const Color(0xFF2A2422)),
+              ),
+            ),
+          ),
+          // Clipped with a CLIPPER rather than sized with a LayoutBuilder.
+          //
+          // The previous version measured the track with a LayoutBuilder
+          // and then over-sized the fill with an OverflowBox to keep the
+          // gradient anchored. That combination triggered a layout during
+          // layout, and Flutter's assertion for it fires only in DEBUG -
+          // so release builds rendered it fine while every debug build
+          // failed to lay out the whole Home body and painted nothing at
+          // all. A clipper gets the same result from the size it is
+          // already given, with no second layout pass.
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: _radius,
+              child: ClipRect(
+                clipper: _FillClipper(fill),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: track,
                     borderRadius: _radius,
-                  ),
-                ),
-              ),
-              ClipRRect(
-                borderRadius: _radius,
-                child: SizedBox(
-                  width: width * fill,
-                  height: _height,
-                  // The gradient is painted across the WHOLE track and
-                  // then clipped, so a given colour means the same thing
-                  // at every rank. Letting it rescale to the filled part
-                  // would make a quarter-full meter look as hot as a full
-                  // one, and would shift the colours under a player after
-                  // every match.
-                  child: OverflowBox(
-                    alignment: Alignment.centerLeft,
-                    minWidth: width,
-                    maxWidth: width,
-                    child: Container(
-                      width: width,
-                      height: _height,
-                      decoration: BoxDecoration(
-                        borderRadius: _radius,
-                        gradient: const LinearGradient(
-                          colors: [_cold, _warm, _hot],
-                          stops: [0.0, 0.55, 1.0],
-                        ),
-                        boxShadow: glow
-                            ? [
-                                BoxShadow(
-                                  color: _hot.withValues(alpha: 0.6),
-                                  blurRadius: 12,
-                                  spreadRadius: 1,
-                                ),
-                              ]
-                            : null,
-                      ),
+                    // Anchored across the WHOLE track, so a given colour
+                    // means the same thing at every rank rather than
+                    // shifting under the player after every match.
+                    gradient: LinearGradient(
+                      colors: [
+                        House.brass.withValues(alpha: 0.55),
+                        House.brass,
+                        House.spot,
+                      ],
+                      stops: const [0.0, 0.6, 1.0],
                     ),
+                    boxShadow: glow
+                        ? [
+                            BoxShadow(
+                              color: House.brass.withValues(alpha: 0.55),
+                              blurRadius: 14,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
                   ),
                 ),
               ),
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
+}
+
+/// Shows the left [fraction] of whatever it is given.
+class _FillClipper extends CustomClipper<Rect> {
+  const _FillClipper(this.fraction);
+
+  final double fraction;
+
+  @override
+  Rect getClip(Size size) => Rect.fromLTWH(
+        0,
+        0,
+        size.width * fraction.clamp(0.0, 1.0),
+        size.height,
+      );
+
+  @override
+  bool shouldReclip(_FillClipper old) => old.fraction != fraction;
 }

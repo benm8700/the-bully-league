@@ -74,6 +74,23 @@ flutter:
   assets:
     - assets/turnstile.html
 
+  # BUNDLED rather than fetched through the google_fonts package, for two
+  # reasons. It adds no dependency to a toolchain this project documents
+  # as fragile, and google_fonts downloads at first run - so a new player
+  # opening the app on bad signal would see fallback type on the one
+  # session that matters most.
+  #
+  # Both are VARIABLE fonts. Archivo carries a width axis, which is what
+  # makes the display face wide rather than condensed - everyone reaches
+  # for condensed, and that is the point.
+  fonts:
+    - family: Archivo
+      fonts:
+        - asset: assets/fonts/Archivo-Variable.ttf
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Variable.ttf
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

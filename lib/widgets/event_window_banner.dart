@@ -258,7 +258,11 @@ class _CommitRow extends StatelessWidget {
                       icon: const Icon(Icons.check_circle, size: 18),
                       label: const Text("You're in tonight"),
                     )
-                  : FilledButton.tonal(
+                    // OutlinedButton, not Filled. Brass means ONE thing -
+                    // the primary action - and the first pass spent it on
+                    // two big blocks on the same screen, which is how an
+                    // accent stops meaning anything.
+                  : OutlinedButton(
                       onPressed: () => userRef.set({
                         'eventCommitmentDayKey': dayKey,
                       }, SetOptions(merge: true)),
