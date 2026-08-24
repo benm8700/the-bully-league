@@ -170,11 +170,17 @@ async function makeUser(uid, extra = {}) {
         r.status !== 200, JSON.stringify(r.raw).slice(0, 120));
 
     console.log("\nTHE CONSTRAINT: judged, but no rating and no points");
-    // Settle it and finalize with a real ballot, exactly as a played
-    // friend battle would.
-    await db.collection("matches").doc(matchId).set({
-      status: "completed", completedAt: Timestamp.now(),
-    }, {merge: true});
+    // Settled through the REAL completeMatch callable, not by writing
+    // status straight to Firestore.
+    //
+    // The shortcut was the reason this check missed a real bug: the
+    // participation points are paid by completeMatch, so a test that
+    // never calls it can only ever prove that FINALIZATION pays
+    // nothing - which was true while friend battles were quietly
+    // collecting a turn-up award on every match.
+    r = await call(A, "completeMatch", {matchId});
+    check("the match settles through the real callable",
+        r.status === 200, JSON.stringify(r.raw).slice(0, 160));
     await db.collection("votes").doc(matchId).collection("ballots").doc(C).set({
       votedForPlayerId: A, weight: 1, timestamp: Timestamp.now(),
     });
@@ -198,9 +204,16 @@ async function makeUser(uid, extra = {}) {
     check("no win or loss was recorded",
         aDoc.data().wins === 0 && bDoc.data().losses === 0,
         JSON.stringify({w: aDoc.data().wins, l: bDoc.data().losses}));
+    // The ledger reasons, not just the total. A failure reading {a:15}
+    // says nothing about WHICH award paid, which is the only thing that
+    // tells you where to look.
+    const ledger = await db.collection("users").doc(A)
+        .collection("pointsLedger").get();
+    const reasons = ledger.docs.map((d) => `${d.id}=${d.data().amount}`);
     check("NO POINTS were paid - you pick your opponent, so this would farm",
         (aDoc.data().points ?? 0) === 0 && (bDoc.data().points ?? 0) === 0,
-        JSON.stringify({a: aDoc.data().points, b: bDoc.data().points}));
+        JSON.stringify({a: aDoc.data().points, b: bDoc.data().points,
+          ledger: reasons}));
     check("but it IS a recorded mode, so it can still be clipped",
         require("../matchmaking").RECORDED_MODES.includes("friend"));
 

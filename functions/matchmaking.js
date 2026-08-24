@@ -908,7 +908,14 @@ async function completeMatch(auth, data, creds = null) {
     }
 
     // Daily quests, from the same completion event the referral uses.
-    try {
+    //
+    // A FRIEND BATTLE DOES NOT COUNT, for the same reason it pays no
+    // participation points: you choose your own opponent, so it would be
+    // trivially arrangeable. The daily cap bounds the damage, but a quest
+    // exists to pull people into the real loop - the shared queue and,
+    // above all, judging - and clearing it against a friend by
+    // appointment does none of that.
+    if (match.mode !== "friend") try {
       const {recordQuestEvent} = require("./quests");
       await Promise.all([match.player1Id, match.player2Id]
           .map((uid) => recordQuestEvent(uid, "matches")));
@@ -934,7 +941,20 @@ async function completeMatch(auth, data, creds = null) {
     // to settle the same match cannot both pay out; awardPoints is
     // idempotent per source. Failures are swallowed: points are a reward,
     // never a precondition for finishing a battle.
-    try {
+    //
+    // NOT PAID FOR A FRIEND BATTLE. finalizeMatch already withholds the
+    // rating change and the win bonus there, for a reason that applies
+    // just as much here: you CHOOSE your opponent, and no cooldown stops
+    // you choosing the same one all evening, so paying per match is a
+    // straight farm between two accounts. What a friend battle pays
+    // instead is the clip and the crowd's verdict.
+    //
+    // This was missed when friend battles were built - the mode skipped
+    // the rating and the win bonus but still collected the turn-up
+    // award on every single match. The live check could not see it
+    // because it wrote `status: completed` straight to Firestore rather
+    // than calling this function.
+    if (match.mode !== "friend") try {
       const {awardPoints, pointsSettings, awardAmount} = require("./points");
       const rates = await pointsSettings();
       const multiplier = match.eventWindow?.qualified === true ?
