@@ -160,6 +160,25 @@ function battleEntitlement({user, mode, nowMs, windowConfig, config}) {
   // match, whatever their subscription state or the hour.
   if (mode === "tournament") return allow();
 
+  // A FRIEND BATTLE IS FREE AT EVERY TIER, by decision. You bring your
+  // own opponent, so it costs the shared queue nothing and splits no
+  // pool - and it is the one route into a battle that works when nobody
+  // else is online, which is exactly the situation a small userbase is
+  // in. It already moves no rating and pays no points, so there is
+  // nothing here to protect.
+  //
+  // Stated EXPLICITLY rather than left implicit. friendBattle.js never
+  // calls this function, so friend battles were free only because
+  // nothing asked - while this policy, if asked, would have refused them
+  // for a lapsed account by lumping them in with practice below. Two
+  // answers to one question, waiting for somebody to add an entitlement
+  // check "for consistency" and silently paywall a feature that is
+  // meant to be free.
+  //
+  // What IS paid is FINDING someone: the player directory is a
+  // subscriber feature. Challenging a name you already know is not.
+  if (mode === "friend") return allow();
+
   const isPractice = mode !== "ranked";
 
   // Rule that binds everyone, subscribers included: the window is

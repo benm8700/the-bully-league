@@ -193,4 +193,26 @@ check("defaults are the documented ones and ship switched OFF", () => {
   assert.strictEqual(DEFAULTS.enabled, false);
 });
 
+// ------------------------------------------------- friend battles are free
+check("A FRIEND BATTLE IS FREE FOR EVERYONE, in every state", () => {
+  // Free by decision: you bring your own opponent, so it costs the shared
+  // queue nothing, and it is the one route into a battle that works when
+  // nobody else is online. It already moves no rating and pays no points,
+  // so there is nothing here to protect.
+  //
+  // friendBattle.js never calls battleEntitlement, so this was true only
+  // because nothing asked - while the policy, if asked, used to refuse a
+  // lapsed account by lumping friend in with practice. Pinned so that
+  // adding a check "for consistency" cannot silently paywall it.
+  const users = [userAgedDays(60), userAgedDays(1),
+    userAgedDays(60, {subscription: {active: true}})];
+  for (const user of users) {
+    for (const now of [IN_WINDOW, OUT_OF_WINDOW]) {
+      const v = verdict(user, "friend", now);
+      assert.strictEqual(v.allowed, true,
+          `friend refused for ${v.state} (inWindow=${v.inWindow})`);
+    }
+  }
+});
+
 console.log(`\n${passed} checks passed.`);
