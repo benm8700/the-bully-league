@@ -128,10 +128,10 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 10),
                     if (uid != null) _RankBadge(uid: uid),
                     const SizedBox(height: 24),
+                    // Anything urgent stays at the very top: a match
+                    // waiting, or somebody challenging you.
                     const _ActiveMatchBanner(),
                     const _IncomingChallengeBanner(),
-                    const EventWindowBanner(),
-                    const DailyQuests(),
                     const _TrialStatus(),
                     const SizedBox(height: 4),
                     // Ranked is available immediately - the unlock gate is
@@ -165,13 +165,23 @@ class HomeScreen extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 32),
                       child: Text(
-                        'Unranked and never recorded. Good for checking your '
-                        'camera and lighting, or getting the first one out of '
-                        'the way.',
+                        // Three lines cut to one. Practice is the quiet
+                        // option and it was carrying more copy than the
+                        // primary action.
+                        'Unranked, and never recorded.',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
+                    const SizedBox(height: 28),
+                    // WHAT IS ON TODAY, below the thing the screen is
+                    // for. The window, the quests and the progress toward
+                    // a clip are all context for battling - they were
+                    // sitting above the battle button, so the app's one
+                    // job was the sixth thing on the screen.
+                    const EventWindowBanner(),
+                    const DailyQuests(),
+                    if (uid != null) _PointsBalanceForUser(uid: uid),
                     const SizedBox(height: 12),
                     // Sits with the battle actions rather than under
                     // "Find a Player", because it IS a way to start a
@@ -917,10 +927,16 @@ class _RankBadge extends StatelessWidget {
             // plumbing, exposed only in the detailed stats view on the
             // profile for players who want precision.
             LaughMeter(fallbackTitle: rankTitle),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
+            // ONE line, not three. This block had the record, a points
+            // total and a second progress bar stacked under the gauge -
+            // four rows of small grey text and two near-identical amber
+            // bars, which read as a wall of status rather than as an
+            // identity. The points progress moved down to sit with the
+            // quests, where everything else about earning lives.
             Text(
-              '$wins wins, $losses losses',
-              style: Theme.of(context).textTheme.bodySmall,
+              '$wins-$losses',
+              style: Theme.of(context).textTheme.labelSmall,
             ),
             // Shown right under a rating that can fall, deliberately. This
             // is the number that only ever climbs, so a player on a losing
@@ -937,12 +953,40 @@ class _RankBadge extends StatelessWidget {
             // part that was actually doing the work - a loss still earns
             // points, so it still moves you toward a clip you can post.
             // That beats a title because it converts into something.
-            _PointsBalance(
-              balance: (data['pointsBalance'] ?? data['points']) as num?,
-            ),
           ],
         );
       },
     );
   }
 }
+
+/// The points balance, streamed for one user.
+///
+/// Split out because the balance moved OUT of the identity block and
+/// down beside the quests, away from the stream _RankBadge already had.
+/// Grouping it with the quests is the point: everything about what you
+/// can earn today now sits together, instead of a second progress bar
+/// competing with the rank gauge for the same glance.
+class _PointsBalanceForUser extends StatelessWidget {
+  const _PointsBalanceForUser({required this.uid});
+
+  final String uid;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final data = snapshot.data?.data();
+        if (data == null) return const SizedBox.shrink();
+        return _PointsBalance(
+          balance: (data['pointsBalance'] ?? data['points']) as num?,
+        );
+      },
+    );
+  }
+}
+
