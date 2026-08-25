@@ -179,10 +179,31 @@ class HomeScreen extends StatelessWidget {
                     // a clip are all context for battling - they were
                     // sitting above the battle button, so the app's one
                     // job was the sixth thing on the screen.
+                    // GROUPED BY PROXIMITY, deliberately. These three are
+                    // one thought - what is on today - and each can fail
+                    // to load independently: the window reads a config
+                    // document, the quests and the balance each read the
+                    // backend. When the quests went missing, the points
+                    // progress was left floating between a card and a
+                    // button, belonging to neither.
+                    //
+                    // Tight spacing inside the group and a generous gap
+                    // plus a rule after it means the survivors still read
+                    // as a section however many of them render.
                     const EventWindowBanner(),
+                    const SizedBox(height: 4),
                     const DailyQuests(),
+                    const SizedBox(height: 4),
                     if (uid != null) _PointsBalanceForUser(uid: uid),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 28),
+                    // Everything below is navigation rather than the
+                    // day's business, and the rule says so without a
+                    // heading nobody would read.
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 32),
+                      child: Divider(),
+                    ),
+                    const SizedBox(height: 20),
                     // Sits with the battle actions rather than under
                     // "Find a Player", because it IS a way to start a
                     // battle - and with a thin pool it is the most
