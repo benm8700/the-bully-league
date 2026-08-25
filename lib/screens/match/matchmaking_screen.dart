@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/friendly_error.dart';
+
 import '../../core/services/event_window.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/presence.dart';
@@ -66,11 +68,10 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
   }
 
   String _friendlyError(Object e) {
-    final message = e.toString();
-    if (message.contains("account can't join matches")) {
-      return 'This account can\'t join matches right now.';
-    }
-    return 'Couldn\'t find a match: $message';
+    // The server's own refusal messages are written for a player and
+    // say WHICH rule was hit, so friendlyError keeps them. What it drops
+    // is the raw exception, which used to be appended here in full.
+    return friendlyError(e, doing: 'finding a match');
   }
 
   void _onCancel() {

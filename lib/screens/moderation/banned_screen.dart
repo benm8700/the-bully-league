@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../../theme/house_theme.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/auth_service.dart';
@@ -110,7 +112,7 @@ class _BannedScreenState extends State<BannedScreen> {
                     ),
                     const SizedBox(height: 16),
                     if (_errorMessage != null) ...[
-                      Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                      Text(_errorMessage!, style: const TextStyle(color: House.alarm)),
                       const SizedBox(height: 16),
                     ],
                     FilledButton(

@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../../theme/house_theme.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/age_verification_service.dart';
@@ -206,7 +208,7 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
               const SizedBox(height: 24),
               if (_errorMessage != null) ...[
-                Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                Text(_errorMessage!, style: const TextStyle(color: House.alarm)),
                 const SizedBox(height: 16),
               ],
               FilledButton(

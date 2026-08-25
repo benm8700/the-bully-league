@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+
+import '../../theme/house_theme.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -254,14 +256,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const UsernameCard(),
                     const ReferrerField(),
                     const InviteCard(),
-                    Text(
-                      'Give opponents some ammo - it\'s funnier if it\'s true.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
                     const SizedBox(height: 24),
+                    // States what is TRUE today rather than the eventual
+                    // rule. Photos and manual approval are deliberately
+                    // unenforced for the private beta, so a header reading
+                    // "0/5, first must show your face" describes a
+                    // requirement nothing checks - and a tester who
+                    // believes it will think they cannot play until they
+                    // have uploaded five.
                     Text(
-                      'Photos (${_photoUrls.length}/$kRequiredPhotoCount, first must show your face)',
+                      'Photos',
                       style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Optional. Your first photo is the one other players see when they find you.',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 12),
                     _PhotoGrid(
@@ -289,6 +299,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 16),
                     _optionalField(_favoriteFoodController, 'Favorite food'),
                     const SizedBox(height: 16),
+                    // Sat forty lines above this, directly under the
+                    // invite card, where it read as a caption for
+                    // inviting people. A label belongs next to the thing
+                    // it labels.
+                    Text(
+                      'Give opponents some ammo - it\'s funnier if it\'s true.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 8),
                     TextFormField(
                       controller: _ammoTextController,
                       maxLines: 3,
@@ -356,7 +375,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       child: const Text(
                         'Delete my account',
-                        style: TextStyle(color: Colors.red),
+                        style: TextStyle(color: House.alarm),
                       ),
                     ),
                   ],

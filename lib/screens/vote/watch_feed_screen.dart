@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/friendly_error.dart';
+
 import '../../core/services/watch_feed_service.dart';
 import '../../widgets/turnstile_challenge.dart';
 import 'feed_page.dart';
@@ -74,7 +76,10 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Could not load battles: $e');
+      // Was 'Could not load battles: $e', which rendered a six-frame
+      // Dart stack trace into the middle of the app's main content
+      // surface.
+      setState(() => _error = friendlyError(e, doing: 'loading battles'));
     }
   }
 
@@ -199,7 +204,7 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Vote failed: $e')),
+          SnackBar(content: Text(friendlyError(e, doing: 'casting your vote'))),
         );
       }
       return false;

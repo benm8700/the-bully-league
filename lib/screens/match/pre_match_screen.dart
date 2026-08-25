@@ -2,6 +2,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../../theme/house_theme.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/services/agora_token_service.dart';
@@ -291,7 +293,11 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
           children: [
             Icon(
               _micVerified ? Icons.mic : Icons.mic_none,
-              color: _micVerified ? Colors.green : null,
+              // Brass, because brass already means LIVE - and a mic
+              // that is registering your voice is exactly that. The
+              // green here was the only green in the app, and it sat
+              // badly in a warm room.
+              color: _micVerified ? House.brass : House.smoke,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -300,7 +306,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
                 child: LinearProgressIndicator(
                   value: fraction,
                   minHeight: 8,
-                  color: _micVerified ? Colors.green : Colors.amber,
+                  color: _micVerified ? House.brass : House.smoke,
                 ),
               ),
             ),

@@ -1,6 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../../theme/house_theme.dart';
+
 /// Lets a player object to their own battle footage being public.
 ///
 /// TWO CHANNELS, PRESENTED VERY DIFFERENTLY, because they are different
@@ -189,7 +191,7 @@ class _ClipTakedownSheetState extends State<ClipTakedownSheet> {
 
         if (_error != null) ...[
           const SizedBox(height: 12),
-          Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+          Text(_error!, style: const TextStyle(color: House.alarm, fontSize: 12)),
         ],
       ],
     );
