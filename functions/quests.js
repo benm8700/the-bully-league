@@ -69,8 +69,28 @@ function daySeed(dayKey) {
  */
 function questsForDay(dayKey) {
   const seed = daySeed(dayKey);
-  return SLOTS.map((options, slot) =>
-    QUESTS[options[(seed + slot * 7) % options.length]]);
+  const picked = [];
+  const usedMetrics = new Set();
+
+  for (let slot = 0; slot < SLOTS.length; slot++) {
+    const options = SLOTS[slot];
+    // THE STRETCH SLOT MUST NOT REPEAT A METRIC ALREADY CHOSEN.
+    //
+    // Its options deliberately overlap the earlier slots so the day has
+    // some variety, but nothing stopped it drawing the same metric
+    // twice. Seen live: judge5 + play2 + judge3, so two of the three
+    // quests were judging - and judge3 is strictly CONTAINED in judge5,
+    // so judging five completed both. Three quests that are really two,
+    // which reads as the feature being broken rather than generous.
+    const fresh = options.filter((id) => !usedMetrics.has(QUESTS[id].metric));
+    // Falling back to the full list rather than to nothing: a repeated
+    // metric is a poor day, an empty slot is a bug.
+    const pool = fresh.length > 0 ? fresh : options;
+    const chosen = QUESTS[pool[(seed + slot * 7) % pool.length]];
+    usedMetrics.add(chosen.metric);
+    picked.push(chosen);
+  }
+  return picked;
 }
 
 /**

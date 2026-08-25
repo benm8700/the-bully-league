@@ -162,4 +162,30 @@ check("rewards are modest - a quest must not out-earn playing", () => {
   }
 });
 
+check("NO DAY EVER REPEATS A METRIC, so three quests are really three", () => {
+  // The stretch slot overlaps the earlier slots on purpose, but nothing
+  // stopped it drawing the same metric twice. Seen live: judge5 + play2
+  // + judge3 - two judging quests, and judge3 is strictly CONTAINED in
+  // judge5, so judging five completed both.
+  for (let d = 1; d <= 400; d++) {
+    const key = `2026-${String(1 + (d % 12)).padStart(2, "0")}` +
+      `-${String(1 + (d % 28)).padStart(2, "0")}`;
+    const q = questsForDay(key);
+    const metrics = q.map((x) => x.metric);
+    assert.strictEqual(new Set(metrics).size, metrics.length,
+        `${key} repeated a metric: ${q.map((x) => x.label).join(", ")}`);
+  }
+});
+
+check("every day still has a judging quest", () => {
+  // Votes are the scarce resource; this is the one slot that must never
+  // be optimised away by the de-duplication above.
+  for (let d = 1; d <= 400; d++) {
+    const key = `2026-${String(1 + (d % 12)).padStart(2, "0")}` +
+      `-${String(1 + (d % 28)).padStart(2, "0")}`;
+    assert.ok(questsForDay(key).some((q) => q.metric === "votes"),
+        `${key} had no judging quest`);
+  }
+});
+
 console.log(`\n${passed} checks passed.`);
