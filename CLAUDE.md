@@ -711,6 +711,95 @@ A deliberate sweep across the classes of failure this project has actually had, 
 **The one real find was operational rather than code**: leftover probe data from live-check scripts that had thrown before their cleanup ran. Three orphan tournaments, six matches and fifteen accounts - and `tournamentNotifications` had picked them up and sent real pushes about a probe event. Cleaned, with a reusable prefix-matched sweep. **A live check that dies mid-run leaves production data behind, and the scheduled jobs will act on it.**
 
 
+## Visual identity — "House Lights Down" (2026-08-24)
+
+The app was stock Material 3 on the default purple seed - a Flutter
+starter look, and a bad match for a product whose premise is being loud.
+Three directions were proposed; the developer chose the club.
+
+**THE TOKENS** (`lib/theme/house_theme.dart`, mirrored in the website's
+`globals.css` - if one moves, move both): `house` #12100F the room with
+the lights down, warm-cast rather than true black because #000 reads as
+an OLED tech product and this is a venue; `curtain` #4A1220 deep velvet,
+a SURFACE and never an accent; `spot` #F5E6C8 the pool of light and
+therefore the primary text; `brass` #C98A2B **the one accent, meaning
+exactly one thing - live, lit, yours**; `smoke` #6E6A66 everything not
+currently lit.
+
+**TYPE IS ARCHIVO PUSHED WIDE** on its variable width axis, over Inter
+for body. Every competitive app reaches for a condensed face; going the
+other way reads loud and is far rarer. **Bundled as assets, not via
+`google_fonts`** - no new dependency against a toolchain this doc
+documents as fragile, and no runtime download on a new player's first
+session. De-risked with a real release build before any theme code was
+written.
+
+**THE SIGNATURE WAS PROPOSED AND THEN DROPPED, which is worth recording
+so it is not re-proposed.** The idea was a spotlight following the
+performer - the lit player talking, the muted one in shadow, turning the
+format's own rule into something felt rather than read. The developer
+asked what it actually was, and checking the code killed it on two
+counts: **the match screen is FaceTime-style PiP**, not a split (line 523
+of `match_screen.dart` puts the opponent full-frame and the local view in
+a 100x140 inset), so "light the performer" means lighting a thumbnail
+for the most important moment; and **recording captures the raw camera
+streams server-side, so no UI effect ever reaches a clip** - the
+signature would be invisible in the thing that actually spreads. The
+stacked split is the RENDER layout only. **The identity stands on palette
+and type; it does not need a signature element, and any future one should
+live in the clips, where reach happens.**
+
+**STAGE GELS - how two players are told apart.** `gelRed` #C4485E and
+`gelBlue` #5E93A8, warm against cool so the pair survives common colour
+blindness, and **neither is brass**. Needed because several surfaces show
+both players at once with NEITHER performing: the vote screen, the live
+tally, feed cards, and the captions burned into a clip. This was found as
+a real bug rather than designed in the abstract - the tally shipped with
+player one on `Colors.amber` and player two on `colorScheme.primary`, and
+**the moment primary became brass the two bars were the same colour and
+the scoreboard stopped being readable**.
+
+**DARK ONLY, committed.** "House lights down" is a room with the lights
+off; a light version is a different room, not an inverted palette. The
+website's old light-mode block flipped the background to white and left
+the accent untouched, producing a combination nobody designed - removed.
+
+**THE WEBSITE CARRIES THE PALETTE AND THE DISPLAY FACE, not a re-skin.**
+It is the landing pad for every shared clip, and it was running stock
+Next.js Geist fonts and a purple accent - so an ad and its destination
+looked like different products. Layout untouched; the existing
+`text-accent` / `bg-accent` classes inherit brass automatically. Verified
+in the built CSS: the new values are present and the old purple is gone.
+
+**A THEME RULE BLANKED THE ENTIRE HOME SCREEN, and the lesson generalises.**
+`minimumSize: Size.fromHeight(52)` in the FilledButton theme sets
+minWidth to INFINITY. Harmless for a full-width button, fatal for one
+inside a Row - it forces infinite width and the whole subtree fails to
+lay out. Home rendered its app bar and nothing else, with no visible
+error. **A single global theme rule can silently kill every widget on a
+screen**, and screenshots could not explain it; attaching `flutter run`
+and reading the real exception could. Use `Size(0, h)`.
+
+**A SECOND BUG WAS ONLY VISIBLE IN DEBUG.** The Laugh Meter's gauge used
+`LayoutBuilder` + `OverflowBox`, which triggers a layout during layout.
+That assertion fires only in debug builds, so release rendered it fine
+while every debug build failed. Rewritten with a `CustomClipper`, which
+needs no second layout pass. **Release builds silently tolerate layout
+errors that debug builds refuse** - worth remembering, since this project
+does most of its device testing in release.
+
+**Also corrected during this pass**: the Laugh Meter's cold-blue-to-orange
+heat gradient is gone. It was the templated answer for a roast app, said
+"spicy" and nothing else, and fought the identity. The bar now fills
+with brass. And Home's hierarchy was inverted - the greeting was the
+largest thing on screen, above the player's own rank; the rank is the
+identity and now carries the size.
+
+**STILL OPEN**: the branded intro/outro card and the audio sting both
+still need a brand mark, which does not exist yet. Custom iconography was
+considered and dropped - the nav already pairs outlined and filled
+Material icons correctly, so there was nothing to fix.
+
 ## Rankings board and friend-battle rewards (2026-08-23)
 
 **FRIEND BATTLES NOW REALLY DO MOVE NOTHING.** The developer asked to confirm the mode is unranked. It already skipped rating, wins/losses and the win bonus - but `completeMatch` still paid the **turn-up award** and advanced the **daily play quest** for every mode including friend. Both are farmable there in a way they are not in ranked: you choose your own opponent and no cooldown stops you choosing the same one all evening. The quest is worse than it looks despite its daily cap, because a quest exists to pull people into the shared queue and into judging, and clearing it against a friend by appointment does neither.

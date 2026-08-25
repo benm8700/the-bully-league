@@ -1,32 +1,48 @@
 @import "tailwindcss";
 
-/* Dark-first, matching the app's own theming decision (CLAUDE.md's Tech
-   Stack section: "support both dark and light mode, DEFAULT to dark
-   mode"). Flips to light only when the visitor's OS explicitly prefers
-   it. */
+/* "House Lights Down" - the same identity the app uses, so a visitor who
+   taps a shared clip does not land somewhere that looks like a different
+   product. The values are lifted from lib/theme/house_theme.dart; if one
+   moves, move both.
+
+   Dark ONLY, matching the app's decision. A venue with the house lights
+   up is a different room, not an inverted palette - the previous
+   light-mode block flipped the background to white and left the accent
+   untouched, which produced a combination nobody designed. */
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-  --accent: #a78bfa;
+  --background: #12100f; /* house  - the room with the lights down */
+  --foreground: #f5e6c8; /* spot   - the pool of light */
+  --accent: #c98a2b; /* brass  - live, lit, yours. One meaning only. */
+  --muted: #6e6a66; /* smoke  - inactive text, dividers */
+  --surface: #1b1716; /* raised cards */
+  --curtain: #4a1220; /* deep velvet - a surface, never an accent */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-accent: var(--accent);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --background: #ffffff;
-    --foreground: #171717;
-  }
+  --color-muted: var(--muted);
+  --color-surface: var(--surface);
+  --color-curtain: var(--curtain);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+/* Display type is Archivo pushed WIDE on its width axis - the same move
+   the app makes, and the reason the two read as one product. Every
+   competitive app reaches for a condensed face; this goes the other way. */
+h1,
+h2,
+.display {
+  font-family: var(--font-display), var(--font-body), sans-serif;
+  font-variation-settings: "wdth" 118, "wght" 800;
+  letter-spacing: 0.01em;
+  line-height: 1.03;
 }

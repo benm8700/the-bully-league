@@ -1,18 +1,23 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Archivo, Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/AuthProvider";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AgeGate } from "@/components/AgeGate";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// The same pairing the app bundles, so a visitor arriving from a shared
+// clip does not land on something that looks like a different product.
+// Archivo is loaded as a VARIABLE font because the width axis is the
+// whole point - see globals.css, which pushes it wide.
+const archivo = Archivo({
+  variable: "--font-display",
   subsets: ["latin"],
+  axes: ["wdth"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const inter = Inter({
+  variable: "--font-body",
   subsets: ["latin"],
 });
 
@@ -25,7 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${archivo.variable} ${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <AuthProvider>

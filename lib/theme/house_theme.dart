@@ -50,6 +50,30 @@ class House {
   /// [curtain] so a failure never reads as decoration.
   static const alarm = Color(0xFFE05252);
 
+  // --- telling two players apart -----------------------------------------
+
+  /// STAGE GELS: the coloured filters over a venue's lights, and the two
+  /// colours used to distinguish the players from each other.
+  ///
+  /// Needed because several screens show both players at once with
+  /// NEITHER performing - the vote screen, the live tally, feed cards,
+  /// the captions burned into a clip. During a match the question does
+  /// not arise; everywhere else it does, and a name alone is slow to
+  /// read at a glance.
+  ///
+  /// WARM AGAINST COOL rather than two hues of similar temperature, so
+  /// the pair survives the common forms of colour blindness - red
+  /// against green would not.
+  ///
+  /// NEITHER OF THEM IS [brass], and that is the rule that matters.
+  /// Brass means live, lit, yours. Spending it on "this one is player
+  /// two" would make it mean nothing. The live tally shipped with
+  /// player one on amber and player two on the theme's primary - once
+  /// primary became brass the two bars were the same colour and the
+  /// scoreboard stopped being readable at all.
+  static const gelRed = Color(0xFFC4485E);
+  static const gelBlue = Color(0xFF5E93A8);
+
   // --- the signature -----------------------------------------------------
 
   /// The spotlight: a warm pool that falls on whoever is performing.
