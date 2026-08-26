@@ -32,6 +32,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.radius,
     required this.name,
     this.signature = 'none',
+    this.segmentedGauge = false,
   });
 
   /// The one colour that means "primary action / live". Mirrors
@@ -64,6 +65,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
   /// (collectible card). 'none' for the plain directions.
   final String signature;
 
+  /// Whether the rank gauge is a chunky segmented power bar rather
+  /// than a smooth fill. Shared by both finalists.
+  final bool segmentedGauge;
+
   @override
   AppPalette copyWith({
     Color? accent,
@@ -77,6 +82,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     double? radius,
     String? name,
     String? signature,
+    bool? segmentedGauge,
   }) {
     return AppPalette(
       accent: accent ?? this.accent,
@@ -90,6 +96,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
       radius: radius ?? this.radius,
       name: name ?? this.name,
       signature: signature ?? this.signature,
+      segmentedGauge: segmentedGauge ?? this.segmentedGauge,
     );
   }
 
@@ -108,6 +115,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
       radius: radius,
       name: t < 0.5 ? name : other.name,
       signature: t < 0.5 ? signature : other.signature,
+      segmentedGauge: t < 0.5 ? segmentedGauge : other.segmentedGauge,
     );
   }
 }
@@ -147,18 +155,11 @@ TextStyle displayStyle(
 // ===========================================================================
 
 /// Every direction, in order, keyed by id. The picker cycles this list.
+// Narrowed to the two finalists. The other directions' builders are
+// kept below so any can be restored by adding its id back here.
 const List<String> kThemeIds = [
-  'tabloid',
-  'arcade',
-  'courtside',
-  'neon',
-  'riso',
-  // Batch two.
-  'fightnight',
-  'comic',
-  'battle',
   'card',
-  'tape',
+  'neon',
 ];
 
 ThemeData appTheme(String id) {
@@ -362,7 +363,7 @@ ThemeData _arcade() {
       gelA: magenta, gelB: cyan,
       display: 'Archivo', displayWeight: 800, displayWidth: 125,
       radius: 2,
-      signature: 'segments',
+      segmentedGauge: true,
     ),
   );
 }
@@ -432,6 +433,7 @@ ThemeData _neon() {
       display: 'Archivo', displayWeight: 800, displayWidth: 108,
       radius: 14,
       signature: 'glow',
+      segmentedGauge: true,
     ),
   );
 }
@@ -590,6 +592,7 @@ ThemeData _card() {
       display: 'Archivo', displayWeight: 760, displayWidth: 116,
       radius: 12,
       signature: 'frame',
+      segmentedGauge: true,
     ),
   );
 }

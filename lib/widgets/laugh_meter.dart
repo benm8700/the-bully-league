@@ -124,7 +124,11 @@ class _LaughMeterState extends State<LaughMeter> {
         // margin as everything else on the screen.
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: _Gauge(fill: fill, glow: glow, signature: sig),
+          child: _Gauge(
+            fill: fill,
+            glow: glow,
+            segmented: context.palette.segmentedGauge,
+          ),
         ),
         const SizedBox(height: 10),
         Text(
@@ -173,11 +177,15 @@ class _LaughMeterState extends State<LaughMeter> {
 /// spotlight instead: the bar fills with the same brass the app uses
 /// everywhere to mean live, lit, yours.
 class _Gauge extends StatelessWidget {
-  const _Gauge({required this.fill, this.glow = false, this.signature = 'none'});
+  const _Gauge({
+    required this.fill,
+    this.glow = false,
+    this.segmented = false,
+  });
 
   final double fill;
   final bool glow;
-  final String signature;
+  final bool segmented;
 
   static const _height = 14.0;
   static const _radius = BorderRadius.all(Radius.circular(3));
@@ -187,7 +195,7 @@ class _Gauge extends StatelessWidget {
     // The arcade signature: a chunky segmented power bar rather than a
     // smooth fill. Ten cells light in the gauge's gradient; the rest sit
     // dark. Reads as a cabinet health bar, which is the whole point.
-    if (signature == 'segments') {
+    if (segmented) {
       const cells = 10;
       final lit = (fill * cells).round().clamp(0, cells);
       final scheme = Theme.of(context).colorScheme;
