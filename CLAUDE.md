@@ -1352,14 +1352,51 @@ a money printer. So, mirroring TikTok (coins→diamonds) and Twitch (bits):
   best fit for a live-battle app; it also fixes the dead subscriber sink.
 - **Q2 (allow buying points/coins with cash): YES**, sequenced — prove the
   loop in beta first, same "decide now, charge later" discipline as the sub.
-- **Q3 (creator payouts): PHASED.** Phase 1 at launch — coins are bought
-  with cash, gifts splash on-screen and pay the roaster prestige + points,
-  NO cash payout yet (platform keeps 100% minus the store's 30% IAP cut),
-  which proves people will gift with zero payout/tax/legal machinery. Phase
-  2 once gifting has volume — switch on real cash payouts via Stripe Connect
-  / PayPal (roaster "diamonds" → cash, platform cut ~30-50%, 1099 over
-  $600/yr). Phase 2 is the moat: the best comedians earning on-platform is
-  why they stay. ONLY cash-bought coins ever convert to cash.
+- **Q3 (creator payouts): PHASED, and DESIGNED AROUND RECIRCULATION —
+  DECIDED (2026-08-26).** Phase 1 at launch — coins are bought with cash,
+  gifts splash on-screen and pay the roaster prestige + points, NO cash
+  payout yet (platform keeps 100% minus the store's 30% IAP cut), which
+  proves people will gift with zero payout/tax/legal machinery. Phase 2 once
+  gifting has volume — switch on real cash payouts via Stripe Connect /
+  PayPal (roaster "diamonds" → cash, platform cut ~30-50%, 1099 over
+  $600/yr). ONLY cash-bought coins ever convert to cash.
+
+  **THE PAYOUT STRATEGY: "cashout is the promise, recirculation is the
+  design, tournament buy-ins are the primary loop."** The mental model is
+  NOT "trap the money in-app" — it is MAXIMISE LOOPS BEFORE IT LEAVES. Money
+  that comes in and immediately cashes out is cut once; money that loops
+  three times is cut three times, so the goal is to make recirculating the
+  rational choice for anyone staying anyway.
+  - **In-app sinks for roaster earnings, best first:** (1) **tournament
+    buy-ins** — a roaster spends earnings entering a cash-prize tournament,
+    which feeds the prize pool, whose winner earns and spends again: the
+    money circles the competitive loop and the platform cuts every lap, AND
+    it reinforces exactly what the app is about. This IS the cash-tournament
+    system already on the roadmap. (2) **pay for their own subscription with
+    earnings** — they get the sub, the platform keeps the value, nothing
+    cashes out. (3) **gift OTHER roasters** — pure community recirculation,
+    the way Twitch streamers gift subs to chat. (4) **exclusive
+    access/merch** — GOAT-only events, branded gear fulfilled at cost.
+  - **The lever that keeps money in without being sleazy: a conversion
+    bonus.** Offer the choice — cash out $100 to the bank, OR convert to
+    ~$120 of in-app credit. The bonus makes recirculating rational for
+    anyone staying; it is the proven gift-card tactic (Amazon/Steam). Pair
+    with frictionless in-app spend vs a cashout threshold/processing delay.
+  - **THE GUARDRAIL, non-negotiable: keep the cashout REAL.** The whole
+    reason payouts matter is the MOAT — comedians stay because a following
+    becomes real income. The moment "earnings" cannot actually become money
+    they are Monopoly money and the best talent leaves for TikTok/Twitch. So
+    cashout is a genuine, accessible promise; in-app spend is merely made
+    more attractive. Win on the ones who loop it, never by locking the door
+    (that is the same predatory shape as the rejected pay-to-remove-clip
+    model).
+  - **Two bonuses:** recirculation is **legally/operationally lighter** than
+    cashouts (every cashout means 1099s, payout processing, money-transmitter
+    questions; in-app credit that loops avoids most of it) — so it is cheaper
+    to run AND higher-margin. And it **sequences perfectly with the phasing**:
+    Phase 1 already keeps 100%, so real payouts arrive in Phase 2 WITH the
+    conversion-bonus and tournament-buy-in sinks layered on top — there is
+    never a phase whose only exit is withdrawal.
 - **Q4 (raffles): NO** — a chance-based draw is a gambling regime that would
   muddy the clean skill-contest framing; skill-based tournaments give the
   same "real stakes" hook without the sweepstakes lawyer. Tournaments come
