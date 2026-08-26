@@ -452,11 +452,16 @@ class _PointsBalance extends StatefulWidget {
   State<_PointsBalance> createState() => _PointsBalanceState();
 }
 
+/// A single spendable-reward milestone: the balance at which it becomes
+/// affordable, an emoji that marks the spot, and a short name.
+typedef _Reward = ({int price, String emoji, String label});
+
 class _PointsBalanceState extends State<_PointsBalance> {
-  /// Mirrors DEFAULT_CLIP_POINTS_PRICE in functions/clipGrants.js, used
-  /// until the live value arrives so the line never renders a wrong number
-  /// and then corrects itself jarringly.
+  /// Mirror the server defaults so the bar never renders wrong numbers and
+  /// then corrects itself jarringly (functions/clipGrants.js and
+  /// functions/points.js). Overwritten by config the moment it arrives.
   int _clipPrice = 250;
+  int _dayPassPrice = 500;
 
   @override
   void initState() {
@@ -466,12 +471,16 @@ class _PointsBalanceState extends State<_PointsBalance> {
         .doc('pointsSettings')
         .get()
         .then((snap) {
-      final price = (snap.data()?['clipPrice'] as num?)?.toInt();
-      if (mounted && price != null && price > 0) {
-        setState(() => _clipPrice = price);
-      }
+      final data = snap.data();
+      final clip = (data?['clipPrice'] as num?)?.toInt();
+      final pass = (data?['dayPassPrice'] as num?)?.toInt();
+      if (!mounted) return;
+      setState(() {
+        if (clip != null && clip > 0) _clipPrice = clip;
+        if (pass != null && pass > 0) _dayPassPrice = pass;
+      });
     }).catchError((_) {
-      // The default is a fine answer; never block Home on this.
+      // The defaults are fine answers; never block Home on this.
       return null;
     });
   }
@@ -481,10 +490,33 @@ class _PointsBalanceState extends State<_PointsBalance> {
     final balance = (widget.balance ?? 0).toInt();
     if (balance <= 0) return const SizedBox.shrink();
 
-    final enough = balance >= _clipPrice;
     final text = Theme.of(context).textTheme;
+    // The things points buy, in price order. An emoji marks the exact
+    // balance at which each becomes affordable.
+    final rewards = <_Reward>[
+      (price: _clipPrice, emoji: '🎬', label: 'clip'),
+      (price: _dayPassPrice, emoji: '🎟️', label: 'day pass'),
+    ]..sort((a, b) => a.price.compareTo(b.price));
+    final scale = rewards.last.price.toDouble();
+
+    // The next thing they cannot yet afford - the honest "keep going" line.
+    _Reward? next;
+    for (final r in rewards) {
+      if (balance < r.price) {
+        next = r;
+        break;
+      }
+    }
+
+    // Currency gold, fixed across themes: money reads as money, and it is
+    // deliberately NOT the rank gauge's colour, so a glance tells the two
+    // bars apart - the top one is your RANK climbing, this is your WALLET
+    // filling toward things to buy.
+    const gold = Color(0xFFE7B24B);
+    const trackColor = Color(0xFF2A2620);
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 6, 32, 0),
+      padding: const EdgeInsets.fromLTRB(28, 6, 28, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -493,21 +525,85 @@ class _PointsBalanceState extends State<_PointsBalance> {
             textAlign: TextAlign.center,
             style: text.bodySmall?.copyWith(fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 4),
-          if (!enough)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: balance / _clipPrice,
-                minHeight: 5,
-              ),
-            ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final w = constraints.maxWidth;
+              const markerW = 36.0;
+              // Emoji/price sit centred on their price point, clamped so an
+              // end milestone never overflows the bar.
+              double left(double frac) =>
+                  (frac * w - markerW / 2).clamp(0.0, w - markerW);
+              final fill = (balance / scale).clamp(0.0, 1.0);
+              return SizedBox(
+                height: 50,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // The emoji milestones, just above the track. Lit once
+                    // affordable, dimmed until then.
+                    for (final r in rewards)
+                      Positioned(
+                        left: left(r.price / scale),
+                        top: 0,
+                        width: markerW,
+                        child: Opacity(
+                          opacity: balance >= r.price ? 1.0 : 0.32,
+                          child: Text(
+                            r.emoji,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 19),
+                          ),
+                        ),
+                      ),
+                    // The wallet track + gold fill.
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 26,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Stack(
+                          children: [
+                            Container(
+                                height: 6,
+                                width: double.infinity,
+                                color: trackColor),
+                            FractionallySizedBox(
+                              widthFactor: fill,
+                              child: Container(height: 6, color: gold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // The price under each milestone, gold once reached.
+                    for (final r in rewards)
+                      Positioned(
+                        left: left(r.price / scale),
+                        top: 34,
+                        width: markerW,
+                        child: Text(
+                          '${r.price}',
+                          textAlign: TextAlign.center,
+                          style: text.labelSmall?.copyWith(
+                            color: balance >= r.price ? gold : null,
+                            fontWeight: balance >= r.price
+                                ? FontWeight.bold
+                                : null,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
           Text(
-            enough
-                ? 'Enough for the captioned cut of one of your battles.'
-                : '${_clipPrice - balance} more for the captioned cut of one '
-                    'of your battles.',
+            next == null
+                ? 'You can afford anything here - go spend it.'
+                : '${next.price - balance} more for a ${next.label} ${next.emoji}',
             textAlign: TextAlign.center,
             style: text.bodySmall,
           ),
