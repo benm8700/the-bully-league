@@ -3,7 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../theme/house_theme.dart';
+import '../../theme/app_theme.dart';
+
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/services/agora_token_service.dart';
@@ -297,7 +298,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
               // that is registering your voice is exactly that. The
               // green here was the only green in the app, and it sat
               // badly in a warm room.
-              color: _micVerified ? House.brass : House.smoke,
+              color: _micVerified ? context.palette.accent : Theme.of(context).colorScheme.outline,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -306,7 +307,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
                 child: LinearProgressIndicator(
                   value: fraction,
                   minHeight: 8,
-                  color: _micVerified ? House.brass : House.smoke,
+                  color: _micVerified ? context.palette.accent : Theme.of(context).colorScheme.outline,
                 ),
               ),
             ),

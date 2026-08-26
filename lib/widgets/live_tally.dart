@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/house_theme.dart';
+import '../theme/app_theme.dart';
+
 
 /// Live head-to-head scoreboard for a match still open for voting.
 ///
@@ -114,17 +115,17 @@ class LiveTally extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
               child: Row(
                 children: [
-                  // The two stage gels, never the accent - see House.
+                  // The two player gels, never the accent - see AppPalette.
                   // These were amber and colorScheme.primary, which
                   // became the same colour the moment primary turned
                   // brass, leaving a scoreboard nobody could read.
                   Expanded(
                     flex: (p1Share * 1000).round().clamp(1, 999),
-                    child: Container(height: 10, color: House.gelRed),
+                    child: Container(height: 10, color: context.palette.gelA),
                   ),
                   Expanded(
                     flex: ((1 - p1Share) * 1000).round().clamp(1, 999),
-                    child: Container(height: 10, color: House.gelBlue),
+                    child: Container(height: 10, color: context.palette.gelB),
                   ),
                 ],
               ),

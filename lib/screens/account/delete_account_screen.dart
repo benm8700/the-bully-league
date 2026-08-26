@@ -2,7 +2,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../theme/house_theme.dart';
 
 /// User-initiated account and data deletion (CCPA - see CLAUDE.md's
 /// Compliance / Account Management item, which makes this a V1 requirement
@@ -82,7 +81,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: House.alarm),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE05252)),
             child: const Text('Delete forever'),
           ),
         ],
@@ -98,7 +97,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Icon(Icons.warning_amber_rounded, size: 48, color: House.alarm),
+          const Icon(Icons.warning_amber_rounded, size: 48, color: Color(0xFFE05252)),
           const SizedBox(height: 16),
           Text(
             'Deleting your account is permanent',
@@ -149,7 +148,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
           const SizedBox(height: 20),
           FilledButton(
             onPressed: _canDelete ? _confirmThenDelete : null,
-            style: FilledButton.styleFrom(backgroundColor: House.alarm),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE05252)),
             child: _busy
                 ? const SizedBox(
                     height: 20,
@@ -160,7 +159,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 16),
-            Text(_error!, style: const TextStyle(color: House.alarm)),
+            Text(_error!, style: const TextStyle(color: Color(0xFFE05252))),
           ],
           const SizedBox(height: 24),
           Text(

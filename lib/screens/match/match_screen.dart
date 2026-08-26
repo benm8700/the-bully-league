@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../theme/house_theme.dart';
+
 import 'package:provider/provider.dart';
 
 import '../../core/services/agora_token_service.dart';
@@ -638,7 +638,9 @@ class _MatchScreenState extends State<MatchScreen> {
                 label: const Text('Judge a battle'),
               )
             else if (_matchSaveError != null)
-              Text(_matchSaveError!, style: const TextStyle(color: House.alarm))
+              Text(_matchSaveError!,
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.error))
             else
               const CircularProgressIndicator(),
             if (_matchCompleted) ...[

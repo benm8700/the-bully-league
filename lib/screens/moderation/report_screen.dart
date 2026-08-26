@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../theme/house_theme.dart';
 
 /// In-app report button (Build Order step 9). Reports feed a review queue
 /// that's just Firestore documents browsed via the Firebase console (same
@@ -124,7 +123,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     const SizedBox(height: 24),
                     if (_resultMessage != null) ...[
-                      Text(_resultMessage!, style: const TextStyle(color: House.alarm)),
+                      Text(_resultMessage!, style: const TextStyle(color: Color(0xFFE05252))),
                       const SizedBox(height: 16),
                     ],
                     FilledButton(

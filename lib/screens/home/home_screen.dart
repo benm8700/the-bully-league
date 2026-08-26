@@ -3,6 +3,9 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../app.dart';
+import '../../theme/app_theme.dart';
+
 import '../../widgets/laugh_meter.dart';
 import 'package:provider/provider.dart';
 
@@ -37,6 +40,25 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('The Bully League'),
         actions: [
+          // DEV-ONLY theme picker. Cycles the five candidate directions
+          // in the running app so they can be judged live rather than
+          // in five separate builds. Shows the current direction's name
+          // in a snackbar on each tap. Remove once a direction is chosen.
+          IconButton(
+            icon: const Icon(Icons.palette_outlined),
+            tooltip: 'Cycle design (dev)',
+            onPressed: () {
+              final i = kThemeIds.indexOf(kActiveTheme.value);
+              final next = kThemeIds[(i + 1) % kThemeIds.length];
+              kActiveTheme.value = next;
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(SnackBar(
+                  duration: const Duration(seconds: 2),
+                  content: Text('Design: ${appTheme(next).extension<AppPalette>()!.name}'),
+                ));
+            },
+          ),
           // The help icon is where people look when they are confused, so
           // it offers both things a confused person might want: a reminder
           // of how a battle actually works, and a way to reach a human.

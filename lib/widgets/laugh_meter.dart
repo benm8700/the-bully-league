@@ -1,7 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/house_theme.dart';
+import '../theme/app_theme.dart';
+
 
 /// The Laugh Meter - the user-facing face of the rating system.
 ///
@@ -105,7 +106,7 @@ class _LaughMeterState extends State<LaughMeter> {
             // GOAT gets the one piece of special treatment in the whole
             // display, because it is the one rank that is genuinely scarce
             // rather than a threshold anybody can eventually cross.
-            color: isGoat ? House.brass : null,
+            color: isGoat ? context.palette.accent : null,
           ),
           textAlign: TextAlign.center,
         ),
@@ -154,7 +155,7 @@ class _Gauge extends StatelessWidget {
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: House.house,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: _radius,
                 border: Border.all(color: const Color(0xFF2A2422)),
               ),
@@ -183,16 +184,16 @@ class _Gauge extends StatelessWidget {
                     // shifting under the player after every match.
                     gradient: LinearGradient(
                       colors: [
-                        House.brass.withValues(alpha: 0.55),
-                        House.brass,
-                        House.spot,
+                        context.palette.gaugeFrom,
+                        context.palette.gaugeTo,
+                        context.palette.gaugeTo,
                       ],
-                      stops: const [0.0, 0.6, 1.0],
+                      stops: const [0.0, 0.75, 1.0],
                     ),
                     boxShadow: glow
                         ? [
                             BoxShadow(
-                              color: House.brass.withValues(alpha: 0.55),
+                              color: context.palette.accent.withValues(alpha: 0.55),
                               blurRadius: 14,
                               spreadRadius: 1,
                             ),

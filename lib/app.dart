@@ -10,10 +10,16 @@ import 'core/services/auth_service.dart';
 import 'core/services/cloud_vision_moderation_service.dart';
 import 'core/services/push_notification_service.dart';
 import 'core/services/visual_moderation_service.dart';
-import 'theme/house_theme.dart';
+import 'theme/app_theme.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/home/main_shell.dart';
 import 'screens/moderation/banned_screen.dart';
+
+/// A theme id shared with the in-app picker, so cycling it rebuilds the
+/// whole app in the next direction. A plain global ValueNotifier rather
+/// than a provider because it is a dev-only preview control with a single
+/// consumer - the app root.
+final ValueNotifier<String> kActiveTheme = ValueNotifier(kThemeIds.first);
 
 class BullyLeagueApp extends StatelessWidget {
   const BullyLeagueApp({super.key});
@@ -27,16 +33,23 @@ class BullyLeagueApp extends StatelessWidget {
         Provider<VisualModerationService>(create: (_) => CloudVisionModerationService()),
         Provider<PushNotificationService>(create: (_) => PushNotificationService()),
       ],
-      child: MaterialApp(
-        title: 'The Bully League',
-        // Dark only, deliberately. The app already defaults to dark, and
-        // "House Lights Down" is a room with the lights off - a venue with
-        // the house lights up is a different room, so a light variant needs
-        // its own pass rather than an inverted palette.
-        themeMode: ThemeMode.dark,
-        darkTheme: House.dark(),
-        theme: House.dark(),
-        home: const AuthGate(),
+      child: ValueListenableBuilder<String>(
+        valueListenable: kActiveTheme,
+        builder: (context, themeId, _) {
+          final theme = appTheme(themeId);
+          return MaterialApp(
+            title: 'The Bully League',
+            // One theme, whichever direction the picker has selected.
+            // Each direction sets its own brightness, so themeMode is
+            // forced to match rather than following the device.
+            themeMode: theme.brightness == Brightness.dark
+                ? ThemeMode.dark
+                : ThemeMode.light,
+            theme: theme,
+            darkTheme: theme,
+            home: const AuthGate(),
+          );
+        },
       ),
     );
   }
