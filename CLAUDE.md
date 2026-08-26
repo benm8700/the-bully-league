@@ -236,6 +236,65 @@ Developer: solo, no prior backend experience, comfortable with cross-platform fr
 - **Device support — DECIDED**: phone + tablet support (not phone-only).
 - **Video/streaming**: NO live external streaming for V1 (no YouTube live). **Recording scope — DECIDED**: only ranked and tournament matches are recorded and eligible for the website/Instagram highlight pipeline. Exhibition matches are NOT recorded/posted (casual, no ranking impact, no content-pipeline use).
 
+## PROPOSAL — XP-earned monotonic titles (2026-08-25, NOT YET DECIDED)
+
+The developer is debating replacing the current Elo-driven title ladder
+with an **XP progression that you earn and keep**. Recorded now, to be
+settled after the visual-design decision. This is a genuine fork in the
+core loop, so the tensions are written down rather than just the idea.
+
+**The proposal, in the developer's terms:**
+- Titles are earned by accumulating XP and **never lost** - you are
+  always working toward the next one, which is the retention argument.
+- Higher titles get **progressively harder** to reach (a steepening XP
+  curve), so the top stays scarce.
+- **One exception to never-losing**: tournament "title fights" could put
+  a title on the line - the one place stakes and loss are reintroduced.
+- **XP sources**: ranked matches only; wins earn more; judging earns XP
+  too but is **capped**. (Practice, exhibition and friend battles earn
+  nothing, consistent with the current economy.)
+
+**Why it is attractive**: monotonic progress is a proven retention
+engine (battle-pass, Duolingo, prestige levels). It removes the
+demoralising side of a rank that can fall - loss aversion cuts both ways,
+and a losing streak is exactly when people quit. It also means there is
+always a next thing to earn.
+
+**The tensions the eventual decision MUST resolve:**
+1. **A title stops meaning "good" and starts meaning "played a lot."**
+   Elo measures skill right now; XP measures accumulated effort. Under
+   XP, a grinder outranks a skilled newcomer. This is a real shift for an
+   app whose pitch is "skill-based, not chance" - though many games run
+   both (a visible grind level AND a hidden skill rating).
+2. **Matchmaking still needs a hidden skill number.** Fair pairing can't
+   run on XP, or newcomers get fed to veterans. The clean version of this
+   proposal is: **keep Elo as a HIDDEN matchmaking rating, make the
+   VISIBLE titles XP-based.** That is a common, well-understood split.
+3. **GOAT breaks under pure XP.** GOAT is currently the live top-5 by
+   rating - a skill position. "Top 5 by XP" just rewards whoever played
+   most/longest and lets early users lock it forever. GOAT probably has
+   to stay rating-based (the one skill title) while the rest go XP, or
+   become something else entirely.
+4. **Never-losing erodes prestige.** If nobody can fall, everyone
+   eventually reaches a given title and it stops signalling anything. The
+   steepening curve mitigates this; the tournament "title fight" is the
+   other pressure valve, and it makes tournaments the high-stakes centre
+   of the game - a nice concentration of drama.
+5. **How many numbers is the player asked to track?** XP as described is
+   nearly identical to the existing CAREER POINTS (monotonic, ranked
+   +win +capped-judging). The decision has to say whether XP IS career
+   points repurposed to drive titles, or a third number beside rating and
+   the spendable balance. Three numbers is a lot; reusing career points
+   is cleaner. Note this does NOT violate the one-status-ladder rule - it
+   REPLACES the rating-title with an XP-title rather than adding a second
+   parallel ladder.
+
+**What it would touch if built**: the rank-change popups and their
+up/down copy (down mostly disappears), the Laugh Meter's meaning (climb
+toward an earned title, not a rating that floats), the season reset
+(you don't soft-reset earned titles the way you compress ratings), and
+the GOAT/displacement logic. Large, which is why it waits.
+
 ## Ranking System
 - **Rating — DECIDED**: Chess-style Elo-like numerical rating system, used as the underlying math (not shown directly to users — see Laugh Meter below). Everyone starts at a flat **1200**. No hard ceiling (unbounded). Soft floor at ~100 (prevents demoralizing bottomless losing spirals).
 - **K-factor — DECIDED (variable, not flat)**: use a VARIABLE K-factor rather than one flat rate for all players — modeled on how real chess federations (USCF/FIDE) handle this. Lower/newer-tier players (roughly ranks 1-4) get a HIGH K-factor — bigger rating swings per match, faster early climbing, quick gratification, forgiving of an early loss or two. Higher-tier players (roughly Headliner and up, especially near the GOAT top-5 cutoff) get a LOW K-factor — smaller swings, rating only moves with sustained real performance, every win at the top genuinely has to be earned. Chosen over a hard "different system above X rank" split specifically because a single continuously-scaling K-factor achieves the same early-gratification-then-real-competition FEEL without a jarring rule-change moment a player could hit and feel blindsided by. Exact K-factor values per tier band not yet set — needs real tuning once analytics data exists (see Firebase Analytics decision).
