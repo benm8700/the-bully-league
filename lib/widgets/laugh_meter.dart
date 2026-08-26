@@ -98,15 +98,23 @@ class _LaughMeterState extends State<LaughMeter> {
     final state = meter['state'] as String? ?? 'climbing';
     final isGoat = state == 'goat';
 
-    return Column(
+    final sig = context.palette.signature;
+    final glow = isGoat || sig == 'glow';
+
+    final inner = Column(
       children: [
         Text(
           title,
           style: text.headlineLarge?.copyWith(
             // GOAT gets the one piece of special treatment in the whole
             // display, because it is the one rank that is genuinely scarce
-            // rather than a threshold anybody can eventually cross.
-            color: isGoat ? context.palette.accent : null,
+            // rather than a threshold anybody can eventually cross. The
+            // glow direction tints the rank the accent too, so the
+            // identity carries the neon.
+            color: (isGoat || sig == 'glow') ? context.palette.accent : null,
+            shadows: sig == 'glow'
+                ? [Shadow(color: context.palette.accent.withValues(alpha: 0.6), blurRadius: 18)]
+                : null,
           ),
           textAlign: TextAlign.center,
         ),
@@ -116,7 +124,7 @@ class _LaughMeterState extends State<LaughMeter> {
         // margin as everything else on the screen.
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: _Gauge(fill: fill, glow: isGoat),
+          child: _Gauge(fill: fill, glow: glow, signature: sig),
         ),
         const SizedBox(height: 10),
         Text(
@@ -126,6 +134,33 @@ class _LaughMeterState extends State<LaughMeter> {
         ),
       ],
     );
+
+    // The collectible-card signature wraps the whole identity in a
+    // framed panel with a foil sheen, so the rank reads as a card rather
+    // than as loose text - the treatment that makes this direction more
+    // than a palette.
+    if (sig == 'frame') {
+      final scheme = Theme.of(context).colorScheme;
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: context.palette.accent, width: 1.5),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              context.palette.accent.withValues(alpha: 0.10),
+              scheme.surfaceContainer,
+              context.palette.gelB.withValues(alpha: 0.10),
+            ],
+          ),
+        ),
+        child: inner,
+      );
+    }
+    return inner;
   }
 }
 
@@ -138,16 +173,53 @@ class _LaughMeterState extends State<LaughMeter> {
 /// spotlight instead: the bar fills with the same brass the app uses
 /// everywhere to mean live, lit, yours.
 class _Gauge extends StatelessWidget {
-  const _Gauge({required this.fill, this.glow = false});
+  const _Gauge({required this.fill, this.glow = false, this.signature = 'none'});
 
   final double fill;
   final bool glow;
+  final String signature;
 
   static const _height = 14.0;
   static const _radius = BorderRadius.all(Radius.circular(3));
 
   @override
   Widget build(BuildContext context) {
+    // The arcade signature: a chunky segmented power bar rather than a
+    // smooth fill. Ten cells light in the gauge's gradient; the rest sit
+    // dark. Reads as a cabinet health bar, which is the whole point.
+    if (signature == 'segments') {
+      const cells = 10;
+      final lit = (fill * cells).round().clamp(0, cells);
+      final scheme = Theme.of(context).colorScheme;
+      return SizedBox(
+        height: _height + 4,
+        child: Row(
+          children: List.generate(cells, (i) {
+            final on = i < lit;
+            final t = cells <= 1 ? 0.0 : i / (cells - 1);
+            return Expanded(
+              child: Container(
+                margin: EdgeInsets.only(right: i == cells - 1 ? 0 : 3),
+                decoration: BoxDecoration(
+                  color: on
+                      ? Color.lerp(context.palette.gaugeFrom,
+                          context.palette.gaugeTo, t)
+                      : scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(1),
+                  boxShadow: on
+                      ? [BoxShadow(
+                          color: (Color.lerp(context.palette.gaugeFrom,
+                                  context.palette.gaugeTo, t))!
+                              .withValues(alpha: 0.5),
+                          blurRadius: 6)]
+                      : null,
+                ),
+              ),
+            );
+          }),
+        ),
+      );
+    }
     return SizedBox(
       height: _height,
       child: Stack(
@@ -193,8 +265,8 @@ class _Gauge extends StatelessWidget {
                     boxShadow: glow
                         ? [
                             BoxShadow(
-                              color: context.palette.accent.withValues(alpha: 0.55),
-                              blurRadius: 14,
+                              color: context.palette.accent.withValues(alpha: 0.6),
+                              blurRadius: 16,
                               spreadRadius: 1,
                             ),
                           ]

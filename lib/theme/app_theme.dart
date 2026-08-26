@@ -31,6 +31,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.displayWidth,
     required this.radius,
     required this.name,
+    this.signature = 'none',
   });
 
   /// The one colour that means "primary action / live". Mirrors
@@ -57,6 +58,12 @@ class AppPalette extends ThemeExtension<AppPalette> {
 
   final String name;
 
+  /// The one distinctive treatment this direction is remembered by,
+  /// per the design principle of spending boldness in a single place.
+  /// 'glow' (neon sign), 'segments' (arcade power bar), 'frame'
+  /// (collectible card). 'none' for the plain directions.
+  final String signature;
+
   @override
   AppPalette copyWith({
     Color? accent,
@@ -69,6 +76,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     double? displayWidth,
     double? radius,
     String? name,
+    String? signature,
   }) {
     return AppPalette(
       accent: accent ?? this.accent,
@@ -81,6 +89,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
       displayWidth: displayWidth ?? this.displayWidth,
       radius: radius ?? this.radius,
       name: name ?? this.name,
+      signature: signature ?? this.signature,
     );
   }
 
@@ -98,6 +107,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
       displayWidth: displayWidth,
       radius: radius,
       name: t < 0.5 ? name : other.name,
+      signature: t < 0.5 ? signature : other.signature,
     );
   }
 }
@@ -231,6 +241,10 @@ ThemeData _build({
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
         minimumSize: const Size(0, 52),
+        elevation: palette.signature == 'glow' ? 10 : 0,
+        shadowColor: palette.signature == 'glow'
+            ? scheme.primary
+            : Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(r)),
         textStyle: disp(16, ls: 0.8),
       ),
@@ -348,6 +362,7 @@ ThemeData _arcade() {
       gelA: magenta, gelB: cyan,
       display: 'Archivo', displayWeight: 800, displayWidth: 125,
       radius: 2,
+      signature: 'segments',
     ),
   );
 }
@@ -388,10 +403,12 @@ ThemeData _courtside() {
 // --- 4. NEON: 1am street. Two-tone glow. ---------------------------------
 ThemeData _neon() {
   const nearBlack = Color(0xFF0B0713);
-  const violet = Color(0xFF9B5CFF);
+  const violet = Color(0xFF7C3BF0); // deepened so WHITE button text reads
   const lime = Color(0xFFB6FF3C);
   const scheme = ColorScheme.dark(
-    primary: violet, onPrimary: Color(0xFF0B0713),
+    // White button text, per the developer's call. A neon sign is lit
+    // white-hot at its core; the colour is the glow around it.
+    primary: violet, onPrimary: Color(0xFFFFFFFF),
     secondary: lime, onSecondary: Color(0xFF0B0713),
     surface: nearBlack, onSurface: Color(0xFFEDE7FA),
     onSurfaceVariant: Color(0xFF9186AE),
@@ -409,11 +426,12 @@ ThemeData _neon() {
     bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'Neon',
-      accent: violet,
+      accent: Color(0xFFB57CFF), // the brighter glow colour, for text
       gaugeFrom: violet, gaugeTo: lime,
-      gelA: violet, gelB: lime,
+      gelA: Color(0xFFB57CFF), gelB: lime,
       display: 'Archivo', displayWeight: 800, displayWidth: 108,
       radius: 14,
+      signature: 'glow',
     ),
   );
 }
@@ -571,6 +589,7 @@ ThemeData _card() {
       gelA: Color(0xFFFF6B9D), gelB: Color(0xFF6BA9FF),
       display: 'Archivo', displayWeight: 760, displayWidth: 116,
       radius: 12,
+      signature: 'frame',
     ),
   );
 }
