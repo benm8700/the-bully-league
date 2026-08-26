@@ -592,7 +592,11 @@ ThemeData _card() {
       display: 'Archivo', displayWeight: 760, displayWidth: 116,
       radius: 12,
       signature: 'frame',
-      segmentedGauge: true,
+      // Solid smooth fill, not the segmented power bar. The segmented bar
+      // reads as an arcade-cabinet health bar, which fights Card's
+      // premium collectible-card feel; a continuous stat bar sits better
+      // inside the foil frame.
+      segmentedGauge: false,
     ),
   );
 }
