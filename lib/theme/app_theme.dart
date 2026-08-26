@@ -143,6 +143,12 @@ const List<String> kThemeIds = [
   'courtside',
   'neon',
   'riso',
+  // Batch two.
+  'fightnight',
+  'comic',
+  'battle',
+  'card',
+  'tape',
 ];
 
 ThemeData appTheme(String id) {
@@ -155,6 +161,16 @@ ThemeData appTheme(String id) {
       return _neon();
     case 'riso':
       return _riso();
+    case 'fightnight':
+      return _fightNight();
+    case 'comic':
+      return _comic();
+    case 'battle':
+      return _battle();
+    case 'card':
+      return _card();
+    case 'tape':
+      return _tape();
     case 'tabloid':
     default:
       return _tabloid();
@@ -431,6 +447,161 @@ ThemeData _riso() {
       gelA: pink, gelB: Color(0xFF2C6FE8),
       display: 'Archivo', displayWeight: 800, displayWidth: 88,
       radius: 3,
+    ),
+  );
+}
+
+// --- 6. FIGHT NIGHT: title-fight poster. The tale of the tape. ------------
+ThemeData _fightNight() {
+  const canvas = Color(0xFF131114); // dark neutral, the arena
+  const bone = Color(0xFFECE3D6);
+  const blood = Color(0xFFD21F3C);
+  const scheme = ColorScheme.dark(
+    primary: blood, onPrimary: bone,
+    secondary: bone, onSecondary: canvas,
+    surface: canvas, onSurface: bone,
+    onSurfaceVariant: Color(0xFF938A83),
+    surfaceContainer: Color(0xFF1D1A1E),
+    surfaceContainerHigh: Color(0xFF241F26),
+    surfaceContainerHighest: Color(0xFF2C262E),
+    outline: Color(0xFF453E48), outlineVariant: Color(0xFF322C34),
+    error: Color(0xFFE0685A), onError: canvas,
+    inverseSurface: bone, onInverseSurface: canvas,
+    primaryContainer: Color(0xFF3A0E17), onPrimaryContainer: bone,
+  );
+  return _build(
+    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    palette: const AppPalette(
+      name: 'Fight Night',
+      accent: blood,
+      gaugeFrom: Color(0xFF7A1520), gaugeTo: blood,
+      gelA: blood, gelB: Color(0xFF4E86C6),
+      display: 'Archivo', displayWeight: 900, displayWidth: 68,
+      radius: 0,
+    ),
+  );
+}
+
+// --- 7. COMIC: halftone panels and speech bubbles. Roasts ARE speech. -----
+ThemeData _comic() {
+  const paper = Color(0xFFF7F4EC);
+  const ink = Color(0xFF141019);
+  const pop = Color(0xFF1F5EFF); // pop-art electric blue
+  const scheme = ColorScheme.light(
+    primary: pop, onPrimary: Color(0xFFFFFFFF),
+    secondary: ink, onSecondary: paper,
+    surface: paper, onSurface: ink,
+    onSurfaceVariant: Color(0xFF565064),
+    surfaceContainer: Color(0xFFEDE9DE),
+    surfaceContainerHigh: Color(0xFFE6E1D3),
+    surfaceContainerHighest: Color(0xFFDED8C7),
+    outline: Color(0xFF141019), outlineVariant: Color(0xFF9C96A6),
+    error: Color(0xFFE5342B), onError: paper,
+    inverseSurface: ink, onInverseSurface: paper,
+    primaryContainer: Color(0xFFD5E0FF), onPrimaryContainer: ink,
+  );
+  return _build(
+    brightness: Brightness.light, scheme: scheme, bodyFont: 'Inter',
+    palette: const AppPalette(
+      name: 'Comic',
+      accent: pop,
+      gaugeFrom: Color(0xFF8FB0FF), gaugeTo: pop,
+      gelA: Color(0xFFE5342B), gelB: Color(0xFF178A4C),
+      display: 'Archivo', displayWeight: 850, displayWidth: 120,
+      radius: 2,
+    ),
+  );
+}
+
+// --- 8. BATTLE: graffiti / battle-rap. The audience's own culture. --------
+ThemeData _battle() {
+  const concrete = Color(0xFF1A1A1D);
+  const chalk = Color(0xFFEDEDE8);
+  const spray = Color(0xFFFF5A1F); // construction orange-red, not amber
+  const scheme = ColorScheme.dark(
+    primary: spray, onPrimary: Color(0xFF12100E),
+    secondary: Color(0xFF35E06B), onSecondary: Color(0xFF12100E),
+    surface: concrete, onSurface: chalk,
+    onSurfaceVariant: Color(0xFF8C8C86),
+    surfaceContainer: Color(0xFF242427),
+    surfaceContainerHigh: Color(0xFF2C2C30),
+    surfaceContainerHighest: Color(0xFF353539),
+    outline: Color(0xFF4A4A4E), outlineVariant: Color(0xFF343438),
+    error: Color(0xFFFF5A5A), onError: Color(0xFF12100E),
+    inverseSurface: chalk, onInverseSurface: concrete,
+    primaryContainer: Color(0xFF3A1608), onPrimaryContainer: spray,
+  );
+  return _build(
+    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    palette: const AppPalette(
+      name: 'Battle',
+      accent: spray,
+      gaugeFrom: Color(0xFF35E06B), gaugeTo: spray,
+      gelA: Color(0xFFFF2E88), gelB: Color(0xFF35E06B),
+      display: 'Archivo', displayWeight: 900, displayWidth: 110,
+      radius: 2,
+    ),
+  );
+}
+
+// --- 9. CARD: collectible / holo. Every roaster is a card. ----------------
+ThemeData _card() {
+  const slate = Color(0xFF12141C);
+  const frost = Color(0xFFE8ECF5);
+  const foil = Color(0xFF2DD4BF); // holographic teal
+  const scheme = ColorScheme.dark(
+    primary: foil, onPrimary: Color(0xFF08120F),
+    secondary: Color(0xFF8B7BFF), onSecondary: Color(0xFF08120F),
+    surface: slate, onSurface: frost,
+    onSurfaceVariant: Color(0xFF828AA0),
+    surfaceContainer: Color(0xFF1B1E29),
+    surfaceContainerHigh: Color(0xFF222634),
+    surfaceContainerHighest: Color(0xFF2A2F40),
+    outline: Color(0xFF3A4056), outlineVariant: Color(0xFF272C3B),
+    error: Color(0xFFFF6B7D), onError: Color(0xFF08120F),
+    inverseSurface: frost, onInverseSurface: slate,
+    primaryContainer: Color(0xFF0C3A34), onPrimaryContainer: foil,
+  );
+  return _build(
+    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    palette: const AppPalette(
+      name: 'Card',
+      accent: foil,
+      gaugeFrom: Color(0xFF8B7BFF), gaugeTo: foil,
+      gelA: Color(0xFFFF6B9D), gelB: Color(0xFF6BA9FF),
+      display: 'Archivo', displayWeight: 760, displayWidth: 116,
+      radius: 12,
+    ),
+  );
+}
+
+// --- 10. TAPE: camcorder / VHS. The app's own output is tape. -------------
+ThemeData _tape() {
+  const tape = Color(0xFF0C0D0B);
+  const white = Color(0xFFE6EFE6);
+  const phosphor = Color(0xFF6AE86A);
+  const scheme = ColorScheme.dark(
+    primary: phosphor, onPrimary: Color(0xFF071007),
+    secondary: white, onSecondary: tape,
+    surface: tape, onSurface: white,
+    onSurfaceVariant: Color(0xFF7C877C),
+    surfaceContainer: Color(0xFF151714),
+    surfaceContainerHigh: Color(0xFF1C1F1B),
+    surfaceContainerHighest: Color(0xFF242822),
+    outline: Color(0xFF39403A), outlineVariant: Color(0xFF282D28),
+    error: Color(0xFFFF5C7A), onError: Color(0xFF071007),
+    inverseSurface: white, onInverseSurface: tape,
+    primaryContainer: Color(0xFF0F2A0F), onPrimaryContainer: phosphor,
+  );
+  return _build(
+    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    palette: const AppPalette(
+      name: 'Tape',
+      accent: phosphor,
+      gaugeFrom: Color(0xFF2E7A2E), gaugeTo: phosphor,
+      gelA: Color(0xFFFF5C7A), gelB: Color(0xFF57C7FF),
+      display: 'Archivo', displayWeight: 800, displayWidth: 100,
+      radius: 2,
     ),
   );
 }
