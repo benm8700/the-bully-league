@@ -56,7 +56,7 @@ const DEFAULTS = {
    * comfortably above what an honest judge does in a sitting and well
    * below what a farmer would want. */
   votePointsPerDay: 10,
-  /** What a day pass costs.
+  /** What a day pass costs. 300 as of 2026-08-26 (was 500).
    *
    * THE POINT OF THIS SINK, and why it beats the clip: a clip is
    * TERMINAL. You want one, you get it, and then you want nothing - so
@@ -66,18 +66,27 @@ const DEFAULTS = {
    *
    * It is also the one thing a free player most wants and cannot
    * otherwise have, since free battling is confined to the daily window -
-   * which makes it a taste of the subscription rather than a substitute
-   * for it. At roughly 2-3 days of committed earning per pass, grinding is
-   * plainly a worse deal than subscribing for anyone who wants it
-   * regularly, which is exactly the comparison it should provoke.
+   * which makes it a taste of the subscription.
    *
-   * DELIBERATELY SET HIGH TO BEGIN WITH. Nobody can experience a pass
-   * until enforcement is switched on - with it off, everyone already
-   * battles any time - so starting low buys no information and costs
-   * optionality. Raising a price later is the most damaging pricing move
-   * available; lowering one reads as generosity. Start expensive, come
-   * down if the economy feels dead. */
-  dayPassPrice: 500,
+   * PRICED FOR RETENTION FIRST (the developer's call): at ~1.5-2 days of
+   * play it is a frequently-achievable reward that keeps people earning
+   * and playing rather than a distant grind that frustrates them into
+   * quitting - the right bias for launch, when the goal is proving the
+   * loop, not squeezing revenue.
+   *
+   * WHY CHEAP IS SAFE HERE (verified in code): a day pass grants ONLY the
+   * anytime-battling gate - it puts the account in state "daypass", which
+   * is distinct from "subscriber"/"trial", and every OTHER subscription
+   * perk (free clips in clipGrants.js, stats in FormCard, the player
+   * directory) gates on subscriber/trial and so is NOT unlocked by a pass.
+   * So a cheap pass only lets a free player buy the "battle anytime" slice
+   * a la carte; it never approaches the full subscription, which still
+   * bundles clips + stats + directory + (planned) a coin allowance and a
+   * gift bonus. The residual risk is the narrow case of someone who wants
+   * ONLY anytime-battling and would grind rather than pay - and
+   * dayPassEnabled (the kill switch) plus this being live-config cover even
+   * that, from the console without a release. */
+  dayPassPrice: 300,
   /** Whether day passes can be bought at all.
    *
    * THE OFF SWITCH MATTERS MORE THAN THE PRICE. The whole worry about

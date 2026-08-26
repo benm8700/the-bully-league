@@ -41,7 +41,7 @@ const {readEventWindowConfig} = require("./eventWindow");
 /** Points price of one captioned clip. In config, like every other
  * economy number, because CLAUDE.md is explicit that these need real
  * playtesting and an economy needing a release to tune never gets tuned. */
-const DEFAULT_CLIP_POINTS_PRICE = 250;
+const DEFAULT_CLIP_POINTS_PRICE = 500;
 const CLIP_PRICE_LIMITS = {min: 1, max: 100000};
 
 /** What a client may ASK for. "free" is deliberately absent - the first

@@ -444,8 +444,8 @@ class _PointsBalanceState extends State<_PointsBalance> {
   /// Mirror the server defaults so the bar never renders wrong numbers and
   /// then corrects itself jarringly (functions/clipGrants.js and
   /// functions/points.js). Overwritten by config the moment it arrives.
-  int _clipPrice = 250;
-  int _dayPassPrice = 500;
+  int _clipPrice = 500;
+  int _dayPassPrice = 300;
 
   @override
   void initState() {

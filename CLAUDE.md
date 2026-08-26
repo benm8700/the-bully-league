@@ -1327,6 +1327,94 @@ The developer asked directly whether a hard paywall could work, given published 
   - **Unrelated but worth recording**: match `6caX71o7xygcXhjryIKX` cannot be rendered at all ("No usable segments in the recording"). Its files include a stray `_0.mp4`, i.e. leftovers from the old composite-mode recording that the individual-mode pipeline cannot read. Not a regression; skip it when testing renders.
 - **NOT built**: IAP.
 
+## Gifting economy + points spend scale — DIRECTION SET (2026-08-26), mostly UNBUILT
+
+A deep-dive on "make a lot of money" reframed the whole economy. The goal:
+hook users into subscribing AND give points real purchasing power. The
+strategic reframe the developer accepted: **the money is in the LOOP, not
+the sinks.** Earned points create engagement, never revenue; the revenue
+comes from a cash faucet (buy currency with money) draining into spending
+ON OTHER PEOPLE (gifting), TikTok/Twitch-style, with the platform taking a
+cut. This app is live, competitive, status-driven and creator-ish, which is
+exactly that model's home turf.
+
+**TWO CURRENCIES — DECIDED IN PRINCIPLE, UNBUILT.** Splitting the economy is
+mandatory to close a fraud hole: if earned points could be gifted AND gifts
+paid out cash, players would farm free points, gift a buddy, and cash out =
+a money printer. So, mirroring TikTok (coins→diamonds) and Twitch (bits):
+- **Points** — EARNED by playing/judging. Buy your own utility, and send
+  *status* gifts ("props") that give a roaster prestige. **Never cash out.**
+- **Coins** — BOUGHT with real money (IAP). Used to gift roasters during
+  battles; these are the only thing that can become real creator earnings.
+
+**Q1–Q4 answered by the developer:**
+- **Q1 (gifting is the centerpiece): YES.** The biggest money lever and the
+  best fit for a live-battle app; it also fixes the dead subscriber sink.
+- **Q2 (allow buying points/coins with cash): YES**, sequenced — prove the
+  loop in beta first, same "decide now, charge later" discipline as the sub.
+- **Q3 (creator payouts): PHASED.** Phase 1 at launch — coins are bought
+  with cash, gifts splash on-screen and pay the roaster prestige + points,
+  NO cash payout yet (platform keeps 100% minus the store's 30% IAP cut),
+  which proves people will gift with zero payout/tax/legal machinery. Phase
+  2 once gifting has volume — switch on real cash payouts via Stripe Connect
+  / PayPal (roaster "diamonds" → cash, platform cut ~30-50%, 1099 over
+  $600/yr). Phase 2 is the moat: the best comedians earning on-platform is
+  why they stay. ONLY cash-bought coins ever convert to cash.
+- **Q4 (raffles): NO** — a chance-based draw is a gambling regime that would
+  muddy the clean skill-contest framing; skill-based tournaments give the
+  same "real stakes" hook without the sweepstakes lawyer. Tournaments come
+  EARLY: the engine is already built (brackets/byes/async+live/forfeits/
+  notifications), so points-entry tournaments can launch day one with zero
+  payment processor, upgrading to cash entry/prizes when the money infra and
+  entity are ready.
+
+**THE POINTS SPEND SCALE — DECIDED (2026-08-26), tuned for retention.** The
+developer's brief: "just hard enough to earn so people keep playing and
+earn things, not get frustrated and quit" — i.e. retention-first for
+launch, tighten monetization later. Against an active free player's
+~150-250 points/day:
+- 🎟️ **Day pass — 300** (was 500). **LIVE in config now.** ~1.5-2 days;
+  a frequently-achievable retention reward. **Cheap is SAFE here (verified
+  in code, the developer's point):** a day pass grants ONLY anytime-battling
+  (state "daypass"), NOT the subscription's other perks - free clips, stats
+  and the directory all gate on subscriber/trial, which a pass is not. So it
+  is an a-la-carte "battle anytime" slice, never a mini-subscription; the
+  sub keeps its clips+stats+directory+(planned) coin/gift value. Residual
+  risk is only the narrow "wants nothing but anytime-battling" case, covered
+  by the kill switch.
+- 🎬 **Captioned clip — 500** (was 250). **LIVE in config now.** ~2-3 days;
+  the aspirational trophy. Pricing it high is revenue-smart — it makes the
+  $1.99 direct buy attractive, driving clip SALES, while "first clip free"
+  still seeds virality regardless of price.
+- ⏭️ **Extra skip — 100.** Above the 50/day earnable from judging (so no
+  judge-farming skips) and hard-capped at 5 total skips/day. NOT BUILT (no
+  skip-purchase feature yet) — recorded value.
+- 🏆 **Points-entry tournament buy-in — 1000.** A staked event should cost
+  something meaningful (~4-6 days), which keeps points-tournaments from
+  being spammed and makes cash entry attractive by comparison. NOT BUILT
+  (tournament entry fees are schema-only) — recorded value.
+- 🧊 **Streak freeze — ~100**, 🎁 **gift-a-friend — item cost +~20%**,
+  👏 **props to a roaster — 25-50**: proposed, NOT BUILT.
+
+**COIN BUNDLES (bought, IAP) — proposed, UNBUILT**: 100/$1.99, 550/$9.99,
+1200/$19.99, 3000/$49.99 (bonus scales up). **Live gift tiers**: 🥊 Jab 10,
+🔥 Fire 50, 👑 Crown 200, 💎 Diamond 1000 - animated on the battle screen,
+named ("BigMike sent 🔥 to PlayerTwo").
+
+**Where the SUBSCRIPTION sits: ON TOP of gifting, not competing.** The
+answer to the earlier framing question is TRANSACTION-LED with subscription
+as the floor (TikTok-shaped), which for a live creator app is where the
+explosive money is. Sub perks now include (in addition to battle-anytime +
+auto clips + stats + tournament economics + directory) a monthly coin
+allowance and a bonus on gifts received - so it makes you a better player
+AND creator, while gifting is the transaction engine underneath.
+
+**BUILT so far: only the two live price changes** (clip 500, day pass 300 in
+`config/pointsSettings`, defaults synced in `points.js`/`clipGrants.js` and
+the client wallet-bar fallbacks). Everything else here - Coins, gifting,
+creator payouts, streak freeze, gift-a-friend, points tournament entry - is
+DIRECTION, not code.
+
 ## Pay-Per-Clip — DECIDED; entitlement and delivery BUILT, the IAP purchase path is not
 **$1.99 per produced clip** (price still tunable), sold to free users as a one-off consumable IAP, with the buy button on the **post-match screen** — the highest-intent moment in the app.
 
