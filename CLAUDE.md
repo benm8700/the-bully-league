@@ -912,7 +912,7 @@ Material icons correctly, so there was nothing to fix.
   - **A player with no rating gets NO row rather than a made-up one.** The board is not where somebody should learn they are unranked.
   - **The break above the self row is visible on purpose.** That row is not the 101st player, it is a jump of unknown distance, and running it straight on from the board would misrepresent where they stand.
 
-**A RECORDED DECISION WAS DELIBERATELY OVERRIDDEN, on request**: Home gained a **Rankings** button even though the Ranks bottom-nav tab already reaches the same screen, and the nav redesign explicitly removed duplicate routes so "there aren't two routes to the same place". The justification for the exception is that the board is now a personal question ("where am I?") rather than a browse list. Worth re-reading if Home starts growing back toward the eight stacked buttons the nav was built to cure.
+**A RECORDED DECISION WAS DELIBERATELY OVERRIDDEN, on request — THEN REVERSED (2026-08-26).** Home briefly gained a **Rankings** button even though the Ranks bottom-nav tab already reaches the same screen; the justification was that the board is a personal question ("where am I?"). The developer later called the duplicate out and had it **removed**, restoring the nav redesign's "there aren't two routes to the same place" principle. So Home no longer links to the board — the Ranks tab is the single route. (Kept written down because the personal-question argument was real; if it comes back, it comes back as one considered exception, not by accident.)
 
 **KNOWN GAP, not fixed**: the board does not exclude banned accounts, so a banned player could sit on the public ladder. Harmless at current scale and easy to filter, but it is a public surface.
 
