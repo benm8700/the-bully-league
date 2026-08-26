@@ -296,12 +296,21 @@ call.
 - `functions/seasonReset.js`: re-places the hidden Elo but PRESERVES the
   earned title (titles are never reset) - so a reset no longer demotes the
   userbase, and the rank-change suppression is now belt-and-suspenders.
-- Client: `leaderboard_screen.dart` orders the board by XP (career points),
-  self-position counts by XP, and the raw Elo number is gone (position +
-  title carry the standing; raw XP is not printed either, to keep the title
-  thresholds hidden). `form_card.dart` drops every Elo figure (current, peak,
-  per-match delta), keeping the Elo-free trend/streak/recent-results.
-  `home_screen.dart` already used the Laugh Meter (no raw Elo).
+- Client: `leaderboard_screen.dart` — **the Ranks board orders by ELO
+  (skill), not XP (2026-08-26 refinement).** The developer's point: nobody
+  cares who has ground the most XP; the board must answer "who is actually
+  best." So the board ranks on the hidden Elo, but shows only POSITION -
+  the raw Elo number stays hidden. This is deliberately DIFFERENT from the
+  XP title, which is the never-falling earned identity on Home/profile: the
+  board is the competition (position moves), the title is the progression
+  (only climbs). The XP title is NOT shown on a board row (a #3 with a lower
+  title than a #5 would look broken); rows are position · username · W-L,
+  with the GOAT flame on the top five - who, because GOAT is itself top-5 by
+  Elo, genuinely ARE the GOATs. `form_card.dart` drops every Elo figure
+  (current, peak, per-match delta), keeping the Elo-free
+  trend/streak/recent-results. `home_screen.dart` already used the Laugh
+  Meter (no raw Elo). NOTE: the two axes now split cleanly - **titles = XP
+  (earned, kept, your identity); the board = Elo (skill, who's best).**
 
 **Rank-change copy needed NO change** - it already keys on the 9 shared
 title strings in the same order, and since XP is monotonic only the "up"

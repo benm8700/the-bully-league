@@ -1,9 +1,9 @@
 /**
- * LIVE check: can a CLIENT count how many players out-RANK it by XP?
+ * LIVE check: can a CLIENT count how many players out-RANK it by Elo?
  *
- * The Ranks board shows the top 100 and, when the viewer is not on it,
- * appends their own position. That position comes from an aggregation
- * query run on the device - "how many users have more XP" - and
+ * The Ranks board shows the top 100 by skill (Elo) and, when the viewer is
+ * not on it, appends their own position. That position comes from an
+ * aggregation query run on the device - "how many users out-rate me" - and
  * aggregation queries are subject to firestore.rules exactly like reads.
  * If the rules refused it the board would still look fine and the self
  * row would simply never appear, which is the silent-failure shape this
@@ -56,7 +56,7 @@ async function countAhead(token, xp) {
       structuredQuery: {
         from: [{collectionId: "users"}],
         where: {fieldFilter: {
-          field: {fieldPath: "points"},
+          field: {fieldPath: "rating"},
           op: "GREATER_THAN",
           value: {integerValue: String(xp)},
         }},
@@ -79,7 +79,7 @@ const made = [LOW];
   try {
     await auth.createUser({uid: LOW, email: `${LOW}@example.com`,
       password: "Test12345!"});
-    // Deliberately at the very bottom (0 XP), so every real account out-ranks it.
+    // Deliberately at the very bottom (rating 1), so every real account out-rates it.
     await db.collection("users").doc(LOW).set({
       username: `Rp${stamp}`, usernameLower: `rp${stamp}`,
       rating: 1, points: 0, pointsBalance: 0, rankTitle: "Average Joe", rankedMatchesPlayed: 0,
@@ -94,7 +94,7 @@ const made = [LOW];
     const token = (await sr.json()).idToken;
 
     console.log("\nthe aggregation the board depends on");
-    const mine = await countAhead(token, 0);
+    const mine = await countAhead(token, 1);
     check("A CLIENT MAY RUN THE COUNT - the rules allow it",
         mine.status === 200,
         `status ${mine.status} ${mine.body ?? ""} - if refused, the self ` +
@@ -104,8 +104,8 @@ const made = [LOW];
 
     // Cross-check against the truth, computed with the Admin SDK.
     const all = await db.collection("users").get();
-    const truth = all.docs.filter((d) => (Number(d.data().points) || 0) > 0).length;
-    check("the count matches the actual number of higher-XP players",
+    const truth = all.docs.filter((d) => (Number(d.data().rating) || 0) > 1).length;
+    check("the count matches the actual number of higher-rated players",
         mine.count === truth, `client ${mine.count} vs real ${truth}`);
     check("so the bottom player's position is last",
         mine.count + 1 === truth + 1, `position ${mine.count + 1}`);
