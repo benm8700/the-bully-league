@@ -4,12 +4,18 @@ import 'package:flutter/material.dart';
 
 import 'hall_of_fame_tab.dart';
 
-/// Top players by rating - the in-app equivalent of the website homepage's
+/// Top players by XP - the in-app equivalent of the website homepage's
 /// "top 5 roasters" concept (CLAUDE.md's Website — Account & Tournament
-/// Rules section), broadened to a longer list for in-app browsing. GOAT
-/// (top 5) is a live leaderboard position by design, so this screen is a
-/// natural fit for surfacing it, though rank-title computation itself
-/// stays server-side (functions/matchFinalization.js's syncGoatTier).
+/// Rules section), broadened to a longer list for in-app browsing.
+///
+/// ORDERED BY XP (career points), NOT by Elo, since the XP ladder decision
+/// (2026-08-25). Elo is now the hidden matchmaking number; what a player
+/// can see is their XP standing - which is exactly what "you can see how
+/// you are doing and know who the best players are" asked for. The raw XP
+/// value is deliberately NOT printed on a row, to keep the hidden title
+/// thresholds from being back-computed off the board; the position and the
+/// title carry the standing instead. GOAT (top 5 by hidden Elo) is still
+/// surfaced by title, computed server-side in syncGoatTier.
 class LeaderboardScreen extends StatelessWidget {
   const LeaderboardScreen({super.key, this.embedded = false});
 
@@ -20,7 +26,7 @@ class LeaderboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final query = FirebaseFirestore.instance
         .collection('users')
-        .orderBy('rating', descending: true)
+        .orderBy('points', descending: true)
         // 100 rather than 50: the board is the app's one public
         // scoreboard, and a longer list is what makes a position
         // outside it feel like a real distance to close.
@@ -86,7 +92,6 @@ class LeaderboardScreen extends StatelessWidget {
               position: index + 1,
               username: data['username'] as String? ?? 'Roaster',
               rankTitle: data['rankTitle'] as String? ?? 'Average Joe',
-              rating: data['rating'] as num? ?? 1200,
               wins: data['wins'] as num? ?? 0,
               losses: data['losses'] as num? ?? 0,
               isMe: docs[index].id == me,
@@ -111,7 +116,6 @@ class _Row extends StatelessWidget {
     required this.position,
     required this.username,
     required this.rankTitle,
-    required this.rating,
     required this.wins,
     required this.losses,
     this.isMe = false,
@@ -120,7 +124,6 @@ class _Row extends StatelessWidget {
   final int position;
   final String username;
   final String rankTitle;
-  final num rating;
   final num wins;
   final num losses;
   final bool isMe;
@@ -139,12 +142,11 @@ class _Row extends StatelessWidget {
           style: const TextStyle(fontSize: 14),
         ),
       ),
+      // Title carries the standing; the raw Elo number is gone (hidden), and
+      // the raw XP is deliberately not printed so the title thresholds stay
+      // hidden. Position and title are the standing.
       title: Text(isMe ? '$username (you)' : username),
       subtitle: Text('$rankTitle · $wins-$losses'),
-      trailing: Text(
-        '$rating',
-        style: Theme.of(context).textTheme.titleMedium,
-      ),
     );
   }
 }
@@ -154,7 +156,7 @@ class _Row extends StatelessWidget {
 ///
 /// Counted rather than paged to: finding position 387 by reading 387
 /// documents would be absurd, so this is one aggregation query -
-/// how many players out-rate me, plus one. That is the standard
+/// how many players have more XP than me, plus one. That is the standard
 /// competition ranking, and it means tied players share a position
 /// rather than being ordered arbitrarily.
 class _YourPosition extends StatefulWidget {
@@ -181,17 +183,17 @@ class _YourPositionState extends State<_YourPosition> {
       final db = FirebaseFirestore.instance;
       final doc = await db.collection('users').doc(uid).get();
       final data = doc.data();
-      final rating = data?['rating'] as num?;
-      if (data == null || rating == null) {
-        // No rating means they have never been placed. Saying nothing is
-        // better than inventing a position for somebody who has not
-        // played - the board is not where you learn you are unranked.
+      if (data == null) {
         if (mounted) setState(() => _failed = true);
         return;
       }
+      // XP standing, not Elo. Everyone is on the XP ladder from their first
+      // ranked match, so a missing points field is a real 0 (bottom of the
+      // ladder) rather than "unplaced" - counted as such, not hidden.
+      final xp = (data['points'] as num?) ?? 0;
       final ahead = await db
           .collection('users')
-          .where('rating', isGreaterThan: rating)
+          .where('points', isGreaterThan: xp)
           .count()
           .get();
       if (!mounted) return;
@@ -238,7 +240,6 @@ class _YourPositionState extends State<_YourPosition> {
           position: position,
           username: me['username'] as String? ?? 'You',
           rankTitle: me['rankTitle'] as String? ?? 'Average Joe',
-          rating: me['rating'] as num? ?? 1200,
           wins: me['wins'] as num? ?? 0,
           losses: me['losses'] as num? ?? 0,
           isMe: true,

@@ -4,7 +4,7 @@ const {getMessaging} = require("firebase-admin/messaging");
 const {wantsCategory} = require("./notifications");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {sanitiseQualityReport} = require("./captureQuality");
-const {STARTING_RATING, RANK_TIERS, GOAT_TITLE, computeBaseRankTitle} = require("./rating");
+const {STARTING_RATING, RANK_TIERS} = require("./rating");
 const {getMatchSettings} = require("./matchSettings");
 const {readEventWindowConfig, qualifiesForWindow} = require("./eventWindow");
 const {readMonetizationConfig, battleEntitlement, toMillis} = require("./entitlement");
@@ -80,17 +80,24 @@ const REPEAT_OPPONENT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const STALE_ENTRY_MS = 10 * 60 * 1000;
 
 /**
- * Position on the 10-rank ladder, used for tier-proximity matchmaking.
- * GOAT sits one above the fixed-threshold ranks since it's a live top-5
- * leaderboard position rather than a threshold (CLAUDE.md's "IMPORTANT
- * EXCEPTION"), so a GOAT is one tier above a Hall of Famer for pairing.
+ * A skill band for tier-proximity matchmaking, computed from the HIDDEN
+ * Elo rating - NOT from the visible rank title.
+ *
+ * As of the XP ladder (2026-08-25) the title reflects accumulated XP, not
+ * skill, so pairing by title would match a dedicated grinder against a
+ * genuine expert. Elo is precisely the number kept hidden so it can still
+ * run matchmaking, so this bands directly on it using the rating
+ * thresholds in RANK_TIERS. GOAT needs no special case: a GOAT is top-5 by
+ * rating, so their rating already lands them in the top band.
  */
 function tierIndexFor(user) {
-  if (user.rankTitle === GOAT_TITLE) return RANK_TIERS.length;
-  const title = user.rankTitle ??
-    computeBaseRankTitle(user.rating ?? STARTING_RATING, user.rankedMatchesPlayed ?? 0);
-  const idx = RANK_TIERS.findIndex((t) => t.title === title);
-  return idx >= 0 ? idx : 0;
+  const rating = Number.isFinite(Number(user.rating)) ?
+    Number(user.rating) : STARTING_RATING;
+  let idx = 0;
+  for (let i = 0; i < RANK_TIERS.length; i++) {
+    if (rating >= RANK_TIERS[i].minRating) idx = i;
+  }
+  return idx;
 }
 
 function queueRef(mode) {
@@ -954,7 +961,15 @@ async function completeMatch(auth, data, creds = null) {
     // award on every single match. The live check could not see it
     // because it wrote `status: completed` straight to Firestore rather
     // than calling this function.
-    if (match.mode !== "friend") try {
+    //
+    // RANKED AND TOURNAMENT ONLY, as of the XP ladder (2026-08-25). Career
+    // points ARE the XP that drives the visible title, and the decision is
+    // that only ranked matches earn XP. Exhibition is casual and stakes-
+    // free, so it now pays nothing at all (no XP, no clip currency) rather
+    // than paying the participation award it used to; friend was already
+    // excluded, for the farm reason above. Tournament stays in because it
+    // is genuinely competitive, staked play.
+    if (match.mode === "ranked" || match.mode === "tournament") try {
       const {awardPoints, pointsSettings, awardAmount} = require("./points");
       const rates = await pointsSettings();
       const multiplier = match.eventWindow?.qualified === true ?

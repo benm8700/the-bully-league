@@ -236,64 +236,94 @@ Developer: solo, no prior backend experience, comfortable with cross-platform fr
 - **Device support — DECIDED**: phone + tablet support (not phone-only).
 - **Video/streaming**: NO live external streaming for V1 (no YouTube live). **Recording scope — DECIDED**: only ranked and tournament matches are recorded and eligible for the website/Instagram highlight pipeline. Exhibition matches are NOT recorded/posted (casual, no ranking impact, no content-pipeline use).
 
-## PROPOSAL — XP-earned monotonic titles (2026-08-25, NOT YET DECIDED)
+## XP-earned monotonic titles — DECIDED AND BUILT (2026-08-25)
 
-The developer is debating replacing the current Elo-driven title ladder
-with an **XP progression that you earn and keep**. Recorded now, to be
-settled after the visual-design decision. This is a genuine fork in the
-core loop, so the tensions are written down rather than just the idea.
+**The one-line version: the visible title ladder is now driven by XP that
+only ever rises and is KEPT; Elo still exists but is HIDDEN and only runs
+matchmaking; GOAT is the one title you can lose.** This replaces the old
+Elo-driven title ladder. All three forks were the developer's explicit
+call.
 
-**The proposal, in the developer's terms:**
-- Titles are earned by accumulating XP and **never lost** - you are
-  always working toward the next one, which is the retention argument.
-- Higher titles get **progressively harder** to reach (a steepening XP
-  curve), so the top stays scarce.
-- **One exception to never-losing**: tournament "title fights" could put
-  a title on the line - the one place stakes and loss are reintroduced.
-- **XP sources**: ranked matches only; wins earn more; judging earns XP
-  too but is **capped**. (Practice, exhibition and friend battles earn
-  nothing, consistent with the current economy.)
+**What was decided:**
+- **XP is the career-points total, reused** (not a new number). It already
+  only rises and already comes from ranked/tournament play + the win bonus
+  + capped judging - exactly the XP rule. Fewer numbers, and it does NOT
+  violate the one-status-ladder rule because it REPLACES the Elo-title
+  rather than adding a second ladder. `points` (lifetime, drives titles) and
+  `pointsBalance` (spendable, buys clips/day-pass) keep their existing split
+  - spending never pulls the title down.
+- **Judging progresses your title**, capped at `votePointsPerDay` paid votes
+  a day (the existing cap), so nobody grinds titles purely by voting. The
+  developer explicitly confirmed this is intended.
+- **"Ranked only" is enforced by gating match XP to ranked + tournament.**
+  Exhibition now earns NOTHING (no XP, no clip currency), matching its
+  stakes-free role; friend and practice already earned nothing.
+- **Elo is hidden everywhere.** It is no longer shown on Home, the profile,
+  the leaderboard, or the form card. It still updates on every ranked match
+  and drives (a) matchmaking bands and (b) GOAT.
+- **New players start at the bottom (Average Joe, 0 XP) and climb**, instead
+  of starting mid-ladder - because XP only moves upward.
+- **GOAT stays a live top-5 by HIDDEN Elo** - the skill throne, and the one
+  title that can be lost (displacement), which is the everyday "title fight."
+  A displaced GOAT drops to their EARNED XP title, never lower. GOAT
+  eligibility is now "earned to the top of the XP ladder" (career points ≥
+  the Hall of Famer XP threshold) rather than a match count.
 
-**Why it is attractive**: monotonic progress is a proven retention
-engine (battle-pass, Duolingo, prestige levels). It removes the
-demoralising side of a rank that can fall - loss aversion cuts both ways,
-and a losing streak is exactly when people quit. It also means there is
-always a next thing to earn.
+**Where it lives in code:**
+- `functions/rating.js`: `XP_TIERS` (9 earned titles, same title strings and
+  order as the old `RANK_TIERS` so all downstream copy/ordering is unchanged)
+  + `computeTitleFromXp(xp)` + `GOAT_ELIGIBLE_MIN_XP`. Elo functions
+  (`applyEloChange`, `kFactorForRating`, `RANK_TIERS`) all stay - Elo is
+  hidden, not gone. **XP thresholds (50/150/350/700/1200/2000/3200/5000) are
+  PLACEHOLDERS** and steepen deliberately; they want tuning against real
+  earning rates, same as the Elo thresholds and point rates.
+- `functions/points.js`: `awardPoints` is the single XP chokepoint, so the
+  title is derived THERE after every award (new career total →
+  `computeTitleFromXp`), and it **never demotes a live GOAT** (that is
+  syncGoatTier's job). Because XP only rises, the title can only rise - no
+  down transition among the earned ranks.
+- `functions/matchFinalization.js`: no longer writes rankTitle from Elo (the
+  title comes from XP via awardPoints); `syncGoatTier` orders by hidden Elo,
+  gates by XP eligibility, and drops a displaced GOAT to
+  `computeTitleFromXp(points)`.
+- `functions/matchmaking.js`: `tierIndexFor` bands by the HIDDEN Elo rating,
+  NOT the XP title - pairing by title would match a grinder against an
+  expert. Match-play XP gated to ranked + tournament.
+- `functions/laughMeter.js`: fills toward the next XP tier from career
+  points (single dimension now - no rating/matches binding), still leaks no
+  numbers. Hall of Famer points at GOAT; GOAT shows a full "hold the slot"
+  bar.
+- `functions/seasonReset.js`: re-places the hidden Elo but PRESERVES the
+  earned title (titles are never reset) - so a reset no longer demotes the
+  userbase, and the rank-change suppression is now belt-and-suspenders.
+- Client: `leaderboard_screen.dart` orders the board by XP (career points),
+  self-position counts by XP, and the raw Elo number is gone (position +
+  title carry the standing; raw XP is not printed either, to keep the title
+  thresholds hidden). `form_card.dart` drops every Elo figure (current, peak,
+  per-match delta), keeping the Elo-free trend/streak/recent-results.
+  `home_screen.dart` already used the Laugh Meter (no raw Elo).
 
-**The tensions the eventual decision MUST resolve:**
-1. **A title stops meaning "good" and starts meaning "played a lot."**
-   Elo measures skill right now; XP measures accumulated effort. Under
-   XP, a grinder outranks a skilled newcomer. This is a real shift for an
-   app whose pitch is "skill-based, not chance" - though many games run
-   both (a visible grind level AND a hidden skill rating).
-2. **Matchmaking still needs a hidden skill number.** Fair pairing can't
-   run on XP, or newcomers get fed to veterans. The clean version of this
-   proposal is: **keep Elo as a HIDDEN matchmaking rating, make the
-   VISIBLE titles XP-based.** That is a common, well-understood split.
-3. **GOAT breaks under pure XP.** GOAT is currently the live top-5 by
-   rating - a skill position. "Top 5 by XP" just rewards whoever played
-   most/longest and lets early users lock it forever. GOAT probably has
-   to stay rating-based (the one skill title) while the rest go XP, or
-   become something else entirely.
-4. **Never-losing erodes prestige.** If nobody can fall, everyone
-   eventually reaches a given title and it stops signalling anything. The
-   steepening curve mitigates this; the tournament "title fight" is the
-   other pressure valve, and it makes tournaments the high-stakes centre
-   of the game - a nice concentration of drama.
-5. **How many numbers is the player asked to track?** XP as described is
-   nearly identical to the existing CAREER POINTS (monotonic, ranked
-   +win +capped-judging). The decision has to say whether XP IS career
-   points repurposed to drive titles, or a third number beside rating and
-   the spendable balance. Three numbers is a lot; reusing career points
-   is cleaner. Note this does NOT violate the one-status-ladder rule - it
-   REPLACES the rating-title with an XP-title rather than adding a second
-   parallel ladder.
+**Rank-change copy needed NO change** - it already keys on the 9 shared
+title strings in the same order, and since XP is monotonic only the "up"
+lines fire for the earned ranks; "down" only via GOAT displacement, which it
+already handles honestly ("someone else got better").
 
-**What it would touch if built**: the rank-change popups and their
-up/down copy (down mostly disappears), the Laugh Meter's meaning (climb
-toward an earned title, not a rating that floats), the season reset
-(you don't soft-reset earned titles the way you compress ratings), and
-the GOAT/displacement logic. Large, which is why it waits.
+**Still open / follow-ups:**
+- **The XP threshold numbers are placeholders** - the first real thing to
+  tune once there is earning data. Earning rates today: ranked match = 10 XP
+  (+25 for a win), judging = 5/vote capped at 10/day. So Open Micer (50 XP)
+  is a few matches; Hall of Famer (5000) is a long grind.
+- **Tournament "title fights"** (putting a title on the line in a tournament)
+  are decided in principle but NOT built - the everyday losable title is GOAT
+  for now.
+- **The form card is still Elo-history under the hood** (just not shown);
+  re-centring it on XP/results is a natural later pass.
+- **NOT yet deployed or live-verified.** All 47 local suites pass and the
+  client analyzes clean; the live checks (`coreLoop.js`, `laughMeterChecks.js`,
+  `rankPositionChecks.js`) were updated to the new behavior and are ready to
+  run against the deployed backend. Per this project's own discipline, the
+  seam between awardPoints, finalize and syncGoatTier wants a real coreLoop
+  run before it is trusted.
 
 ## Ranking System
 - **Rating — DECIDED**: Chess-style Elo-like numerical rating system, used as the underlying math (not shown directly to users — see Laugh Meter below). Everyone starts at a flat **1200**. No hard ceiling (unbounded). Soft floor at ~100 (prevents demoralizing bottomless losing spirals).

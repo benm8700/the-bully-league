@@ -1,9 +1,9 @@
 /**
- * LIVE check: can a CLIENT count how many players out-rate it?
+ * LIVE check: can a CLIENT count how many players out-RANK it by XP?
  *
  * The Ranks board shows the top 100 and, when the viewer is not on it,
  * appends their own position. That position comes from an aggregation
- * query run on the device - "how many users have a higher rating" - and
+ * query run on the device - "how many users have more XP" - and
  * aggregation queries are subject to firestore.rules exactly like reads.
  * If the rules refused it the board would still look fine and the self
  * row would simply never appear, which is the silent-failure shape this
@@ -47,7 +47,7 @@ const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT}` +
   "/databases/(default)/documents";
 
 /** The same aggregation the client runs, as the CLIENT. */
-async function countAhead(token, rating) {
+async function countAhead(token, xp) {
   const r = await fetch(`${BASE}:runAggregationQuery`, {
     method: "POST",
     headers: {"Content-Type": "application/json",
@@ -56,9 +56,9 @@ async function countAhead(token, rating) {
       structuredQuery: {
         from: [{collectionId: "users"}],
         where: {fieldFilter: {
-          field: {fieldPath: "rating"},
+          field: {fieldPath: "points"},
           op: "GREATER_THAN",
-          value: {integerValue: String(rating)},
+          value: {integerValue: String(xp)},
         }},
       },
       aggregations: [{alias: "n", count: {}}],
@@ -79,10 +79,10 @@ const made = [LOW];
   try {
     await auth.createUser({uid: LOW, email: `${LOW}@example.com`,
       password: "Test12345!"});
-    // Deliberately at the very bottom, so every real account out-rates it.
+    // Deliberately at the very bottom (0 XP), so every real account out-ranks it.
     await db.collection("users").doc(LOW).set({
       username: `Rp${stamp}`, usernameLower: `rp${stamp}`,
-      rating: 1, rankTitle: "Average Joe", rankedMatchesPlayed: 0,
+      rating: 1, points: 0, pointsBalance: 0, rankTitle: "Average Joe", rankedMatchesPlayed: 0,
       wins: 0, losses: 0, accountStatus: "active", isAdmin: false,
     });
 
@@ -94,7 +94,7 @@ const made = [LOW];
     const token = (await sr.json()).idToken;
 
     console.log("\nthe aggregation the board depends on");
-    const mine = await countAhead(token, 1);
+    const mine = await countAhead(token, 0);
     check("A CLIENT MAY RUN THE COUNT - the rules allow it",
         mine.status === 200,
         `status ${mine.status} ${mine.body ?? ""} - if refused, the self ` +
@@ -104,8 +104,8 @@ const made = [LOW];
 
     // Cross-check against the truth, computed with the Admin SDK.
     const all = await db.collection("users").get();
-    const truth = all.docs.filter((d) => (d.data().rating ?? -1) > 1).length;
-    check("the count matches the actual number of higher-rated players",
+    const truth = all.docs.filter((d) => (Number(d.data().points) || 0) > 0).length;
+    check("the count matches the actual number of higher-XP players",
         mine.count === truth, `client ${mine.count} vs real ${truth}`);
     check("so the bottom player's position is last",
         mine.count + 1 === truth + 1, `position ${mine.count + 1}`);

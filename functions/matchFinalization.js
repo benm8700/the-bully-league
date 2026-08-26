@@ -1,11 +1,10 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {
-  STARTING_RATING,
   GOAT_TITLE,
   GOAT_POOL_SIZE,
-  GOAT_ELIGIBLE_MIN_MATCHES,
+  GOAT_ELIGIBLE_MIN_XP,
   applyEloChange,
-  computeBaseRankTitle,
+  computeTitleFromXp,
   voteConfidence,
 } = require("./rating");
 
@@ -244,13 +243,18 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     const p2Career = (Number.isFinite(Number(p2.careerRankedMatches)) ?
       Number(p2.careerRankedMatches) : (p2.rankedMatchesPlayed ?? 0)) + 1;
 
+    // NOTE: rankTitle is NOT written here any more. As of the XP ladder
+    // (2026-08-25) the visible title is derived from career XP inside
+    // awardPoints, not from Elo - the rating updated here is now the HIDDEN
+    // matchmaking number. The win bonus (awardPoints below) and the
+    // participation award (at completeMatch) are what move the title, and
+    // syncGoatTier still overlays GOAT from this hidden rating.
     if (!p1Gone) tx.update(player1Ref, {
       rating: p1NewRating,
       wins: p1Wins,
       losses: p1Losses,
       rankedMatchesPlayed: p1Matches,
       careerRankedMatches: p1Career,
-      rankTitle: computeBaseRankTitle(p1NewRating, p1Matches),
     });
     if (!p2Gone) tx.update(player2Ref, {
       rating: p2NewRating,
@@ -258,7 +262,6 @@ async function finalizeMatch(matchId, {force = false} = {}) {
       losses: p2Losses,
       rankedMatchesPlayed: p2Matches,
       careerRankedMatches: p2Career,
-      rankTitle: computeBaseRankTitle(p2NewRating, p2Matches),
     });
     // RECORDED HERE, INSIDE THE SAME TRANSACTION, and this is the only
     // chance to do it. A rating update overwrites the previous value, so
@@ -391,13 +394,16 @@ async function syncGoatTier() {
   const db = getFirestore();
   const usersRef = db.collection("users");
 
-  // Firestore can't combine a range filter on one field with orderBy on a
-  // different field without a composite index, so fetch a generous top-N
-  // by rating and filter for match-count eligibility in memory - fine at
-  // V1's user volume.
+  // GOAT is the top-5 by HIDDEN Elo - the skill throne, the one title that
+  // can be lost (2026-08-25 decision). Ordered by rating, then gated by XP:
+  // only players who have earned to the top of the visible ladder are even
+  // eligible, so a lucky low-XP account with a hot rating cannot flicker
+  // into GOAT. Firestore can't combine a range filter on one field with
+  // orderBy on another without a composite index, so fetch a generous
+  // top-N by rating and filter for XP eligibility in memory.
   const topRatedSnap = await usersRef.orderBy("rating", "desc").limit(50).get();
   const eligible = topRatedSnap.docs
-      .filter((d) => (d.data().rankedMatchesPlayed ?? 0) >= GOAT_ELIGIBLE_MIN_MATCHES)
+      .filter((d) => (Number(d.data().points) || 0) >= GOAT_ELIGIBLE_MIN_XP)
       .slice(0, GOAT_POOL_SIZE);
   const newGoatIds = new Set(eligible.map((d) => d.id));
 
@@ -420,8 +426,11 @@ async function syncGoatTier() {
   for (const doc of currentGoatSnap.docs) {
     if (!newGoatIds.has(doc.id)) {
       const data = doc.data();
+      // Dropped back to the title they EARNED and kept, never lower - a
+      // displaced GOAT falls to their XP standing, which is theirs
+      // permanently.
       batch.update(doc.ref, {
-        rankTitle: computeBaseRankTitle(data.rating ?? STARTING_RATING, data.rankedMatchesPlayed ?? 0),
+        rankTitle: computeTitleFromXp(Number(data.points) || 0),
       });
       displaced.push(doc.id);
       dirty = true;

@@ -81,7 +81,7 @@ class _FormCardState extends State<FormCard> {
       return _Section(
         title: 'Your form',
         child: Text(
-          'Rating history, streaks and your peak are part of a '
+          'Your form, streaks and recent results are part of a '
           'subscription. Your battles are still being recorded, so it '
           'will all be here waiting.',
           style: text.bodySmall,
@@ -102,17 +102,16 @@ class _FormCardState extends State<FormCard> {
       );
     }
 
-    final net = (summary['netChange'] as num?)?.toInt() ?? 0;
     final form = summary['form'] as String?;
     final streak = (summary['streak'] as Map?)?.cast<String, dynamic>();
-    final peak = (summary['peakRating'] as num?)?.toInt();
-    // ratingAfter on the newest rated match IS the current rating, so
-    // deriving it here beats adding a second server field that could
-    // disagree with the user document.
-    final current = _entries.isEmpty
-        ? null
-        : (_entries.first['ratingAfter'] as num?)?.toInt();
 
+    // NO ELO NUMBERS. Since the XP ladder (2026-08-25) the Elo rating is
+    // hidden everywhere, so this card no longer prints the current rating,
+    // the peak, or the per-match rating delta - all of which used to show
+    // it. What survives is Elo-FREE and still genuinely useful: whether
+    // you are trending up or down lately, your current win/loss streak, and
+    // your recent results. (This card is still driven off the rating
+    // history under the hood; re-centring it on XP is a natural follow-up.)
     return _Section(
       title: 'Your form',
       child: Column(
@@ -132,10 +131,10 @@ class _FormCardState extends State<FormCard> {
               Expanded(
                 child: Text(
                   form == 'climbing'
-                      ? 'Climbing - up $net over your last '
+                      ? 'Trending up over your last '
                           '${summary['windowMatches']}'
                       : form == 'sliding'
-                          ? 'Sliding - down ${net.abs()} over your last '
+                          ? 'Trending down over your last '
                               '${summary['windowMatches']}'
                           : 'Level over your last ${summary['windowMatches']}',
                   style: text.bodyMedium,
@@ -152,40 +151,21 @@ class _FormCardState extends State<FormCard> {
               style: text.bodySmall,
             ),
           ],
-          // The raw rating, which Home deliberately no longer shows.
-          // This is the "detailed stats view" the Laugh Meter decision
-          // names as the place precision belongs - the gauge is for
-          // everyone, the number is for people who came looking.
-          if (current != null) ...[
-            const SizedBox(height: 4),
-            Text('Rating: $current', style: text.bodySmall),
-          ],
-          if (peak != null) ...[
-            const SizedBox(height: 6),
-            Text('Peak rating: $peak', style: text.bodySmall),
-          ],
           const SizedBox(height: 12),
-          // A list rather than a chart: on a phone, ten rows each naming a
-          // real result say more than a sparkline a centimetre tall, and
-          // the per-match delta is the thing people actually query.
+          // Recent results as plain won/lost - the outcome, never the Elo
+          // delta the outcome moved.
           ..._entries.take(5).map((e) {
-            final delta = (e['delta'] as num?)?.toInt() ?? 0;
             final won = e['won'] == true;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Row(
                 children: [
-                  SizedBox(
-                    width: 44,
-                    child: Text(
-                      delta >= 0 ? '+$delta' : '$delta',
-                      style: text.bodySmall,
-                    ),
+                  Icon(
+                    won ? Icons.check_circle_outline : Icons.remove_circle_outline,
+                    size: 16,
                   ),
-                  Text(won ? 'won' : 'lost', style: text.bodySmall),
-                  const Spacer(),
-                  Text('${(e['ratingAfter'] as num?)?.toInt() ?? ''}',
-                      style: text.bodySmall),
+                  const SizedBox(width: 8),
+                  Text(won ? 'Won' : 'Lost', style: text.bodySmall),
                 ],
               ),
             );

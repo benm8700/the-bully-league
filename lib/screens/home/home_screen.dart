@@ -624,11 +624,9 @@ Future<bool> _ensureTutorialCompleted(BuildContext context) async {
   return completed == true;
 }
 
-/// Shows rank title + raw rating + win/loss record. Real "Laugh Meter"
-/// visual gauge (CLAUDE.md's Display decision) isn't designed yet - this is
-/// the plain "detailed stats view" fallback CLAUDE.md explicitly allows.
-/// The Ranked entry point, which stays locked until a few exhibition
-/// matches are done (CLAUDE.md's Modes decision).
+/// Shows the Laugh Meter (rank title + XP climb) and the win/loss record.
+/// As of the XP ladder (2026-08-25) the title comes from career XP and the
+/// Elo rating is hidden - it is not shown here or anywhere else.
 ///
 /// Shows real progress rather than a silent unlock - that decision is
 /// explicit, and a disabled button with no explanation reads as a bug.
@@ -964,11 +962,11 @@ class _RankBadge extends StatelessWidget {
         final losses = data['losses'] as num? ?? 0;
         return Column(
           children: [
-            // The Laugh Meter carries the rank title and the climb
-            // toward the next one. The raw Elo number is deliberately
-            // NOT here: CLAUDE.md's Display decision makes it invisible
-            // plumbing, exposed only in the detailed stats view on the
-            // profile for players who want precision.
+            // The Laugh Meter carries the rank title and the climb toward
+            // the next one - now the climb is XP, not Elo. As of the XP
+            // ladder (2026-08-25) the Elo rating is hidden EVERYWHERE (it
+            // only runs matchmaking underneath); it is no longer shown here
+            // or in the profile stats.
             LaughMeter(fallbackTitle: rankTitle),
             const SizedBox(height: 8),
             // ONE line, not three. This block had the record, a points

@@ -26,6 +26,66 @@ const RANK_TIERS = [
   {title: "Hall of Famer", minRating: 1800, minMatches: 30},
 ];
 
+/**
+ * The XP ladder - the VISIBLE progression, decided 2026-08-25.
+ *
+ * Titles are earned by accumulating XP and KEPT: XP only ever rises (it is
+ * the career-points total, see functions/points.js), so a player's title
+ * only ever rises with it. This is the deliberate opposite of the Elo
+ * ladder above, which floats up and down. The retention argument is that
+ * you are always working toward the next title and can never be knocked
+ * back down to grind it again - a losing streak costs rating, never a
+ * title you already earned.
+ *
+ * ELO IS NOT GONE - it is now HIDDEN. It still drives matchmaking (so
+ * pairing stays skill-appropriate) and it still decides GOAT (below). What
+ * changed is that Elo no longer drives the nine earned titles and is no
+ * longer shown to the player.
+ *
+ * XP SOURCES are ranked/tournament play, the win bonus, capped judging,
+ * and the daily engagement bonuses - i.e. exactly what already credits
+ * career points, minus casual (exhibition) and friend battles, which no
+ * longer pay. See the awardPoints title hook in points.js.
+ *
+ * THRESHOLDS ARE PLACEHOLDERS, like the Elo thresholds and the point
+ * rates. The curve steepens deliberately (50, 100, 200, 350, 500, 800,
+ * 1200, 1800) so the top stays scarce, but the absolute numbers want
+ * tuning against real earning rates once there is analytics data. New
+ * players start at Average Joe (0 XP) and climb - unlike the old Elo
+ * placement that started mid-ladder, because XP only moves upward.
+ */
+const XP_TIERS = [
+  {title: "Average Joe", minXp: 0},
+  {title: "Open Micer", minXp: 50},
+  {title: "Class Clown", minXp: 150},
+  {title: "The Funny Friend", minXp: 350},
+  {title: "Door Guy", minXp: 700},
+  {title: "Regular", minXp: 1200},
+  {title: "Headliner", minXp: 2000},
+  {title: "Legend", minXp: 3200},
+  {title: "Hall of Famer", minXp: 5000},
+];
+
+/** XP at which a player is eligible to be swapped into a GOAT slot - the
+ * top of the earned ladder. Mirrors the old "must otherwise qualify for
+ * Hall of Famer" rule, now measured in XP rather than matches. */
+const GOAT_ELIGIBLE_MIN_XP = XP_TIERS[XP_TIERS.length - 1].minXp;
+
+/**
+ * The earned title for a given XP total (ranks 1-9). Does NOT apply the
+ * GOAT overlay, which is a live top-5 Elo position resolved by
+ * syncGoatTier. Because XP only rises, this only ever returns a higher
+ * title over time.
+ */
+function computeTitleFromXp(xp) {
+  const value = Number.isFinite(Number(xp)) ? Number(xp) : 0;
+  let title = XP_TIERS[0].title;
+  for (const tier of XP_TIERS) {
+    if (value >= tier.minXp) title = tier.title;
+  }
+  return title;
+}
+
 const GOAT_TITLE = "GOAT";
 const GOAT_POOL_SIZE = 5;
 // Only players who'd otherwise qualify for Hall of Famer are even eligible
@@ -120,13 +180,16 @@ module.exports = {
   STARTING_RATING,
   RATING_FLOOR,
   RANK_TIERS,
+  XP_TIERS,
   GOAT_TITLE,
   GOAT_POOL_SIZE,
   GOAT_ELIGIBLE_MIN_MATCHES,
+  GOAT_ELIGIBLE_MIN_XP,
   kFactorForRating,
   voteConfidence,
   FULL_CONFIDENCE_WEIGHT,
   expectedScore,
   applyEloChange,
   computeBaseRankTitle,
+  computeTitleFromXp,
 };

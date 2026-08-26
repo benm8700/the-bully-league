@@ -1,6 +1,6 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
-const {STARTING_RATING, computeBaseRankTitle} = require("./rating");
+const {STARTING_RATING, GOAT_TITLE, computeTitleFromXp} = require("./rating");
 
 /**
  * The season soft reset (CLAUDE.md's Season reset decision).
@@ -71,19 +71,30 @@ function resetFor(user, pull) {
   const careerRankedMatches = Number.isFinite(career) ?
     career : (Number(user?.rankedMatchesPlayed) || 0);
 
-  const rankTitle = computeBaseRankTitle(rating, 0);
+  // THE EARNED TITLE IS NEVER RESET. As of the XP ladder (2026-08-25)
+  // titles are earned and KEPT - a season reset re-places the hidden Elo
+  // for fresh matchmaking but must not knock anyone down the visible
+  // ladder, which is the whole promise of the system. XP (career points)
+  // is untouched by the reset, so the earned title is preserved by
+  // recomputing it from that unchanged XP; a live GOAT keeps GOAT (the
+  // proportional pull preserves rating order, so the same five stay on
+  // top, and the next syncGoatTier confirms it either way).
+  const rankTitle = user?.rankTitle === GOAT_TITLE ?
+    GOAT_TITLE : computeTitleFromXp(Number(user?.points) || 0);
 
   return {
     rating,
+    // Zeroed as a per-season stats counter. It no longer gates anything -
+    // titles come from XP and the entitlement carve-out reads
+    // careerRankedMatches - so this is cosmetic continuity rather than a
+    // placement gate.
     rankedMatchesPlayed: 0,
     careerRankedMatches,
+    // Written unchanged so the value stays consistent, and the notification
+    // pointers are pinned to it so no stray rank-change fires - though with
+    // the title preserved there is now nothing to announce in the first
+    // place, unlike the old reset that demoted almost everybody at once.
     rankTitle,
-    // SUPPRESSES THE RANK-CHANGE ANNOUNCEMENT, and this is not a detail.
-    // A reset moves almost everybody down a tier at once, so without this
-    // the next sweep would push a demotion roast to the entire userbase
-    // simultaneously - on the one day it means nothing about how they
-    // played. Both fields are set because one drives the push and the
-    // other the in-app popup.
     lastNotifiedRankTitle: rankTitle,
     lastSeenRankTitle: rankTitle,
   };

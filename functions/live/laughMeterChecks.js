@@ -68,7 +68,7 @@ async function call(uid, fn, data) {
   return {status: r.status, body: j.result, raw: j};
 }
 
-const {RANK_TIERS, GOAT_TITLE} = require("../rating");
+const {XP_TIERS, GOAT_TITLE} = require("../rating");
 const stamp = Date.now().toString(36);
 const UID = `lm-${stamp}`;
 
@@ -82,12 +82,13 @@ async function setState(fields) {
       password: "Test12345!"});
     await db.collection("users").doc(UID).set({
       username: `Lm${stamp}`, usernameLower: `lm${stamp}`,
-      rating: 1200, rankTitle: RANK_TIERS[0].title, rankedMatchesPlayed: 0,
+      rating: 1200, points: 0, pointsBalance: 0,
+      rankTitle: XP_TIERS[0].title, rankedMatchesPlayed: 0,
       wins: 0, losses: 0, accountStatus: "active", isAdmin: false,
       createdAt: Timestamp.now(),
     });
 
-    console.log("\na new account");
+    console.log("\na new account with no XP");
     let r = await call(UID, "getLaughMeter", {});
     check("the meter loads", r.status === 200 && r.body?.title,
         JSON.stringify(r.raw).slice(0, 200));
@@ -95,41 +96,39 @@ async function setState(fields) {
         r.body.fill >= 0 && r.body.fill <= 1 && Boolean(r.body.nextTitle),
         JSON.stringify(r.body));
 
-    console.log("\nthe rating is there but the matches are not");
+    console.log("\nthe bar tracks XP within the current title's band");
     await setState({
-      rankTitle: RANK_TIERS[1].title,
-      rating: RANK_TIERS[2].minRating + 50,
-      rankedMatchesPlayed: RANK_TIERS[1].minMatches,
+      rankTitle: XP_TIERS[1].title,
+      points: XP_TIERS[2].minXp - 1, // one XP short of the next title
     });
     r = await call(UID, "getLaughMeter", {});
-    check("THE BAR IS NOT FULL, because matches are what is binding",
-        r.body.fill < 1 && r.body.binding === "matches",
-        JSON.stringify(r.body));
-    check("...and it says how many battles are left",
-        r.body.matchesRemaining > 0, JSON.stringify(r.body));
+    check("THE BAR IS NEAR FULL just before the next title",
+        r.body.fill > 0.9, JSON.stringify(r.body));
+    await setState({rankTitle: XP_TIERS[1].title, points: XP_TIERS[1].minXp});
+    r = await call(UID, "getLaughMeter", {});
+    check("...and near empty just after promoting into a title",
+        r.body.fill < 0.05, JSON.stringify(r.body));
 
     console.log("\nthe thresholds stay hidden");
     let leaked = null;
-    for (let i = 0; i < RANK_TIERS.length; i++) {
-      for (const rating of [900, 1200, 1500, 1900]) {
-        await setState({rankTitle: RANK_TIERS[i].title, rating,
-          rankedMatchesPlayed: 999});
+    for (let i = 0; i < XP_TIERS.length; i++) {
+      for (const points of [0, 300, 1500, 4999]) {
+        await setState({rankTitle: XP_TIERS[i].title, points});
         const m = await call(UID, "getLaughMeter", {});
         if (/\d{3,}/.test(m.body?.caption ?? "")) {
-          leaked = `${RANK_TIERS[i].title}@${rating}: ${m.body.caption}`;
+          leaked = `${XP_TIERS[i].title}@${points}: ${m.body.caption}`;
         }
       }
     }
-    check("NO CAPTION EVER LEAKS A RATING-SIZED NUMBER", leaked === null,
+    check("NO CAPTION EVER LEAKS AN XP-SIZED NUMBER", leaked === null,
         String(leaked));
 
     console.log("\nthe top of the ladder");
-    const top = RANK_TIERS[RANK_TIERS.length - 1];
-    await setState({rankTitle: top.title, rating: 1900,
-      rankedMatchesPlayed: 999});
+    const top = XP_TIERS[XP_TIERS.length - 1];
+    await setState({rankTitle: top.title, points: top.minXp + 5000});
     r = await call(UID, "getLaughMeter", {});
     check("Hall of Famer points at GOAT without faking progress toward it",
-        r.body.nextTitle === GOAT_TITLE && r.body.binding === "leaderboard",
+        r.body.nextTitle === GOAT_TITLE && r.body.state === "contender",
         JSON.stringify(r.body));
 
     await setState({rankTitle: GOAT_TITLE});

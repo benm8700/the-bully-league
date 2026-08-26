@@ -1,27 +1,28 @@
-const {RANK_TIERS, GOAT_TITLE, GOAT_POOL_SIZE, STARTING_RATING} =
+const {XP_TIERS, GOAT_TITLE, GOAT_POOL_SIZE, computeTitleFromXp} =
   require("./rating");
 
 /**
- * The Laugh Meter (CLAUDE.md's Display decision).
+ * The Laugh Meter (CLAUDE.md's Display decision), now filling toward the
+ * next XP title rather than the next Elo tier (2026-08-25).
  *
- * The Elo number is invisible plumbing; what a player sees is a gauge
- * that fills toward the next rank, labelled with the rank title. The
- * exact thresholds stay HIDDEN - the decision is explicit that the
- * criteria are not shown but a partial progress indicator is, which is
- * why this returns a fraction and a mood rather than "38 rating to go".
+ * The player sees a gauge that fills toward the next earned title, labelled
+ * with the current title. As of the XP ladder the fill is driven by career
+ * XP (functions/points.js), NOT by the hidden Elo rating - which is exactly
+ * why this is simpler than it was: XP is one dimension that only rises, so
+ * there is no rating-versus-matches binding constraint to reconcile any
+ * more, and no down direction to describe.
  *
- * SERVED RATHER THAN COMPUTED ON THE CLIENT, deliberately. The ladder
- * lives here, and this project has already been bitten by duplicating it:
+ * SERVED RATHER THAN COMPUTED ON THE CLIENT, deliberately. The ladder lives
+ * in rating.js, and this project has already been bitten by duplicating it:
  * the rank-change copy was first written client-side with a hand-copied
- * tier order that omitted Headliner, which would have called a promotion
- * a demotion for anyone near it. One definition, one place.
+ * tier order that omitted Headliner, which would have called a promotion a
+ * demotion for anyone near it. One definition, one place.
  *
- * THE PART THAT TOOK THOUGHT: promotion needs BOTH a rating threshold and
- * a minimum number of ranked matches, so progress is two-dimensional. A
- * meter showing only rating would sit visually FULL while the player
- * stubbornly failed to promote - which reads as a broken gauge, not as a
- * missing requirement. So the fill always shows whichever constraint is
- * actually binding, and says which one it is.
+ * NO NUMBERS. The exact XP thresholds stay HIDDEN - the decision is
+ * explicit that the criteria are not shown but a partial progress indicator
+ * is, which is why this returns a fraction and a mood rather than "180 XP to
+ * go". Showing the raw XP would let anyone back-compute the thresholds one
+ * match at a time.
  */
 
 /** How the meter is described when it cannot honestly show progress. */
@@ -29,9 +30,9 @@ const GOAT_STATE = "goat";
 const CONTENDER_STATE = "contender";
 const CLIMBING_STATE = "climbing";
 
-/** The tier a title sits at, or -1. */
+/** The XP tier a title sits at, or -1. */
 function tierIndexOf(title) {
-  return RANK_TIERS.findIndex((t) => t.title === title);
+  return XP_TIERS.findIndex((t) => t.title === title);
 }
 
 /** Progress between two bounds, clamped, with a degenerate span treated
@@ -45,34 +46,32 @@ function fraction(value, from, to) {
 /**
  * The whole meter for one player.
  *
- * Pure, so every branch is testable without Firestore - including the
- * ones that are awkward to reach in real data, like a player sitting at
- * Hall of Famer or holding a GOAT slot.
+ * Pure, so every branch is testable without Firestore - including the ones
+ * that are awkward to reach in real data, like a player sitting at Hall of
+ * Famer or holding a GOAT slot.
  *
  * @param {object} user the account
  * @return {object} what the gauge should show
  */
 function laughMeter(user) {
-  const rating = Number(user?.rating);
-  const safeRating = Number.isFinite(rating) ? rating : STARTING_RATING;
-  const played = Number(user?.rankedMatchesPlayed);
-  const safePlayed = Number.isFinite(played) && played > 0 ?
-    Math.floor(played) : 0;
-  const title = user?.rankTitle ?? RANK_TIERS[0].title;
+  const xpRaw = Number(user?.points);
+  const xp = Number.isFinite(xpRaw) && xpRaw > 0 ? xpRaw : 0;
+  // The stored title is the source of truth (awardPoints keeps it in step
+  // with XP, and syncGoatTier overlays GOAT), but fall back to deriving it
+  // from XP for any account whose title has not been written yet.
+  const title = user?.rankTitle ?? computeTitleFromXp(xp);
 
-  // GOAT is the one rank that is a live leaderboard POSITION rather than
-  // a threshold, so there is no "next" to fill toward and no honest
-  // progress to show. The meter is simply full, and the copy talks about
-  // holding the slot rather than climbing - a player here can be demoted
-  // without ever losing, purely because somebody else rose.
+  // GOAT is the one rank that is a live leaderboard POSITION rather than a
+  // threshold, so there is no "next" to fill toward and no honest progress
+  // to show. The meter is simply full, and the copy talks about holding the
+  // slot rather than climbing - a GOAT can be displaced without ever losing
+  // a match, purely because somebody else's hidden rating rose past theirs.
   if (title === GOAT_TITLE) {
     return {
       title,
       state: GOAT_STATE,
       fill: 1,
       nextTitle: null,
-      binding: null,
-      matchesRemaining: 0,
       caption: `Top ${GOAT_POOL_SIZE} in the world. Someone is coming for it.`,
     };
   }
@@ -82,66 +81,45 @@ function laughMeter(user) {
   // error: every account predating the field reads that way, and a
   // broken-looking gauge is a worse answer than a modest one.
   const current = index >= 0 ? index : 0;
-  const next = RANK_TIERS[current + 1] ?? null;
+  const next = XP_TIERS[current + 1] ?? null;
 
   if (!next) {
-    // Hall of Famer. The only thing above is GOAT, which cannot be
-    // reached by crossing a number - so showing a fill toward it would be
-    // inventing progress that does not exist.
+    // Hall of Famer. The only thing above is GOAT, which cannot be reached
+    // by crossing an XP number - it is the top five by hidden skill - so
+    // showing a fill toward it would be inventing progress that does not
+    // exist. Point at the leaderboard instead.
     return {
       title,
       state: CONTENDER_STATE,
       fill: 1,
       nextTitle: GOAT_TITLE,
-      binding: "leaderboard",
-      matchesRemaining: 0,
-      caption: `Only the top ${GOAT_POOL_SIZE} rated players hold GOAT. ` +
-        "Out-rank one of them.",
+      caption: `Only the top ${GOAT_POOL_SIZE} hold GOAT. Out-battle one of them.`,
     };
   }
 
-  const here = RANK_TIERS[current];
-  const byRating = fraction(safeRating, here.minRating, next.minRating);
-  const byMatches = fraction(safePlayed, here.minMatches, next.minMatches);
-
-  // THE BINDING CONSTRAINT WINS. Showing the rating alone would leave a
-  // player who has the rating but not the matches staring at a full bar
-  // that never promotes them.
-  const fill = Math.min(byRating, byMatches);
-  const binding = byMatches < byRating ? "matches" : "rating";
-  const matchesRemaining = Math.max(0, next.minMatches - safePlayed);
+  const here = XP_TIERS[current];
+  // Fill by the player's XP standing between this title and the next. When
+  // the stored title lags the XP (a title write that has not landed yet),
+  // clamp the fill to this band rather than letting it overflow.
+  const fill = fraction(xp, here.minXp, next.minXp);
 
   return {
     title,
     state: CLIMBING_STATE,
     fill,
     nextTitle: next.title,
-    binding,
-    // Only meaningful when matches are what is holding them back. Stated
-    // plainly in that case because it is actionable and reveals nothing
-    // about the RATING thresholds, which are the part deliberately
-    // hidden - "play two more" helps; "38 rating to go" would not.
-    matchesRemaining: binding === "matches" ? matchesRemaining : 0,
-    caption: binding === "matches" ?
-      matchesCaption(matchesRemaining, next.title) :
-      ratingCaption(fill, next.title),
+    caption: climbingCaption(fill, next.title),
   };
-}
-
-function matchesCaption(remaining, nextTitle) {
-  if (remaining <= 0) return `${nextTitle} is within reach.`;
-  return `${remaining} more ranked ${remaining === 1 ? "battle" : "battles"} ` +
-    `before ${nextTitle} is on the table.`;
 }
 
 /**
  * Qualitative, never numeric.
  *
  * A percentage would let anyone back-compute the thresholds the hidden-
- * criteria decision exists to keep hidden, and it would turn a mood into
- * a spreadsheet.
+ * criteria decision exists to keep hidden, and it would turn a mood into a
+ * spreadsheet.
  */
-function ratingCaption(fill, nextTitle) {
+function climbingCaption(fill, nextTitle) {
   if (fill >= 0.85) return `${nextTitle} is close.`;
   if (fill >= 0.5) return `Halfway to ${nextTitle}.`;
   if (fill >= 0.15) return `Climbing toward ${nextTitle}.`;

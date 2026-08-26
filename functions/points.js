@@ -240,6 +240,26 @@ async function awardPoints(uid, {reason, sourceId, amount, dailyCap}) {
         points: FieldValue.increment(points),
         pointsBalance: Math.max(0, balance) + points,
       };
+
+      // THE XP -> TITLE HOOK (decided 2026-08-25). Career points ARE the
+      // XP that drives the visible title ladder, and awardPoints is the one
+      // chokepoint every XP gain flows through, so the title is derived
+      // here rather than being scattered across each earning site. Because
+      // XP only rises, the title can only rise - there is no down
+      // transition to handle among the earned ranks.
+      //
+      // A LIVE GOAT SLOT IS NEVER TOUCHED. GOAT is a top-5 HIDDEN-Elo
+      // position owned by syncGoatTier, not an XP threshold, so earning
+      // points must never demote a GOAT back to their earned title. Only
+      // syncGoatTier moves anyone in or out of GOAT.
+      const {computeTitleFromXp, GOAT_TITLE} = require("./rating");
+      const newCareer = (Number(user.points) || 0) + points;
+      const currentTitle = user.rankTitle;
+      const nextTitle = currentTitle === GOAT_TITLE ?
+        GOAT_TITLE : computeTitleFromXp(newCareer);
+      if (nextTitle && nextTitle !== currentTitle) {
+        update.rankTitle = nextTitle;
+      }
       if (dailyCap) {
         const record = user.dailyAwards?.[reason];
         const sameDay = record?.day === dailyCap.dayKey;

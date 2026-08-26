@@ -16,9 +16,12 @@ const {
   voteConfidence,
   kFactorForRating,
   computeBaseRankTitle,
+  computeTitleFromXp,
   FULL_CONFIDENCE_WEIGHT,
   RATING_FLOOR,
   RANK_TIERS,
+  XP_TIERS,
+  GOAT_ELIGIBLE_MIN_XP,
 } = require("../rating");
 
 let passed = 0;
@@ -128,6 +131,66 @@ test("rank titles still require both rating and matches played", () => {
   assert.strictEqual(computeBaseRankTitle(1500, 0), "Average Joe",
       "a high rating with no matches must not grant a high rank");
   assert.strictEqual(computeBaseRankTitle(1500, 20), "Headliner");
+});
+
+// --- XP ladder (2026-08-25) -----------------------------------------------
+
+test("XP titles use the same strings and order as the Elo ladder", () => {
+  // Everything downstream (rank-change copy, ORDER, matchmaking bands) keys
+  // on these exact strings. If the two ladders ever disagree on the titles
+  // or their order, a promotion could be announced as a demotion - the
+  // exact bug that put this copy server-side. Pin them together.
+  assert.deepStrictEqual(
+      XP_TIERS.map((t) => t.title),
+      RANK_TIERS.map((t) => t.title),
+      "XP tier titles must match the Elo tier titles one-for-one");
+});
+
+test("a brand-new account with no XP is Average Joe", () => {
+  assert.strictEqual(computeTitleFromXp(0), "Average Joe");
+  assert.strictEqual(computeTitleFromXp(undefined), "Average Joe");
+  assert.strictEqual(computeTitleFromXp(NaN), "Average Joe");
+  assert.strictEqual(computeTitleFromXp(-100), "Average Joe",
+      "a nonsense negative floors rather than throwing");
+});
+
+test("each XP threshold lands exactly on its title, one below stays under", () => {
+  for (let i = 0; i < XP_TIERS.length; i++) {
+    const tier = XP_TIERS[i];
+    assert.strictEqual(computeTitleFromXp(tier.minXp), tier.title,
+        `${tier.minXp} XP should be ${tier.title}`);
+    if (i > 0) {
+      assert.strictEqual(computeTitleFromXp(tier.minXp - 1), XP_TIERS[i - 1].title,
+          `one XP below ${tier.title} should still be ${XP_TIERS[i - 1].title}`);
+    }
+  }
+});
+
+test("XP titles are monotonic - more XP never means a lower title", () => {
+  let lastIndex = -1;
+  for (let xp = 0; xp <= 6000; xp += 25) {
+    const idx = XP_TIERS.findIndex((t) => t.title === computeTitleFromXp(xp));
+    assert.ok(idx >= lastIndex, `title went backwards at ${xp} XP`);
+    lastIndex = idx;
+  }
+});
+
+test("the XP curve steepens - each gap is at least as large as the last", () => {
+  // The scarcity argument: higher titles must cost progressively more, or
+  // the top stops being scarce. Guards a careless edit to the thresholds.
+  for (let i = 2; i < XP_TIERS.length; i++) {
+    const gap = XP_TIERS[i].minXp - XP_TIERS[i - 1].minXp;
+    const prevGap = XP_TIERS[i - 1].minXp - XP_TIERS[i - 2].minXp;
+    assert.ok(gap >= prevGap,
+        `gap into ${XP_TIERS[i].title} (${gap}) is smaller than the one before it (${prevGap})`);
+  }
+});
+
+test("the top XP title is below GOAT eligibility, and GOAT is not an XP tier", () => {
+  assert.strictEqual(GOAT_ELIGIBLE_MIN_XP, XP_TIERS[XP_TIERS.length - 1].minXp,
+      "GOAT eligibility is earning to the top of the visible ladder");
+  assert.ok(!XP_TIERS.some((t) => t.title === "GOAT"),
+      "GOAT is a live Elo position, never an XP threshold");
 });
 
 console.log(`rating: ${passed} checks passed`);
