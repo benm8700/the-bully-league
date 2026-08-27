@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/services/visual_moderation_service.dart';
 import '../account/delete_account_screen.dart';
+import '../settings/appearance_screen.dart';
 import '../settings/blocked_players_screen.dart';
 import 'form_card.dart';
 
@@ -345,6 +346,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         'Subscribers can search for your username and see '
                         'your first photo and rank. Turn this off and you '
                         'stop appearing in search entirely.',
+                      ),
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.palette_outlined),
+                      title: const Text('Appearance'),
+                      subtitle:
+                          const Text('Your skin - Card, and prestige unlocks.'),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const AppearanceScreen(),
+                        ),
                       ),
                     ),
                     ListTile(

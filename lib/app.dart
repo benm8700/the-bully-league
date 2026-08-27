@@ -96,6 +96,12 @@ class _AccountStatusGate extends StatefulWidget {
 }
 
 class _AccountStatusGateState extends State<_AccountStatusGate> {
+  // Applies the account's saved skin exactly ONCE per account load, so a
+  // later in-session change (equipping in the Appearance screen, or the dev
+  // preview toggle) is never clobbered by a subsequent user-doc snapshot.
+  // Reset naturally on account switch, since this gate is keyed by uid.
+  bool _appliedSkin = false;
+
   @override
   void initState() {
     super.initState();
@@ -115,7 +121,23 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-        final accountStatus = snapshot.data?.data()?['accountStatus'] as String?;
+        // Restore the persisted skin (CLAUDE.md's earned-skins system) from
+        // the user document, which this gate already streams. Done in a
+        // post-frame callback because kActiveTheme is listened to by an
+        // ANCESTOR (the MaterialApp above): mutating it during this
+        // descendant's build would try to mark that ancestor dirty
+        // mid-build, which Flutter forbids.
+        final data = snapshot.data?.data();
+        if (!_appliedSkin && data != null) {
+          final skin = data['equippedSkin'] as String?;
+          _appliedSkin = true;
+          if (skin != null && skin.isNotEmpty && skin != kActiveTheme.value) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              kActiveTheme.value = skin;
+            });
+          }
+        }
+        final accountStatus = data?['accountStatus'] as String?;
         if (accountStatus == 'banned') {
           return const BannedScreen();
         }

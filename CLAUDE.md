@@ -824,9 +824,33 @@ unlockable prestige skin** (a strong "GOAT edition" candidate), which
 converges neatly with the earned-skins decision: Card = base everyone gets,
 Neon = a skin you unlock. The dev palette toggle stays for now because the
 developer may switch the base to Neon later. `kThemeIds = ['card','neon']`;
-the other 8 builders remain and can be restored by adding an id. NEXT:
-take Card to full polish across every screen (feed cards, vote screen, the
-collectible-card language) and build the Neon-as-unlockable proof-of-concept.
+the other 8 builders remain and can be restored by adding an id.
+
+**EARNED-SKIN SYSTEM — BUILT AND VERIFIED ON DEVICE (2026-08-26).** The
+proof-of-concept for unlockable prestige skins is live: an **Appearance
+screen** (`lib/screens/settings/appearance_screen.dart`, reached from
+Profile) lists each skin previewed in its OWN colours, with Card as the
+always-available base and Neon locked behind "Reach GOAT". Two user-doc
+fields drive it, both plain client writes (a skin is pure presentation, so a
+hacked skin harms nobody - no server guard needed): **`equippedSkin`** (the
+active skin, restored at launch so it follows the account across devices)
+and **`unlockedSkins`** (what's been earned - Neon is added the moment
+`rankTitle == 'GOAT'` is seen, so it stays unlocked even after dropping out
+of the top five: earned and KEPT, like the XP titles). The theme is restored
+in `_AccountStatusGate` (which already streams the user doc) via a
+post-frame callback, applied ONCE per account load so an in-session change
+isn't clobbered by a later snapshot. **Verified end-to-end on a device**:
+Neon shows locked; setting the account to GOAT unlocks it LIVE; equipping
+turns the whole app Neon instantly; and a full force-stop + relaunch comes
+back in Neon from the persisted field. **KNOWN follow-ups**: the auto-unlock
+is a fire-and-forget Firestore write from inside the stream builder (guarded
+idempotent, fine for a POC, worth moving out later); the dev palette toggle
+on Home still exists and is now superseded by this screen (gate behind
+AdminOnly or remove); the real unlock grant could later move server-side
+into `syncGoatTier` for tamper-resistance, though cosmetics don't strictly
+need it. NEXT: take Card to full polish across every screen (feed cards,
+vote screen, the collectible-card language).
+
 Original "House Lights Down" exploration notes follow.
 
 The app was stock Material 3 on the default purple seed - a Flutter
