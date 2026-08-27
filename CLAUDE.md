@@ -811,6 +811,24 @@ A deliberate sweep across the classes of failure this project has actually had, 
 
 ## Visual identity — "House Lights Down" (2026-08-24)
 
+**THEME DECIDED (2026-08-26): CARD is the base; NEON is preserved as the
+earmarked unlockable prestige skin.** After building a swappable theme
+system (10 explorations, then narrowed to two finalists on the emulator),
+the developer chose **Card** — the collectible-card look (teal foil frame
+around the rank, a solid violet→teal gradient XP bar). Reasoning: retention
+is the harder problem for a competitive app, and the card doubles as a
+shareable "player card" trophy and the natural home for an earned skin.
+**Neon** (glowing violet title, segmented power bar, glowing button) is NOT
+discarded - it is kept in `app_theme.dart` and earmarked as the **future
+unlockable prestige skin** (a strong "GOAT edition" candidate), which
+converges neatly with the earned-skins decision: Card = base everyone gets,
+Neon = a skin you unlock. The dev palette toggle stays for now because the
+developer may switch the base to Neon later. `kThemeIds = ['card','neon']`;
+the other 8 builders remain and can be restored by adding an id. NEXT:
+take Card to full polish across every screen (feed cards, vote screen, the
+collectible-card language) and build the Neon-as-unlockable proof-of-concept.
+Original "House Lights Down" exploration notes follow.
+
 The app was stock Material 3 on the default purple seed - a Flutter
 starter look, and a bad match for a product whose premise is being loud.
 Three directions were proposed; the developer chose the club.
@@ -1579,11 +1597,32 @@ stays a starting point ($6.99/mo, $39.99/yr); everything is tunable config.
   the sub feel like a steal AND seeds the gifting economy every month
   (subscribers are the most active gifters, so this primes the pump). NEW,
   UNBUILT.
-- **"Keep a bigger share" on gifts received — the creator hook.** When cash
-  payouts go live (Phase 2), subscribers keep more of their earnings (e.g.
-  60% vs 50%); in Phase 1 (no cashout), a points multiplier on gifts
-  received (e.g. 1.5×). Framing: "subscribe and keep more of what your fans
-  give you" — the reason a gifted comedian subscribes. NEW, UNBUILT.
+- **EARNING FROM GIFTS REQUIRES SUBSCRIBER-OR-TRIAL — the creator hook, and
+  the strongest one (DECIDED 2026-08-26, the developer's idea).** Gating
+  monetisation behind a paid tier is exactly the YouTube/Twitch model (you
+  must be a partner/affiliate to earn), and BINARY beats graduated: "**earn
+  from your fans, or don't**" converts far harder than "earn a slightly
+  bigger share". So **only subscribers and TRIAL users earn from support
+  gifts they receive; free/lapsed roasters earn 0% and the platform keeps
+  100%.**
+  - **Gated at FULL ACCESS (subscriber OR trial), not subscriber-only, on
+    purpose:** the trial's job is to hook people on the full experience, so
+    a trial user EARNS - then the end-of-trial pitch is "keep earning"
+    (something they felt) rather than "start earning" (abstract). Experienced
+    value converts better than promised value.
+  - **THE MANDATORY SAFEGUARD: show free/lapsed roasters what they are
+    missing, do NOT pocket it silently.** When an un-monetised roaster gets
+    gifts, surface it as a claimable carrot - "You got $14 of support this
+    battle 🔥 - subscribe to start keeping it." Visible-and-dangling PULLS
+    them into subscribing; silent pocketing is how a rising comedian feels
+    robbed and leaves for TikTok. The whole difference between predatory and
+    motivating is whether they can SEE what they are missing.
+  - **Bonuses:** pure margin on all free/lapsed gift revenue, a smaller
+    payout population (simpler ops, fewer 1099s), and it makes the "free
+    player claws to GOAT" narrative the best subscription ad there is - a
+    famous free roaster showered with gifts they cannot touch is the most
+    compelling "subscribe now" moment imaginable. NEW, UNBUILT. (This
+    supersedes the earlier "graduated 60% vs 50% share" idea.)
 - **Tournament economics — 2 free entries/month + ~50% off entry fees +
   members-only tournaments/giveaways.** Ties the sub to the prize/competition
   motivation. NEW numbers, UNBUILT (tournament fees are schema-only).

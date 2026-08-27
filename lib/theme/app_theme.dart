@@ -155,8 +155,13 @@ TextStyle displayStyle(
 // ===========================================================================
 
 /// Every direction, in order, keyed by id. The picker cycles this list.
-// Narrowed to the two finalists. The other directions' builders are
-// kept below so any can be restored by adding its id back here.
+//
+// DECIDED (2026-08-26): 'card' is the chosen BASE theme (first = default),
+// and 'neon' is preserved as the earmarked future UNLOCKABLE prestige skin
+// (a strong "GOAT edition" candidate) rather than shipped as the base. Both
+// stay in this list for now so the dev palette toggle can still flip the
+// base between them - the developer may switch to Neon later. The other 8
+// directions' builders are kept below and can be restored by adding an id.
 const List<String> kThemeIds = [
   'card',
   'neon',
