@@ -1353,7 +1353,16 @@ a money printer. So, mirroring TikTok (coins→diamonds) and Twitch (bits):
 - **Q2 (allow buying points/coins with cash): YES**, sequenced — prove the
   loop in beta first, same "decide now, charge later" discipline as the sub.
 - **Q3 (creator payouts): PHASED, and DESIGNED AROUND RECIRCULATION —
-  DECIDED (2026-08-26).** Phase 1 at launch — coins are bought with cash,
+  DECIDED (2026-08-26).** ⏳ **BUILD-LATER MARKER: Phase 1 ships first;
+  Phase 2 (real cash payouts + the conversion-bonus and tournament-buy-in
+  recirculation sinks) is a DELIBERATE LATER BUILD, not part of the initial
+  launch. TRIGGER TO BUILD PHASE 2: gifting has proven real volume in the
+  beta/early launch. WHAT PHASE 2 ENTAILS when its time comes: Stripe
+  Connect (or PayPal) payout rails, a diamonds→cash ledger with a payout
+  threshold, 1099 tax reporting, the cash-out-vs-convert-to-in-app-credit
+  choice with its bonus, and wiring roaster earnings into tournament
+  buy-ins. Until then, Phase 1 keeps 100% and needs none of that
+  machinery.** Phase 1 at launch — coins are bought with cash,
   gifts splash on-screen and pay the roaster prestige + points, NO cash
   payout yet (platform keeps 100% minus the store's 30% IAP cut), which
   proves people will gift with zero payout/tax/legal machinery. Phase 2 once
