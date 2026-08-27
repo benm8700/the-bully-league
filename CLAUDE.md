@@ -1562,10 +1562,41 @@ which for a live creator app is where the explosive money is. (Also decided
 2026-08-26: leave the Home wallet/points bar visible to everyone for now
 rather than hiding it from subscribers — enforcement is off so everyone
 reads as full-access anyway, making the hide moot until billing is live;
-revisit then.) Sub perks now include (in addition to battle-anytime +
-auto clips + stats + tournament economics + directory) a monthly coin
-allowance and a bonus on gifts received - so it makes you a better player
-AND creator, while gifting is the transaction engine underneath.
+revisit then.)
+
+**SUBSCRIPTION PERK SHEET — FINALIZED (2026-08-26).** In a transaction-led
+model the sub is the FLOOR, not the primary revenue, so it must not gate
+core value behind a paywall. Its three jobs: (1) remove friction for the
+most engaged players, (2) PRIME THE GIFTING PUMP, (3) HOOK CREATORS. Price
+stays a starting point ($6.99/mo, $39.99/yr); everything is tunable config.
+- **Utility/convenience perks** (already built into `entitlement.js` as the
+  subscriber/trial state): battle ANYTIME (free tier is window-only), every
+  ranked match auto-captioned/rendered, stats (the FormCard — form, streaks,
+  and now the career Crowd-Favourite count), the player directory, and 6
+  skips/day vs 3 free.
+- **Monthly coin allowance — ~200 coins (~$4)**, the strategically important
+  perk: over half the sub's value returns as gifting currency, which makes
+  the sub feel like a steal AND seeds the gifting economy every month
+  (subscribers are the most active gifters, so this primes the pump). NEW,
+  UNBUILT.
+- **"Keep a bigger share" on gifts received — the creator hook.** When cash
+  payouts go live (Phase 2), subscribers keep more of their earnings (e.g.
+  60% vs 50%); in Phase 1 (no cashout), a points multiplier on gifts
+  received (e.g. 1.5×). Framing: "subscribe and keep more of what your fans
+  give you" — the reason a gifted comedian subscribes. NEW, UNBUILT.
+- **Tournament economics — 2 free entries/month + ~50% off entry fees +
+  members-only tournaments/giveaways.** Ties the sub to the prize/competition
+  motivation. NEW numbers, UNBUILT (tournament fees are schema-only).
+- **Earned prestige skins stay EARNED, never a sub perk** — the sub sells
+  convenience + creator upside, never status.
+- All perk NUMBERS (coin allowance, gift-share/multiplier, free entries, fee
+  discount) are PLACEHOLDERS to tune against real data.
+
+The money model is now DESIGN-COMPLETE. Everything monetization-related
+from here is BLOCKED on infrastructure (IAP → a Play Console account +
+entity + payment processor), so it is correctly parked as design; the next
+valuable work is concrete/shippable (visual identity, real-device testing of
+the core loop), not more monetization paper.
 
 **BUILT so far: only the two live price changes** (clip 500, day pass 300 in
 `config/pointsSettings`, defaults synced in `points.js`/`clipGrants.js` and
