@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../theme/app_theme.dart';
 import '../../widgets/live_tally.dart';
 import '../../widgets/match_clip_player.dart';
 import '../../widgets/turnstile_challenge.dart';
@@ -180,12 +181,14 @@ class _VoteScreenState extends State<VoteScreen> {
                 const SizedBox(height: 16),
                 _PlayerChoice(
                   label: player1Name,
+                  color: context.palette.gelA,
                   selected: _selectedPlayerId == player1Id,
                   onTap: () => setState(() => _selectedPlayerId = player1Id),
                 ),
                 const SizedBox(height: 8),
                 _PlayerChoice(
                   label: player2Name,
+                  color: context.palette.gelB,
                   selected: _selectedPlayerId == player2Id,
                   onTap: () => setState(() => _selectedPlayerId = player2Id),
                 ),
@@ -317,24 +320,50 @@ class _VoteScreenState extends State<VoteScreen> {
 }
 
 class _PlayerChoice extends StatelessWidget {
-  const _PlayerChoice(
-      {required this.label, required this.selected, required this.onTap});
+  const _PlayerChoice({
+    required this.label,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String label;
+
+  /// The player's gel colour - the SAME one they wear on the scoreboard and
+  /// in the burned-in clip captions, so "who is who" reads consistently on
+  /// every two-player surface.
+  final Color color;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        backgroundColor:
-            selected ? Theme.of(context).colorScheme.primaryContainer : null,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        backgroundColor: selected ? color.withValues(alpha: 0.16) : null,
+        side: BorderSide(
+          color: selected ? color : scheme.outlineVariant,
+          width: selected ? 2 : 1,
+        ),
       ),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(label, overflow: TextOverflow.ellipsis),
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: scheme.onSurface)),
+          ),
+          if (selected) Icon(Icons.check_circle, color: color, size: 20),
+        ],
       ),
     );
   }

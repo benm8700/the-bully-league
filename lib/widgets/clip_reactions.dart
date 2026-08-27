@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 /// Emoji reactions on a battle clip.
 ///
 /// This is what stands in for comments, which are ruled out entirely so
@@ -148,7 +150,10 @@ class _Chip extends StatelessWidget {
           color: Colors.black.withValues(alpha: selected ? 0.75 : 0.45),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: selected ? Colors.amber : Colors.white24,
+            // The brand accent for the selected reaction (white for the
+            // rest, which stays legible over any video). Ties the pick to
+            // the active skin instead of a hardcoded amber.
+            color: selected ? context.palette.accent : Colors.white24,
             width: selected ? 1.5 : 1,
           ),
         ),

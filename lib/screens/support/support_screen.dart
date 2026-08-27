@@ -108,7 +108,9 @@ class _SupportScreenState extends State<SupportScreen> {
                     ),
                     const SizedBox(height: 24),
                     if (_resultMessage != null) ...[
-                      Text(_resultMessage!, style: const TextStyle(color: Colors.red)),
+                      Text(_resultMessage!,
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error)),
                       const SizedBox(height: 16),
                     ],
                     FilledButton(
