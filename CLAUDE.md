@@ -1449,8 +1449,12 @@ named ("BigMike sent 🔥 to PlayerTwo").
 
 **Where the SUBSCRIPTION sits: ON TOP of gifting, not competing.** The
 answer to the earlier framing question is TRANSACTION-LED with subscription
-as the floor (TikTok-shaped), which for a live creator app is where the
-explosive money is. Sub perks now include (in addition to battle-anytime +
+as the floor (TikTok-shaped) — **CONFIRMED by the developer (2026-08-26)** —
+which for a live creator app is where the explosive money is. (Also decided
+2026-08-26: leave the Home wallet/points bar visible to everyone for now
+rather than hiding it from subscribers — enforcement is off so everyone
+reads as full-access anyway, making the hide moot until billing is live;
+revisit then.) Sub perks now include (in addition to battle-anytime +
 auto clips + stats + tournament economics + directory) a monthly coin
 allowance and a bonus on gifts received - so it makes you a better player
 AND creator, while gifting is the transaction engine underneath.
