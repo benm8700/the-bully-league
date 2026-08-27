@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../theme/app_theme.dart';
 import '../../widgets/live_tally.dart';
 import '../battles/get_clip_sheet.dart';
 import '../settings/blocked_players_screen.dart';
@@ -129,24 +130,56 @@ class _MatchCard extends StatelessWidget {
       future: _usernames(player1Id, player2Id),
       builder: (context, nameSnap) {
         final names = nameSnap.data ?? const ['Player 1', 'Player 2'];
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Text(
-                  (match['mode'] as String? ?? 'exhibition').toUpperCase(),
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-                const Spacer(),
-                Text(
-                  finalized
-                      ? _verdict(winnerId, player1Id, names)
-                      : status == 'completed'
-                          ? 'Being judged'
-                          : status,
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
+        final scheme = Theme.of(context).colorScheme;
+        final palette = context.palette;
+        return Container(
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainer,
+            borderRadius: BorderRadius.circular(16),
+            // A thin accent-tinted edge - the collectible-card language,
+            // kept light here because a list of ten heavy foil frames would
+            // be noise; the hero frame stays on Home.
+            border: Border.all(
+              color: palette.accent.withValues(alpha: 0.22),
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 10, 6, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  // The mode as a small chip rather than loose grey text.
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: palette.accent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      (match['mode'] as String? ?? 'exhibition').toUpperCase(),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: palette.accent,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    finalized
+                        ? _verdict(winnerId, player1Id, names)
+                        : status == 'completed'
+                            ? 'Being judged'
+                            : status,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: finalized
+                              ? scheme.onSurface
+                              : scheme.onSurfaceVariant,
+                          fontWeight: finalized ? FontWeight.bold : null,
+                        ),
+                  ),
                 // The only route to the takedown flow, and it belongs here:
                 // this is the screen showing your OWN battles, which is
                 // exactly where someone unhappy about their footage looks.
@@ -193,19 +226,20 @@ class _MatchCard extends StatelessWidget {
                     ),
                   ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            // Even a finalized match keeps its scoreboard - the final count
-            // is the result, and hiding it the moment it stops moving would
-            // remove the payoff for watching.
-            LiveTally(
-              matchId: matchId,
-              player1Name: names[0],
-              player2Name: names[1],
-              closesAtMs: finalized ? null : closesAtMs,
-            ),
-          ],
+                ],
+              ),
+              const SizedBox(height: 10),
+              // Even a finalized match keeps its scoreboard - the final count
+              // is the result, and hiding it the moment it stops moving would
+              // remove the payoff for watching.
+              LiveTally(
+                matchId: matchId,
+                player1Name: names[0],
+                player2Name: names[1],
+                closesAtMs: finalized ? null : closesAtMs,
+              ),
+            ],
+          ),
         );
       },
     );
