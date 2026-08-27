@@ -1447,6 +1447,55 @@ launch, tighten monetization later. Against an active free player's
 🔥 Fire 50, 👑 Crown 200, 💎 Diamond 1000 - animated on the battle screen,
 named ("BigMike sent 🔥 to PlayerTwo").
 
+### Gifting UX — DESIGNED (2026-08-26), UNBUILT
+
+- **IT LIVES WHERE THERE IS AN AUDIENCE: the live-tournament spectator
+  view.** Gifting needs people watching, and the only consented live
+  audience is live tournaments (a regular ranked match has no live audience,
+  and its players never agreed to perform for one - "someone who entered a
+  live tournament chose to perform in front of an audience; nobody else
+  did"). So gifting rides the existing spectator machinery
+  (`AgoraSpectatorService`, `WatchLiveList`, `LiveVotePanel`). **The growth
+  lever later is creating MORE consented-live-audience moments** (e.g. an
+  opt-in "battle live" mode); that is a follow-on, not launch.
+- **The flow**: a persistent Support/🎁 button on the spectator screen → a
+  tray with the tiers, the viewer's coin balance and a "Get coins" (IAP)
+  button → pick a gift → pick which roaster → send (tap-and-hold to
+  combo-send). Every gift **splashes on the battle for all viewers**, scaled
+  by size (Jab = small floating icon; 💎 = full-screen takeover with the
+  sender's name big). The public recognition is the product - people pay to
+  be SEEN supporting.
+- **Q1 — CROWD ENERGY IS VISIBLE, THE TALLY IS NOT (the developer's call,
+  and a good one).** In live comedy the crowd is part of the act - a hyped
+  room spreads laughter contagiously, and a comedian who is landing
+  genuinely earns more crowd energy, which is authentic signal, not
+  corruption. So **live gift splashes stay VISIBLE to everyone including
+  voters**, but the **aggregate per-roaster gift total is HIDDEN until you
+  cast your vote** (then revealed, like the vote tally). Gifts NEVER count
+  toward the verdict. **A lovely emergent safeguard: the splash names the
+  sender**, so one whale spamming 💎 visibly reads as ONE superfan while
+  fifty people each sending 🥊 reads as genuine crowd love - the design
+  itself distinguishes manufactured hype from a real room, so a single
+  wallet cannot fake the crowd or buy the vote.
+- **Q2 — CROWD FAVOURITE, a second honour distinct from the WINNER.** Each
+  battle crowns a **Crowd Favourite** (most gifts received) alongside the
+  **Winner** (most votes) - two axes, skill and popularity. The per-battle
+  Crowd Favourite is a public moment; the **career "Crowd Favourite" count
+  lives in the subscriber stats section** (the FormCard, already a
+  subscriber feature). **This is a STAT, NOT a second title ladder** - it
+  measures popularity, a different axis from the skill title, so it does not
+  violate the one-status-ladder rule; it must never become a competing
+  TITLE people chase instead of rank.
+- **Q3 — POST-BATTLE "SHOW SUPPORT FOR YOUR FAVOURITE", never "tip".** The
+  seconds after a battle are the emotional peak, so a brief prompt catches
+  spending intent there (same reason the clip-buy sits on the post-match
+  screen) - but framed as **fandom, not tipping**: "show some love for your
+  favourite comedian", and crucially it lets you support **EITHER roaster,
+  not just the winner** (you back who was funniest to you, even if they
+  lost). The whole feature's tone is supporting comedians you love, not
+  transactional tipping - which decouples support from the verdict again and
+  fits comedy-scene culture. Avoid the word "tip" throughout.
+
 **Where the SUBSCRIPTION sits: ON TOP of gifting, not competing.** The
 answer to the earlier framing question is TRANSACTION-LED with subscription
 as the floor (TikTok-shaped) — **CONFIRMED by the developer (2026-08-26)** —
