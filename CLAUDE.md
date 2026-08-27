@@ -1496,6 +1496,65 @@ named ("BigMike sent 🔥 to PlayerTwo").
   transactional tipping - which decouples support from the verdict again and
   fits comedy-scene culture. Avoid the word "tip" throughout.
 
+- **HECKLES ARE PAID TOO, AND THE PLATFORM KEEPS 100% OF THEM — DECIDED
+  (2026-08-26).** You can pay to heckle as well as support (throw a 🍅 that
+  splats on the target's face, a 👻 that pops up and goes "boo"). Unlike
+  support, a heckle credits NO roaster - the platform keeps it all (minus
+  the store cut). Two revenue streams with different jobs: **support** is
+  shared with the performer (the creator moat), **heckles** are 100% margin
+  with zero fraud/cashout surface (nothing to pay out). Heckles never count
+  toward the verdict or the Crowd Favourite; they are pure live crowd fun.
+- **HECKLE/CHEER GRAPHICS ARE LIVE-ONLY AND NEVER RECORDED - and this IS the
+  welfare safeguard, not just a clean-clip nicety.** Recordings are the raw
+  camera streams captured server-side; the graphics render client-side on
+  the live view, so they PHYSICALLY cannot reach a recording or a highlight
+  clip (satisfied by the existing architecture, near-zero effort).
+  Ephemerality is what separates "fun club energy" from "monetised
+  bullying": a tomato that splats and vanishes is a moment; a permanent clip
+  of someone buried in garbage is lasting humiliation. This is the exact
+  line the no-comments-protect-roasters welfare rule draws, honoured.
+- **COMPETITORS SEE THE CROWD LIVE - DECIDED (2026-08-26) - because reading
+  and working the room is THE comedy skill and the best content** (the
+  tomato-then-devastating-comeback is the viral clip). The integrity risk is
+  narrow and specific: money must not be able to CONCENTRATE heckling to
+  snipe one competitor at one moment (indirect pay-to-win via a manufactured
+  meltdown). **The fix: the competitor sees AGGREGATE "room energy", not
+  individual purchases** - decouple what the competitor feels from each
+  gift. **Spectators** see granular named splashes ("BigMike 🍅 -> PlayerA",
+  the flex); **the competitor** feels an ambient boo/cheer intensity driven
+  by the CROWD, capped four ways, all server-computed and tunable:
+  1. **PEOPLE-WEIGHTED, NOT DOLLAR-WEIGHTED (anti-whale):** each sender's
+     contribution to the competitor-facing meter is capped per window, so
+     the room reflects how many DISTINCT people are heckling, not how much
+     one wallet spent. One whale ≈ one person; a hostile room is fifty
+     people, not one rich hater.
+  2. **SMOOTHED + LAGGED (anti-sniper):** a rolling average over a few
+     seconds, never an instant per-gift trigger, so nothing can be timed to
+     detonate on a punchline - it reads as "the room got rowdier".
+  3. **HARD VISUAL CEILING (anti-burial):** the competitor-facing intensity
+     maxes out at "loud rowdy room" and cannot exceed it however much is
+     spent; a huge burst just pins the meter.
+  4. **DISTINCT-PEOPLE FLOOR:** it takes a real crowd to move the meter at
+     all - one lone heckler barely registers to the performer.
+  The turn structure helps: only one player performs at a time (opponent
+  muted), so heckles during a turn are unambiguously the room reacting to
+  THAT set - legitimate feedback, correctly scoped. Everyone who paid still
+  gets charged, still gets their named splash to spectators, and still feeds
+  the aggregate - they just cannot single-handedly break a performer. **Net
+  principle: money buys crowd ENERGY, never one person's MELTDOWN.** The vote
+  stays fully separate, so the only way a heckle affects the result is
+  through the performer's actual response, which is a real skill test.
+- **Residual guardrails to build in (not blockers):** keep heckles punchy
+  and fast-clearing (a moment, not a five-minute burial); keep it "in
+  service of comedy" per the existing moderation line, watching the
+  dogpile-on-the-underdog case; put "the live crowd can cheer AND heckle
+  you" in the tournament-entry consent copy so no roaster is surprised; and
+  keep the framing (18+, consensual, comedic, ephemeral) tight for store
+  review, since "pay to throw things at people" reads twice. **Optional heel
+  angle**: let a roaster lean into being booed (wrestling-villain style, a
+  "most-heckled" flex) so exposure becomes a CHOSEN persona - funnier and
+  safer.
+
 **Where the SUBSCRIPTION sits: ON TOP of gifting, not competing.** The
 answer to the earlier framing question is TRANSACTION-LED with subscription
 as the floor (TikTok-shaped) — **CONFIRMED by the developer (2026-08-26)** —
