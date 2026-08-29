@@ -814,10 +814,18 @@ A deliberate sweep across the classes of failure this project has actually had, 
 **THEME DECIDED (2026-08-26): CARD is the base; NEON is preserved as the
 earmarked unlockable prestige skin.** After building a swappable theme
 system (10 explorations, then narrowed to two finalists on the emulator),
-the developer chose **Card** — the collectible-card look (teal foil frame
-around the rank, a solid violet→teal gradient XP bar). Reasoning: retention
-is the harder problem for a competitive app, and the card doubles as a
-shareable "player card" trophy and the natural home for an earned skin.
+the developer chose **Card** — the collectible-card look (a framed panel
+around the rank + a solid gauge). Reasoning: retention is the harder
+problem for a competitive app, and the card doubles as a shareable "player
+card" trophy and the natural home for an earned skin. **REFINED
+(2026-08-28): the base Card now wears the "Aurora" look** — the developer
+explored two extra variants of each finalist (Card→Aurora/Sapphire,
+Neon→Solid/Synthwave) on the emulator and picked **Aurora** as the base:
+a brighter holographic **cyan** accent, a cooler glassier slate surface,
+rounder corners, and a **mint→cyan** gauge (softer than the original teal
+foil + violet→teal gauge, which is in git history). The exploration
+variants were removed after the pick; only `card` (Aurora) and `neon`
+remain in `kThemeIds`.
 **Neon** (glowing violet title, segmented power bar, glowing button) is NOT
 discarded - it is kept in `app_theme.dart` and earmarked as the **future
 unlockable prestige skin** (a strong "GOAT edition" candidate), which

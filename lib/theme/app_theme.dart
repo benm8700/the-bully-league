@@ -570,41 +570,46 @@ ThemeData _battle() {
 }
 
 // --- 9. CARD: collectible / holo. Every roaster is a card. ----------------
+//
+// The base now wears the "AURORA" look, chosen by the developer (2026-08-28)
+// over the original teal foil: brighter cyan accent, a cooler/glassier
+// slate surface, rounder corners, and a mint->cyan gauge. Softer and more
+// holographic. (The original teal foil is in git history if ever wanted.)
 ThemeData _card() {
-  const slate = Color(0xFF12141C);
+  const slate = Color(0xFF0F131D);
   const frost = Color(0xFFE8ECF5);
-  const foil = Color(0xFF2DD4BF); // holographic teal
+  const cyan = Color(0xFF22D3EE); // holographic aurora cyan
   const scheme = ColorScheme.dark(
-    primary: foil, onPrimary: Color(0xFF08120F),
-    secondary: Color(0xFF8B7BFF), onSecondary: Color(0xFF08120F),
+    primary: cyan, onPrimary: Color(0xFF04121A),
+    secondary: Color(0xFF7DE8C4), onSecondary: Color(0xFF04121A),
     surface: slate, onSurface: frost,
-    onSurfaceVariant: Color(0xFF828AA0),
-    surfaceContainer: Color(0xFF1B1E29),
-    surfaceContainerHigh: Color(0xFF222634),
-    surfaceContainerHighest: Color(0xFF2A2F40),
-    outline: Color(0xFF3A4056), outlineVariant: Color(0xFF272C3B),
-    error: Color(0xFFFF6B7D), onError: Color(0xFF08120F),
+    onSurfaceVariant: Color(0xFF8390A8),
+    surfaceContainer: Color(0xFF17202E),
+    surfaceContainerHigh: Color(0xFF1E2838),
+    surfaceContainerHighest: Color(0xFF263143),
+    outline: Color(0xFF3A4759), outlineVariant: Color(0xFF232F3E),
+    error: Color(0xFFFF6B7D), onError: Color(0xFF04121A),
     inverseSurface: frost, onInverseSurface: slate,
-    primaryContainer: Color(0xFF0C3A34), onPrimaryContainer: foil,
+    primaryContainer: Color(0xFF0A3A3F), onPrimaryContainer: cyan,
   );
   return _build(
     brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'Card',
-      accent: foil,
-      gaugeFrom: Color(0xFF8B7BFF), gaugeTo: foil,
+      accent: cyan,
+      // Mint -> cyan, a cool aurora sweep. Solid smooth fill, not the
+      // segmented power bar - a continuous stat bar sits better inside the
+      // foil frame than an arcade-cabinet health bar.
+      gaugeFrom: Color(0xFF34E0B0), gaugeTo: cyan,
       gelA: Color(0xFFFF6B9D), gelB: Color(0xFF6BA9FF),
-      display: 'Archivo', displayWeight: 760, displayWidth: 116,
-      radius: 12,
+      display: 'Archivo', displayWeight: 720, displayWidth: 118,
+      radius: 20,
       signature: 'frame',
-      // Solid smooth fill, not the segmented power bar. The segmented bar
-      // reads as an arcade-cabinet health bar, which fights Card's
-      // premium collectible-card feel; a continuous stat bar sits better
-      // inside the foil frame.
       segmentedGauge: false,
     ),
   );
 }
+
 
 // --- 10. TAPE: camcorder / VHS. The app's own output is tape. -------------
 ThemeData _tape() {
