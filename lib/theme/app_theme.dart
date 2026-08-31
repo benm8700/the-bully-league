@@ -406,17 +406,22 @@ ThemeData _courtside() {
   );
 }
 
-// --- 4. NEON: 1am street. Two-tone glow. ---------------------------------
+// --- 4. NEON: 1am street. Indigo glow. -----------------------------------
+//
+// The "Indigo" purple, chosen by the developer (2026-08-28) from five
+// purple takes: a cooler, blue-leaning periwinkle-violet on a blue-black
+// night, with a mono-purple segmented power bar and the neon glow. (The
+// original violet + lime two-tone is in git history.)
 ThemeData _neon() {
-  const nearBlack = Color(0xFF0B0713);
-  const violet = Color(0xFF7C3BF0); // deepened so WHITE button text reads
-  const lime = Color(0xFFB6FF3C);
+  const night = Color(0xFF08081A); // blue-black
+  const indigo = Color(0xFF5A3BF0); // deepened so WHITE button text reads
+  const glow = Color(0xFF8E86FF); // brighter periwinkle, for text
   const scheme = ColorScheme.dark(
     // White button text, per the developer's call. A neon sign is lit
     // white-hot at its core; the colour is the glow around it.
-    primary: violet, onPrimary: Color(0xFFFFFFFF),
-    secondary: lime, onSecondary: Color(0xFF0B0713),
-    surface: nearBlack, onSurface: Color(0xFFEDE7FA),
+    primary: indigo, onPrimary: Color(0xFFFFFFFF),
+    secondary: glow, onSecondary: Color(0xFF0B0713),
+    surface: night, onSurface: Color(0xFFEDE7FA),
     onSurfaceVariant: Color(0xFF9186AE),
     surfaceContainer: Color(0xFF160E24),
     surfaceContainerHigh: Color(0xFF1D1430),
@@ -424,7 +429,7 @@ ThemeData _neon() {
     outline: Color(0xFF3B2D57), outlineVariant: Color(0xFF2A2043),
     error: Color(0xFFFF6B8A), onError: Color(0xFF0B0713),
     inverseSurface: Color(0xFFEDE7FA), onInverseSurface: Color(0xFF0B0713),
-    primaryContainer: Color(0xFF2A1650), onPrimaryContainer: violet,
+    primaryContainer: Color(0xFF2A1650), onPrimaryContainer: indigo,
   );
   return _build(
     brightness: Brightness.dark,
@@ -432,9 +437,9 @@ ThemeData _neon() {
     bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'Neon',
-      accent: Color(0xFFB57CFF), // the brighter glow colour, for text
-      gaugeFrom: violet, gaugeTo: lime,
-      gelA: Color(0xFFB57CFF), gelB: lime,
+      accent: glow,
+      gaugeFrom: indigo, gaugeTo: Color(0xFFAAA0FF),
+      gelA: glow, gelB: Color(0xFF5FE0FF),
       display: 'Archivo', displayWeight: 800, displayWidth: 108,
       radius: 14,
       signature: 'glow',
@@ -442,6 +447,7 @@ ThemeData _neon() {
     ),
   );
 }
+
 
 // --- 5. RISO: zine print. Two spot inks that overprint. -------------------
 ThemeData _riso() {

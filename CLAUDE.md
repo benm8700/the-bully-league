@@ -826,9 +826,13 @@ rounder corners, and a **mint→cyan** gauge (softer than the original teal
 foil + violet→teal gauge, which is in git history). The exploration
 variants were removed after the pick; only `card` (Aurora) and `neon`
 remain in `kThemeIds`.
-**Neon** (glowing violet title, segmented power bar, glowing button) is NOT
+**Neon** (glowing title, segmented power bar, glowing button) is NOT
 discarded - it is kept in `app_theme.dart` and earmarked as the **future
-unlockable prestige skin** (a strong "GOAT edition" candidate), which
+unlockable prestige skin** (a strong "GOAT edition" candidate). **Its purple
+was refined (2026-08-28): the developer compared five purple shades and
+chose "Indigo"** - a cooler, blue-leaning periwinkle-violet on a blue-black
+night, with a mono-purple segmented bar (replacing the original violet +
+lime two-tone, in git history). This
 converges neatly with the earned-skins decision: Card = base everyone gets,
 Neon = a skin you unlock. The dev palette toggle stays for now because the
 developer may switch the base to Neon later. `kThemeIds = ['card','neon']`;
