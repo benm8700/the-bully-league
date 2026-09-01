@@ -26,41 +26,38 @@ export function StoreCta({
   const live = Boolean(url);
 
   const base =
-    "inline-flex items-center justify-center gap-2 rounded-full font-medium transition-colors";
+    "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all";
   const size =
     variant === "inline" ? "px-4 py-2 text-sm" : "px-6 py-3 text-base";
 
   if (!live) {
     return (
-      <div className="flex flex-col items-center gap-2">
-        <span
-          className={`${base} ${size} bg-foreground/10 text-foreground/50 cursor-default`}
-          aria-disabled="true"
-        >
-          Coming soon to Android
-        </span>
-        {variant === "block" && (
-          <span className="text-xs text-foreground/50">
-            Battles happen in the app.
-          </span>
-        )}
-      </div>
+      <span
+        className={`${base} ${size} bg-surface-2 text-muted cursor-default border border-outline`}
+        aria-disabled="true"
+      >
+        <AndroidGlyph />
+        Coming soon to Android
+      </span>
     );
   }
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <a
-        href={url}
-        className={`${base} ${size} bg-accent text-background hover:opacity-90`}
-      >
-        Get The Bully League
-      </a>
-      {variant === "block" && (
-        <span className="text-xs text-foreground/50">
-          Free to watch and judge. Battles happen in the app.
-        </span>
-      )}
-    </div>
+    <a
+      href={url}
+      className={`${base} ${size} text-white hover:opacity-90`}
+      style={{ background: "var(--primary)", boxShadow: "0 8px 24px rgba(234,76,109,0.35)" }}
+    >
+      <AndroidGlyph />
+      Get The Bully League
+    </a>
+  );
+}
+
+function AndroidGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M6 9h12v8a2 2 0 0 1-2 2h-1v2.5a1.5 1.5 0 0 1-3 0V19h-2v2.5a1.5 1.5 0 0 1-3 0V19H8a2 2 0 0 1-2-2V9Zm-2 0a1.5 1.5 0 0 1 3 0v6a1.5 1.5 0 0 1-3 0V9Zm13 0a1.5 1.5 0 0 1 3 0v6a1.5 1.5 0 0 1-3 0V9ZM8 8a4 4 0 0 1 8 0H8Zm2-3.2-.9-1.4.8-.5.9 1.5a5 5 0 0 1 2.4 0l.9-1.5.8.5-.9 1.4A4 4 0 0 1 8 8" />
+    </svg>
   );
 }

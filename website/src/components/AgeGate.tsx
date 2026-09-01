@@ -30,16 +30,18 @@ export function AgeGate() {
   if (confirmed) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm px-6">
-      <div className="max-w-sm w-full flex flex-col items-center text-center gap-4 rounded-lg border border-foreground/10 p-8">
-        <h2 className="text-xl font-bold">Mature Content</h2>
-        <p className="text-sm text-foreground/70">
-          The Bully League features unfiltered comedic roasting, including strong and offensive
-          language. It&apos;s not intended for people under 18.
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/95 px-6 backdrop-blur-sm">
+      <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-outline bg-surface p-8 text-center">
+        <span className="eyebrow" style={{ color: "var(--live)" }}>Mature content</span>
+        <h2 className="display text-2xl">Are you 18 or older?</h2>
+        <p className="text-sm text-muted">
+          The Bully League is unfiltered comedic roasting — strong and offensive
+          language included. It&apos;s not intended for anyone under 18.
         </p>
         <button
           onClick={confirm}
-          className="w-full rounded-md bg-accent text-black font-medium px-4 py-2"
+          className="w-full rounded-full py-3 font-semibold text-white"
+          style={{ background: "var(--primary)", boxShadow: "0 8px 24px rgba(234,76,109,0.35)" }}
         >
           I&apos;m 18 or older — Continue
         </button>

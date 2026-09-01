@@ -1,19 +1,21 @@
 import type { Metadata } from "next";
-import { Archivo, Inter } from "next/font/google";
+import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/AuthProvider";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AgeGate } from "@/components/AgeGate";
 
-// The same pairing the app bundles, so a visitor arriving from a shared
-// clip does not land on something that looks like a different product.
-// Archivo is loaded as a VARIABLE font because the width axis is the
-// whole point - see globals.css, which pushes it wide.
-const archivo = Archivo({
+// The same pairing the app now bundles ("Comedy Night" base theme), so a
+// visitor arriving from a shared clip does not land on something that looks
+// like a different product. Fraunces is the display face: an elegant
+// high-contrast serif, loaded as a VARIABLE font with its optical-size axis
+// so headlines read premium/editorial at large sizes without going stiff.
+// Body stays Inter.
+const fraunces = Fraunces({
   variable: "--font-display",
   subsets: ["latin"],
-  axes: ["wdth"],
+  axes: ["opsz"],
 });
 
 const inter = Inter({
@@ -23,14 +25,15 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "The Bully League",
-  description: "Live 1-on-1 video roast battles. Random pairing, community-judged, no mercy.",
+  description:
+    "Get randomly matched 1-on-1 with a stranger for a live, timed roast battle. The crowd votes the winner. Climb the ranks. 18+.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${archivo.variable} ${inter.variable} h-full antialiased`}
+      className={`${fraunces.variable} ${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <AuthProvider>

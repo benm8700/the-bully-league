@@ -1,30 +1,71 @@
 @import "tailwindcss";
 
-/* "House Lights Down" - the same identity the app uses, so a visitor who
-   taps a shared clip does not land somewhere that looks like a different
-   product. The values are lifted from lib/theme/house_theme.dart; if one
-   moves, move both.
+/* "Comedy Night" - the app's current base theme, so a visitor who taps a
+   shared clip does not land somewhere that looks like a different product.
+   Values are lifted from lib/theme/app_theme.dart (the _comedyNight
+   builder + AppPalette tokens); if one moves, move both.
 
-   Dark ONLY, matching the app's decision. A venue with the house lights
-   up is a different room, not an inverted palette - the previous
-   light-mode block flipped the background to white and left the accent
-   untouched, which produced a combination nobody designed. */
+   Dark ONLY, matching the app. Colours have JOBS here, not one hue smeared
+   everywhere:
+     - primary  = the one hot-pink call to action
+     - live     = a DISTINCT true red for "live / on air / hot"
+     - reward   = gold, for prizes / points / the nightly event
+     - secondary = purple, a supporting accent + one of the two player gels
+     - winner   = green, for a settled result */
 :root {
-  --background: #12100f; /* house  - the room with the lights down */
-  --foreground: #f5e6c8; /* spot   - the pool of light */
-  --accent: #c98a2b; /* brass  - live, lit, yours. One meaning only. */
-  --muted: #6e6a66; /* smoke  - inactive text, dividers */
-  --surface: #1b1716; /* raised cards */
-  --curtain: #4a1220; /* deep velvet - a surface, never an accent */
+  --ink: #0d0d0f; /* warm near-black background, never pure #000 */
+  --surface: #16161a; /* raised cards */
+  --surface-2: #1f1f24; /* cards on cards */
+  --surface-3: #282830; /* highest surface, chips */
+  --foreground: #f5f1ec; /* primary text - warm off-white */
+  --muted: #a8a29e; /* secondary text, captions */
+  --outline: #3a3a40; /* borders */
+  --outline-soft: #2a2a2e; /* hairline dividers */
+
+  --primary: #ea4c6d; /* the hot-pink CTA */
+  --primary-soft: #ff6f90; /* lighter pink, for text/links on dark */
+  --primary-container: #3a1622; /* pink-tinted surface */
+  --on-primary-container: #ffb3c6;
+
+  --secondary: #8b5cf6; /* purple - support accent + player gel B */
+  --reward: #e8b84b; /* gold - prizes, the nightly event */
+  --currency: #eec153; /* brighter gold - points / currency */
+  --live: #ff3b47; /* true red - live / on air */
+  --winner: #4fc98a; /* green - settled winner */
+
+  --gel-a: #ff6f90; /* player one (pink) */
+  --gel-b: #8b5cf6; /* player two (purple) */
+
+  /* Legacy aliases kept so pre-existing pages/components (legal, matches,
+     age gate) keep working unchanged. --accent now means the primary CTA. */
+  --background: var(--ink);
+  --accent: var(--primary);
 }
 
 @theme inline {
+  --color-ink: var(--ink);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-accent: var(--accent);
-  --color-muted: var(--muted);
   --color-surface: var(--surface);
-  --color-curtain: var(--curtain);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-muted: var(--muted);
+  --color-outline: var(--outline);
+  --color-outline-soft: var(--outline-soft);
+
+  --color-accent: var(--accent);
+  --color-primary: var(--primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
+  --color-secondary: var(--secondary);
+  --color-reward: var(--reward);
+  --color-currency: var(--currency);
+  --color-live: var(--live);
+  --color-winner: var(--winner);
+  --color-gel-a: var(--gel-a);
+  --color-gel-b: var(--gel-b);
+
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
 }
@@ -33,16 +74,45 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-body), system-ui, sans-serif;
+  /* faint warm vignette so the "room" feels lit from the middle rather
+     than a flat black slab */
+  background-image: radial-gradient(
+    120% 90% at 50% -10%,
+    rgba(234, 76, 109, 0.08),
+    transparent 55%
+  );
+  background-attachment: fixed;
 }
 
-/* Display type is Archivo pushed WIDE on its width axis - the same move
-   the app makes, and the reason the two read as one product. Every
-   competitive app reaches for a condensed face; this goes the other way. */
+/* Display type is Fraunces, the app's display face: an elegant
+   high-contrast serif set with its optical-size axis high for the
+   editorial, marquee feel. This is what makes the two read as one
+   product. Body stays Inter. */
+.display,
 h1,
-h2,
-.display {
-  font-family: var(--font-display), var(--font-body), sans-serif;
-  font-variation-settings: "wdth" 118, "wght" 800;
-  letter-spacing: 0.01em;
-  line-height: 1.03;
+h2 {
+  font-family: var(--font-display), Georgia, serif;
+  font-variation-settings: "opsz" 144;
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+}
+
+/* Small utility label - tracked uppercase Inter, the "eyebrow" voice. */
+.eyebrow {
+  font-family: var(--font-body), system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

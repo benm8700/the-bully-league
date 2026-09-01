@@ -64,10 +64,10 @@ export function MatchFeedTabs({
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${
+            className={`px-4 py-1.5 rounded-full text-sm font-semibold capitalize transition-colors ${
               tab === t
-                ? "bg-accent text-black"
-                : "border border-foreground/20 text-foreground/70 hover:border-foreground/40"
+                ? "bg-primary text-white"
+                : "border border-outline text-muted hover:border-outline hover:text-foreground"
             }`}
           >
             {t}
