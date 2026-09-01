@@ -36,8 +36,9 @@ export function StoreCta({
         className={`${base} ${size} bg-surface-2 text-muted cursor-default border border-outline`}
         aria-disabled="true"
       >
+        <AppleGlyph />
         <AndroidGlyph />
-        Coming soon to Android
+        Coming soon to Apple &amp; Android
       </span>
     );
   }
@@ -51,6 +52,14 @@ export function StoreCta({
       <AndroidGlyph />
       Get The Bully League
     </a>
+  );
+}
+
+function AppleGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M16.365 1.43c0 1.14-.42 2.2-1.12 2.98-.84.94-2.2 1.66-3.34 1.57-.13-1.09.42-2.24 1.08-2.96.75-.82 2.1-1.44 3.38-1.59Zm3.94 16.2c-.6 1.38-.88 2-1.65 3.22-1.08 1.7-2.6 3.82-4.48 3.83-1.67.02-2.1-1.09-4.37-1.08-2.27.01-2.74 1.1-4.42 1.08-1.88-.02-3.32-1.93-4.4-3.63C-.4 16.3-.72 10.3 2.1 7.28c1.13-1.2 2.6-1.96 4.2-1.96 1.7 0 2.77 1.1 4.18 1.1 1.36 0 2.19-1.1 4.16-1.1 1.42 0 2.93.77 4 2.1-3.52 1.93-2.95 6.96.66 8.31Z" />
+    </svg>
   );
 }
 

@@ -1,5 +1,27 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 import { ScreenShell, Gel, LaughMeter, NavBar, FauxVideo } from "./bits";
+
+/* The Home tab uses a REAL screenshot of the app (captured on-device),
+   the rest stay as clean mockups. This is the "hybrid" the developer chose:
+   real where a capture is clean, mockup where it isn't (the camera-heavy
+   screens show test patterns on an emulator, so those keep their mockups).
+   The image is the app screen with the OS status bar cropped off, so it
+   sits under ScreenShell's themed status bar like every other screen. */
+export function ScreenHomeReal() {
+  return (
+    <ScreenShell pad={false}>
+      <Image
+        src="/demo/home.png"
+        width={1080}
+        height={2244}
+        alt="The Bully League home screen"
+        className="block h-auto w-full"
+        priority
+      />
+    </ScreenShell>
+  );
+}
 
 /* Faithful, on-brand mockups of the app's key screens. Static (no backend)
    and built in the Comedy Night theme rather than using real screenshots,
@@ -428,7 +450,7 @@ export type DemoScreen = {
 };
 
 export const DEMO_SCREENS: DemoScreen[] = [
-  { id: "home", label: "Home", tagline: "Your rank, your quests, and one button to start.", render: () => <ScreenHome /> },
+  { id: "home", label: "Home", tagline: "Your rank, your quests, and one button to start.", render: () => <ScreenHomeReal /> },
   { id: "prematch", label: "Pre-match", tagline: "Camera and mic check before you go live.", render: () => <ScreenPreMatch /> },
   { id: "opponent", label: "Opponent", tagline: "Study your opponent. Load up on ammo.", render: () => <ScreenOpponent /> },
   { id: "battle", label: "Battle", tagline: "Three rounds. One mic at a time. No mercy.", render: () => <ScreenBattle /> },
