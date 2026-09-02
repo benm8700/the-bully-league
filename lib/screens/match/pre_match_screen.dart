@@ -38,6 +38,7 @@ class PreMatchScreen extends StatefulWidget {
     required this.mode,
     this.tournamentId,
     this.challengeMatchId,
+    this.climbPairing,
   });
 
   /// Set when this check precedes an already-agreed FRIEND battle. Like a
@@ -45,6 +46,11 @@ class PreMatchScreen extends StatefulWidget {
   /// already named - so this goes straight to the bio reveal for that
   /// match rather than to matchmaking.
   final String? challengeMatchId;
+
+  /// Set when this check precedes a CLIMB match. climbPoll already handed the
+  /// pairing over, so after the check we go straight to the bio reveal for it
+  /// - no fetch, no queue.
+  final MatchPairing? climbPairing;
 
   /// Set when this check precedes a TOURNAMENT match. The pairing is
   /// already decided by the bracket, so there is no queue to join - the
@@ -67,7 +73,24 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
   bool _permissionDenied = false;
   String? _error;
 
-  static const _micThreshold = 15; // out of 255
+  /// Loudest level seen so far (0-255). Verification is peak-held rather than
+  /// judged on the instantaneous value: speech is bursty, so a single clear
+  /// syllable should pass and stay passed. Without this, a real user could
+  /// talk, watch the meter twitch, and never trip the gate - which happened
+  /// on a device (2026-09-01).
+  int _micPeak = 0;
+
+  /// The level a clear voice must reach. Lowered from 15 to 10: 15 only
+  /// tripped for loud/close speech, so quieter rooms/phones-at-arms-length
+  /// never crossed it. 10 is still well above the idle noise floor (~2-3),
+  /// so a dead or muted mic still won't pass.
+  static const _micThreshold = 10; // out of 255
+
+  /// The meter fills relative to this, NOT to 255 - at /255 normal speech
+  /// (~10-40) fills only a few percent and the bar looks frozen, which is
+  /// most of why the check felt broken. /45 makes speech visibly move the bar
+  /// and cross the target marker.
+  static const _micMeterReference = 45.0;
 
   @override
   void initState() {
@@ -121,9 +144,12 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
 
   void _onAudioLevel() {
     if (_micVerified) return;
-    if (_videoCallService.localAudioLevel.value >= _micThreshold) {
-      setState(() => _micVerified = true);
-    }
+    final level = _videoCallService.localAudioLevel.value;
+    if (level <= _micPeak) return;
+    setState(() {
+      _micPeak = level;
+      if (_micPeak >= _micThreshold) _micVerified = true;
+    });
   }
 
   @override
@@ -150,6 +176,17 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     if (!mounted) return;
     final tournamentId = widget.tournamentId;
     final challengeMatchId = widget.challengeMatchId;
+
+    // Climb match: the pairing is already in hand, so straight to the bio
+    // reveal (the intro + warmup + battle flow) like any other named matchup.
+    if (widget.climbPairing != null) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => BioRevealScreen(pairing: widget.climbPairing!),
+        ),
+      );
+      return;
+    }
 
     if (challengeMatchId != null) {
       // The pairing already exists - fetch it and hand off to the same bio
@@ -240,7 +277,13 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
             // Ready button falls off the bottom entirely, which strands
             // someone one tap short of a match with no way to reach it.
             // Seen live as a 28px overflow on a 320x640 emulator.
-            padding: const EdgeInsets.all(16),
+            //
+            // The bottom padding includes the system gesture inset so the
+            // Ready / skip-mic buttons clear the home-gesture bar - without
+            // it, on a gesture-nav phone a tap on the bottom button triggers
+            // the launcher instead (found on a real S22, 2026-09-01).
+            padding: EdgeInsets.fromLTRB(
+                16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -270,7 +313,11 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Text(_micVerified ? 'Find an Opponent' : 'Say something to test your mic...'),
+                      : Text(_micVerified
+                          ? 'Find an Opponent'
+                          : _micPeak > 2
+                              ? 'Almost - a little louder'
+                              : 'Say something to test your mic...'),
                 ),
                 if (kDebugMode && !_micVerified)
                   TextButton(
@@ -289,25 +336,53 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     return ValueListenableBuilder<int>(
       valueListenable: _videoCallService.localAudioLevel,
       builder: (context, level, _) {
-        final fraction = (level / 255).clamp(0.0, 1.0);
+        final scheme = Theme.of(context).colorScheme;
+        // Scaled to the reference, not 255, so speech visibly moves the bar.
+        final fraction = (level / _micMeterReference).clamp(0.0, 1.0);
+        final target = (_micThreshold / _micMeterReference).clamp(0.0, 1.0);
+        // Brass when verified, a dimmer brass while your voice is registering
+        // (so the movement reads as "it hears me"), grey at rest.
+        final fillColor = _micVerified
+            ? context.palette.accent
+            : _micPeak > 2
+                ? context.palette.accent.withValues(alpha: 0.6)
+                : scheme.outline;
         return Row(
           children: [
             Icon(
               _micVerified ? Icons.mic : Icons.mic_none,
-              // Brass, because brass already means LIVE - and a mic
-              // that is registering your voice is exactly that. The
-              // green here was the only green in the app, and it sat
-              // badly in a warm room.
-              color: _micVerified ? context.palette.accent : Theme.of(context).colorScheme.outline,
+              color: _micVerified ? context.palette.accent : scheme.outline,
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: fraction,
-                  minHeight: 8,
-                  color: _micVerified ? context.palette.accent : Theme.of(context).colorScheme.outline,
+              child: SizedBox(
+                height: 10,
+                child: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(5),
+                      child: LinearProgressIndicator(
+                        value: fraction,
+                        minHeight: 10,
+                        backgroundColor: scheme.surfaceContainerHighest,
+                        color: fillColor,
+                      ),
+                    ),
+                    // The target marker: fill past this line to pass. Gives
+                    // the user a visible goal instead of a mystery threshold.
+                    if (!_micVerified)
+                      FractionallySizedBox(
+                        widthFactor: target,
+                        alignment: Alignment.centerLeft,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Container(
+                            width: 2,
+                            color: scheme.onSurface.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),

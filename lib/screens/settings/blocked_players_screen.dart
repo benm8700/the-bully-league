@@ -1,6 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/empty_state.dart';
+
 /// The people this player has blocked, and the way to undo it.
 ///
 /// Blocking without this screen would be a ONE-WAY DOOR: matchmaking and
@@ -87,17 +89,12 @@ class _BlockedPlayersScreenState extends State<BlockedPlayersScreen> {
                   ),
                 Expanded(
                   child: _players.isEmpty
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(32),
-                            child: Text(
-                              "You haven't blocked anyone.\n\n"
-                              "Blocking is private - the other person is "
+                      ? const EmptyState(
+                          icon: Icons.block_outlined,
+                          title: "You haven't blocked anyone",
+                          message: 'Blocking is private - the other person is '
                               'never told, and it only means the two of you '
                               'are never paired again.',
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
                         )
                       : ListView.builder(
                           itemCount: _players.length,

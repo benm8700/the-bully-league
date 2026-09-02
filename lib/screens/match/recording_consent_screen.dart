@@ -48,9 +48,8 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
                     'You consent to being recorded, on video and audio, for this match.',
                   ),
                   const _ConsentBullet(
-                    'If this is a ranked or tournament match, the recording may be posted '
-                    'publicly on The Bully League\'s website or social media if it\'s '
-                    'selected as a highlight.',
+                    'The recording may be posted publicly on The Bully League\'s '
+                    'website or social media if it\'s selected as a highlight.',
                   ),
                   const _ConsentBullet(
                     'The raw recording is kept for a limited time (see Privacy Policy) '
@@ -60,7 +59,13 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
               ),
             ),
           ),
-          Padding(
+          // SafeArea(bottom) keeps the buttons clear of the system gesture
+          // bar - without it, on a gesture-nav phone the "I Agree" / Decline
+          // row sits inside the home-gesture inset and taps hit the launcher
+          // instead (found on a real S22, 2026-09-01).
+          SafeArea(
+            top: false,
+            child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -92,6 +97,7 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
                 ),
               ],
             ),
+          ),
           ),
         ],
       ),

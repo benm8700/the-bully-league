@@ -1,9 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../app.dart';
 import '../../theme/app_theme.dart';
 
 import '../../widgets/laugh_meter.dart';
@@ -24,8 +25,7 @@ import '../friends/challenge_screen.dart';
 import '../practice/solo_practice_screen.dart';
 import '../settings/notification_settings_screen.dart';
 import '../support/support_screen.dart';
-import '../directory/player_search_screen.dart';
-import '../tournament/tournament_list_screen.dart';
+import '../info/rules_screen.dart';
 import '../vote/finalize_test_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -39,25 +39,6 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('The Bully League'),
         actions: [
-          // DEV-ONLY theme picker. Cycles the five candidate directions
-          // in the running app so they can be judged live rather than
-          // in five separate builds. Shows the current direction's name
-          // in a snackbar on each tap. Remove once a direction is chosen.
-          IconButton(
-            icon: const Icon(Icons.palette_outlined),
-            tooltip: 'Cycle design (dev)',
-            onPressed: () {
-              final i = kThemeIds.indexOf(kActiveTheme.value);
-              final next = kThemeIds[(i + 1) % kThemeIds.length];
-              kActiveTheme.value = next;
-              ScaffoldMessenger.of(context)
-                ..hideCurrentSnackBar()
-                ..showSnackBar(SnackBar(
-                  duration: const Duration(seconds: 2),
-                  content: Text('Design: ${appTheme(next).extension<AppPalette>()!.name}'),
-                ));
-            },
-          ),
           // The help icon is where people look when they are confused, so
           // it offers both things a confused person might want: a reminder
           // of how a battle actually works, and a way to reach a human.
@@ -146,77 +127,45 @@ class HomeScreen extends StatelessWidget {
                         style: Theme.of(context).textTheme.labelSmall,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     if (uid != null) _RankBadge(uid: uid),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 18),
                     // Anything urgent stays at the very top: a match
                     // waiting, or somebody challenging you.
                     const _ActiveMatchBanner(),
                     const _IncomingChallengeBanner(),
                     const _TrialStatus(),
-                    const SizedBox(height: 4),
-                    // Ranked is available immediately - the unlock gate is
-                    // gone (see CLAUDE.md's Modes section). The tutorial
-                    // already covers the mechanics, and under the
-                    // monetization model a free player's only battling is
-                    // ranked during the window, so a practice-first gate
-                    // would lock them out of the one thing they get.
+                    const SizedBox(height: 8),
+                    // THE HEADLINE: Sixes and Sevens IS the nightly
+                    // tournament (CLAUDE.md), so it leads - prestige and
+                    // prizes live here, and it is where everyone is pointed
+                    // first. Tapping it goes to the tournament, where
+                    // check-in lives.
+                    const EventWindowBanner(),
+                    const SizedBox(height: 16),
+                    // The primary action sits DIRECTLY UNDER the headline so
+                    // it is always above the fold - even on a short real phone
+                    // (the layout was tuned on a taller emulator), and even
+                    // with the live-cue bar pushing content down during the
+                    // window. This is why the quests + points/XP bar moved
+                    // BELOW it: the CTA being visible without scrolling beats
+                    // the XP bar being above the fold.
                     FilledButton(
                       onPressed: () => _startMatch(context, 'ranked'),
-                      child: const Text('Find Ranked Match'),
+                      // "Roast a Stranger": names exactly what the app is (you
+                      // roast a random stranger), which the developer judged
+                      // reads better for the app's identity than "Roast Someone
+                      // Now" / "Find Opponent". "Find" read like browsing a
+                      // list rather than doing something.
+                      child: const Text('Roast a Stranger'),
                     ),
-                    // Ranked is the primary action and Practice is
-                    // deliberately quieter. Everything durable lives in
-                    // ranked - it is the only recorded mode, so the only
-                    // one producing clips, feed content and a ladder
-                    // position - and offering both as equal siblings split
-                    // an already-thin pool across two queues.
-                    //
-                    // Named "Practice" rather than "Exhibition" because
-                    // the people who need it are new, and "exhibition"
-                    // tells them nothing about what it is for. The
-                    // internal mode id stays `exhibition`: renaming that
-                    // would orphan every existing queue entry, match
-                    // document and unlock counter.
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () => _startMatch(context, 'exhibition'),
-                      child: const Text('Practice instead'),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: Text(
-                        // Three lines cut to one. Practice is the quiet
-                        // option and it was carrying more copy than the
-                        // primary action.
-                        'Unranked, and never recorded.',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    // WHAT IS ON TODAY, below the thing the screen is
-                    // for. The window, the quests and the progress toward
-                    // a clip are all context for battling - they were
-                    // sitting above the battle button, so the app's one
-                    // job was the sixth thing on the screen.
-                    // GROUPED BY PROXIMITY, deliberately. These three are
-                    // one thought - what is on today - and each can fail
-                    // to load independently: the window reads a config
-                    // document, the quests and the balance each read the
-                    // backend. When the quests went missing, the points
-                    // progress was left floating between a card and a
-                    // button, belonging to neither.
-                    //
-                    // Tight spacing inside the group and a generous gap
-                    // plus a rule after it means the survivors still read
-                    // as a section however many of them render.
-                    const EventWindowBanner(),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 22),
+                    // Daily progress - the quests and the points/clip (XP)
+                    // bar - sits just under the primary action.
                     const DailyQuests(),
                     const SizedBox(height: 4),
                     if (uid != null) _PointsBalanceForUser(uid: uid),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 24),
                     // Everything below is navigation rather than the
                     // day's business, and the rule says so without a
                     // heading nobody would read.
@@ -225,9 +174,17 @@ class HomeScreen extends StatelessWidget {
                       child: Divider(),
                     ),
                     const SizedBox(height: 20),
-                    // Sits with the battle actions rather than under
-                    // "Find a Player", because it IS a way to start a
-                    // battle - and with a thin pool it is the most
+                    // Practice-vs-a-stranger (the `exhibition` matchmaking
+                    // mode) is gone from Home, collapsed into SOLO practice
+                    // (2026-08-31): less is better, and the two real draws are
+                    // the nightly tournament and Roast Someone Now. Warming up
+                    // is a solo activity anyway, and solo practice still lives
+                    // where it is actually wanted - the matchmaking screen
+                    // offers "Warm up solo instead" for the empty-queue case.
+                    // Battle a friend leads the navigation trio now.
+                    //
+                    // Sits with the battle actions because it IS a way to
+                    // start a battle - and with a thin pool it is the most
                     // reliable one there is.
                     OutlinedButton.icon(
                       onPressed: () => Navigator.of(context).push(
@@ -239,21 +196,12 @@ class HomeScreen extends StatelessWidget {
                           size: 18),
                       label: const Text('Battle a friend'),
                     ),
-                    const SizedBox(height: 12),
-                    // Quieter still than Practice, and free at every tier
-                    // because it costs the platform nothing - no channel is
-                    // joined, so no Agora minutes are billed. Its real job
-                    // is the empty-pool case: someone who opens the app when
-                    // nobody is online needs something to do that is not a
-                    // consolation prize.
-                    TextButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const SoloPracticeScreen(),
-                        ),
-                      ),
-                      child: const Text('Warm up solo'),
-                    ),
+                    // Solo practice is no longer offered here - Home is for
+                    // battling and the day's business, not warm-ups. It
+                    // still lives where it is actually wanted: the
+                    // matchmaking screen offers "Warm up solo instead" for
+                    // the empty-queue case, which is its real job.
+                    //
                     // Judging, My Battles, Ranks and Profile are bottom-nav
                     // destinations now (see MainShell), so they are
                     // deliberately not repeated here - a second route to
@@ -273,22 +221,20 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    OutlinedButton(
+                    // The "Tournaments" button was removed: Sixes and Sevens
+                    // IS the tournament, and its headline banner above already
+                    // taps through to the tournament list, so a separate
+                    // button was a second route to the same place. In its
+                    // spot, the rules - the one thing a new player wants and
+                    // had nowhere to find.
+                    OutlinedButton.icon(
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const PlayerSearchScreen(),
+                          builder: (_) => const RulesScreen(),
                         ),
                       ),
-                      child: const Text('Find a Player'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const TournamentListScreen(),
-                        ),
-                      ),
-                      child: const Text('Tournaments'),
+                      icon: const Icon(Icons.menu_book_outlined, size: 18),
+                      label: const Text('Rules'),
                     ),
                   ],
                 ),
@@ -397,13 +343,13 @@ class _TrialStatusState extends State<_TrialStatus> {
     if (e.state == 'trial') {
       if (daysLeft == null) return const SizedBox.shrink();
       message = daysLeft <= 1
-          ? 'Last day of full access. After that, ranked stays free during '
-              '$windowName.'
+          ? 'Last day of full access. After that, the nightly $windowName '
+              'tournament stays free.'
           : '$daysLeft days of full access left.';
     } else {
       message = e.inWindow
-          ? '$windowName is live - ranked is free right now.'
-          : 'Ranked is free every night during $windowName.';
+          ? '$windowName is live - jump in free right now.'
+          : 'Join the nightly $windowName tournament free, every night.';
     }
 
     return Padding(
@@ -492,12 +438,12 @@ class _PointsBalanceState extends State<_PointsBalance> {
       }
     }
 
-    // Currency gold, fixed across themes: money reads as money, and it is
+    // Currency has its own themed token (money reads as money) and it is
     // deliberately NOT the rank gauge's colour, so a glance tells the two
     // bars apart - the top one is your RANK climbing, this is your WALLET
     // filling toward things to buy.
-    const gold = Color(0xFFE7B24B);
-    const trackColor = Color(0xFF2A2620);
+    final gold = context.palette.currency;
+    final trackColor = Theme.of(context).colorScheme.surfaceContainerHighest;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 6, 28, 0),
@@ -624,7 +570,7 @@ Future<void> _showBlockedSheet(
           const SizedBox(height: 8),
           Text(
             entitlement.blockedMessage ??
-                'Ranked is free every night during $windowName. '
+                'The nightly $windowName tournament is free, every night. '
                     'Subscribe to battle whenever you like.',
             style: Theme.of(sheetContext).textTheme.bodyMedium,
           ),
@@ -635,7 +581,7 @@ Future<void> _showBlockedSheet(
                 Navigator.of(sheetContext).pop();
                 _startMatch(context, 'ranked');
               },
-              child: const Text('Battle ranked instead'),
+              child: const Text('Battle in the window instead'),
             )
           else ...[
             // THE HIGHEST-INTENT MOMENT IN THE APP for this offer: they
@@ -1040,6 +986,19 @@ class _RankBadge extends StatelessWidget {
         final rankTitle = data['rankTitle'] as String?;
         final wins = data['wins'] as num? ?? 0;
         final losses = data['losses'] as num? ?? 0;
+        final username = data['username'] as String? ?? 'You';
+        final points = data['points'] as num? ?? 0;
+
+        // The rank card is a COLLECTIBLE PLAYER CARD (the reason the Card
+        // look was chosen): tap it and it flips to a trophy back with your
+        // record, win rate and career points - the shareable face. Only
+        // the framed skins have a card to turn over; plainer skins show
+        // the meter as before. This is deliberately YOUR OWN card only -
+        // flipping other people's cards to reveal their stats/bio would
+        // walk back the "opponent rank hidden pre-match" and directory-
+        // privacy decisions (see CLAUDE.md).
+        final meter = LaughMeter(fallbackTitle: rankTitle);
+        final hasCard = context.palette.signature == 'frame';
         return Column(
           children: [
             // The Laugh Meter carries the rank title and the climb toward
@@ -1047,7 +1006,19 @@ class _RankBadge extends StatelessWidget {
             // ladder (2026-08-25) the Elo rating is hidden EVERYWHERE (it
             // only runs matchmaking underneath); it is no longer shown here
             // or in the profile stats.
-            LaughMeter(fallbackTitle: rankTitle),
+            if (hasCard)
+              _FlipRankCard(
+                front: meter,
+                back: _RankCardBack(
+                  username: username,
+                  title: rankTitle,
+                  wins: wins,
+                  losses: losses,
+                  points: points,
+                ),
+              )
+            else
+              meter,
             const SizedBox(height: 8),
             // ONE line, not three. This block had the record, a points
             // total and a second progress bar stacked under the gauge -
@@ -1077,6 +1048,194 @@ class _RankBadge extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Tap-to-flip wrapper for the rank card. Renders [front] and [back] as the
+/// two faces of one card that rotates around its vertical axis on tap.
+///
+/// Both faces are kept mounted in a Stack sized to the front, so the layout
+/// height never jumps mid-flip (the swap happens at 90 degrees, when the
+/// card is edge-on and invisible anyway). The back is pre-rotated 180 so it
+/// is not mirror-imaged once it faces the viewer.
+class _FlipRankCard extends StatefulWidget {
+  const _FlipRankCard({required this.front, required this.back});
+
+  final Widget front;
+  final Widget back;
+
+  @override
+  State<_FlipRankCard> createState() => _FlipRankCardState();
+}
+
+class _FlipRankCardState extends State<_FlipRankCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 460),
+  );
+  bool _showBack = false;
+
+  void _flip() {
+    setState(() => _showBack = !_showBack);
+    _showBack ? _c.forward() : _c.reverse();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return GestureDetector(
+      // Opaque so a tap anywhere over the card - including the transparent
+      // margin around the framed panel - turns it.
+      behavior: HitTestBehavior.opaque,
+      onTap: _flip,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) {
+          final t = _c.value;
+          final frontUp = t < 0.5;
+          return Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.0012)
+              ..rotateY(t * math.pi),
+            child: Stack(
+              children: [
+                Opacity(opacity: frontUp ? 1 : 0, child: widget.front),
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: frontUp ? 0 : 1,
+                    child: Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.identity()..rotateY(math.pi),
+                      child: widget.back,
+                    ),
+                  ),
+                ),
+                // A quiet hint that the card turns, shown only on the front.
+                if (frontUp)
+                  Positioned(
+                    top: 4,
+                    right: 28,
+                    child: Opacity(
+                      opacity: 0.45,
+                      child: Icon(Icons.flip_camera_android_outlined,
+                          size: 15, color: scheme.onSurface),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The back of the rank card - a shareable "player card" trophy face: the
+/// username, the earned title, and the three stats a player would screenshot
+/// (record, win rate, career points). Matches the LaughMeter's framed panel
+/// so it reads as the same card turned over.
+class _RankCardBack extends StatelessWidget {
+  const _RankCardBack({
+    required this.username,
+    required this.title,
+    required this.wins,
+    required this.losses,
+    required this.points,
+  });
+
+  final String username;
+  final String? title;
+  final num wins;
+  final num losses;
+  final num points;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final total = wins + losses;
+    final winRate = total > 0 ? ((wins / total) * 100).round() : 0;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.palette.accent, width: 1.5),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            context.palette.accent.withValues(alpha: 0.10),
+            scheme.surfaceContainer,
+            context.palette.gelB.withValues(alpha: 0.10),
+          ],
+        ),
+      ),
+      // FittedBox guards against overflow: the back is sized to match the
+      // front card (Positioned.fill in the flip), and the front's height
+      // varies with the rank title and the gauge state, so the trophy
+      // content scales down to fit rather than overflowing a tight box.
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                username,
+                style:
+                    text.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (title != null) ...[
+                const SizedBox(height: 2),
+                Text(title!,
+                    style: text.bodySmall, textAlign: TextAlign.center),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _stat(context, '$wins-$losses', 'RECORD'),
+                  const SizedBox(width: 22),
+                  _stat(context, '$winRate%', 'WIN RATE'),
+                  const SizedBox(width: 22),
+                  _stat(context, '$points', 'CAREER'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _stat(BuildContext context, String value, String label) {
+    final text = Theme.of(context).textTheme;
+    return Column(
+      children: [
+        Text(
+          value,
+          style: text.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: context.palette.accent,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(label,
+            style: text.bodySmall?.copyWith(letterSpacing: 0.5)),
+      ],
     );
   }
 }

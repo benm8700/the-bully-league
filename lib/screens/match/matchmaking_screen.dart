@@ -103,7 +103,10 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.mode == 'ranked' ? 'Ranked Match' : 'Practice Match'),
+        // Mode-neutral: this is the "searching" screen, and with practice
+        // collapsed into solo it is reached for real battles. "Ranked" is
+        // de-emphasised in the UI now, so the title says what is happening.
+        title: const Text('Finding an Opponent'),
       ),
       body: Center(
         child: Padding(

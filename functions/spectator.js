@@ -62,9 +62,16 @@ function spectateProblem({match, tournament, uid}) {
     return "you-are-playing";
   }
   if (match.mode !== "tournament") return "not-a-tournament-match";
-  if (!match.tournament?.tournamentId) return "not-a-tournament-match";
+  // A climb match carries its tournament id under `climb`, a bracket match
+  // under `tournament` - either makes it watchable.
+  if (!match.tournament?.tournamentId && !match.climb?.tournamentId) {
+    return "not-a-tournament-match";
+  }
   if (!tournament) return "tournament-not-found";
-  if (!isLive(tournament)) return "not-a-live-event";
+  // Both live-bracket and climb tournaments are live events you can watch.
+  if (tournament.format !== "live" && tournament.format !== "climb") {
+    return "not-a-live-event";
+  }
   if (tournament.status !== "in_progress") return "not-running";
   // Once a match is over there is nothing to watch live - the clip is the
   // way to see it, and that path has its own consent and takedown rules.
@@ -102,7 +109,8 @@ async function watchLiveMatch(auth, data, appCertificate) {
   const match = matchSnap.exists ? matchSnap.data() : null;
 
   let tournament = null;
-  const tournamentId = match?.tournament?.tournamentId;
+  const tournamentId = match?.tournament?.tournamentId ||
+    match?.climb?.tournamentId;
   if (tournamentId) {
     const tSnap = await db.collection("tournaments").doc(tournamentId).get();
     tournament = tSnap.exists ? tSnap.data() : null;

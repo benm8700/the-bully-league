@@ -210,6 +210,28 @@ async function enterQueue(auth, data) {
     throw new HttpsError("permission-denied", "This account can't join matches.");
   }
 
+  // MANDATORY intro video for REAL battles (ranked/tournament) - the ammo the
+  // opponent studies during the pre-match reveal, so a match where one side
+  // has nothing to work with is half the point missing. profile.introVideoUrl
+  // is only written after moderateIntroVideo approves the upload, so its mere
+  // presence IS the approved flag (same pattern as photoUrls).
+  //
+  // PRACTICE (exhibition) IS EXEMPT, by decision: it is a low-stakes warm-up
+  // and requiring a 60s recording to touch it is the wrong friction - a
+  // brand-new player should be able to practise first and record their intro
+  // when they are ready to battle for real. Ranked and tournament are never
+  // exempt (tournament is gated separately at check-in); friend battles do
+  // not run through this function and are exempt too.
+  if (mode !== "exhibition") {
+    const introVideoUrl = user.profile && user.profile.introVideoUrl;
+    if (typeof introVideoUrl !== "string" || introVideoUrl.length === 0) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Record your intro video before you battle - your opponent needs " +
+          "something to work with.");
+    }
+  }
+
   // The ranked unlock gate is GONE - Ranked is available immediately. The
   // tutorial already does its job (a real practice round with live turn
   // machinery, mandatory before a first match), and under the monetization

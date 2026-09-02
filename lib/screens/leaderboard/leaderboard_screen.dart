@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import 'hall_of_fame_tab.dart';
+import '../../widgets/empty_state.dart';
 
 /// The skill ladder - the in-app equivalent of the website homepage's
 /// "top 5 roasters" concept (CLAUDE.md's Website — Account & Tournament
@@ -19,8 +19,13 @@ import 'hall_of_fame_tab.dart';
 /// competition (position moves up and down); the title is the progression
 /// (only climbs). The two axes are different, so the XP TITLE is NOT shown
 /// on a row here - a #3 with a lower title than a #5 would look broken.
-/// Because GOAT is itself the top-5 by Elo, the top five rows of this board
-/// ARE the GOATs - the flame marks them.
+///
+/// The 🐐 marks ACTUAL GOATs - accounts whose authoritative rankTitle is
+/// "GOAT" (top-five by Elo AND career-XP eligible, per syncGoatTier), NOT
+/// merely whoever sits in the top five rows. So a top-five player who is not
+/// yet a GOAT shows their position number and no flame: "if they aren't
+/// GOATs they don't get the goat" (the developer's call, 2026-08-31). The
+/// board and the profile title therefore always agree on who a GOAT is.
 class LeaderboardScreen extends StatelessWidget {
   const LeaderboardScreen({super.key, this.embedded = false});
 
@@ -37,27 +42,15 @@ class LeaderboardScreen extends StatelessWidget {
         // outside it feel like a real distance to close.
         .limit(kBoardSize);
 
-    // Two things belong on this tab and they answer different questions:
-    // who is the best PLAYER, and what were the best BATTLES. Tabs rather
-    // than one scrolling page, because a hall of fame buried under fifty
-    // leaderboard rows would never be seen.
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Ranks'),
-          automaticallyImplyLeading: !embedded,
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Players'),
-              Tab(text: 'Hall of Fame'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [_buildPlayers(context, query), const HallOfFameTab()],
-        ),
+    // A single ranked list. The "Hall of Fame" tab was removed - Hall of
+    // Fame was dropped from the design (the GOAT top-five serves the
+    // fame/prestige purpose), so a second tab for it was dead UI.
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Ranks'),
+        automaticallyImplyLeading: !embedded,
       ),
+      body: _buildPlayers(context, query),
     );
   }
 
@@ -78,7 +71,12 @@ class LeaderboardScreen extends StatelessWidget {
         }
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) {
-          return const Center(child: Text('No ranked players yet.'));
+          return const EmptyState(
+            icon: Icons.leaderboard_outlined,
+            title: 'No one on the board yet',
+            message: 'Play a battle and you could be the first name '
+                'on the board.',
+          );
         }
         final me = FirebaseAuth.instance.currentUser?.uid;
         final onBoard = me != null && docs.any((d) => d.id == me);
@@ -99,6 +97,7 @@ class LeaderboardScreen extends StatelessWidget {
               wins: data['wins'] as num? ?? 0,
               losses: data['losses'] as num? ?? 0,
               isMe: docs[index].id == me,
+              isGoat: data['rankTitle'] == 'GOAT',
             );
           },
         );
@@ -122,6 +121,7 @@ class _Row extends StatelessWidget {
     required this.wins,
     required this.losses,
     this.isMe = false,
+    this.isGoat = false,
   });
 
   final int position;
@@ -130,26 +130,50 @@ class _Row extends StatelessWidget {
   final num losses;
   final bool isMe;
 
+  /// True only for an account that actually holds the GOAT title, not merely
+  /// one sitting in the top five rows.
+  final bool isGoat;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    // EVERY row shows its position number (a real ranking). An actual GOAT
+    // additionally carries the 🐐, so their row reads "1 🐐". Everyone else -
+    // including a top-five player who is not (yet) a GOAT - is just their
+    // number.
+    final marker = isGoat ? '$position 🐐' : '$position';
+    // DENSE single-line rows so the top ~25 fit without scrolling - the
+    // board's job is a scoreboard you can scan, not a few oversized cards.
     return ListTile(
+      dense: true,
+      visualDensity: const VisualDensity(vertical: -3),
+      minVerticalPadding: 4,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       tileColor: isMe ? scheme.primaryContainer.withValues(alpha: 0.35) : null,
-      leading: CircleAvatar(
+      leading: SizedBox(
+        width: 46,
         child: Text(
-          // The flame marks the GOAT five - and since this board is ordered
-          // by Elo, the top five ARE the GOATs. A viewer needs to see their
-          // own NUMBER, so it never replaces theirs.
-          position <= 5 && !isMe ? '🔥' : '$position',
-          style: const TextStyle(fontSize: 14),
+          marker,
+          textAlign: TextAlign.center,
+          style: text.titleMedium?.copyWith(
+              color: isGoat ? null : scheme.onSurfaceVariant),
         ),
       ),
       // A pure skill ladder: position, name, record. No Elo number (hidden)
       // and no XP title (a different axis that would look out of order on
       // an Elo-ranked board). The win-loss record is the one honest,
-      // Elo-free signal that belongs on a competitive board.
-      title: Text(isMe ? '$username (you)' : username),
-      subtitle: Text('$wins-$losses'),
+      // Elo-free signal that belongs on a competitive board - kept on the
+      // trailing edge so each row is a single scannable line.
+      title: Text(
+        isMe ? '$username (you)' : username,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: text.bodyLarge?.copyWith(
+            fontWeight: isMe ? FontWeight.bold : FontWeight.w500),
+      ),
+      trailing: Text('$wins-$losses',
+          style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant)),
     );
   }
 }
@@ -246,6 +270,7 @@ class _YourPositionState extends State<_YourPosition> {
           wins: me['wins'] as num? ?? 0,
           losses: me['losses'] as num? ?? 0,
           isMe: true,
+          isGoat: me['rankTitle'] == 'GOAT',
         ),
       ],
     );

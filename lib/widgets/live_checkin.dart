@@ -4,28 +4,36 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-/// Check-in for a LIVE tournament.
+/// The single "Join tonight's tournament" control for a LIVE tournament.
 ///
-/// WHY THIS IS A REAL GATE RATHER THAN A FORMALITY. A live bracket is
-/// built from whoever is actually present when it starts, not from
-/// everyone who entered - because building from all entrants and
-/// forfeiting the absentees produces a first round mostly of walkovers,
-/// which is not a show and wastes the time of the people who did turn up.
-/// So missing check-in means missing the tournament, and that has to be
-/// said plainly enough that nobody discovers it afterwards.
+/// ONE TAP, not two (2026-08-31). The old flow was enter-the-tournament then
+/// check-in-during-the-window, and it read as a trap: "I'm in tonight" looked
+/// like entry but did nothing toward the bracket, and a player could show up
+/// and not be in it. Now this button appears when the window opens (~15
+/// minutes before the start) and one tap enters AND checks you in, straight
+/// into the bracket that forms at the start.
 ///
-/// Renders nothing at all for an async tournament, which has no check-in.
+/// WHY IT IS STILL A REAL GATE. A live bracket is built from whoever joined
+/// by the time it starts, not from everyone who ever showed interest -
+/// building from absentees produces a first round of walkovers, which is not
+/// a show. So joining has a window, and missing it means missing the
+/// tournament - said plainly enough that nobody discovers it afterwards.
+///
+/// Renders nothing at all for an async tournament, which has no join window.
 class LiveCheckIn extends StatefulWidget {
   const LiveCheckIn({
     super.key,
     required this.tournamentId,
     required this.tournament,
-    required this.isEntrant,
+    required this.checkedIn,
   });
 
   final String tournamentId;
   final Map<String, dynamic> tournament;
-  final bool isEntrant;
+
+  /// Whether the signed-in player is already in tonight's bracket (their
+  /// entrant document records a check-in).
+  final bool checkedIn;
 
   @override
   State<LiveCheckIn> createState() => _LiveCheckInState();
@@ -34,7 +42,7 @@ class LiveCheckIn extends StatefulWidget {
 class _LiveCheckInState extends State<LiveCheckIn> {
   Timer? _ticker;
   bool _busy = false;
-  bool? _checkedIn;
+  bool _joined = false;
   String? _error;
 
   /// Mirrors DEFAULT_CHECKIN_LEAD_MS in functions/liveTournament.js. If
@@ -66,26 +74,28 @@ class _LiveCheckInState extends State<LiveCheckIn> {
 
   bool get _isLive => widget.tournament['format'] == 'live';
 
-  Future<void> _checkIn() async {
+  Future<void> _join() async {
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
+      // checkInToTournament now enters AND checks in for a free live
+      // tournament - one call for the one-tap Join.
       await FirebaseFunctions.instance
           .httpsCallable('checkInToTournament')
           .call<Map<String, dynamic>>({'tournamentId': widget.tournamentId});
       if (mounted) {
         setState(() {
           _busy = false;
-          _checkedIn = true;
+          _joined = true;
         });
       }
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
         setState(() {
           _busy = false;
-          _error = e.message ?? 'Could not check in.';
+          _error = e.message ?? 'Could not join.';
         });
       }
     }
@@ -118,9 +128,10 @@ class _LiveCheckInState extends State<LiveCheckIn> {
     final until = Duration(milliseconds: startsAt - now);
     final open = until.inMinutes < _leadMinutes && !until.isNegative;
     final started = until.isNegative;
+    final inBracket = widget.checkedIn || _joined;
 
     return Card(
-      color: open ? scheme.primaryContainer : null,
+      color: (open && !inBracket) ? scheme.primaryContainer : null,
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
@@ -134,47 +145,48 @@ class _LiveCheckInState extends State<LiveCheckIn> {
               ],
             ),
             const SizedBox(height: 6),
-            Text(
-              // Seen on a device: telling somebody to "check in now" while
-              // the only button on screen says Join is a small
-              // contradiction, and small contradictions are what make an
-              // app feel unfinished. A non-entrant is told what they
-              // actually have to do first.
-              started
-                  ? 'Under way.'
-                  : !open
-                      ? 'Starts in ${_countdown(until)}. Check-in opens '
-                          '$_leadMinutes minutes before.'
-                      : widget.isEntrant
-                          ? 'Starts in ${_countdown(until)}. Check in now.'
-                          : 'Starts in ${_countdown(until)}. Join, then '
-                              'check in to play.',
-              style: text.bodyMedium,
-            ),
-            if (widget.isEntrant && !started) ...[
-              const SizedBox(height: 6),
+            // Already in the bracket - the same message whether they joined
+            // just now or the round has started.
+            if (inBracket)
+              Row(
+                children: [
+                  Icon(Icons.check_circle, size: 18, color: scheme.primary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      started
+                          ? 'You are in the bracket. Your match is coming up.'
+                          : 'You are in tonight\'s bracket. Sit tight - it '
+                              'kicks off in ${_countdown(until)}.',
+                      style: text.bodyMedium,
+                    ),
+                  ),
+                ],
+              )
+            else if (started)
+              // Missed it: the bracket is set and they are not in it.
               Text(
-                // The consequence, said before it happens rather than
-                // discovered afterwards.
-                'The bracket is built from whoever has checked in when it '
-                'starts. Miss it and you are not in it.',
-                style: text.bodySmall,
+                'The bracket is set. You can still find a one-on-one any time.',
+                style: text.bodyMedium,
+              )
+            else if (!open)
+              Text(
+                'Starts in ${_countdown(until)}. Join opens '
+                '$_leadMinutes minutes before.',
+                style: text.bodyMedium,
+              )
+            else ...[
+              // The window is open and they are not in yet: the single Join.
+              Text(
+                'Starts in ${_countdown(until)}. Tap Join to get in - the '
+                'bracket locks when it kicks off.',
+                style: text.bodyMedium,
               ),
               const SizedBox(height: 10),
-              if (_checkedIn == true)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.check_circle, size: 18, color: scheme.primary),
-                    const SizedBox(width: 6),
-                    Text('You are checked in', style: text.bodyMedium),
-                  ],
-                )
-              else
-                FilledButton(
-                  onPressed: (_busy || !open) ? null : _checkIn,
-                  child: Text(open ? 'Check in' : 'Check-in not open yet'),
-                ),
+              FilledButton(
+                onPressed: _busy ? null : _join,
+                child: const Text('Join tonight\'s tournament'),
+              ),
             ],
             if (_error != null) ...[
               const SizedBox(height: 8),

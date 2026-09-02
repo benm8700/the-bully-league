@@ -17,4 +17,10 @@ abstract class VisualModerationService {
   /// VideoCallService), which are never uploaded to Storage since they're
   /// ephemeral moderation checks, not content anyone needs to keep.
   Future<String?> checkImageBytes(Uint8List jpegBytes);
+
+  /// Returns null if the already-uploaded intro video at [storagePath]
+  /// passes moderation, or a human-readable rejection reason if it doesn't.
+  /// The server samples frames with ffmpeg and runs SafeSearch on each -
+  /// the mandatory "tell me about yourself" video (User Profile System).
+  Future<String?> checkVideo(String storagePath);
 }

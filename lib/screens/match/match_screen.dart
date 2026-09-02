@@ -46,7 +46,7 @@ class MatchScreen extends StatefulWidget {
   State<MatchScreen> createState() => _MatchScreenState();
 }
 
-enum _Phase { waitingForOpponent, countdown, turn, verdict }
+enum _Phase { waitingForOpponent, warmup, countdown, turn, verdict }
 
 class _MatchScreenState extends State<MatchScreen> {
   // Timings come from the pairing, which carries what the server resolved
@@ -57,6 +57,7 @@ class _MatchScreenState extends State<MatchScreen> {
   MatchSettings get _settings => widget.pairing.settings;
   int get _roundLengthSeconds => _settings.roundLengthSeconds;
   int get _countdownSeconds => _settings.countdownSeconds;
+  int get _warmupSeconds => _settings.warmupSeconds;
   int get _totalTurns => _settings.totalTurns;
 
   late final VideoCallService _videoCallService;
@@ -334,6 +335,20 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   Future<void> _runHostSequence() async {
+    // The Warmup Round: the first live beat of the battle, both mics OPEN
+    // (unlike the turns), for open banter / a staredown before round 1. It
+    // is inside the recorded battle channel, so it costs ~1 extra
+    // participant-minute and is captured + shown to spectators as pre-fight
+    // hype. Skipped only if the config sets it to 0. No active player and no
+    // early-end: it is a fixed shared beat.
+    if (_warmupSeconds > 0 && !_violationEnded) {
+      await _hostAdvance(
+        phase: _Phase.warmup,
+        turnIndex: -1,
+        activeUid: null,
+        duration: _warmupSeconds,
+      );
+    }
     for (var i = 0; i < _totalTurns; i++) {
       if (_violationEnded) return;
       final activeUid = (i.isEven) ? _myUid! : _opponentUid!;
@@ -417,6 +432,9 @@ class _MatchScreenState extends State<MatchScreen> {
     _startTicker(duration);
 
     switch (phase) {
+      case _Phase.warmup:
+        // Both mics open - the one beat where the two players talk freely.
+        _videoCallService.muteLocalAudio(false);
       case _Phase.turn:
         _videoCallService.muteLocalAudio(activeUid != _myUid);
       case _Phase.verdict:
@@ -539,9 +557,56 @@ class _MatchScreenState extends State<MatchScreen> {
             child: _videoCallService.localVideoView(),
           ),
         ),
+        if (_phase == _Phase.warmup) _buildWarmupOverlay(),
         if (_phase == _Phase.countdown) _buildCountdownOverlay(),
         if (_phase == _Phase.turn) _buildTurnOverlay(),
       ],
+    );
+  }
+
+  /// The Warmup Round banner. Deliberately NON-blocking (a top pill, not a
+  /// full-screen blackout like the countdown) - both players are live on
+  /// camera for the staredown/banter, so blacking the video out would
+  /// defeat the point. States that both mics are open, since that is the one
+  /// beat where that is true.
+  Widget _buildWarmupOverlay() {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.local_fire_department,
+                      color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Warmup Round · ${_secondsRemaining}s',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'Both mics are open - loosen up',
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

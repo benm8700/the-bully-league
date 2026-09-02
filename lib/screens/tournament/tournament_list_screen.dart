@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/admin_only.dart';
+import '../../widgets/empty_state.dart';
 import 'tournament_detail_screen.dart';
 
 /// Browse tournaments (Build Order step 8). Real tournament creation is
@@ -78,7 +79,18 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
           }
           final docs = snapshot.data!.docs;
           if (docs.isEmpty) {
-            return const Center(child: Text('No tournaments yet.'));
+            // The nightly tournament is auto-created shortly before the
+            // evening window, so off-hours there is genuinely nothing here.
+            // Point people at the Home countdown (which carries the real,
+            // config-driven time) rather than hardcoding a time/name that
+            // could drift from config.
+            return const EmptyState(
+              icon: Icons.emoji_events_outlined,
+              title: 'No tournament running right now',
+              message: 'The nightly tournament runs during the evening window. '
+                  'Check the countdown on Home - and tap "I\'m in tonight" so '
+                  'you do not miss it.',
+            );
           }
           return ListView.separated(
             padding: const EdgeInsets.symmetric(vertical: 8),

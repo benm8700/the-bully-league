@@ -96,7 +96,7 @@ class _FormCardState extends State<FormCard> {
       return _Section(
         title: 'Your form',
         child: Text(
-          'Play a ranked battle and your form starts here.',
+          'Play a battle and your form starts here.',
           style: text.bodySmall,
         ),
       );
@@ -409,15 +409,40 @@ class _UsernameCardState extends State<UsernameCard> {
   }
 
   Future<void> _load() async {
-    try {
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('getUsernameState')
-          .call<Map<String, dynamic>>();
-      if (mounted) setState(() => _state = result.data);
-    } catch (_) {
-      // Renders nothing. A profile that will not load its name control is
-      // still a working profile.
+    // Runs from initState. Because the Profile tab lives in MainShell's
+    // IndexedStack, this widget is built EAGERLY at login/signup (not when the
+    // tab is first opened) and NEVER re-inits. That exposed a real device bug
+    // (2026-09-01): right after signup this callable can win a race against
+    // setUsername and come back with username:null, and the null result was
+    // then cached for the whole session - showing a false "You have not picked
+    // one yet / Pick a username" to someone who just chose a name. A cold-start
+    // transient (Firebase Installations warming up) is the other way it fails.
+    // So retry until a real name arrives (or a bounded give-up for the genuine
+    // legacy username-less account), and only commit a null-name state at the
+    // end so the false control never flashes.
+    Map<String, dynamic>? last;
+    for (var attempt = 0; attempt < 5; attempt++) {
+      try {
+        final result = await FirebaseFunctions.instance
+            .httpsCallable('getUsernameState')
+            .call<Map<String, dynamic>>();
+        last = result.data;
+        final name = last['username'] as String?;
+        if (name != null && name.isNotEmpty) {
+          if (mounted) setState(() => _state = last);
+          return;
+        }
+      } catch (_) {
+        // Fall through to the backoff + retry.
+      }
+      if (!mounted) return;
+      if (attempt < 4) {
+        await Future.delayed(Duration(milliseconds: 500 * (1 << attempt)));
+      }
     }
+    // Retries exhausted: commit whatever we last saw. A genuinely name-less
+    // (legacy) account legitimately gets the "Pick a username" control here.
+    if (mounted && last != null) setState(() => _state = last);
   }
 
   Future<void> _change() async {

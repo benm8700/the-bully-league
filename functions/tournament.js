@@ -18,27 +18,57 @@ function nextPowerOfTwo(n) {
 }
 
 /**
- * Random seeding (CLAUDE.md's Bracket seeding decision) with byes for
- * non-power-of-2 entrant counts (CLAUDE.md's Bracket size decision - any
- * entrant count is allowed, not just 8/16/32).
- *
- * Byes and real entrants are NOT simply shuffled together into one slot
- * list and paired sequentially - that can randomly place two bye slots
- * in the same matchup (both players null), which has no one to advance.
- * byeCount is always < bracketSize / 2 (since entrantCount is always
- * more than half of the next power of two), so it's always POSSIBLE to
- * give every bye its own matchup - this just does that explicitly:
- * shuffle entrants, peel off the first `byeCount` as auto-advancing bye
- * matchups, pair the rest normally, then shuffle the matchup order so
- * byes aren't all clustered together in the bracket display.
+ * Fetches current Elo ratings for a list of player ids as `[{id, rating}]`,
+ * so bracket seeding can give byes to the strongest. A missing/deleted user
+ * or an unreadable rating falls back to the starting 1200 rather than
+ * throwing - a bracket must build even if one entrant's doc is gone.
  */
-function buildFirstRound(entrantIds) {
-  const shuffled = shuffle(entrantIds);
-  const bracketSize = nextPowerOfTwo(shuffled.length);
-  const byeCount = bracketSize - shuffled.length;
+async function ratingsFor(ids) {
+  if (ids.length === 0) return [];
+  const db = getFirestore();
+  const refs = ids.map((id) => db.collection("users").doc(id));
+  const snaps = await db.getAll(...refs);
+  const byId = {};
+  snaps.forEach((s) => {
+    byId[s.id] = Number(s.data() && s.data().rating) || 1200;
+  });
+  return ids.map((id) => ({id, rating: byId[id] || 1200}));
+}
 
-  const byePlayers = shuffled.slice(0, byeCount);
-  const pairedPlayers = shuffled.slice(byeCount);
+/**
+ * Builds round 1: byes go to the HIGHEST-Elo entrants (CLAUDE.md's Bracket
+ * size decision - any entrant count allowed; the developer's call is that
+ * the strongest player earns the first-round pass, ties broken arbitrarily),
+ * while the remaining players are still paired RANDOMLY (the matchups
+ * themselves stay unseeded).
+ *
+ * Takes `[{id, rating}]`, not bare ids, so bye selection can use rating.
+ * (Accepts bare id strings too, treating them as rating 0, for any legacy
+ * caller.)
+ *
+ * Byes and real entrants are NOT simply merged into one slot list and
+ * paired sequentially - that can put two bye slots in one matchup (both
+ * players null), which has no one to advance. byeCount is always <
+ * bracketSize / 2 (entrantCount is always more than half the next power of
+ * two), so every bye can get its own matchup - done explicitly here: take
+ * the top `byeCount` by rating as auto-advancing bye matchups, shuffle and
+ * pair the rest, then shuffle the matchup order so byes aren't clustered.
+ */
+function buildFirstRound(entrants) {
+  const normalized = entrants.map((e) =>
+    (typeof e === "string" ? {id: e, rating: 0} : e));
+  const bracketSize = nextPowerOfTwo(normalized.length);
+  const byeCount = bracketSize - normalized.length;
+
+  // Highest rating first; id as a deterministic arbitrary tiebreak so ties
+  // resolve consistently ("just pick one") rather than by array order.
+  const byRating = [...normalized].sort((a, b) =>
+    (b.rating - a.rating) ||
+    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const byePlayers = byRating.slice(0, byeCount).map((e) => e.id);
+  const byeSet = new Set(byePlayers);
+  const pairedPlayers = shuffle(
+      normalized.filter((e) => !byeSet.has(e.id)).map((e) => e.id));
 
   const matchups = byePlayers.map((playerId) => ({
     player1Id: playerId,
@@ -130,7 +160,7 @@ async function generateBracket(tournamentId) {
   // stalls the first time somebody loses interest.
   const {roundWindow} = require("./tournamentPlay");
   const firstRound = Object.assign(
-      {roundNumber: 1, matchups: buildFirstRound(entrantIds)},
+      {roundNumber: 1, matchups: buildFirstRound(await ratingsFor(entrantIds))},
       roundWindow(Date.now(), tournament.roundWindowHours));
   await tournamentRef.update({
     status: "in_progress",
@@ -313,5 +343,5 @@ async function recordTournamentResult(match, winnerId) {
 module.exports = {
   generateBracket, debugAdvanceRound, recordTournamentResult,
   applyResultToBracket, buildNextRound, isSettled, DEFAULT_MIN_ENTRANTS,
-  buildFirstRound,
+  buildFirstRound, ratingsFor,
 };

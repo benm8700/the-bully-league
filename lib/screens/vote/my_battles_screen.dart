@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/live_tally.dart';
+import '../../widgets/empty_state.dart';
 import '../battles/get_clip_sheet.dart';
 import '../settings/blocked_players_screen.dart';
 import '../moderation/clip_takedown_sheet.dart';
@@ -35,7 +36,7 @@ class MyBattlesScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My battles'),
+        title: const Text('My Battles'),
         automaticallyImplyLeading: !embedded,
       ),
       body: FutureBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
@@ -53,15 +54,11 @@ class MyBattlesScreen extends StatelessWidget {
           }
           final docs = snap.data ?? const [];
           if (docs.isEmpty) {
-            return const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(
-                child: Text(
-                  'No battles yet. Once you finish one, the crowd\'s verdict '
-                  'shows up here while it happens.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
+            return const EmptyState(
+              icon: Icons.sports_mma_outlined,
+              title: 'No battles yet',
+              message: 'Once you finish a battle, it shows up here so you can '
+                  'watch the crowd\'s verdict come in.',
             );
           }
 
@@ -237,6 +234,9 @@ class _MatchCard extends StatelessWidget {
                 player1Name: names[0],
                 player2Name: names[1],
                 closesAtMs: finalized ? null : closesAtMs,
+                // Compact: this card already frames it, and denser tallies
+                // mean more battles fit per page.
+                compact: true,
               ),
             ],
           ),

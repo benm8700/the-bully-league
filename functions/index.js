@@ -6,7 +6,8 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {finalizeMatch, VOTE_WINDOW_MS, voteWindowEndMs} = require("./matchFinalization");
 const {generateBracket, debugAdvanceRound, DEFAULT_MIN_ENTRANTS} = require("./tournament");
-const {moderateImage, moderateImageContent} = require("./visualModeration");
+const {moderateImage, moderateImageContent, moderateVideo} =
+  require("./visualModeration");
 const {generateToken, AGORA_APP_ID} = require("./agoraToken");
 const {onVoteCast} = require("./voteCount");
 const {onReactionWritten} = require("./reactions");
@@ -459,6 +460,32 @@ exports.startTournamentMatch = onCall((request) => {
   return startTournamentMatch(request.auth, request.data);
 });
 
+// The nightly "climb" tournament (rolling single-elimination). Join enters you
+// at 0 wins; poll pairs you with a same-win-count opponent, the same shape as
+// the matchmaking queue.
+exports.joinClimb = onCall((request) => {
+  const {joinClimb} = require("./climbPlay");
+  return joinClimb(request.auth, request.data);
+});
+
+exports.climbPoll = onCall((request) => {
+  const {climbPoll} = require("./climbPlay");
+  return climbPoll(request.auth, request.data);
+});
+
+// The climb's backstop: force-resolves the endgame, forfeits stale unplayed
+// matches so one no-show cannot freeze the ladder, and crowns the champion at
+// the window's end. Every minute because climb matches are short.
+exports.sweepClimb = onSchedule("every 1 minutes", async () => {
+  const {sweepClimb} = require("./climbPlay");
+  try {
+    const result = await sweepClimb();
+    if (result.swept > 0) console.log("sweepClimb:", JSON.stringify(result));
+  } catch (err) {
+    console.error("sweepClimb failed:", err);
+  }
+});
+
 /**
  * Closes rounds whose window has expired. Without this the window is
  * decoration and a bracket stalls the first time somebody loses interest.
@@ -700,6 +727,32 @@ exports.moderateMatchFrame = onCall(async (request) => {
   }
   return moderateImageContent(imageBase64);
 });
+
+/**
+ * Moderates the mandatory 60s "tell me about yourself" intro video (User
+ * Profile System). Downloads the uploaded file, samples frames with ffmpeg,
+ * and runs SafeSearch on each - so it needs more memory and time than an
+ * image check. Restricted to the caller's own uploads as defense in depth
+ * alongside storage.rules. Returns {approved} / {approved:false, reason};
+ * the client only writes profile.introVideoUrl once approved, exactly like
+ * photos.
+ */
+exports.moderateIntroVideo = onCall(
+    {memory: "1GiB", timeoutSeconds: 120},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Must be signed in.");
+      }
+      const {storagePath} = request.data || {};
+      if (!storagePath) {
+        throw new HttpsError("invalid-argument", "storagePath is required.");
+      }
+      if (!storagePath.startsWith(`profile_videos/${request.auth.uid}/`)) {
+        throw new HttpsError(
+            "permission-denied", "Can only moderate your own video.");
+      }
+      return moderateVideo(storagePath);
+    });
 
 /**
  * Generates a real, signed Agora RTC token server-side (functions/
@@ -1170,6 +1223,26 @@ exports.advanceLiveTournaments = onSchedule("every 1 minutes", async () => {
     }
   } catch (err) {
     console.error("advanceLiveTournaments failed:", err);
+  }
+});
+
+/**
+ * Auto-creates tonight's Sixes and Sevens live tournament ahead of the
+ * window so check-in can open at 6:00 (bracket kicks off at 6:15). Polled
+ * rather than pinned to a 6pm cron because the window hours live in Firestore
+ * and are provisional - a cron fixed at deploy time would keep firing at the
+ * old hour after a retune. Idempotent via a Pacific-day marker, so the extra
+ * polls are no-ops.
+ */
+exports.createDailyTournament = onSchedule("every 15 minutes", async () => {
+  const {ensureDailyTournament} = require("./dailyTournament");
+  try {
+    const result = await ensureDailyTournament();
+    if (result.created) {
+      console.log("createDailyTournament:", JSON.stringify(result));
+    }
+  } catch (err) {
+    console.error("createDailyTournament failed:", err);
   }
 });
 

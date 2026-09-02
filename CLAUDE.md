@@ -535,6 +535,39 @@ Goal: give roasters concrete material about a stranger instead of relying purely
 - **Still worth watching**: these are list prices for the HD band. Anything that raises recording resolution (bigger composite canvas, higher-quality tiles) moves it to the Full HD band and more than doubles the recording line. Re-check rates before any real marketing spend, since they're vendor-set and can change.
 
 ## Clip Takedown & Participant Objection — DECIDED AND BUILT
+
+**TAKEDOWN SHEET REDESIGNED (2026-08-31) into a GATED 3-STEP HARM FLOW +
+narrowed grounds.** The developer wanted fewer options and a speed bump so
+the casual "delete my loss" impulse stops before the harm channel even
+appears (`ClipTakedownSheet`, `clip_takedown_sheet.dart`):
+1. **Gate** - "Is this clip causing you harm?" with the load-bearing line
+   (taking it down does not change the result; getting roasted is the point).
+   Yes -> step 2; "No, never mind" closes. No harm options are shown yet.
+2. **Comedy reminder** - "The Bully League is a comedy platform. Making fun of
+   people - even brutally - is the entire purpose, and a joke at your expense,
+   however harsh, is not harm." Continue -> step 3.
+3. **Narrowed grounds** - "Does the clip do one of these?" Four SERIOUS
+   grounds only (harassment beyond the roast, doxxing, a false factual claim,
+   sexual/threatening/minor). The vaguer "brigading" and catch-all "other"
+   were removed; selecting one files the same `requestTakedown` harm channel.
+- **It is a SPEED BUMP, not an obstruction** - deliberately, because the harm
+  channel must stay accessible (Apple 1.2, GDPR consent-withdrawal). Two taps
+  is not obstruction; it just filters frivolous deletes. The broad Apple-1.2
+  flag mechanism is the general report button on every clip, untouched.
+- **Every button in the flow is PLAIN and neutral** (outlined, neutral
+  colour for actions; muted text for cancel) - NO highlighted pink CTA
+  anywhere. A prominent "report" button reads as the app inviting reports,
+  which is the opposite of the intent (`_plainAction` / `_plainCancel`).
+- **The pre-publication PREFERENCE opt-out survives but is now a quiet
+  secondary link** on the gate screen (only while unpublished + allowance
+  left) - clips are distribution, so removal is no longer promoted (the
+  developer separately had the "you can remove your own clip" line pulled
+  from the Rules screen for the same reason).
+- Verified on device through all three steps; the backend (`getTakedownOptions`
+  / `requestTakedown`) is unchanged.
+
+Original decision follows.
+
 Raised by the developer: what protects someone who is unhappy that their match footage is public — because they were offended, feel defamed, or are receiving hate. Audit found the **takedown machinery exists but no user-facing path to it does**: `publishHighlight` genuinely revokes access (clearing the Storage token makes every issued URL fail), but report categories are all about the opponent's *conduct*, support categories are billing/bug/account, nothing checks for an objection before publishing, and **nobody is told when their clip goes public** — so they cannot object to something they don't know exists.
 
 **TWO CHANNELS, deliberately behaving differently.** This split is the core of the design and everything else follows from it:
@@ -862,6 +895,1020 @@ AdminOnly or remove); the real unlock grant could later move server-side
 into `syncGoatTier` for tamper-resistance, though cosmetics don't strictly
 need it. NEXT: take Card to full polish across every screen (feed cards,
 vote screen, the collectible-card language).
+
+## Flippable player card on Home — DECIDED AND BUILT (2026-09-01)
+
+The Home rank card is now a **tap-to-flip collectible player card**: tap it
+and it rotates around its vertical axis to a **trophy back** showing the
+username, the earned title, and the three stats worth screenshotting -
+**record, win rate, career points**. Tap again to flip back. This is the
+payoff of choosing the Card look in the first place (a shareable "player
+card" trophy), so the flip makes the metaphor real rather than decorative.
+- **Built** in `lib/screens/home/home_screen.dart`: `_FlipRankCard` (a
+  `Transform`/`rotateY` flip with both faces kept mounted in a Stack sized to
+  the front, so the layout never jumps mid-flip - the swap happens at 90°
+  when the card is edge-on and invisible) and `_RankCardBack` (the trophy
+  face, matching the LaughMeter's framed panel so it reads as the same card
+  turned over). A quiet flip icon sits in the front card's top-right corner
+  as the affordance; a `FittedBox(scaleDown)` guards the back against overflow
+  since the front's height varies with the rank title and gauge state.
+- **Only the framed skins get the flip** (`context.palette.signature ==
+  'frame'`, which the Comedy Night base is); plainer skins show the meter as
+  before. Verified on a device: tap flips to the trophy back, tap flips back,
+  no overflow.
+- **DELIBERATELY YOUR OWN CARD ONLY.** The developer asked whether other
+  people's cards should flip the same way to reveal their bio/stats. They
+  should NOT, at least not to reveal the same things: opponent rank/rating is
+  hidden pre-match by design (anti-sandbagging), and the player directory
+  deliberately exposes only name/face/rank - NOT hometown/profession/interests
+  /ammo - for harassment/privacy reasons. So for OTHERS, a card back should be
+  a **public trophy view** (username, record, and title/rank where it is
+  already shown), never the private profile - the one exception being the
+  **pre-match bio reveal**, where showing their "ammo" side is the whole
+  point and is consented. Not built for other people's cards; this is the
+  guardrail for whenever it is.
+
+## Brand + Home restructure (2026-08-31) — DECIDED AND BUILT
+
+A batch of the developer's decisions, mostly built and verified on device.
+
+**BASE BRAND IS NOW "COMEDY NIGHT," NOT AURORA/CARD.** After a five-way
+brand-theme exploration (a temporary dev-only Theme Preview menu on Home,
+`kBrandPreviewIds` in `app_theme.dart`), the developer chose the **Comedy
+Night** direction as the everyday base: neutral charcoal, a **toned-down
+crimson / hot-pink** primary CTA (the developer's tweak - moved off coral
+toward hot-pink but not neon: `#EA4C6D`), purple secondary, gold reward.
+`live` stays a TRUE red (`#FF3B47`) so "live/hot" and "primary action" read
+as two distinct signals rather than one. `kBaseSkin = 'comedyNight'` in
+`app.dart`; `kThemeIds = ['comedyNight','neon']`.
+- **The other explorations are SAVED, not deleted** (developer's call -
+  "maybe we will use in the future"): Card/Aurora, Electric Violet, Comedy
+  Club, and The Spotlight all remain as builders in `app_theme.dart`, still
+  reachable from the dev preview menu (`kBrandPreviewIds`). A legacy account
+  that had `equippedSkin: 'card'` now falls back to the base, because
+  `kEquippableSkins = {comedyNight, neon}` and anything else degrades to the
+  base rather than rendering a retired skin.
+- **Neon stays the earned GOAT prestige unlock**, unchanged.
+- **Semantic colour tokens added to `AppPalette`**: `live` / `reward` /
+  `currency` / `winner`, so colours have JOBS rather than one hue smeared
+  everywhere. The Home wallet bar (`currency`) and the event banner's live
+  fire icon (`live`) and 2x bolt (`reward`) now read from tokens.
+
+**NIGHTLIFE IS THE AUTOMATIC SIXES AND SEVENS SKIN — "the lights change at
+6."** During the window the WHOLE app switches to the Premium Nightlife
+look (navy-black, violet, champagne gold) for **everyone including
+spectators**, then reverts at 7. This is the developer's idea and it turns
+the one theme that was wrong as a permanent base (too Twitch/Discord as an
+everyday identity) into a perfect *event* signal - the app visibly becomes
+"the show" during prime time, reinforcing the ritual/scarcity the window is
+built on.
+- **It overrides EVERY skin, including an equipped prestige skin** - the
+  developer was explicit that everyone sees the same shift, so it is not a
+  per-user setting and the earned skin is only your *everyday* base.
+- **Built** as `kWindowSkin = 'nightlife'` plus `kEquippedSkin` (the user's
+  chosen skin) and `kWindowLive` notifiers, with `kActiveTheme` DERIVED:
+  `windowLive ? kWindowSkin : kEquippedSkin` (`wireActiveTheme()` in
+  `app.dart`). `WindowSkinController` (`lib/widgets/window_skin_controller.dart`),
+  mounted high in the signed-in tree, streams `config/eventWindow` and ticks
+  every 30s to keep `kWindowLive` current - the window is a wall-clock event
+  so a purely event-driven check would miss the 6pm boundary for someone on
+  an idle screen. A disabled/unreadable config never repaints the app.
+  **VERIFIED LIVE ON DEVICE**: temporarily forcing `config/eventWindow` open
+  (start 0, end 24) flipped the RUNNING app to Nightlife with no rebuild -
+  violet CTA, violet->magenta gauge, champagne-gold wallet, "Sixes and
+  Sevens is LIVE" banner - and restoring the real 18-19 hours reverted it to
+  Comedy Night within seconds, all driven by the config stream.
+
+**"TALENT" — DECIDED (verbiage, NOT a rank).** The developer wants the
+performing users to feel special, referred to as "Talent" the way the film
+industry calls actors "the Talent." It is a **role/showbiz flavour word,
+never a ladder rung** (that would break the one-status-ladder rule). Use it
+in the *performance* surfaces where the showbiz framing lands - "Tonight's
+Talent" (tournament lineup / spectator view), how the app addresses a
+performer, and the gifting/support copy ("support the Talent") - not
+everywhere the plumbing says "battler." NOT yet threaded into copy.
+
+**SIXES AND SEVENS IS THE DAILY TOURNAMENT — DECIDED, supersedes the
+"weekends only" live-tournament timing.** The nightly window becomes the
+daily tournament slot: putting the tournament where the crowd already is
+(peak concurrency) is exactly right, and it collapses two appointments into
+one (the developer's "not too many modes" instinct). **The tournament is the
+HEADLINE act, but one-off ranked stays available** - the developer's Q&A
+answer: "encourage everyone to join the tournament first and foremost, but
+allow people to find a ranked match if they want to, and make that less
+stressed in the design so people don't click on it." So the tournament
+becomes the prominent primary CTA on Home and **"Find Opponent" drops to a
+quiet secondary** - NOT YET BUILT, because there is no tournament CTA on
+Home yet and demoting the only battle button would leave Home with no
+prominent action. It happens in the tournament-at-window build. Occasional
+BIGGER special events (real cash) can still be scheduled on top later.
+- **Prizes: optional, developer's choice, none required at first.** Points
+  or coins prizes are legally clean today (skill contest, no cash regime);
+  cash ($1000 etc.) is the future switch that turns on the
+  geofencing/tax/processor machinery already documented. A daily FREE
+  tournament with a points prize (or no prize) is the shippable v1.
+- **PRIZE IDEA (developer's, worth keeping): the "best man" fly-out.** Find
+  a real-world roast-battle event, guarantee a top player a spot in the
+  physical battle, and **fly them out + hotel** - like sending our champion
+  to represent the app. Builds real loyalty to the app that made them. A
+  standout non-cash prize that doubles as marketing (a comedian the app sent
+  to a real stage is a story and a clip).
+- **This whole path depends on the live-tournament + spectator plumbing,
+  which has NEVER run with real people on real devices** - built and tested
+  against the backend, not battle-tested live. Do a controlled dry run
+  (developer + a couple of beta friends) before it is the nightly headline.
+
+**TOURNAMENT MECHANICS - ANSWERED (2026-08-31):**
+- **NO bracket size cap** (any entrant count). When byes are needed (count
+  not a power of two), the **highest-Elo player(s) get the bye(s)**; ties
+  broken deterministically ("just pick one"). **BUILT**: `buildFirstRound`
+  in `functions/tournament.js` now takes `[{id, rating}]` and seeds byes by
+  rating (remaining players still paired RANDOMLY); a `ratingsFor` helper
+  fetches Elo for both the async (`generateBracket`) and live
+  (`sweepLiveTournaments` start) paths, missing users falling back to 1200.
+  Deployed. 6 tests in `test/bracketByes.test.js`; bare-string entrants
+  still build a valid bracket (back-compat, rating 0), and the existing
+  tournament suites (12+20+17) stay green.
+- **Auto-created daily** (developer: "automatically").
+- **Prize v1: points prize or none** to start (subs get little from a points
+  prize, accepted); cash is the future switch.
+- **Dry run FIRST**, and for the first few beta nights a looser "start when
+  enough are here" grace rather than the hard 6:15 cutoff.
+- **Ranked ready-up is DELIBERATE - BUILT.** Readying up ends the reveal
+  early and forgoes the rest of the intro-study time, so a confirmation
+  dialog ("The battle starts the moment you are both ready... you will not
+  get more time to watch their intro") now stands between the "I'm Ready"
+  button and starting - it must be hard to skip your prep by accident
+  (`_confirmReady` in `bio_reveal_screen.dart`).
+- **Intro-video gate: friends EXEMPT** (friend battles do not go through
+  `enterQueue`, so already exempt); **tournaments REQUIRE it** - add the gate
+  at tournament join/check-in during the tournament build (NOT yet wired).
+- **"Best man" fly-out prize = FUTURE to-do only**, do not build now (recorded
+  above under prize ideas).
+
+**DAILY AUTO-TOURNAMENT - BACKEND BUILT + DEPLOYED (2026-08-31).**
+`functions/dailyTournament.js` auto-creates tonight's LIVE tournament ahead
+of the window so check-in opens at 6:00 and the bracket kicks off at 6:15.
+- **`createDailyTournament`** (scheduled every 15 min) polls rather than
+  using a 6pm cron, because the window hours live in Firestore and are
+  provisional - a fixed cron would keep firing at the old hour after a
+  retune. Idempotent via a Pacific-day marker (`stats/dailyTournament`,
+  claimed in a transaction before creating), so the extra polls are no-ops.
+- **`dailyTournamentPlan(nowMs, config)` is PURE and unit-tested** (8 tests
+  in `test/dailyTournament.test.js`, incl. the PST/PDT boundary): it computes
+  `startsAtMs` = 6:15pm Pacific of tonight's window day, only creates within
+  ~3h before check-in and before kickoff. Uses new shared helpers
+  `pacificOffsetMs` / `pacificWallClockToUtcMs` in `eventWindow.js` (ICU
+  longOffset, two-pass like the Dart client) so the wall-clock->UTC maths has
+  one definition.
+- **The created tournament**: `format:"live"`, `status:"open"`, `startsAtMs`,
+  `minEntrants: 2` (the FIRST-NIGHTS GRACE - runs as soon as ~2 are checked
+  in rather than demanding a full field; raise once there is volume),
+  `prizeType:"points"`, `prizeValue:0` (developer sets per night; 0 = no
+  prize), `createdBy:"auto"`, `eventDayKey`, and `createdAt` (so it is
+  visible in the client tournament list, which orders by it).
+- **Reuses the existing live-tournament machinery unchanged**: check-in
+  (`checkInToTournament`), the 6:15 bracket build with **Elo-bye seeding**
+  (already done), the per-minute `advanceLiveTournaments` sweep, live voting,
+  spectating. Nothing new there.
+- **INTRO-VIDEO GATE ADDED AT CHECK-IN** (`checkInToTournament`): no approved
+  intro -> refused. Check-in is where it belongs because the bracket is built
+  from who checked in. Friends stay exempt.
+- **VERIFIED**: 8 local plan tests + `ensureDailyTournament` run against real
+  Firestore off-window (returns `{created:false, reason:"too-early"}`, reads
+  config, no throw - the scheduled-job-throws bug class checked). Added to
+  `live/scheduledJobScan.js`'s coverage list.
+- **HOME TOURNAMENT HEADLINE - BUILT + device-verified.** The Sixes and
+  Sevens banner is now the Home HEADLINE (moved above the battle buttons),
+  reworded "The nightly tournament - win prestige & prizes" (reward-gold
+  tagline) and made tappable straight to the tournament list where check-in
+  lives. "Find Opponent" is DEMOTED to a quiet OUTLINED secondary labelled
+  "Find a one-on-one now" below it (the developer's "make ranked less
+  stressed so people don't click on it"); Practice stays quieter still.
+  Verified on device: banner leads, one-on-one is secondary, and the banner
+  taps through to Tournaments ("No tournaments yet" OFF the 3-6:15pm
+  auto-create window, a real tournament with check-in during it).
+- **COPY POLISH DONE:** the battle button under the tournament headline is a
+  solid **"Find Opponent"** FilledButton (brand pink) - after iterating: the
+  plain outlined version was too dark, the soft-tonal "Battle one-on-one" was
+  still too unnoticeable, so it landed on a solid noticeable button labelled
+  "Find Opponent". The tournament CARD above stays the headline by position +
+  size + gold tagline; this is the clear "battle now" action below it. The tutorial closing
+  line now calls Sixes and Sevens "the nightly tournament ... where the
+  prizes and prestige are". The daily push copy (`eventWindowPush.js`) frames
+  it as the tournament ("The nightly tournament is on/starting...", "The
+  tournament closes soon...") - deployed, 29 push tests still green. The
+  empty-tournaments state points at the Home countdown + "I'm in tonight"
+  instead of a bare "No tournaments yet".
+- **STILL TO DO:** the full live flow (create -> check-in -> bracket ->
+  battle with the 30s warmup -> live vote -> advance) has NEVER run with real
+  people - do the dry run before it is the nightly headline.
+
+**HOME DECLUTTERED (developer's call - "why do we need these things?").**
+`FilledButton` label **"Find Ranked Match" -> "Find Opponent"** (warmer,
+person-first; "ranked" is de-emphasised now the unlock gate is gone and
+rating is hidden). Removed from Home: the **"Unranked, and never recorded"**
+subtitle under Practice ("pointless and ugly"), **"Warm up solo"** (its real
+job is the empty-queue moment, where the matchmaking screen still offers
+"Warm up solo instead" - the feature is untouched), and **"Find a Player"**
+(the searchable directory duplicates "Battle a friend" at beta scale, and
+browsing a directory of a few people is pointless; `PlayerSearchScreen`
+stays in the codebase for when the directory is a real subscriber feature).
+Home's battle actions are now just: **Find Opponent -> Practice instead ->
+Battle a friend -> Tournaments.** The **"I'm in tonight"** pre-commit box was
+tinted with the `reward` (gold) token + a star icon to make the window a
+captivating hook, distinct from the one true primary accent.
+
+**THE DEV THEME-PREVIEW MENU IS REMOVED** (the palette icon on Home) now
+that the lineup is decided. The real skin selector stays: Profile ->
+Appearance, offering Comedy Night (base) + Neon (GOAT-locked prestige). The
+saved brand explorations are `kSavedBrandThemes` in `app_theme.dart` -
+retained builders, no longer surfaced anywhere.
+
+**"TALENT" - FIRST THREADING DONE.** The live spectator lineup header
+(`WatchLiveList`) now reads **"Tonight's Talent"** - the strongest showbiz
+spot, since it is literally who is performing live. More surfaces to come
+(addressing a performer, the gifting/support copy once gifting is built).
+The live "on air" dot there now uses the `live` token, and the live vote
+panel's winner line uses the `winner` (green) token - part of giving colours
+jobs rather than one hue everywhere.
+
+## Pre-match redesign: mandatory intro video + warmup round (2026-08-31)
+
+A redesign of the pre-match ammo/warm-up flow, driven by cost and safety.
+The long version of the reasoning: a live 5-minute stranger video chat was
+considered (great for comedy authenticity) and **rejected** on two grounds -
+Agora bills per participant-minute, so a 5-min 2-person video chat is ~10
+billable minutes (roughly tripling per-match cost), and a private unrecorded
+1:1 stranger video channel is the exact Omegle-style exposure risk this
+project treats as its core legal exposure. Both problems are solved by
+splitting the flow into a **pre-recorded intro** (ammo) and a **short live
+warmup inside the battle channel** (energy).
+
+**MANDATORY 60-SECOND INTRO VIDEO - BUILT AND VERIFIED ON DEVICE.** Every
+battler records a 60s "tell me about yourself"; the opponent watches it
+(rewatchable, on a loop, sound on) during the pre-match reveal to build ammo.
+- **Cheap and safe by design.** A stored file joins NO Agora channel (no
+  per-minute billing, just storage/bandwidth - same trick as the tutorial's
+  local preview) and is screened frame-by-frame **at upload, before anyone
+  sees it** - far more reliable than sampling a live feed and hoping to catch
+  a flash between samples. This is the whole reason a recorded intro beats a
+  live chat.
+- **Pipeline:** client records via `image_picker`'s `pickVideo(camera,
+  maxDuration: 60s)` (already a dependency, no new toolchain risk) -> uploads
+  to `profile_videos/{uid}/` (new `storage.rules` block, own-folder write,
+  100MB cap, video content-type) -> `moderateIntroVideo` callable
+  (`functions/index.js`, 1GiB/120s) downloads it, samples frames with ffmpeg
+  (`fps=1/10:round=up` - round=up guarantees at least one frame so a SHORT
+  clip is not wrongly reported unreadable, a real bug caught on device with a
+  4s test clip that produced zero frames) and runs each through the SAME
+  SafeSearch used for photos; the FIRST bad frame rejects the whole video.
+  `profile.introVideoUrl` is written only on approval, so its presence IS the
+  approved flag (same pattern as `photoUrls`).
+- **MANDATORY gate in `enterQueue`**: no approved intro -> refused with
+  "Record your intro video before you battle." This **reverses the beta's
+  photos/approval-deferred stance for the video specifically** (developer's
+  explicit call) and **blocks every existing account until it records one** -
+  intended. Friend-battle and tournament-start paths still need the same gate
+  added (TODO).
+- **Client:** `IntroVideoCard` (`lib/screens/profile/intro_video_card.dart`)
+  on the profile - Required badge, record/re-record, upload+moderate, preview
+  via the new reusable `LoopingVideo` widget (`lib/widgets/looping_video.dart`,
+  built on `video_player`). `bio_reveal_screen` now leads with the opponent's
+  intro (sound on) above the text fields. **Verified end-to-end on the
+  emulator**: recorded through the system camera, uploaded, moderated
+  (approved), stored, and the looping preview rendered.
+
+**30-SECOND WARMUP ROUND - BUILT (analyze-clean + tests; NOT yet 2-device
+verified).** The live warm-up the intro video can't give: the first beat of
+the battle sequence (both players connected) is a ~30s "Warmup Round" with
+**both mics open** (unlike the turns, where one is muted) - open banter /
+staredown, then straight into round 1. **Cheap** because it reuses the
+battle channel already joined (~1 extra participant-minute, ~$0.004).
+**RECORDED and shown to spectators** (developer's call) - pre-fight tension
+is good content, both players already consented to the battle recording, and
+it runs the same nudity moderation.
+- **Implementation:** a new `_Phase.warmup` in `MatchScreen`'s state machine,
+  emitted by the host as the first beat of `_runHostSequence` (before the
+  turn loop) and synced to the guest over the existing data-stream messaging.
+  Mic handling opens BOTH mics for the warmup (`muteLocalAudio(false)`),
+  unlike the countdown (both muted) and turns (only the active player). The
+  overlay is a NON-blocking top banner ("Warmup Round · Ns · both mics are
+  open"), deliberately not the countdown's full-screen blackout, since both
+  players are live on camera for the staredown.
+- **`warmupSeconds` is live config** in `config/matchSettings` (default 30,
+  bounds 0-120; 0 disables it), resolved server-side and stamped on the
+  match exactly like the other timings, so both players run the same clock.
+  Added to `functions/matchSettings.js` DEFAULTS/LIMITS and the client
+  `MatchSettings`. Deployed to the match-creating callables (pollMatchmaking,
+  respondToChallenge, startTournamentMatch).
+- **Spectators** see the raw warmup video (the banter/staredown) via the
+  existing live-viewer flow; the "Warmup Round" banner itself is a
+  player-only UI cue (a spectator-side indicator could be added later).
+- This deliberately differs from the earlier "private, not recorded"
+  instinct, which was for the ammo-digging chat the intro video now replaces;
+  the warmup is about energy, not digging.
+- **STILL TO VERIFY at the dry run:** the warmup actually rendering on both
+  devices, both mics genuinely open during it, and the recording/spectator
+  capture including it.
+
+**The unified pre-match flow this produces:**
+- **Ranked (Find Opponent):** paired -> watch opponent's intro video + card,
+  up to 5 min or until both ready up -> 30s warmup (both mics) -> battle.
+- **Tournament (Sixes and Sevens):** join 6:00-6:15 -> bracket forms at 6:15
+  -> each round: see intro + card -> 30s warmup -> battle. Auto-created
+  daily. Late joiners miss the bracket but can still play ranked. Mechanics
+  (join window, bracket size cap, prizes) still being finalised.
+
+## Type + Home tweaks (2026-08-31, later)
+
+- **DISPLAY FONT CHANGED TO FRAUNCES** (elegant high-contrast serif), on the
+  developer's ask for "a more professional / elegant font". Bundled as
+  `assets/fonts/Fraunces-Variable.ttf` (OFL, fetched from Google Fonts'
+  repo) + a pubspec `Fraunces` family - NOT via `google_fonts`, keeping the
+  no-runtime-download / no-fragile-dependency rule. It is the DISPLAY face
+  only (rank title, headlines, app bar, and - because the button themes use
+  `disp()` - button labels); body stays Inter. Optical sizing is wired
+  properly: `FontVariation('opsz', size)` scales opsz with the point size in
+  both `displayStyle` and the `_build` `disp()` helper (Archivo has no opsz
+  axis and ignores it harmlessly). Applied to **Comedy Night only** so far
+  (the base skin); Neon/others still use Archivo - unify later if the
+  serif is kept. displayWeight dropped 760->600 (a serif wants less weight
+  than the wide Archivo). NOTE: buttons render in the serif too since they
+  use the display face; switch the button `textStyle` to `bodyFont` if a
+  cleaner sans button is wanted (the developer likes the serif buttons).
+  **UNIFIED across ALL 15 skin builders** (2026-08-31): the developer loved
+  it, so every builder now uses `display: 'Fraunces', displayWeight: 600,
+  displayWidth: 100` (Fraunces has no width axis; the old per-skin condensed/
+  wide Archivo distinctions are gone). Trailing `// condensed` etc. comments
+  on a few builders are now stale but harmless.
+- **PRIMARY CTA relabelled "Roast Someone Now"** (was "Find Ranked Match" ->
+  "Find Opponent" -> this). "Find" read like browsing a list; this says what
+  the tap does (go roast a stranger), puts the app's identity on its main
+  button, and the "Now" gives it a dare-like urgency. Chosen from a shortlist
+  (Battle Now / Enter the Roast / Roast Someone / ...) - the developer landed
+  on adding "Now" to "Roast Someone".
+- **HOME "Practice" restyled + regrouped.** It was a plain text "Practice
+  instead" tucked under the primary Find Opponent button and looked orphaned.
+  Now it is an OutlinedButton.icon (dumbbell) sitting in the group WITH
+  "Battle a friend" and "Rules" below the divider, relabelled just "Practice".
+  Find Opponent is the sole prominent battle button above the divider; the
+  three outlined options form a consistent group below it.
+- **HOME: XP/points bar moved above the fold.** The tournament headline card
+  had pushed the daily quests + points/clip bar below the fold. The quests +
+  `_PointsBalanceForUser` now sit directly under the tournament banner,
+  ABOVE the Find Opponent / Practice buttons, so the "XP bar" is visible
+  without scrolling.
+- **"Tournaments" button REMOVED from Home** (redundant - Sixes and Sevens IS
+  the tournament, and its banner already taps to the tournament list). In its
+  place, a **"Rules" button** -> new `RulesScreen`
+  (`lib/screens/info/rules_screen.dart`), a friendly non-legal "how to play"
+  list: the battle format, how you win (crowd vote), the intro video, Sixes
+  and Sevens, what flies / what doesn't (comedy yes, hate/harassment/explicit
+  no), and recording/clips. Device-verified.
+
+## Tab polish sweep (2026-08-31, later) + Hall of Fame flag
+
+Audited the non-Home bottom-nav tabs on device. The global font/colour
+changes already carry to every tab (theme-level), so they are consistent;
+what needed work was per-screen:
+- **Judge empty state** upgraded from a bare line of grey text to an icon
+  (gavel) + serif title "Nothing to judge right now" + motivating copy
+  ("judging earns you points ... most show up during Sixes and Sevens").
+- **"My battles" -> "My Battles"** (title-case, matches the nav label).
+
+**HALL OF FAME TAB REMOVED (developer's call) - honours the dropped
+decision.** The Ranks screen is now a single list; the "Hall of Fame" tab
+and the `HallOfFameTab` widget (`hall_of_fame_tab.dart`, deleted) are gone.
+**ORPHANED BACKEND, still to clean up: the `rebuildHallOfFame` scheduled job
+(functions) still runs and writes a `hallOfFame` doc nothing reads** - it
+should be removed from `index.js` + `scheduledJobScan.js` and un-deployed,
+but that is a backend deploy left for a follow-up.
+
+**RANKS BOARD polish (2026-08-31):**
+- Rows are now DENSE single lines (position/marker · name · W-L on the
+  trailing edge, `dense` + `visualDensity(-3)` + `minVerticalPadding: 4`),
+  so ~26 fit without scrolling (was ~5 oversized rows). "At least the top
+  25 visible" is the target.
+- The GOAT marker is now a 🐐 emoji (was 🔥), shown on the top FIVE by
+  position (the board is Elo-ordered, so its top five ARE the GOAT slots -
+  CLAUDE.md's own note). The viewer's own row always shows their position
+  number instead of the 🐐 so they can find themselves. (Considered gating
+  the badge on the actual GOAT title/XP-eligibility, but that left the top
+  five unbadged for low-XP test accounts and contradicted the "top five =
+  GOATs" board framing - reverted to position-based.)
+- Titles are deliberately NOT shown on rows (asked): the board ranks by
+  hidden Elo/position, and a #3 with a lower XP title than a #5 would look
+  broken. Titles are the earned identity on Home/Profile; the board is the
+  competition.
+
+**MY BATTLES polish:** the 0-vote tally bar is now a single NEUTRAL track
+(was a 50/50 pink/purple split that read like a real tied result);
+`LiveTally` gained a `compact` mode (drops its inner Card, smaller numbers)
+used here so more battles fit per page; title fixed to "My Battles".
+
+**RANKS shows EVERYONE'S position number** (asked): every row carries its
+position, and the top five - the GOAT slots - additionally show the 🐐, so
+they read "1 🐐", "2 🐐", ... through "5 🐐"; everyone below is just their
+number. (Earlier iterations badged only the top five with a bare 🐐, then
+showed the number only on the self row - the developer wanted the number on
+all rows.)
+
+**EMPTY STATES STANDARDISED** (developer's call): a reusable `EmptyState`
+widget (`lib/widgets/empty_state.dart`) - icon + serif title + one line of
+orienting/motivating copy - now used everywhere a screen has "nothing here
+yet", replacing bare centered sentences: the Judge feed, the vote queue, My
+Battles, the leaderboard, blocked players, and the tournament list all use
+it. The rule going forward: never a bare sentence floating in a black screen.
+
+**SETTINGS SCREENS AUDITED (2026-08-31), all consistent, no changes needed:**
+Notification settings (clear per-category toggles + a good "don't block us in
+phone settings" footer), the Home help menu (How a battle works / Support &
+feedback), and the Appearance skin selector all inherit the serif/theme and
+read well. The deeper flow screens (the vote screen, the live match screen,
+tournament detail/lobby) need live data / two devices / the window to render,
+so they are left for the controlled dry run.
+
+## Contradiction sweep resolutions (2026-08-31)
+
+A logic/rules/mechanics audit after the "window = tournament" pivot surfaced
+seven tensions; the developer ruled on each. What changed:
+
+- **GOAT flame is title-driven again, NOT position-driven.** The Ranks board
+  marks the 🐐 only on accounts whose authoritative `rankTitle == 'GOAT'`
+  (top-five Elo AND career-XP eligible), not merely whoever sits in the top
+  five rows. So a top-five player who is not yet a GOAT shows their position
+  number and no flame - "if they aren't GOATs they don't get the goat." This
+  reverses the brief position-based marker and makes the board and the
+  profile title always agree on who a GOAT is. GOAT stays top-five Elo gated
+  by XP; the board still shows every player's position number. Accepted cost:
+  with the placeholder 5000-XP gate, no current account holds the title, so
+  no flame shows yet - intended.
+- **Practice is EXEMPT from the mandatory intro video; ranked and tournament
+  never are.** The intro-video gate in `enterQueue` now skips `exhibition`
+  mode - a low-stakes warm-up should not require a 60-second recording, and a
+  brand-new player should be able to practise first and record their intro
+  when they are ready to battle for real. Friend battles were already exempt
+  (they never call `enterQueue`).
+- **Practice-vs-a-stranger is COLLAPSED into solo practice.** The
+  `exhibition` matchmaking button is gone from Home (less is better; funnel to
+  the tournament and Roast Someone Now). Solo practice still lives where it is
+  wanted - the matchmaking screen's "Warm up solo instead" for the
+  empty-queue case. The `exhibition` mode and its entitlement rules remain in
+  the backend, just unreachable from Home.
+- **Stale "ranked / the window" copy swept to the tournament framing** (no
+  logic changed): the tutorial recording line, the recording-consent bullet,
+  the form-card and leaderboard empty states, the matchmaking screen title
+  ("Finding an Opponent"), and the `entitlement.js` fallback messages. The
+  subscription-perk copy that legitimately means "ranked" was left alone.
+- **Tournament prizes stay empty for now, by decision.** "Win prestige &
+  prizes" does not claim a prize every night, so a points/cash prize can be
+  switched on whenever (the developer floated a bigger cash prize on, e.g.,
+  Fridays). No change.
+- **The "one crowd" goal vs. two queues during the window** (tournament +
+  casual Roast Someone Now): keep both open. Casual is the escape valve for
+  people who miss the 6:15 bracket cutoff or do not want a bracket; closing it
+  would strand latecomers during the exact hour meant for battling. The
+  tournament stays the headline (top card, the push, the prominent Join), so
+  the split is healthy rather than fragmenting. No change.
+- **STREAMLINED TOURNAMENT JOIN - BUILT (2026-08-31).** The confusing
+  enter-then-check-in two-step is collapsed into ONE "Join tonight's
+  tournament" button. `checkInToTournament` (functions/liveTournament.js) now
+  ENTERS and CHECKS IN in a single call for a FREE live tournament: it
+  validates the window first, then the intro-video gate, then auto-creates the
+  entrant doc (with `checkedInAtMs`) if missing. A PAID tournament still
+  refuses a non-entrant (fee must be collected first - the paid-entry flow is
+  separate/future); an existing entrant is simply checked in. Client
+  (`LiveCheckIn`) is now the single "Join tonight's tournament" button, shown
+  when the window is open (~15 min before start); the async Join/Withdraw
+  button is hidden for live tournaments (`tournament_detail_screen.dart`), so
+  there is no second "Join". The bracket still locks at the start and is built
+  from whoever joined. NO auto-check-in - the player taps Join. The T-15min
+  reminder is already served by the existing `eventWindowPush` firing at
+  window open (6:00), with distinct copy for committed ("I'm in tonight")
+  users. Analyze clean; 20 live-tournament pure tests green; the
+  `liveTournamentChecks.js` live check was updated to prove the one-tap
+  enter+check-in and that a no-intro account is refused. **The full live flow
+  (join -> bracket -> warmup -> battle -> vote -> advance) still needs a real
+  dry run with people on real devices** - built and backend-tested, never run
+  live end to end.
+- **No-show penalty - DEFERRED, by decision (2026-08-31).** The proposed
+  penalty (commit via "I'm in tonight" then fail to join = lose points) is
+  held until the beta shows real no-show volume, so commits stay frictionless
+  while the pool is fragile. When/if built, it MUST come from the spendable
+  `pointsBalance` and NEVER the career/XP `points` total (which only ever
+  rises and drives the never-falling title), fire only when the tournament
+  actually ran (not when it was cancelled for low turnout), and be small and
+  disclosed on the commit button.
+
+## Real-device dry run (2026-08-31) — two bugs, one fixed live
+
+First-ever run on a physical phone (Samsung Galaxy S22, SM-S901U) alongside
+the emulator. Signup, the real camera, and the theme all render correctly on
+real hardware, and the run surfaced two genuine bugs the backend checks
+could never see.
+
+- **FRIEND-BATTLE CHALLENGER COULD NOT JOIN THE ACCEPTED MATCH — FOUND AND
+  FIXED, verified end-to-end on two devices.** When the target accepted, the
+  match was created and the TARGET went into it (respondToChallenge returns
+  the matchId and the client navigates) - but the CHALLENGER's "Sent /
+  Waiting on X" was a static hourglass with no listener and no navigation, so
+  they were stranded forever with no path into the match that already existed
+  for them. `getMyChallenges` only returned PENDING challenges, so on
+  acceptance the challenge (now status "accepted") dropped out of the
+  challenger's list entirely and their "Waiting" line just vanished. The
+  backend already had every piece (respondToChallenge sets status "accepted"
+  + matchId and pushes the challenger; `getChallengeMatch` exists precisely
+  so "the acceptor's opponent can join the match they never explicitly
+  started") - only the client half was missing. This is the same "backend
+  verified, client path missing" gap this project keeps hitting (the report
+  button reachable only after a match, the unwritable block list): the 28
+  friend-battle backend checks never exercised the challenger's client
+  navigation. **Fix:** `getMyChallenges` now returns an `accepted` list
+  (fromUid+status=="accepted", bounded by isExpired, no new index - same
+  shape as the pending query), and `ChallengeScreen` polls every 4s and shows
+  a "Ready to battle / X accepted your challenge / Battle now" card that
+  routes the challenger through the normal consent -> camera -> match flow via
+  `startChallengeMatch`. Verified live: phone (challenger) sent, emulator
+  (target) accepted, the phone's poll surfaced "Battle now" within seconds,
+  and tapping it took the challenger into the same match. 16 friend-battle
+  pure tests still green; deployed.
+- **KNOWN GAP, NOT fixed: no re-entry into an accepted friend match for
+  EITHER side.** Once accepted, the challenge is no longer "pending", so it
+  shows in neither player's incoming list; `getActiveMatch`/the Home
+  active-match banner only cover matchmaking-queue matches, not friend
+  matches. So if either player drops out (backgrounded, crash, timeout) after
+  acceptance, there is no path back into the match - they must re-challenge.
+  Fine for the beta; the natural fix is a Home active-match banner that also
+  covers friend matches.
+- **NIGHTLIFE AUTO-SKIN DID NOT APPLY ON A COLD START INSIDE THE WINDOW —
+  FOUND, root-caused, FIXED.** During the live window, an app already running
+  when 6pm hit correctly flips to Nightlife, but an app LAUNCHED fresh while
+  the window was already live came up on the base Comedy Night skin and never
+  switched (reproduced on both the phone and the emulator at ~6:24pm with the
+  window live). The failure is invisible - the app looks fine, just
+  wrong-skinned - and it defeats the whole "the lights change at 6" effect
+  for exactly the people the 6pm push brings in.
+  - **ROOT CAUSE (subtle, and my first guess - "edge-triggered" - was
+    wrong; the code is level-triggered and looked correct).**
+    `WindowSkinController.initState` called `_recompute()` SYNCHRONOUSLY, and
+    initState runs during the parent StreamBuilder's build. On a cold start
+    inside the window that set `kWindowLive` true right then, whose listener
+    updates `kActiveTheme` - which is listened to by an ANCESTOR (the
+    MaterialApp). Marking an ancestor dirty mid-build is illegal, so Flutter
+    dropped the theme change. Then the guard `if (kWindowLive.value != live)`
+    saw kWindowLive was ALREADY true, so the later config-snapshot and 30s
+    timer recomputes were no-ops and never re-fired the listener - stuck on
+    the base skin forever. The transition case works because the flip happens
+    in a timer/snapshot callback, OUTSIDE build.
+  - **FIX**: defer the initial `_recompute()` to a post-frame callback (same
+    pattern `_AccountStatusGate` already uses to restore the equipped skin),
+    so the first liveness evaluation runs after the frame and its kActiveTheme
+    mutation is legal. The config listener and timer already ran outside
+    build, so only the first pass needed it.
+  - **The general lesson, again**: a ValueNotifier an ancestor listens to must
+    not be mutated during a descendant's build. This is the second time this
+    exact shape has bitten the theme system (the first was the equipped-skin
+    restore, already post-framed). Verified on a device by relaunching inside
+    the live window.
+
+## Nightlife dropped as auto-skin; LIVE cue + Home CTA fix (2026-08-31)
+
+Follow-ups from the real-device dry run, all the developer's calls.
+
+- **THE AUTOMATIC NIGHTLIFE SKIN SWAP IS DROPPED.** During the dry run the
+  developer saw the app stay on Comedy Night through the window and decided
+  the full app-wide palette swap is the wrong idea regardless: swapping the
+  entire look for an hour risks reading as a DIFFERENT APP to anyone opening
+  fresh during the window, and it undercuts the Comedy Night brand identity
+  they just committed to. So `wireActiveTheme` no longer branches on
+  `kWindowLive` - the app always wears the user's equipped skin. (The subtle
+  cold-start bug fixed earlier is now moot for THEMING, but the fix still
+  matters because the live cue below depends on `kWindowLive` being correct
+  on a cold start.)
+- **NIGHTLIFE IS SAVED AS AN UNLOCKABLE PRESTIGE SKIN** (the developer's
+  favourite second look), listed in the Appearance screen alongside Neon,
+  gated on `unlockedSkins.contains('nightlife')` with a "premium look -
+  unlock coming soon" hint (no unlock mechanism ships yet). Added to
+  `kEquippableSkins`. **NOTE FOR LATER (developer's idea): all skins may
+  become PAID unlocks** - a monetization lever to design when IAP exists.
+- **NEW APP-WIDE LIVE CUE replaces the skin swap** (`WindowLiveBar`,
+  `lib/widgets/window_live_bar.dart`), mounted in `MainShell` above the tabs
+  next to the service-status banner, so it shows on every tab during the
+  window and nothing the rest of the day. `kWindowName` was added (maintained
+  by WindowSkinController) so the cue names the window from live config. **A
+  real layout bug was caught and fixed on the device**: the strip drew UNDER
+  the system status bar (edge-to-edge app), so it now pads content down by
+  `MediaQuery.padding.top` and extends the tint up behind the status bar.
+  - **DELIBERATELY LOUD (the developer's call - the first quiet version was
+    "not flashy enough").** It is a solid vivid-red gradient bar (the `live`
+    token, distinct from the pink primary) with an animated **shine sweep**
+    glinting across it, a blinking **"● LIVE"** badge, a **"{NAME} · 2X
+    POINTS"** hook, and a white **JOIN pill**. The job is to GRAB and pull
+    people into the tournament, not to whisper. Verified on both devices with
+    the window forced open, on top of the unchanged Comedy Night base.
+- **TOURNAMENT BANNER GETS TWO CTAs DURING THE WINDOW** (`EventWindowBanner`).
+  Previously the live banner was a tappable card with no visible button - a
+  weak affordance nobody knows to tap. Now:
+  - **"Join Tournament"** - a small, custom **metallic GOLD gradient** button
+    (pale-gold -> vivid gold -> deep gold) with a thin earthy-brown OUTLINE
+    (0xFF7A5A12) that follows the rounded pill. It first had a gold glow, but
+    the glow's soft square halo bled past the rounded corners and looked
+    messy, so it was swapped for the clean outline. Gold because it should
+    feel like "win money/prizes"; deliberately a different colour from the
+    pink primary so the two never read as the same action. A plain
+    FilledButton can't gradient, so it is a custom Ink button.
+  - **"Watch"** - a filled PURPLE (secondary) button beside it, the SPECTATOR
+    entry, deliberately COLOURED (not a quiet outline) to actively pull people
+    into watching + judging - votes are the scarce resource the ladder runs
+    on, so it is worth encouraging, not just offering. Distinct from the gold
+    Join and the pink primary. Both go to the tournament, where check-in AND
+    the live watch/vote list live.
+  - The gold/outlined pairing also resolves the earlier "two identical pink
+    buttons" concern without having to demote the primary CTA.
+  - **The gold button is now on the PRE-WINDOW banner too** (extracted to a
+    reusable `_goldTournamentButton(context, label)` helper) - labelled
+    "Tonight's Tournament", leading to tonight's tournament, sitting above the
+    kept "I'm in tonight" pre-commit. The developer loved the gold look and
+    wanted it in both states.
+- **PRIMARY CTA RENAMED "Roast a Stranger"** (was "Roast Someone Now", was
+  "Find Opponent"). The developer's call - it names exactly what the app is
+  (you roast a random stranger), which reads better for the app's identity.
+- **HOME PRIMARY CTA MUST BE ABOVE THE FOLD - fixed.** On the real S22 (the
+  layout was tuned on a taller emulator) "Roast Someone Now" was cut off /
+  needed scrolling, made worse by the live bar pushing content down. Fix:
+  moved the CTA to sit DIRECTLY under the tournament headline, and moved the
+  quests + points/XP bar BELOW it. This reverses the emulator-era "XP bar
+  above the fold" decision on purpose - the primary action being visible
+  without scrolling is the stronger requirement, and the rank card + tournament
+  headline (the two things the developer most wanted prominent) stay above it.
+  The rank card was deliberately NOT shrunk (the developer wants the rank
+  identity to carry the size).
+
+## Live watcher count ("N watching") — BUILT (2026-08-31)
+
+Spectators (and, later, performers) can now see how many people are watching
+a live battle - social proof that "this is where the action is," and the
+crowd energy that makes a live roast feel live (and the hook the gifting/
+heckle economy builds on). Shown in the live viewer's app bar as "N watching".
+- **Heartbeat-based, client-driven, no Cloud Function.** The viewer writes
+  its OWN doc at `liveWatch/{matchId}/viewers/{uid}` with a `lastSeenMs`,
+  refreshed every 15s, and deletes it on leave. The count is a live listener
+  over that subcollection, counting only docs with a heartbeat inside the last
+  30s - so a viewer who crashed out is not counted forever.
+- **The rule is own-write-only** (`request.auth.uid == userId`, read for any
+  signed-in user), mirroring the existing `matches/.../reactions/{userId}`
+  pattern, so the number reflects DISTINCT ACCOUNTS and a modified client
+  cannot inflate it by writing other people's docs. It is vanity/ephemeral -
+  nothing downstream trusts it for rating, money, or moderation - so
+  own-write is enough. Deployed.
+- **Performer-facing count is deferred to the gifting/heckle work**, where
+  the design already says performers should feel aggregate CROWD ENERGY, not
+  exact numbers. Spectators get the exact count now.
+- **NOT device-verified** - it needs a real live tournament with a
+  broadcasting match and multiple spectators (the same dry-run gap as the
+  rest of the live-tournament flow). Analyze-clean; rule deployed and mirrors
+  a verified pattern. Known cost note: at 100 watchers the 15s heartbeat is
+  ~24k writes/hour during an event - negligible at beta scale, worth a
+  scheduled prune of stale docs if it ever grows.
+
+## USER-FACING NAME: "the gauntlet", not "the climb" (2026-09-01)
+
+**The player never sees the word "climb" or "climber" — the format is branded
+"the gauntlet" in all UI copy.** The developer disliked "climb/climber"
+verbiage, so `climb_screen.dart` and `tournament_detail_screen.dart` now read
+"You're in the gauntlet", "Win to advance. Lose once and you're out.",
+"Finding your next match - N opponents left.", "Enter the gauntlet", "You beat
+everyone tonight", etc. **The CODE and the Firestore format id are STILL
+`climb`** (functions, `format: "climb"`, `climb.climbers`, `climbPoll`,
+`ClimbScreen`) - only the user-visible strings changed. Don't rename the
+format id or the internal fields; do keep any NEW user-facing copy in the
+"gauntlet / opponents / advance" voice, never "climb/climber". (The rank-ladder
+"climb the ranks" in the Rules screen and the "Climbing" form-trend label are
+DIFFERENT metaphors and were left as-is.)
+- **Known small nit, offered but not yet applied**: the waiting screen's
+  "N opponents left" uses `activeCount`, which INCLUDES you - so a field of 3
+  reads "3 opponents left" when only 2 are really opponents. Fix is to show
+  `activeCount - 1` (and fall back to the count-free "Finding your next
+  match..." when you're the only one left).
+
+## Nightly "climb" tournament format — DECIDED (2026-08-31), Phase 1 BUILT
+
+The nightly Sixes and Sevens event is moving from a fixed pre-seeded bracket
+to a **rolling single-elimination "climb"** (the developer's design, refined
+over several rounds). The fixed bracket engine is KEPT for occasional
+marquee/cash tournaments where a pre-seeded bracket makes sense; the nightly
+event becomes the climb.
+
+**THE FORMAT (locked):**
+- **Join any time during the window** - you enter at **0 wins**. No punishing
+  6:15 lock (which stranded latecomers and needed a critical mass at one
+  instant - fatal for a thin pool).
+- **You are only ever paired with someone who has the SAME number of wins.**
+  Win -> climb a tier (wins+1), back to waiting. **Lose once -> out** (single
+  elimination), but you can still watch/vote/gift.
+- **Anti-cheese is STRUCTURAL, not a rule.** Because every match is against an
+  equally-proven opponent, a latecomer cannot leapfrog to the final off one
+  win - they must climb 0->1->2->... beating a winner each step. And the later
+  they join, the fewer fresh same-tier opponents exist to climb through, so
+  "join at 6:58 and win it all" is impossible by construction. No hard cutoff
+  needed; new entries just naturally stop near the end when there is no viable
+  pool, and latecomers are pointed to watch the finals.
+- **Champion = last one standing.** When the field narrows and no same-count
+  pair remains, the top survivors are force-paired (highest wins first) so the
+  event converges on a clear winner instead of stalling ("the last two fight
+  no matter what"). At window end, the highest-win active climber takes it.
+- **While waiting** for a same-tier challenger, a climber is dropped into the
+  **watch/vote** view (spectate + judge the live battles) - idle time becomes
+  engagement, and it uses the spectator + watcher-count pieces already built.
+- **Pair unbattled-first** falls out naturally (unbattled = the 0-win bucket,
+  paired every pass, never starved).
+
+**PHASE 1 - THE PURE ENGINE - BUILT AND TESTED.** `functions/climbTournament.js`
+holds the whole format as pure functions - `planPairings` (same-win-count
+pairs, plus a top-down force-resolve for the endgame), `applyResult` (winner
+climbs, loser out), `markInMatch`, `resolveChampion`, `standingFor` - with no
+Firestore, clock, or randomness. `test/climbTournament.test.js`: 19 unit
+checks + **1,080 randomised rolling-join simulations**, each asserting a single
+champion emerges in exactly N-1 matches (single-elim invariant), no tier is
+ever skipped, an eliminated climber is never re-paired, and a latecomer is
+never handed a match above their tier. This is the same simulate-before-device
+approach that caught the bracket bye collision.
+
+**PHASE 2 - BACKEND WIRING - BUILT AND VERIFIED** (`functions/climbPlay.js`).
+Climbers live as an ARRAY on the tournament doc (`climb.climbers`), exactly
+like the bracket's `bracket.rounds`, so a pairing is a single-doc transaction
+that can never double-book. `joinClimb` (enter at 0 wins, intro-gate + window
+checks, eliminated players cannot re-enter), `climbPoll` (client-polled, pairs
+a same-win-count opponent and creates a derived-id match - the race where both
+poll at once is resolved by re-reading the fresh state), `applyClimbResult`
+(called from `finalizeMatch` when a match carries a `climb` field - winner
+climbs and returns to waiting, loser eliminated; idempotent via a
+currentMatchId guard), and `sweepClimb` (every minute: settles played matches
+whose short vote window closed - NOTHING ELSE does, since the live-settle sweep
+is format:"live"-only and the 24h sweep is far too slow - forfeits stale
+unplayed matches so one no-show cannot freeze the ladder, force-resolves the
+endgame, and crowns the champion at window end). Climb matches are mode
+"tournament" (so they get rating/recording/clips) with a short 90s vote window
+and `eventWindow.qualified: true` (the climb IS the free Sixes and Sevens
+event, so it earns the 2x window bonus). `finalizeMatch` routes on the `climb`
+field so a climb match never falls into the bracket path. Deployed;
+`functions/live/climbChecks.js` drives four players up a real ladder to a
+champion - **16 live checks, all green** (join, intro-gate, same-tier pairing,
+result-routing, the final, sweep-without-throw, completion). Added to
+`scheduledJobScan.js`'s coverage.
+
+**PHASE 3 - CLIENT - BUILT** (`lib/screens/tournament/climb_screen.dart`).
+`ClimbScreen` joins the climb, then polls `climbPoll` (same poll-to-be-paired
+shape as matchmaking): a `waiting` response shows your standing ("2 wins in -
+3 climbers left") plus the OTHER live battles to watch/vote on (read straight
+off the tournament doc's `climb.climbers`, so waiting time becomes judging
+time); `in_match` routes into the real match flow (`PreMatchScreen` gained a
+`climbPairing` param that goes straight to the bio reveal, then the warmup +
+battle); `eliminated` and `done` (champion) render their own states.
+`spectator.js` was broadened so climb matches are watchable (they carry the
+tournament id under `climb`, and the format gate now accepts "climb" as well
+as "live"). Wired into `TournamentDetailScreen`: a climb tournament shows one
+"Join the climb" button, with all the bracket/check-in/entrant UI guarded off.
+**Verified on a device**: joining put the account in the climb and rendered
+the waiting state correctly.
+
+**A REAL BUG THE DEVICE CHECK CAUGHT AND FIXED**: `resolveChampion` treated an
+EMPTY field as "done", so `sweepClimb` completed a freshly-created climb before
+anyone had joined. Fixed - an empty field is only "over" once the window has
+ended (and then it cancels rather than crowns nobody). Pinned by two new
+engine tests.
+
+**PHASE 4 - DAILY FLIP - BUILT** (`dailyTournament.js`). The nightly
+auto-tournament now creates `format: "climb"` with `windowStartMs`/
+`windowEndMs` (the 6-7pm bounds) and `climb: {climbers: []}`, instead of a
+pre-seeded bracket. Deployed.
+
+**REAL 2-DEVICE DRY RUN DONE (2026-09-01) — emulator + physical S22 over
+Wi-Fi adb.** The whole climb flow was driven end to end on two real clients:
+login → join the climb → PAIRING across two independent devices → recording
+consent → camera/mic → pre-match → bio reveal → ready-up → **a real battle
+with bidirectional video flowing, the 30s warmup ("both mics open"), and all
+3 rounds of the turn machinery** → "Match complete!". This is the first time
+the live-tournament/climb stack has run with real devices in a real battle,
+and it surfaced THREE genuine bugs:
+
+- **CLIMB CHANNEL NAME EXCEEDED AGORA'S 64-BYTE LIMIT — FOUND AND FIXED AND
+  VERIFIED LIVE.** `climbMatchId` was `c_${tournamentId}_${uidA}_${uidB}`,
+  concatenating two 28-char Firebase UIDs → an ~80-char matchId and a
+  `match_`-prefixed Agora channel of ~86 chars, over Agora's 64-byte channel
+  cap. Every other match type uses a short auto-id, so only the climb hit it.
+  Symptom: **both devices failed to join the battle with
+  `AgoraRtcException(-102)` (ERR_INVALID_APP_ID)** at the exact moment the
+  battle should start. Fixed by hashing `${tournamentId}_${x}_${y}` to a
+  24-hex-char id (`c_<hash>`, 26 chars → 32-char channel), deterministic and
+  order-independent. Deployed; re-verified live — after the fix both devices
+  joined the same channel and real video flowed both ways. Server path
+  re-checked (climbChecks 16/16).
+
+- **THE FORFEIT SWEEP ABANDONED AN ACTIVELY-PLAYED BATTLE — FOUND, ROOT-CAUSED,
+  AND FIXED (2026-09-01), deployed and live-verified.** `_sweepOne`'s forfeit
+  path (`climbPlay.js`) forfeited any climb match still `status:"pending"` past
+  `MATCH_TIMEOUT_MS` (8 min) measured from match CREATION, and read `arrivedAt`
+  to pick who advances. But **climb matches never populate `arrivedAt`**
+  (unlike bracket matches, where `startTournamentMatch` records it), so both
+  read as no-shows → `winnerId` null → BOTH eliminated. And a real battle stays
+  `pending` for its ENTIRE duration (bio-reveal study up to ~10 min + warmup +
+  3 rounds ≈ up to ~14 min); `completeMatch` only flips it to `completed` at
+  the very end. So a legitimate battle that ran past the 8-minute mark got
+  **force-abandoned mid-fight, both players eliminated, and the cloud recording
+  orphaned** (left `status:"recording"` — a cost leak, though
+  `stopRunawayRecordings` eventually stops it). Observed exactly this: the match
+  played fully but came out `status:"abandoned"`, `winnerId:null`, recording
+  still `"recording"`, and `completeMatch` threw
+  `[firebase_functions/internal] INTERNAL` (its
+  settle transaction racing the sweep's abandon-write).
+  - **THE FIX (server-only, isolated to the sweep):** the "battle has started"
+    signal is **`readyPlayerIds`** — once BOTH players ready in the bio reveal,
+    the battle is underway (and heartbeats stop, since the battle is
+    peer-to-peer). A new pure `climbForfeitDecision(match, nowMs, opts)` in
+    `climbTournament.js` replaces the `arrivedAt` logic: (1) **both readied →
+    WAIT** until a long crash-safety window (`BATTLE_ABANDON_MS` = 25 min),
+    then abandon as a no-contest — so a live battle is never killed; (2)
+    **pre-battle, both still present** (readied or a fresh `lastSeenAt`
+    heartbeat within 75s) → wait (mid bio-reveal); (3) not both present and
+    past the 8-min no-show timeout → **whoever is present wins the forfeit**,
+    or a genuine double no-show eliminates both. This also fixes a second bug
+    the `arrivedAt` path had: a real one-sided no-show used to eliminate BOTH;
+    now the present player advances. No client change — chose `readyPlayerIds`
+    (already written by `setMatchReady`) over adding a `battleStartedAt`, to
+    keep the change contained to the sweep. **30 pure checks** (incl. the
+    regression: both-readied at 9 min → wait), **7 live checks**
+    (`functions/live/climbForfeitChecks.js`, against real Firestore: a
+    both-readied aged battle is NOT abandoned, a no-show pair is, a one-sided
+    no-show advances the present player), climbChecks 16/16 and the scheduled
+    scan 15/15 confirm no regression. Deployed. The `completeMatch` INTERNAL
+    was a symptom of the abandon-write race and is resolved by not abandoning
+    live battles.
+
+- **PRE-MATCH MIC GATE can strand a real user, and the CONSENT / SKIP-MIC /
+  READY buttons are occluded by the gesture-nav bar on the S22.** Two
+  device-only UX findings: (1) on the pre-match check the level meter visibly
+  responds to speech but "I'm Ready" never unlocks if the reported level does
+  not cross the 15/255 threshold — with NO feedback telling the user to speak
+  louder or where the bar needs to reach; a real user got stuck here. The
+  threshold may be miscalibrated per device/room, and the screen needs
+  "louder"/target feedback. (2) On the S22's gesture navigation, the Recording
+  Consent Decline/"I Agree" buttons and the pre-match Skip-mic button sit
+  under the system gesture zone with no bottom `SafeArea` — taps land on the
+  nav/home gesture instead. Add bottom safe-area padding to those screens.
+
+- **A minor copy nit**: the pre-match ready button reads "Find an Opponent"
+  even in a climb/tournament pre-match, where you already have an opponent.
+- **A minor UX nit already noted**: the climb bio reveal shows matchmaking-
+  style "Skip this opponent" / "Opponent left" options, which do not fit the
+  single-elimination climb (no requeue) — suppress them for climb pairings
+  like the tournament lobby does.
+
+**2-DEVICE DRY RUN OF THE FIX — DONE (2026-09-01), PASSED.** Emulator
+(MicDropMike) + physical S22 (DryRunB) ran a full climb battle end to end:
+join → pair → consent → pre-match → bio reveal → ready → **warmup + all 3
+rounds with video flowing** → **a clean "Match complete!"** screen with **NO
+`completeMatch` INTERNAL error** (the previous run showed exactly that error
+on this screen). The match doc settled `status:"completed"`,
+`voteFinalized:true`, `ready:[both]` - i.e. the both-readied battle the old
+sweep would have force-abandoned instead completed cleanly. Fix confirmed on
+real devices.
+
+**STILL OPEN:**
+- **NEW edge case the dry run surfaced (separate from the forfeit bug): a TIED
+  climb match strands its climbers.** With 2 players and no spectators the
+  match got zero votes → a tie (`winnerId:null`), and a climb has no
+  tie-break, so `applyClimbResult` advances/eliminates nobody and both
+  climbers sit `in_match` on a `completed`+`voteFinalized` match forever (the
+  sweep skips finalized matches). Rare in a real event (there are voters), but
+  a possible tie needs a rule - e.g. tie → both eliminated, or a coin-flip
+  advance, or a re-battle. Not the forfeit bug; a genuine follow-up.
+- **S22 gesture-nav button occlusion — FIXED (2026-09-01), verified on the
+  phone.** It was systemic: bottom action buttons sat inside the home-gesture
+  inset (no bottom `SafeArea`), so taps hit the launcher. Turned out to affect
+  the tutorial ("Start"/"Got it"/"End My Turn"), recording consent
+  ("I Agree"), pre-match (skip-mic/ready), and the bio reveal ("I'm Ready"/
+  skip/decline). Fix: add the system bottom inset to each bottom block
+  (`SafeArea(top:false)` on consent; `MediaQuery.of(context).padding.bottom`
+  folded into the bottom padding on the others). Verified on the real S22 -
+  the tutorial "Start" now sits clear of the gesture bar and taps advance
+  correctly. **Any NEW screen with a bottom button needs the same bottom
+  inset** - this pattern was missing app-wide, so other non-match screens may
+  still have it; worth a sweep.
+- **Pre-match mic gate — FIXED (2026-09-01), verified on the phone.** The
+  complaint: talking moved the meter but "I'm Ready" never unlocked, with no
+  guidance. Root causes, all fixed in `pre_match_screen.dart`: (1) threshold
+  was 15/255 - too high for a quieter room / phone-at-arm's-length; lowered to
+  10 (still well above the ~2-3 idle floor, so a dead/muted mic still won't
+  pass); (2) verification is now **peak-held** (`_micPeak`) rather than judged
+  on the instantaneous value, so one clear syllable passes and stays passed;
+  (3) the meter filled `level/255`, so speech (~10-40) moved it only a few
+  percent and it looked frozen - now `level/45` so it visibly responds, with a
+  **target marker** line showing how far to fill; (4) the prompt now reads
+  "Almost - a little louder" when it's registering but below the line. Verified
+  on the real S22: it tripped from ambient room noise alone (button went to
+  "Find an Opponent") - the exact thing that used to fail.
+- **"N opponents left" off-by-one - FIXED.** The waiting header now shows
+  `activeCount - 1` (opponents excludes you) and drops the count entirely
+  ("Finding your next match...") when you're the last one standing.
+- **Occlusion sweep extended (2026-09-01).** Beyond the match flow
+  (tutorial/consent/pre-match/bio-reveal, all fixed + phone-verified), the
+  scrollable form screens report / support / banned-appeal also got the bottom
+  gesture inset added to their body padding. `match_screen` was checked and is
+  fine (its buttons - End My Turn, verdict actions - sit mid-screen, not
+  pinned to the bottom edge). Remaining low-risk candidates can take the same
+  `MediaQuery.of(context).padding.bottom` treatment if a full pass is wanted.
+- Left alone deliberately: the rank-ladder "climb the ranks" (Rules screen)
+  and the "Climbing" form-trend label - different metaphors from the gauntlet.
+- **RESOLVED (2026-09-01): GAUNTLET WINS MOVE HIDDEN ELO.** The developer's
+  call ("gauntlet wins should definitely move hidden elo"). It turned out they
+  ALREADY did for present players - finalizeMatch's rating transaction runs for
+  any non-exhibition/non-friend match with a winner, reading LIVE ratings, so a
+  climb match (mode "tournament") was never excluded; the earlier "created
+  without a rating stamp -> no rating change" note was WRONG (the stamp is only
+  the DEPARTED-player fallback, not the gate). Made it robust + explicit anyway
+  by STAMPING `player1Rating`/`player2Rating` on the climb match at creation
+  (`_createClimbMatch`, reading both users' Elo in the pairing transaction), so
+  a win still counts if the opponent deletes their account before finalize -
+  same pattern as ranked. A TIE moves no Elo (winnerId null -> no rating change,
+  the standard tie rule). Verified: winner UP, loser DOWN on a real gauntlet win.
+- **GAUNTLET TIE = BOTH ADVANCE - BUILT (2026-09-01, the developer's call).**
+  A drawn (or zero-vote) climb match now advances BOTH climbers a tier and
+  eliminates neither, instead of stranding them. Pure `applyTie` in
+  `climbTournament.js`; `applyClimbTie` in `climbPlay.js`; and finalizeMatch's
+  tournament routing now moves the gauntlet on a tie too (`winnerId ?
+  applyClimbResult : applyClimbTie`) - previously the `&& winnerId` guard meant
+  a tie never touched the ladder, so both climbers sat `in_match` on a settled
+  match forever (the exact bug the dry run hit on a zero-vote finish). The
+  tournament still always crowns a champion (resolveChampion picks the
+  highest-win active climber at 7pm). Bracket ties are unchanged (a bracket slot
+  still needs a decisive winner; a bracket tie is left to the endgame sweep).
+- **A REAL REMATCH BUG THE TIE RULE EXPOSED, found by the live check and fixed.**
+  `climbMatchId` was DETERMINISTIC per (tournament, pair), which was fine under
+  single-elimination (two players never meet twice). But "both advance" lets the
+  same two players meet AGAIN at a higher tier - and the deterministic id then
+  collided with their earlier match's already-finalized doc, so re-pairing put
+  them `in_match` on a doc that could never be re-finalized -> stuck. Fixed by
+  giving each climb match a UNIQUE (nonce) id (`c_${randomBytes}`) and having the
+  result functions (`applyClimbResult`/`applyClimbTie`) take the actual match id
+  rather than re-deriving it. Double-creation is still prevented by the
+  transaction on the tournament doc (the loser of the pairing race sees both
+  `in_match` and aborts), so determinism was not needed for that. `climbMatchId`
+  is kept only for the forfeit live check's deterministic seeding.
+- **Verified: 34 pure engine checks (incl. `applyTie`), and live -
+  `climbTieChecks.js` (11: stamp present, tie advances both + no Elo, rematch
+  works, win advances one + moves Elo), `climbChecks.js` (16, champion path),
+  `climbForfeitChecks.js` (7), and `coreLoop.js` (22) all green.**
+- **The looping-video background-audio bug that alarmed the developer on their
+  phone is FIXED (2026-09-01).** A real device kept playing an intro clip's audio
+  in a loop after the app was backgrounded. Both looping players
+  (`LoopingVideo`, `MatchClipPlayer`) now implement `WidgetsBindingObserver` and
+  PAUSE on any non-resumed lifecycle state, resuming only if they were playing
+  when the app left the foreground. Analyze clean.
+
+## Device bug scan (2026-09-01) — the USERNAME RACE, found and fixed
+
+A full-app scan on the physical S22 (fresh release build, fresh signup, drive
+every tab while capturing logcat). The logcat was otherwise clean - NO Flutter
+exceptions, NO RenderFlex overflow, NO assertions, NO ANRs across signup, Home
+(incl. the tap-to-flip rank card, verified working), Judge, My Battles, Ranks,
+Profile. Two things surfaced:
+
+- **REAL BUG, FIXED: the Profile showed "You have not picked one yet / Pick a
+  username" for an account that HAD a username** (it rendered correctly as
+  SCANRUN7289 on Home and the Ranks board). Root-caused rather than guessed:
+  `getUsernameState` returns the name correctly (probed: HTTP 200,
+  `username:"ScanRun7289"`), so the backend was fine. The bug is client-side and
+  subtle. `UsernameCard` (`form_card.dart`) loads the name once in `initState`
+  and renders `SizedBox.shrink()` while `_state` is null - but the section DID
+  render with a null name, meaning the call SUCCEEDED with `username:null`. That
+  is a **race**: the Profile tab lives in MainShell's `IndexedStack`, which builds
+  ALL tabs EAGERLY at login/signup (not when a tab is first opened), so
+  `getUsernameState` fired right after signup and won a race against
+  `setUsername` - returning null before the name was written - and the null was
+  then cached for the whole session because an IndexedStack child never re-inits.
+  A relaunch fixed it (name long-written by then), which confirmed the diagnosis.
+  **Impact:** a brand-new user, right after signup (exactly when this races),
+  opens Profile and is told they have no username with a "Pick a username" button.
+  **Fix:** `_load()` now retries (5 attempts, 500ms->4s backoff) while the call
+  errors OR returns a null/empty name, committing a null-name state only after
+  the retries are exhausted (the genuine legacy account) - so the false control
+  never shows and there is no flicker. Verified on-device: a fresh signup opened
+  straight to Profile now shows the real username + "Change username". Analyze
+  clean. **The general lesson: a widget inside an IndexedStack is built once at
+  shell creation and never re-inits, so any one-shot `initState` load that can
+  fail or return stale data is cached for the whole session - it needs a retry
+  or a visibility-triggered reload, not a silent swallow.**
+- **NOT a bug (artifact): the Judge feed showed "This clip could not be loaded."**
+  ExoPlayer got a 404 on the clip URL. Cause: the dry-run match's render file was
+  among the recordings deleted during the earlier audio-loop incident, but the
+  match is still inside its 24h vote window so it still appears in the feed. The
+  app degrades gracefully (message shown, no crash, vote buttons still work). In
+  normal operation a match leaves the vote window (24h) well before its render is
+  purged (7d), so this does not occur; it was purely an artifact of the manual
+  bulk deletion. A transient `Firebase Installations Service unavailable` also
+  appeared once at cold start (unrelated, self-heals).
 
 Original "House Lights Down" exploration notes follow.
 
@@ -1223,7 +2270,8 @@ tournaments/{tournamentId} (extended)
   - `voteReminders` needed a composite index that did not exist. It would have thrown every run and been swallowed by the scheduler's own try/catch, appearing as a job that silently did nothing.
   - `FieldValue` was used but never imported in `matchFinalization.js`. `require()` succeeded because the reference is only reached at runtime inside a transaction, so every ranked finalization would have thrown.
   - **A green deploy proves none of this. Only running the thing does.**
-- **`functions/live/coreLoop.js` is the critical-path regression**: queue → pair → complete → vote → finalize, then rating, wins/losses, both points numbers, rating history, rank change, entitlement, clip eligibility and the judge feed. **Run it after touching `enterQueue`, `pollMatchmaking`, `completeMatch`, `finalizeMatch` or `awardPoints`** — each is depended on by several features, and a regression there breaks the whole app regardless of what is built on top. 18 checks; last run green after a session that changed several of those paths.
+- **`functions/live/coreLoop.js` is the critical-path regression**: queue → pair → complete → vote → finalize, then rating, wins/losses, both points numbers, rating history, rank change, entitlement, clip eligibility and the judge feed. **Run it after touching `enterQueue`, `pollMatchmaking`, `completeMatch`, `finalizeMatch` or `awardPoints`** — each is depended on by several features, and a regression there breaks the whole app regardless of what is built on top. 22 checks; last run green (2026-09-01).
+  - **Its probe accounts now carry a placeholder `profile.introVideoUrl`, and they MUST**: the mandatory intro-video gate added to `enterQueue` (ranked/tournament) refuses any account without an approved intro, so without it the harness fails at STEP 1 before anything else runs. This actually happened — the gate silently broke the whole regression until the probe setup was updated. Any NEW gate on `enterQueue`/`completeMatch`/`finalizeMatch` has to be satisfied in the harness setup the same way, or the critical-path guard goes dark.
 
 ## Build Order (de-risking hardest/least-familiar parts first)
 1. Skeleton app + Firebase Auth (phone/email/password) + Play Age Signals check on signup.
@@ -1296,6 +2344,40 @@ The developer asked directly whether a hard paywall could work, given published 
 - **The window exists to make ONE crowd at ONE time.** Free-unranked plus paid-ranked would split the pool into two thinner queues during the single hour designed to unsplit it — matchmaking would get *worse* at peak.
 - **You convert people who have something at stake, not people who have nothing.** A free player sitting at 1340 with a rank title has something to protect and a ladder to climb. Nothing-at-stake is a churn condition, not a conversion condition — which is precisely what sank the rejected proposal above.
 - A dedicated free player could in principle reach the top on one hour a day. **That is allowed**: a free player in the GOAT five is a story, and they would be the most motivated subscriber in the app the moment their spot was threatened. The **prize** ceiling stays paid regardless, since tournaments are where money lives.
+
+### The window is now the TOURNAMENT — reconciliation (2026-08-31, DECIDED)
+The model above says "free players battle RANKED during Sixes and Sevens,"
+but the window is now the **nightly tournament** (see the daily-tournament
+build). The developer asked whether to charge free players to enter it -
+floated **$19.99**. **DECIDED AGAINST charging entry on the DAILY tournament**,
+for reasons that follow directly from the transaction-led model:
+- **An entry fee taxes the thing that makes the money.** Revenue is gifting /
+  heckles / coins, which only happen when a **crowd** is watching a live
+  tournament. A gate guts the crowd, which guts the gifting - charging
+  admission to the room you earn inside. The tournament wants to be FULL.
+- **It kills the liquidity the window exists for** - the one hour designed to
+  gather a crowd would sit behind the biggest gate, fatal in a thin beta.
+- **$19.99 for a POINTS prize is nonsense** - entry fees only work against a
+  real (cash) prize pool, which also trips the deferred payment-processor /
+  geofencing / 1099 / entity machinery. Not a switch.
+- It is the **hard-paywall-on-a-marketplace** mistake this section already
+  rejected (kills supply, not just demand).
+
+**So the resolution:**
+- The **daily** tournament stays **free to enter** (points prize or none).
+  Free players (post-trial) can join it free and battle in the window;
+  subscription still sells **battle any time** (the window is one hour/day).
+- Monetise the tournament through the **CROWD inside it** - gifting, heckles,
+  coins - and through the **gifting creator-hook** (a free roaster showered
+  with gifts sees "you got $X of support - subscribe to keep it"), which is a
+  far stronger convert than a $20 gate.
+- **Paid entry fees belong ONLY on occasional BIGGER cash-prize special
+  tournaments** (the "$1000 night"), where the prize justifies the buy-in and
+  subscribers get free/discounted entries. The daily one is never gated.
+- **Copy updated** accordingly: the free-tier window lines on Home now read
+  "Join the nightly Sixes and Sevens tournament free, every night" instead of
+  "Ranked is free during the window" (still only visible when the paywall is
+  switched on, which it is not yet).
 
 ### The tiers
 | Tier | Gets |

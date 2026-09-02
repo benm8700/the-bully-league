@@ -42,11 +42,13 @@ class MatchClipPlayer extends StatefulWidget {
   State<MatchClipPlayer> createState() => _MatchClipPlayerState();
 }
 
-class _MatchClipPlayerState extends State<MatchClipPlayer> {
+class _MatchClipPlayerState extends State<MatchClipPlayer>
+    with WidgetsBindingObserver {
   VideoPlayerController? _controller;
   bool _initialising = false;
   String? _error;
   bool _watchedEnough = false;
+  bool _wasPlayingBeforeBackground = false;
 
   /// Measured from the player's own reported position rather than a wall
   /// clock, so leaving it paused, or backgrounding the app, does not
@@ -56,6 +58,7 @@ class _MatchClipPlayerState extends State<MatchClipPlayer> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
     // Nothing to watch means nothing to wait for.
     if (widget.watchSecondsRequired <= 0 ||
@@ -137,8 +140,23 @@ class _MatchClipPlayerState extends State<MatchClipPlayer> {
     }
   }
 
+  /// Pause on background so a looping clip never keeps playing its audio
+  /// unattended; resume only if it was playing when we left.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    if (state == AppLifecycleState.resumed) {
+      if (_wasPlayingBeforeBackground) c.play();
+    } else {
+      _wasPlayingBeforeBackground = c.value.isPlaying;
+      c.pause();
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller?.removeListener(_onTick);
     _controller?.dispose();
     super.dispose();

@@ -1,5 +1,9 @@
 const vision = require("@google-cloud/vision");
 const {getStorage} = require("firebase-admin/storage");
+const {spawn} = require("child_process");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 
 const client = new vision.ImageAnnotatorClient();
 
@@ -58,4 +62,72 @@ async function moderateImageContent(base64Content) {
   });
 }
 
-module.exports = {moderateImage, moderateImageContent};
+/**
+ * Moderates a "tell me about yourself" intro video (mandatory, User Profile
+ * System). A video cannot be handed straight to SafeSearch, so ffmpeg
+ * (already a dependency, used by the highlight renderer) samples ~one frame
+ * every ten seconds and each frame is run through the same SafeSearch check
+ * as a profile photo. The FIRST bad frame rejects the whole video - one
+ * exposed frame is enough, and there is no reason to keep analysing.
+ *
+ * Screening happens ASYNCHRONOUSLY at upload, which is the whole safety
+ * advantage of a recorded intro over a live stranger video chat: a stored
+ * file can be checked frame by frame before anyone ever sees it, rather than
+ * hoping a live sampler catches a flash between samples.
+ */
+async function moderateVideo(storagePath) {
+  const bucket = getStorage().bucket();
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "intromod-"));
+  const localVideo = path.join(workDir, "intro.mp4");
+  try {
+    await bucket.file(storagePath).download({destination: localVideo});
+
+    const ffmpegPath = require("ffmpeg-static");
+    await new Promise((resolve, reject) => {
+      // fps=1/10 => one frame per 10s; cap at 8 so a mis-tagged long file
+      // can never spawn hundreds of SafeSearch calls. round=up ceils the
+      // output frame count, so ANY decodable clip yields at least one frame
+      // - without it a short clip (< ~10s) rounds to zero frames and is
+      // wrongly reported as unreadable.
+      const proc = spawn(ffmpegPath, [
+        "-i", localVideo,
+        "-vf", "fps=1/10:round=up",
+        "-frames:v", "8",
+        path.join(workDir, "f_%03d.jpg"),
+      ]);
+      let err = "";
+      proc.stderr.on("data", (d) => {
+        err += d.toString();
+      });
+      proc.on("close", (code) =>
+        code === 0 ? resolve() : reject(new Error("ffmpeg failed: " + err)));
+      proc.on("error", reject);
+    });
+
+    const frames = fs.readdirSync(workDir)
+        .filter((f) => f.endsWith(".jpg")).sort();
+    if (frames.length === 0) {
+      // No decodable frames - refuse rather than approve an unreadable file.
+      return {approved: false,
+        reason: "Could not read this video - try re-recording."};
+    }
+
+    for (const f of frames) {
+      const content = fs.readFileSync(path.join(workDir, f));
+      const [result] = await client.safeSearchDetection({image: {content}});
+      const verdict = verdictFromSafeSearch(result.safeSearchAnnotation, {
+        failureReason: "Could not analyze this video.",
+      });
+      if (!verdict.approved) return verdict;
+    }
+    return {approved: true};
+  } finally {
+    try {
+      fs.rmSync(workDir, {recursive: true, force: true});
+    } catch (_) {
+      // best-effort temp cleanup
+    }
+  }
+}
+
+module.exports = {moderateImage, moderateImageContent, moderateVideo};

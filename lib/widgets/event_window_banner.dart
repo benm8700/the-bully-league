@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 
 import '../core/services/event_window.dart';
 import '../core/services/presence.dart';
+import '../screens/tournament/tournament_list_screen.dart';
+import '../theme/app_theme.dart';
 
 /// The always-visible countdown to the daily window.
 ///
@@ -67,14 +69,25 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
           color: live
               ? Theme.of(context).colorScheme.primaryContainer
               : Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            // The whole banner is the way in to tonight's tournament - tap to
+            // the tournament list, where check-in lives. The "I'm in tonight"
+            // button inside keeps its own tap.
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const TournamentListScreen(),
+              ),
+            ),
+            child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(live ? Icons.local_fire_department : Icons.schedule),
+                    Icon(live ? Icons.local_fire_department : Icons.schedule,
+                        color: live ? context.palette.live : null),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -84,6 +97,20 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
                             live ? '${config.name} is LIVE' : config.name,
                             style: Theme.of(context).textTheme.titleSmall
                                 ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 2),
+                          // Frames the window as what it now IS - the nightly
+                          // tournament, the one place prestige and prizes are
+                          // on the line - so it reads as the headline event
+                          // rather than just a points-multiplier hour.
+                          Text(
+                            live
+                                ? 'The nightly tournament is on - join the bracket'
+                                : 'The nightly tournament - win prestige & prizes',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                    color: context.palette.reward,
+                                    fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -119,13 +146,75 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
                     ),
                   ],
                 ),
-                // Pre-commitment, shown only ahead of the window. Once it
-                // is running, "I'm in tonight" is a worse call to action
-                // than simply battling, which is already one tap away.
-                if (!live)
+                // The explicit CTA during the window. The whole card is
+                // tappable, but a card with no visible button is a weak
+                // affordance - many people never realise they can tap it. This
+                // is the headline's clear action, right at the decision point
+                // where the urgency (time left, 2x points) is being read. It
+                // reinforces the app-wide LIVE bar rather than duplicating it:
+                // the bar is the persistent glance-nudge, this is the in-context
+                // "do it now" button.
+                if (live) ...[
+                  const SizedBox(height: 8),
+                  // Two entry points side by side. The GOLD "Join Tournament"
+                  // (metallic gold gradient + glow, so it reads like a
+                  // win-money/prize button, distinct from the pink "Roast
+                  // Someone Now" below) is the headline action for battlers.
+                  // The secondary "Watch" invites SPECTATORS in - people who do
+                  // not want to battle but will watch the live bracket and
+                  // vote/judge, which is the scarce resource the ladder runs
+                  // on. Both go to the tournament, where check-in AND the live
+                  // watch/vote list live.
+                  Row(
+                    children: [
+                      _goldTournamentButton(context, 'Join Tournament'),
+                      const SizedBox(width: 10),
+                      // Spectator entry, now COLOURED (filled purple secondary)
+                      // to actively pull people into watching + judging - votes
+                      // are the scarce resource the ladder runs on, so this is
+                      // worth encouraging, not just offering. Distinct from the
+                      // gold Join and the pink primary. An eye icon so it reads
+                      // as "watch" at a glance.
+                      FilledButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const TournamentListScreen(),
+                          ),
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.secondary,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onSecondary,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 9),
+                        ),
+                        icon: const Icon(Icons.remove_red_eye_outlined,
+                            size: 16),
+                        label: const Text('Watch'),
+                      ),
+                    ],
+                  ),
+                ],
+                // Before the window: the SAME gold tournament button (the
+                // developer's favourite, so it lives here too) leading to
+                // tonight's tournament, plus the "I'm in tonight" pre-commit.
+                // Once the window is running, "I'm in tonight" is a worse call
+                // to action than simply battling, so it only shows ahead.
+                if (!live) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _goldTournamentButton(
+                        context, "Tonight's Tournament"),
+                  ),
+                  const SizedBox(height: 8),
                   _CommitRow(dayKey: upcomingWindowDayKey(now, config)),
+                ],
               ],
             ),
+          ),
           ),
         );
       },
@@ -169,6 +258,57 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
     if (local.minute == 0) return '$h$suffix';
     return '$h:${local.minute.toString().padLeft(2, '0')}$suffix';
   }
+}
+
+/// The metallic-gold "win money / prize" tournament button, reused on both the
+/// live and pre-window banner states. Pale-gold -> vivid gold -> deep gold
+/// with a gold glow; a plain FilledButton can't gradient, so this is a custom
+/// Ink button. Deliberately a DIFFERENT colour from the pink "Roast a
+/// Stranger" primary so the two never read as the same action. Goes to the
+/// tournament, where check-in and the live watch/vote list live.
+Widget _goldTournamentButton(BuildContext context, String label) {
+  return Material(
+    color: Colors.transparent,
+    borderRadius: BorderRadius.circular(24),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(24),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const TournamentListScreen()),
+      ),
+      child: Ink(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFCE9A6), Color(0xFFF4C838), Color(0xFFCF9A15)],
+            stops: [0.0, 0.5, 1.0],
+          ),
+          // A thin earthy-brown outline that follows the rounded pill, INSTEAD
+          // of the old gold glow - the glow's soft square halo bled past the
+          // rounded corners and looked messy. Fully rounded, no excess corners.
+          border: Border.all(color: const Color(0xFF7A5A12), width: 1.5),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.emoji_events, size: 16, color: Color(0xFF4A3500)),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: const Color(0xFF3D2C00),
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 /// "N roasters online now", or nothing at all.
@@ -246,27 +386,47 @@ class _CommitRow extends StatelessWidget {
         final committed =
             snapshot.data?.data()?['eventCommitmentDayKey'] == dayKey;
 
+        // Tinted with the REWARD token (the "prize hour" gold), not the
+        // primary accent. This deliberately gives the pre-commit box a
+        // little pull of its own - Sixes and Sevens is what we most want to
+        // captivate people with - while still keeping the solid primary CTA
+        // as the one true accent on the screen. A tonal fill + icon reads
+        // as inviting without shouting louder than "Find Opponent".
+        final reward = context.palette.reward;
+        // A compact button style so the banner stays tight - the default
+        // 48px tap target plus padding makes it taller than it needs to be.
+        final commitStyle = FilledButton.styleFrom(
+          foregroundColor: reward,
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        );
         return Padding(
-          padding: const EdgeInsets.only(top: 10),
+          padding: const EdgeInsets.only(top: 6),
           child: Row(
             children: [
               committed
-                  ? OutlinedButton.icon(
+                  ? FilledButton.tonalIcon(
                       onPressed: () => userRef.set({
                         'eventCommitmentDayKey': null,
                       }, SetOptions(merge: true)),
+                      style: commitStyle.copyWith(
+                        backgroundColor: WidgetStatePropertyAll(
+                            reward.withValues(alpha: 0.18)),
+                      ),
                       icon: const Icon(Icons.check_circle, size: 18),
                       label: const Text("You're in tonight"),
                     )
-                    // OutlinedButton, not Filled. Brass means ONE thing -
-                    // the primary action - and the first pass spent it on
-                    // two big blocks on the same screen, which is how an
-                    // accent stops meaning anything.
-                  : OutlinedButton(
+                  : FilledButton.tonalIcon(
                       onPressed: () => userRef.set({
                         'eventCommitmentDayKey': dayKey,
                       }, SetOptions(merge: true)),
-                      child: const Text("I'm in tonight"),
+                      style: commitStyle.copyWith(
+                        backgroundColor: WidgetStatePropertyAll(
+                            reward.withValues(alpha: 0.14)),
+                      ),
+                      icon: const Icon(Icons.star_rounded, size: 18),
+                      label: const Text("I'm in tonight"),
                     ),
               const SizedBox(width: 12),
               const Expanded(child: _CommittedCountLine()),
@@ -336,7 +496,7 @@ class _MultiplierLine extends StatelessWidget {
           padding: const EdgeInsets.only(top: 4),
           child: Row(
             children: [
-              const Icon(Icons.bolt, size: 14, color: Colors.amber),
+              Icon(Icons.bolt, size: 14, color: context.palette.reward),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(

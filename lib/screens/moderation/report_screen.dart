@@ -85,7 +85,10 @@ class _ReportScreenState extends State<ReportScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Report')),
       body: Padding(
-        padding: const EdgeInsets.all(24),
+        // Bottom inset clears the gesture bar so the submit button isn't
+        // under it when scrolled to the end (S22 gesture-nav, 2026-09-01).
+        padding: EdgeInsets.fromLTRB(
+            24, 24, 24, 24 + MediaQuery.of(context).padding.bottom),
         child: submitted
             ? Center(child: Text(_resultMessage!, textAlign: TextAlign.center))
             : SingleChildScrollView(

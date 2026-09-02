@@ -285,11 +285,24 @@ async function getMyChallenges(auth) {
   const uid = auth.uid;
   const nowMs = Date.now();
 
-  const [incoming, outgoing] = await Promise.all([
+  // A THIRD query for challenges the target has ACCEPTED - without it the
+  // challenger never learns their challenge was taken up. Accepting moves
+  // the challenge from "pending" to "accepted", so it drops out of the
+  // outgoing-pending list entirely; the challenger's "Waiting on X" simply
+  // vanishes with no way into the match that was just created for them.
+  // This is the client half of getChallengeMatch, which exists precisely so
+  // "the acceptor's opponent can join the match they never explicitly
+  // started". Same fromUid+status equality shape as the pending query, so
+  // it needs no new index. Bounded by isExpired to the last hour, so it does
+  // not read every friend battle the user has ever started - fine at beta
+  // scale; revisit if a user accumulates many in an hour.
+  const [incoming, outgoing, accepted] = await Promise.all([
     db.collection("challenges")
         .where("toUid", "==", uid).where("status", "==", "pending").get(),
     db.collection("challenges")
         .where("fromUid", "==", uid).where("status", "==", "pending").get(),
+    db.collection("challenges")
+        .where("fromUid", "==", uid).where("status", "==", "accepted").get(),
   ]);
 
   const live = (snap) => snap.docs
@@ -298,12 +311,14 @@ async function getMyChallenges(auth) {
 
   const incomingLive = live(incoming);
   const outgoingLive = live(outgoing);
+  const acceptedLive = live(accepted);
 
   // Names are resolved here rather than trusted from the challenge, for
-  // the outgoing direction at least - the target may have renamed
+  // the outgoing directions at least - the target may have renamed
   // themselves since.
   const names = new Map();
-  const uids = [...new Set(outgoingLive.map((c) => c.toUid))];
+  const uids = [...new Set(
+      [...outgoingLive, ...acceptedLive].map((c) => c.toUid))];
   await Promise.all(uids.map(async (id) => {
     const s = await db.collection("users").doc(id).get();
     names.set(id, s.data()?.username ?? "Unknown");
@@ -319,6 +334,12 @@ async function getMyChallenges(auth) {
       challengeId: c.id,
       toUsername: names.get(c.toUid) ?? "Unknown",
       expiresAtMs: c.expiresAtMs,
+    })),
+    // The challenger's way into an accepted battle.
+    accepted: acceptedLive.map((c) => ({
+      challengeId: c.id,
+      toUsername: names.get(c.toUid) ?? "Unknown",
+      matchId: c.matchId ?? friendMatchId(c.id),
     })),
   };
 }

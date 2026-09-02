@@ -11,21 +11,73 @@ import 'core/services/cloud_vision_moderation_service.dart';
 import 'core/services/push_notification_service.dart';
 import 'core/services/visual_moderation_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/window_skin_controller.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/home/main_shell.dart';
 import 'screens/moderation/banned_screen.dart';
 
-/// A theme id shared with the in-app picker, so cycling it rebuilds the
-/// whole app in the next direction. A plain global ValueNotifier rather
-/// than a provider because it is a dev-only preview control with a single
-/// consumer - the app root.
-final ValueNotifier<String> kActiveTheme = ValueNotifier(kThemeIds.first);
+/// The everyday base skin everyone gets. Comedy Night is the brand default;
+/// Card/Aurora and the other explorations are kept in app_theme.dart for
+/// future use, and Neon stays the earned GOAT prestige unlock.
+const String kBaseSkin = 'comedyNight';
+
+/// Nightlife: navy-black / violet / champagne-gold. Once the AUTOMATIC skin
+/// the whole app wore during Sixes and Sevens ("the lights change at 6") -
+/// but that app-wide palette swap was DROPPED (2026-08-31, the developer's
+/// call): swapping the entire look for an hour risked reading as a different
+/// app to anyone opening it fresh during the window, and undercut the Comedy
+/// Night brand identity. Nightlife is preserved as an unlockable PRESTIGE
+/// SKIN (the developer's favourite), alongside Neon. The window now gets an
+/// unmistakable LIVE CUE instead (see WindowLiveBar) rather than a full
+/// repaint. The kept constant name is historical.
+const String kWindowSkin = 'nightlife';
+
+/// Skins a client may actually equip. Anything else on a user document (a
+/// legacy 'card', a dev preview) falls back to the base rather than
+/// rendering a retired skin. Nightlife and Neon are prestige unlocks (see
+/// AppearanceScreen); the future plan is that all skins become paid unlocks.
+const Set<String> kEquippableSkins = {kBaseSkin, 'neon', kWindowSkin};
+
+/// The user's chosen skin (persisted as users/{uid}.equippedSkin). This is
+/// what the app wears - there is no longer any window override on top of it.
+final ValueNotifier<String> kEquippedSkin = ValueNotifier(kBaseSkin);
+
+/// Whether Sixes and Sevens is live right now, maintained by
+/// [WindowSkinController]. Drives the LIVE CUE (WindowLiveBar), not the
+/// theme - the automatic skin swap was dropped.
+final ValueNotifier<bool> kWindowLive = ValueNotifier(false);
+
+/// The current window's display name, maintained by [WindowSkinController]
+/// from config/eventWindow so the LIVE CUE names it correctly even though
+/// the name is provisional and console-tunable. Defaults to the documented
+/// name so the cue reads right before the config resolves.
+final ValueNotifier<String> kWindowName = ValueNotifier('Sixes and Sevens');
+
+/// The effective theme the MaterialApp renders: simply the user's equipped
+/// skin. Derived from [kEquippedSkin] - never set directly.
+final ValueNotifier<String> kActiveTheme = ValueNotifier(kBaseSkin);
+
+bool _themeWired = false;
+
+/// Wires [kActiveTheme] to follow [kEquippedSkin]. Idempotent so it can be
+/// called from the app-root build.
+void wireActiveTheme() {
+  if (_themeWired) return;
+  _themeWired = true;
+  void recompute() {
+    kActiveTheme.value = kEquippedSkin.value;
+  }
+
+  kEquippedSkin.addListener(recompute);
+  recompute();
+}
 
 class BullyLeagueApp extends StatelessWidget {
   const BullyLeagueApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    wireActiveTheme();
     return MultiProvider(
       providers: [
         Provider<AuthService>(create: (_) => AuthService(FirebaseAuth.instance)),
@@ -129,19 +181,28 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
         // mid-build, which Flutter forbids.
         final data = snapshot.data?.data();
         if (!_appliedSkin && data != null) {
-          final skin = data['equippedSkin'] as String?;
           _appliedSkin = true;
-          if (skin != null && skin.isNotEmpty && skin != kActiveTheme.value) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              kActiveTheme.value = skin;
-            });
-          }
+          // Restore the persisted skin, falling back to the base for a
+          // retired skin (a legacy 'card') or nothing at all - so an old
+          // account never renders a skin no longer offered. The window
+          // override, if live, wins over this via kActiveTheme.
+          final skin = data['equippedSkin'] as String?;
+          final effective =
+              (skin != null && kEquippableSkins.contains(skin))
+                  ? skin
+                  : kBaseSkin;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            kEquippedSkin.value = effective;
+          });
         }
         final accountStatus = data?['accountStatus'] as String?;
+        // WindowSkinController keeps kWindowLive current so the whole app -
+        // battlers AND spectators - shifts to the event skin during Sixes
+        // and Sevens. Mounted here so it runs for every signed-in surface.
         if (accountStatus == 'banned') {
-          return const BannedScreen();
+          return const WindowSkinController(child: BannedScreen());
         }
-        return const MainShell();
+        return const WindowSkinController(child: MainShell());
       },
     );
   }

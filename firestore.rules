@@ -254,6 +254,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Live-match spectator heartbeats, powering the "N watching" count on the
+    // live viewer. A signed-in viewer may READ the count and write ONLY their
+    // own heartbeat doc (uid == userId), so the number reflects distinct
+    // accounts and cannot be inflated by writing other people's docs. Purely
+    // ephemeral/vanity - no sensitive fields, and nothing downstream trusts it
+    // for rating, money, or moderation. Stale docs (a viewer who left) are
+    // simply not counted (the client filters by a fresh lastSeenMs).
+    match /liveWatch/{matchId}/viewers/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
     match /matches/{matchId} {
       // Match documents are now created and settled entirely server-side:
       // pollMatchmaking creates them at pairing time and completeMatch

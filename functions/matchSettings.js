@@ -34,6 +34,10 @@ const DEFAULTS = {
   roundLengthSeconds: 15,
   countdownSeconds: 5,
   bioRevealSeconds: 60,
+  // The live "Warmup Round" that opens a battle - both mics open, ~30s of
+  // banter/staredown before round 1 (recorded, spectator-visible). Stamped
+  // on the match so both players run the same clock. 0 disables it.
+  warmupSeconds: 30,
   /**
    * Vote weight at which a result counts for full rating movement (see
    * voteConfidence in rating.js).
@@ -69,6 +73,9 @@ const LIMITS = {
   // absent opponent could otherwise hold someone hostage, and that is now
   // bounded by presence rather than by this number.
   bioRevealSeconds: {min: 0, max: 900},
+  // 0 disables the warmup; capped so a console typo can't strand two people
+  // staring at each other for minutes before the battle starts.
+  warmupSeconds: {min: 0, max: 120},
   // At least 1 (0 would make every result count for nothing), and capped
   // well above any plausible per-match vote count so it can grow with the
   // platform without needing a code change.

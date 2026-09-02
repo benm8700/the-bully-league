@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/rank_change_popup.dart';
 import '../../widgets/service_status_banner.dart';
+import '../../widgets/window_live_bar.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import '../profile/profile_screen.dart';
 import '../vote/my_battles_screen.dart';
@@ -67,6 +68,10 @@ class _MainShellState extends State<MainShell> {
       body: Column(
         children: [
           const ServiceStatusBanner(),
+          // The unmistakable "the show is on" cue during Sixes and Sevens,
+          // app-wide above the tabs (the replacement for the dropped
+          // Nightlife skin swap). Renders nothing outside the window.
+          const WindowLiveBar(),
           Expanded(child: IndexedStack(index: _index, children: _screens)),
         ],
       ),

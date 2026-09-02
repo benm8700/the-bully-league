@@ -64,14 +64,14 @@ function copyFor(kind, config, onlineCount, {committed = false} = {}) {
         title: `${config.name} closes soon`,
         body: onlineCount > 0 ?
           `You said you were in. ${people(onlineCount)} still on - one more battle?` :
-          "You said you were in. Still time for one battle.",
+          "You said you were in. The tournament closes soon.",
       };
     }
     return {
       title: `Last call for ${config.name}`,
       body: onlineCount > 0 ?
-        `${people(onlineCount)} still on. Time for one more battle.` :
-        "It closes soon - time for one more battle.",
+        `The tournament closes soon. ${people(onlineCount)} still in - one more?` :
+        "The tournament closes soon - time for one more battle.",
     };
   }
 
@@ -79,15 +79,15 @@ function copyFor(kind, config, onlineCount, {committed = false} = {}) {
     return {
       title: `${config.name} starts now`,
       body: onlineCount > 0 ?
-        `You said you'd be here. So ${onlineCount === 1 ? "is" : "are"} ${onlineCount} other${onlineCount === 1 ? "" : "s"}.` :
-        "You said you'd be here. Go get someone.",
+        `You said you'd be here - the tournament is on. So ${onlineCount === 1 ? "is" : "are"} ${onlineCount} other${onlineCount === 1 ? "" : "s"}.` :
+        "You said you'd be here. The tournament is on.",
     };
   }
   return {
     title: `${config.name} starts now`,
     body: onlineCount > 0 ?
-      `${people(onlineCount)} already on. Come get someone.` :
-      "The busiest hour of the day. Come get someone.",
+      `The nightly tournament is on. ${people(onlineCount)} already in - come get someone.` :
+      "The nightly tournament is starting. Prizes and prestige on the line.",
   };
 }
 

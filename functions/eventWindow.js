@@ -81,6 +81,35 @@ function pacificNow(date) {
   };
 }
 
+/**
+ * Pacific UTC offset (in ms, negative) at a given instant, via ICU's
+ * longOffset - so PST (-8h) and PDT (-7h) are handled by the real IANA
+ * rules rather than a hand-rolled DST calculation.
+ */
+function pacificOffsetMs(date) {
+  const tzName = new Intl.DateTimeFormat("en-US", {
+    timeZone: PACIFIC, timeZoneName: "longOffset",
+  }).formatToParts(date).find((p) => p.type === "timeZoneName").value;
+  const match = /GMT([+-])(\d{2}):(\d{2})/.exec(tzName);
+  if (!match) return -8 * 60 * 60 * 1000; // fall back to PST
+  const sign = match[1] === "-" ? -1 : 1;
+  return sign * (Number(match[2]) * 60 + Number(match[3])) * 60 * 1000;
+}
+
+/**
+ * Epoch millis for a Pacific wall-clock time (a YYYY-MM-DD day plus an
+ * hour:minute). Two-pass to resolve the offset at the instant itself rather
+ * than at the guess - the same correction the Dart client makes. Safe for
+ * the 6pm window, which is nowhere near the 2am DST transition.
+ */
+function pacificWallClockToUtcMs(dayKey, hour, minute) {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const guess = Date.UTC(y, m - 1, d, hour, minute);
+  let off = pacificOffsetMs(new Date(guess));
+  off = pacificOffsetMs(new Date(guess - off));
+  return guess - off;
+}
+
 /** Whether an instant falls inside the window. */
 function isWithinWindow(date, config) {
   if (!config.enabled) return false;
@@ -149,4 +178,6 @@ module.exports = {
   pacificNow,
   isWithinWindow,
   qualifiesForWindow,
+  pacificOffsetMs,
+  pacificWallClockToUtcMs,
 };

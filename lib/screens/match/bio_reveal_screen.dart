@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/matchmaking_service.dart';
+import '../../widgets/looping_video.dart';
 import 'match_screen.dart';
 import 'matchmaking_screen.dart';
 
@@ -207,6 +208,34 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     });
   }
 
+  /// Readying up ends the reveal early (once both are ready), so it forgoes
+  /// the rest of the time to study the opponent's intro. That must be a
+  /// DELIBERATE act, not a stray tap - a confirmation stands between the
+  /// button and starting the battle so nobody skips their prep by accident.
+  Future<void> _confirmReady() async {
+    if (_busy || _iAmReady) return;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ready to battle?'),
+        content: const Text(
+            'The battle starts the moment you are both ready. You will not '
+            'get more time to watch their intro or read their card.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep studying'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text("I'm ready"),
+          ),
+        ],
+      ),
+    );
+    if (go == true) await _onReady();
+  }
+
   Future<void> _onReady() async {
     if (_busy || _iAmReady) return;
     setState(() {
@@ -374,6 +403,27 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     };
 
     final rows = <Widget>[];
+
+    // The intro video is the primary ammo now, so it leads - rewatchable on
+    // a loop, sound ON (they are talking, and that is the point). Sits above
+    // the text fields, which are secondary detail.
+    final introUrl = profile?['introVideoUrl'] as String?;
+    if (introUrl != null && introUrl.trim().isNotEmpty) {
+      rows.add(Row(
+        children: [
+          const Icon(Icons.videocam_outlined, size: 18),
+          const SizedBox(width: 6),
+          Text('Their intro', style: Theme.of(context).textTheme.labelLarge),
+        ],
+      ));
+      rows.add(const SizedBox(height: 8));
+      rows.add(ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 340),
+        child: Align(child: LoopingVideo(url: introUrl)),
+      ));
+      rows.add(const SizedBox(height: 16));
+    }
+
     for (final entry in fields.entries) {
       final value = profile?[entry.key] as String?;
       if (value == null || value.trim().isEmpty) continue;
@@ -446,12 +496,15 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
   Widget _buildActions() {
     final skipsLeft = _skipsLeft;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      // Bottom inset clears the system gesture bar (real-S22 occlusion fix,
+      // 2026-09-01) so "I'm Ready" / skip / decline are never under it.
+      padding: EdgeInsets.fromLTRB(
+          16, 8, 16, 16 + MediaQuery.of(context).padding.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           FilledButton(
-            onPressed: (_busy || _iAmReady) ? null : _onReady,
+            onPressed: (_busy || _iAmReady) ? null : _confirmReady,
             child: Text(_iAmReady ? 'Ready - waiting for opponent' : "I'm Ready"),
           ),
           // Only ever offered once the opponent has genuinely gone quiet,

@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/empty_state.dart';
 import 'vote_screen.dart';
 
 /// The matches most in need of a vote, fewest votes first.
@@ -91,23 +92,11 @@ class _VoteQueueScreenState extends State<VoteQueueScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_matches!.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          const Icon(Icons.how_to_vote_outlined, size: 48),
-          const SizedBox(height: 16),
-          Text(
-            'Nothing to judge right now',
-            style: Theme.of(context).textTheme.titleMedium,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Every open battle has either been judged by you already or is '
-            'one of your own. Check back once more matches finish.',
-            textAlign: TextAlign.center,
-          ),
-        ],
+      return const EmptyState(
+        icon: Icons.how_to_vote_outlined,
+        title: 'Nothing to judge right now',
+        message: 'Every open battle has either been judged by you already or '
+            'is one of your own. Check back once more matches finish.',
       );
     }
 

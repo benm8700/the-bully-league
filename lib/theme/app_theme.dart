@@ -33,6 +33,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.name,
     this.signature = 'none',
     this.segmentedGauge = false,
+    this.live = const Color(0xFFFF5A5F),
+    this.reward = const Color(0xFFE7B24B),
+    this.currency = const Color(0xFFE7B24B),
+    this.winner = const Color(0xFF4FD69A),
   });
 
   /// The one colour that means "primary action / live". Mirrors
@@ -69,6 +73,15 @@ class AppPalette extends ThemeExtension<AppPalette> {
   /// than a smooth fill. Shared by both finalists.
   final bool segmentedGauge;
 
+  /// SEMANTIC COLOUR JOBS (colours have jobs, not just a brand hue):
+  /// the LIVE/battle hot accent, the REWARD gold, the CURRENCY value
+  /// colour, and the WINNER/success colour. Loss/error uses
+  /// colorScheme.error. Defaults keep the two skins unchanged.
+  final Color live;
+  final Color reward;
+  final Color currency;
+  final Color winner;
+
   @override
   AppPalette copyWith({
     Color? accent,
@@ -83,6 +96,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
     String? name,
     String? signature,
     bool? segmentedGauge,
+    Color? live,
+    Color? reward,
+    Color? currency,
+    Color? winner,
   }) {
     return AppPalette(
       accent: accent ?? this.accent,
@@ -97,6 +114,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
       name: name ?? this.name,
       signature: signature ?? this.signature,
       segmentedGauge: segmentedGauge ?? this.segmentedGauge,
+      live: live ?? this.live,
+      reward: reward ?? this.reward,
+      currency: currency ?? this.currency,
+      winner: winner ?? this.winner,
     );
   }
 
@@ -116,6 +137,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
       name: t < 0.5 ? name : other.name,
       signature: t < 0.5 ? signature : other.signature,
       segmentedGauge: t < 0.5 ? segmentedGauge : other.segmentedGauge,
+      live: Color.lerp(live, other.live, t)!,
+      reward: Color.lerp(reward, other.reward, t)!,
+      currency: Color.lerp(currency, other.currency, t)!,
+      winner: Color.lerp(winner, other.winner, t)!,
     );
   }
 }
@@ -146,6 +171,11 @@ TextStyle displayStyle(
       // Only Archivo carries a width axis; on other faces this is ignored
       // harmlessly.
       FontVariation('wdth', p.displayWidth),
+      // Optical size, set to the point size - the correct way to set a
+      // serif like Fraunces (higher opsz = more elegant high contrast at
+      // large sizes, more legible low contrast at small ones). Faces without
+      // an opsz axis (Archivo) ignore it harmlessly.
+      FontVariation('opsz', size.clamp(9, 144)),
     ],
   );
 }
@@ -162,13 +192,41 @@ TextStyle displayStyle(
 // stay in this list for now so the dev palette toggle can still flip the
 // base between them - the developer may switch to Neon later. The other 8
 // directions' builders are kept below and can be restored by adding an id.
+// The two REAL skins today: Comedy Night is the everyday base everyone
+// gets, Neon is the earned GOAT prestige unlock. (See kBaseSkin in app.dart
+// - the base default is Comedy Night.)
 const List<String> kThemeIds = [
-  'card',
+  'comedyNight',
   'neon',
+];
+
+// SAVED brand explorations, kept in code for possible future use (the
+// developer's call - "maybe we will use in the future"). No longer surfaced
+// anywhere: the dev Theme Preview menu was removed once the lineup was
+// decided (Comedy Night base, Neon prestige, Nightlife = the automatic
+// Sixes and Sevens window skin). 'card' is Aurora; 'nightlife' still has a
+// real job as kWindowSkin (see app.dart). The builders remain wired in
+// appTheme() so any of these can be resurrected by pointing a skin at it.
+const List<String> kSavedBrandThemes = [
+  'card',
+  'club',
+  'electric',
+  'nightlife',
+  'wildcard',
 ];
 
 ThemeData appTheme(String id) {
   switch (id) {
+    case 'club':
+      return _club();
+    case 'electric':
+      return _electric();
+    case 'comedyNight':
+      return _comedyNight();
+    case 'nightlife':
+      return _nightlife();
+    case 'wildcard':
+      return _wildcard();
     case 'arcade':
       return _arcade();
     case 'courtside':
@@ -219,6 +277,9 @@ ThemeData _build({
         fontVariations: [
           FontVariation('wght', w ?? palette.displayWeight),
           FontVariation('wdth', palette.displayWidth),
+          // Optical size = point size, for serif faces like Fraunces.
+          // Archivo ignores this axis harmlessly.
+          FontVariation('opsz', s.clamp(9, 144)),
         ],
       );
 
@@ -333,7 +394,7 @@ ThemeData _tabloid() {
       accent: scream,
       gaugeFrom: Color(0xFFF0A0A4), gaugeTo: scream,
       gelA: scream, gelB: Color(0xFF1C6FE0),
-      display: 'Archivo', displayWeight: 900, displayWidth: 62, // condensed
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100, // condensed
       radius: 0,
     ),
   );
@@ -366,7 +427,7 @@ ThemeData _arcade() {
       accent: magenta,
       gaugeFrom: cyan, gaugeTo: magenta,
       gelA: magenta, gelB: cyan,
-      display: 'Archivo', displayWeight: 800, displayWidth: 125,
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
       radius: 2,
       segmentedGauge: true,
     ),
@@ -400,7 +461,7 @@ ThemeData _courtside() {
       accent: gold,
       gaugeFrom: Color(0xFF5E7BB0), gaugeTo: gold,
       gelA: Color(0xFF4E86C6), gelB: gold,
-      display: 'Archivo', displayWeight: 800, displayWidth: 118,
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
       radius: 6,
     ),
   );
@@ -440,7 +501,7 @@ ThemeData _neon() {
       accent: glow,
       gaugeFrom: indigo, gaugeTo: Color(0xFFAAA0FF),
       gelA: glow, gelB: Color(0xFF5FE0FF),
-      display: 'Archivo', displayWeight: 800, displayWidth: 108,
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
       radius: 14,
       signature: 'glow',
       segmentedGauge: true,
@@ -448,6 +509,177 @@ ThemeData _neon() {
   );
 }
 
+
+// === BRAND EXPLORATION THEMES (2026-08-28) ==============================
+// Five whole-app brand directions, SEPARATE from the Card/Neon skins. Same
+// layout as the current Battle screen (framed rank, solid gauge) so only
+// COLOUR changes - a fair side-by-side. Colours have JOBS (primary CTA /
+// live / reward / currency / winner), not one hue smeared everywhere.
+
+/// THEME 1 - Underground Comedy Club: warm near-black, crimson brand, gold
+/// reward, restrained violet secondary. Velvet-curtain and spotlight.
+ThemeData _club() {
+  const scheme = ColorScheme.dark(
+    primary: Color(0xFFD14B57), onPrimary: Color(0xFFFFF3EE),
+    secondary: Color(0xFF8A76B0), onSecondary: Color(0xFF15100A),
+    surface: Color(0xFF130D0F), onSurface: Color(0xFFFBEFE7),
+    onSurfaceVariant: Color(0xFFB7A39E),
+    surfaceContainer: Color(0xFF1E1518),
+    surfaceContainerHigh: Color(0xFF271B1F),
+    surfaceContainerHighest: Color(0xFF322329),
+    outline: Color(0xFF4A393C), outlineVariant: Color(0xFF3A2C2E),
+    error: Color(0xFFE5606A), onError: Color(0xFF2A0C0F),
+    inverseSurface: Color(0xFFFBEFE7), onInverseSurface: Color(0xFF130D0F),
+    primaryContainer: Color(0xFF3A1A20), onPrimaryContainer: Color(0xFFF2B5BB),
+  );
+  return _build(
+    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    palette: const AppPalette(
+      name: 'Comedy Club',
+      accent: Color(0xFFD14B57),
+      gaugeFrom: Color(0xFF8E2A3A), gaugeTo: Color(0xFFD9A94E),
+      gelA: Color(0xFFE06B75), gelB: Color(0xFF8A76B0),
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      radius: 16, signature: 'frame',
+      live: Color(0xFFFF5A5A), reward: Color(0xFFC9A24B),
+      currency: Color(0xFFE0B24A), winner: Color(0xFF5FB88C),
+    ),
+  );
+}
+
+/// THEME 2 - Electric Comedy / Violet: midnight, electric violet brand,
+/// magenta secondary, gold reward. Youthful energy without esports.
+ThemeData _electric() {
+  const scheme = ColorScheme.dark(
+    primary: Color(0xFF7E3FF2), onPrimary: Color(0xFFFFFFFF),
+    secondary: Color(0xFFFF4D8D), onSecondary: Color(0xFF1A0710),
+    surface: Color(0xFF0B0713), onSurface: Color(0xFFEDE7FA),
+    onSurfaceVariant: Color(0xFF9186AE),
+    surfaceContainer: Color(0xFF150E22),
+    surfaceContainerHigh: Color(0xFF1E1533),
+    surfaceContainerHighest: Color(0xFF271B42),
+    outline: Color(0xFF3B2D57), outlineVariant: Color(0xFF2A2043),
+    error: Color(0xFFFF6B8A), onError: Color(0xFF20060F),
+    inverseSurface: Color(0xFFEDE7FA), onInverseSurface: Color(0xFF0B0713),
+    primaryContainer: Color(0xFF2A1650), onPrimaryContainer: Color(0xFFC9A0FF),
+  );
+  return _build(
+    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    palette: const AppPalette(
+      name: 'Electric Violet',
+      accent: Color(0xFF8B5CFF),
+      gaugeFrom: Color(0xFF7E3FF2), gaugeTo: Color(0xFFC9A0FF),
+      gelA: Color(0xFF9B6BFF), gelB: Color(0xFFFF4D8D),
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      radius: 16, signature: 'frame',
+      live: Color(0xFFFF4D5E), reward: Color(0xFFE9C05A),
+      currency: Color(0xFFEAC24E), winner: Color(0xFF4FD69A),
+    ),
+  );
+}
+
+/// THEME 3 - Modern Comedy Night (BASE DEFAULT): neutral charcoal, a
+/// crimson / toned-down-hot-pink brand, purple secondary, gold reward.
+/// The primary leans pink-crimson rather than coral so the CTA reads hot
+/// without tipping into neon; `live` stays a true red so "live/hot" and
+/// "primary action" remain two distinct signals.
+ThemeData _comedyNight() {
+  const scheme = ColorScheme.dark(
+    primary: Color(0xFFEA4C6D), onPrimary: Color(0xFFFFFFFF),
+    secondary: Color(0xFF8B5CF6), onSecondary: Color(0xFF120A20),
+    surface: Color(0xFF0D0D0F), onSurface: Color(0xFFF5F1EC),
+    onSurfaceVariant: Color(0xFFA8A29E),
+    surfaceContainer: Color(0xFF16161A),
+    surfaceContainerHigh: Color(0xFF1F1F24),
+    surfaceContainerHighest: Color(0xFF282830),
+    outline: Color(0xFF3A3A40), outlineVariant: Color(0xFF2A2A2E),
+    error: Color(0xFFFF5C6A), onError: Color(0xFF2A0A0D),
+    inverseSurface: Color(0xFFF5F1EC), onInverseSurface: Color(0xFF0D0D0F),
+    primaryContainer: Color(0xFF3A1622), onPrimaryContainer: Color(0xFFFFB3C6),
+  );
+  return _build(
+    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    palette: const AppPalette(
+      name: 'Comedy Night',
+      accent: Color(0xFFFF6F90),
+      gaugeFrom: Color(0xFFEA4C6D), gaugeTo: Color(0xFFE8B84B),
+      gelA: Color(0xFFFF6F90), gelB: Color(0xFF8B5CF6),
+      // Fraunces: an elegant high-contrast serif for the display face (rank
+      // title, headlines, app bar) - reads premium/editorial, which suits
+      // the prestige framing, while its soft/wonk details keep it from being
+      // stiff. Body stays Inter. displayWidth is irrelevant (Fraunces has no
+      // width axis); a serif wants less weight than the wide Archivo did.
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      radius: 16, signature: 'frame',
+      live: Color(0xFFFF3B47), reward: Color(0xFFE8B84B),
+      currency: Color(0xFFEEC153), winner: Color(0xFF4FC98A),
+    ),
+  );
+}
+
+/// THEME 4 - Premium Nightlife: dark navy-black, refined violet brand,
+/// magenta secondary, champagne gold. Sleek, for 20s-40s.
+ThemeData _nightlife() {
+  const scheme = ColorScheme.dark(
+    primary: Color(0xFFA857E6), onPrimary: Color(0xFFFFFFFF),
+    secondary: Color(0xFFE84B9C), onSecondary: Color(0xFF1E0714),
+    surface: Color(0xFF0A0B14), onSurface: Color(0xFFECEEF5),
+    onSurfaceVariant: Color(0xFF8B90A3),
+    surfaceContainer: Color(0xFF13141F),
+    surfaceContainerHigh: Color(0xFF1B1D2B),
+    surfaceContainerHighest: Color(0xFF242739),
+    outline: Color(0xFF363B4E), outlineVariant: Color(0xFF262A38),
+    error: Color(0xFFFF6B84), onError: Color(0xFF2A0A12),
+    inverseSurface: Color(0xFFECEEF5), onInverseSurface: Color(0xFF0A0B14),
+    primaryContainer: Color(0xFF2C1A45), onPrimaryContainer: Color(0xFFD9B0F5),
+  );
+  return _build(
+    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    palette: const AppPalette(
+      name: 'Premium Nightlife',
+      accent: Color(0xFFBE7BF0),
+      gaugeFrom: Color(0xFFA857E6), gaugeTo: Color(0xFFE84B9C),
+      gelA: Color(0xFFBE7BF0), gelB: Color(0xFFE84B9C),
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      radius: 18, signature: 'frame',
+      live: Color(0xFFFF5277), reward: Color(0xFFD9B87A),
+      currency: Color(0xFFE0C08A), winner: Color(0xFF5FD3A6),
+    ),
+  );
+}
+
+/// THEME 5 - Wildcard "The Spotlight": my pick. Warm-ink neutral, ONE
+/// confident rose-red for CTA/live, gold ONLY for reward/currency, NO third
+/// brand colour competing - the UI recedes so faces and the one hot action
+/// pop. Premium via restraint, video-first.
+ThemeData _wildcard() {
+  const scheme = ColorScheme.dark(
+    primary: Color(0xFFF2454F), onPrimary: Color(0xFFFFFFFF),
+    secondary: Color(0xFFA87E86), onSecondary: Color(0xFF1A0E11),
+    surface: Color(0xFF110D10), onSurface: Color(0xFFF7F1EE),
+    onSurfaceVariant: Color(0xFFB0A6A2),
+    surfaceContainer: Color(0xFF1B1519),
+    surfaceContainerHigh: Color(0xFF251D22),
+    surfaceContainerHighest: Color(0xFF2F252B),
+    outline: Color(0xFF3C3138), outlineVariant: Color(0xFF2C2429),
+    error: Color(0xFFFF5C68), onError: Color(0xFF2A0A0E),
+    inverseSurface: Color(0xFFF7F1EE), onInverseSurface: Color(0xFF110D10),
+    primaryContainer: Color(0xFF3A171B), onPrimaryContainer: Color(0xFFFFB3B9),
+  );
+  return _build(
+    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    palette: const AppPalette(
+      name: 'The Spotlight',
+      accent: Color(0xFFFF6670),
+      gaugeFrom: Color(0xFFF2454F), gaugeTo: Color(0xFFE8B24A),
+      gelA: Color(0xFFFF6670), gelB: Color(0xFFE8B24A),
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      radius: 16, signature: 'frame',
+      live: Color(0xFFFF3345), reward: Color(0xFFE8B24A),
+      currency: Color(0xFFF0C255), winner: Color(0xFF52C98C),
+    ),
+  );
+}
 
 // --- 5. RISO: zine print. Two spot inks that overprint. -------------------
 ThemeData _riso() {
@@ -476,7 +708,7 @@ ThemeData _riso() {
       accent: pink,
       gaugeFrom: Color(0xFF6FA0F0), gaugeTo: pink,
       gelA: pink, gelB: Color(0xFF2C6FE8),
-      display: 'Archivo', displayWeight: 800, displayWidth: 88,
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
       radius: 3,
     ),
   );
@@ -507,7 +739,7 @@ ThemeData _fightNight() {
       accent: blood,
       gaugeFrom: Color(0xFF7A1520), gaugeTo: blood,
       gelA: blood, gelB: Color(0xFF4E86C6),
-      display: 'Archivo', displayWeight: 900, displayWidth: 68,
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
       radius: 0,
     ),
   );
@@ -538,7 +770,7 @@ ThemeData _comic() {
       accent: pop,
       gaugeFrom: Color(0xFF8FB0FF), gaugeTo: pop,
       gelA: Color(0xFFE5342B), gelB: Color(0xFF178A4C),
-      display: 'Archivo', displayWeight: 850, displayWidth: 120,
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
       radius: 2,
     ),
   );
@@ -569,7 +801,7 @@ ThemeData _battle() {
       accent: spray,
       gaugeFrom: Color(0xFF35E06B), gaugeTo: spray,
       gelA: Color(0xFFFF2E88), gelB: Color(0xFF35E06B),
-      display: 'Archivo', displayWeight: 900, displayWidth: 110,
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
       radius: 2,
     ),
   );
@@ -608,7 +840,7 @@ ThemeData _card() {
       // foil frame than an arcade-cabinet health bar.
       gaugeFrom: Color(0xFF34E0B0), gaugeTo: cyan,
       gelA: Color(0xFFFF6B9D), gelB: Color(0xFF6BA9FF),
-      display: 'Archivo', displayWeight: 720, displayWidth: 118,
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
       radius: 20,
       signature: 'frame',
       segmentedGauge: false,
@@ -642,7 +874,7 @@ ThemeData _tape() {
       accent: phosphor,
       gaugeFrom: Color(0xFF2E7A2E), gaugeTo: phosphor,
       gelA: Color(0xFFFF5C7A), gelB: Color(0xFF57C7FF),
-      display: 'Archivo', displayWeight: 800, displayWidth: 100,
+      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
       radius: 2,
     ),
   );

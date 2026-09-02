@@ -1,6 +1,7 @@
 const {getFirestore} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
-const {buildFirstRound, DEFAULT_MIN_ENTRANTS} = require("./tournament");
+const {buildFirstRound, ratingsFor, DEFAULT_MIN_ENTRANTS} =
+  require("./tournament");
 
 /**
  * LIVE tournaments: everyone online at once, the crowd votes, the bracket
@@ -148,10 +149,25 @@ function liveRoundWindow(tournament, startMs) {
 }
 
 /**
- * Record that a player is present for a live tournament.
+ * JOIN a live tournament - one action that ENTERS the player and CHECKS
+ * THEM IN, straight into the bracket that forms at the start.
  *
- * Presence is the whole premise of the format, so this is a real gate
- * rather than a formality: miss it and the bracket is built without you.
+ * This is the streamlined nightly-tournament flow (2026-08-31). The old
+ * design was two steps - enter the tournament earlier, then check in during
+ * the window - and it read as a trap: "I'm in tonight" looked like entry but
+ * did nothing toward the bracket, and a player could show up and not be in
+ * it. Now there is ONE button, shown when the window opens (~15 minutes
+ * before the start), and one tap puts you in. The bracket locks at the start.
+ *
+ * Presence is still the whole premise of the format, so it stays a real gate:
+ * you have to be here, during the window, to be in the bracket built from
+ * whoever joined.
+ *
+ * AUTO-ENTER ONLY WHEN FREE. A tournament with an entry fee needs that fee
+ * collected first, so a non-entrant is refused there rather than slipped into
+ * the bracket for nothing (the paid-entry flow is separate/future). The daily
+ * tournament is free, so this is the path it uses. Someone who is ALREADY an
+ * entrant (a paid entry, or a re-tap) is simply checked in.
  */
 async function checkInToTournament(auth, data) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -166,23 +182,48 @@ async function checkInToTournament(auth, data) {
   if (!snap.exists) throw new HttpsError("not-found", "Tournament not found.");
   const tournament = snap.data();
 
-  const entrantRef = ref.collection("entrants").doc(auth.uid);
-  if (!(await entrantRef.get()).exists) {
-    throw new HttpsError("failed-precondition",
-        "You have not entered this one.");
-  }
-
+  // The window is validated FIRST, before entering anyone: if it is too
+  // early or already closed, nobody should be added to the entrant list.
   const state = checkInState(tournament, nowMs);
   if (state !== "open") {
     const messages = {
       "not-live": "This tournament is not a live event.",
       "not-open": "This tournament has already started.",
       "no-start-time": "This tournament has no start time yet.",
-      "too-early": "Check-in is not open yet. Come back nearer the start.",
-      "closed": "Check-in has closed.",
+      "too-early": "Join opens nearer the start. Come back then.",
+      "closed": "The bracket is set - catch the next one.",
     };
     throw new HttpsError("failed-precondition",
-        messages[state] ?? "You cannot check in right now.", {reason: state});
+        messages[state] ?? "You cannot join right now.", {reason: state});
+  }
+
+  // MANDATORY intro video (User Profile System), same gate as enterQueue.
+  // Enforced here because the bracket is built from who joined - blocking now
+  // keeps anyone without an approved intro out of the bracket rather than
+  // discovering it when their match will not start. (Friend battles are
+  // exempt; tournaments are not.)
+  const userSnap = await db.collection("users").doc(auth.uid).get();
+  const profile = userSnap.data() && userSnap.data().profile;
+  const introUrl = profile && profile.introVideoUrl;
+  if (typeof introUrl !== "string" || introUrl.length === 0) {
+    throw new HttpsError("failed-precondition",
+        "Record your intro video before you battle - your opponent needs " +
+        "something to work with.");
+  }
+
+  const entrantRef = ref.collection("entrants").doc(auth.uid);
+  const entrant = await entrantRef.get();
+  if (!entrant.exists) {
+    const fee = Number(tournament.entryFee) || 0;
+    if (fee > 0) {
+      // Paid tournaments still need the fee collected before entry, so a
+      // non-entrant cannot join one this way.
+      throw new HttpsError("failed-precondition",
+          "You need to enter this one first.");
+    }
+    // Enter and check in in one write.
+    await entrantRef.set({joinedAtMs: nowMs, checkedInAtMs: nowMs});
+    return {checkedIn: true, joined: true, startsAtMs: startsAtMs(tournament)};
   }
 
   await entrantRef.set({checkedInAtMs: nowMs}, {merge: true});
@@ -225,7 +266,7 @@ async function startLiveTournament(tournamentId) {
   }
 
   const firstRound = Object.assign(
-      {roundNumber: 1, matchups: buildFirstRound(checkedIn)},
+      {roundNumber: 1, matchups: buildFirstRound(await ratingsFor(checkedIn))},
       liveRoundWindow(tournament, nowMs));
   await ref.update({
     status: "in_progress",

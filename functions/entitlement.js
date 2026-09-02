@@ -206,7 +206,7 @@ function battleEntitlement({user, mode, nowMs, windowConfig, config}) {
     return {
       allowed: false,
       reason: DENY.practiceClosedDuringWindow,
-      message: "Everyone's battling ranked right now. Jump in.",
+      message: "The nightly window is live - everyone's battling. Jump in.",
       state,
       inWindow,
     };
@@ -221,8 +221,8 @@ function battleEntitlement({user, mode, nowMs, windowConfig, config}) {
     allowed: false,
     reason: DENY.subscriptionRequired,
     message: inWindow ?
-      "Practice is for subscribers. Ranked is free right now - go." :
-      "Free battles happen during the daily window. " +
+      "Practice is for subscribers. Battling is free right now - go." :
+      "Free battles happen during the nightly window. " +
       "Subscribe to battle any time.",
     state,
     inWindow,

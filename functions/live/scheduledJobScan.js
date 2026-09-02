@@ -67,11 +67,14 @@ const JOBS = [
     fn: "purgeExpiredRecordings"},
   {name: "advanceLiveTournaments", mod: "../liveTournament",
     fn: "sweepLiveTournaments"},
+  {name: "createDailyTournament", mod: "../dailyTournament",
+    fn: "ensureDailyTournament"},
   {name: "weeklyRecap", mod: "../weeklyRecap", fn: "sweepWeeklyRecap"},
   {name: "stopRunawayRecordings", mod: "../cloudRecording",
     fn: "stopRunawayRecordings", needsSecret: true},
   {name: "finalizeExpiredMatches", mod: "../finalizeSweep",
     fn: "sweepExpiredMatches"},
+  {name: "sweepClimb", mod: "../climbPlay", fn: "sweepClimb"},
 ];
 
 /**

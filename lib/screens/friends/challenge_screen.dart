@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
@@ -27,19 +29,31 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
   final _controller = TextEditingController();
   List<Map<String, dynamic>> _incoming = const [];
   List<Map<String, dynamic>> _outgoing = const [];
+  List<Map<String, dynamic>> _accepted = const [];
   bool _loading = true;
   bool _busy = false;
   String? _error;
   String? _sent;
+  Timer? _poll;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // Poll so the challenger learns their challenge was accepted WITHOUT
+    // reloading the screen. Accepting is server-side and instant on the
+    // target's device; without this, the challenger's "Waiting on X" just
+    // sits there while the match they can join already exists. Cheap - one
+    // callable every few seconds, and only while this short-lived screen is
+    // open (the timer is cancelled on dispose).
+    _poll = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) _load();
+    });
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -55,6 +69,9 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
             .map((e) => (e as Map).cast<String, dynamic>())
             .toList();
         _outgoing = ((r.data['outgoing'] as List?) ?? const [])
+            .map((e) => (e as Map).cast<String, dynamic>())
+            .toList();
+        _accepted = ((r.data['accepted'] as List?) ?? const [])
             .map((e) => (e as Map).cast<String, dynamic>())
             .toList();
         _loading = false;
@@ -124,9 +141,23 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
     }
   }
 
+  /// Takes the CHALLENGER into the match their opponent just accepted.
+  /// Polling is paused for the duration so it does not fire uselessly under
+  /// the match route, and resumed on return in case another is waiting.
+  Future<void> _startAccepted(String matchId) async {
+    _poll?.cancel();
+    await startChallengeMatch(context, matchId);
+    if (!mounted) return;
+    _poll = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) _load();
+    });
+    _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Battle a friend')),
       body: _loading
@@ -134,6 +165,36 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
           : ListView(
               padding: const EdgeInsets.all(24),
               children: [
+                // The challenger's way in once their challenge is accepted.
+                // Placed first because it is the most time-sensitive thing
+                // on the screen - a "battle now" invitation that was just
+                // taken up.
+                if (_accepted.isNotEmpty) ...[
+                  Text('Ready to battle', style: text.titleMedium),
+                  const SizedBox(height: 8),
+                  ..._accepted.map((c) => Card(
+                        color: scheme.primaryContainer,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text('${c['toUsername']} accepted your challenge',
+                                  style: text.titleSmall),
+                              const SizedBox(height: 10),
+                              FilledButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => _startAccepted(
+                                        c['matchId'] as String),
+                                child: const Text('Battle now'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )),
+                  const SizedBox(height: 24),
+                ],
                 if (_incoming.isNotEmpty) ...[
                   Text('Waiting for you', style: text.titleMedium),
                   const SizedBox(height: 8),

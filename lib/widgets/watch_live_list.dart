@@ -4,6 +4,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../screens/tournament/live_viewer_screen.dart';
+import '../theme/app_theme.dart';
 
 /// What is on right now in a running live tournament.
 ///
@@ -85,7 +86,13 @@ class _WatchLiveListState extends State<WatchLiveList> {
       children: [
         const SizedBox(height: 16),
         Text(
-          _roundNumber == null ? 'On now' : 'On now - round $_roundNumber',
+          // "Tonight's Talent" - the showbiz framing for who is performing
+          // live right now (the film-industry sense of "the Talent"). This
+          // is the spectator's view of the lineup, so it is exactly where
+          // that framing lands.
+          _roundNumber == null
+              ? "Tonight's Talent"
+              : "Tonight's Talent - round $_roundNumber",
           style: text.titleMedium,
         ),
         const SizedBox(height: 8),
@@ -95,7 +102,10 @@ class _WatchLiveListState extends State<WatchLiveList> {
             child: ListTile(
               leading: Icon(
                 live ? Icons.sensors : Icons.hourglass_empty,
-                color: live ? Theme.of(context).colorScheme.primary : null,
+                // The live dot uses the `live` token (red = on air), not the
+                // primary accent - "live" and "primary action" are distinct
+                // signals.
+                color: live ? context.palette.live : null,
               ),
               title: Text(
                 '${m['player1Name'] ?? 'Player 1'} vs '

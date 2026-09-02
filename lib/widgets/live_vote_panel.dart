@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
 import 'live_tally.dart';
 
 /// The crowd's ballot, during the short window after a live battle ends.
@@ -244,7 +245,12 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
         // is no rating change rather than a coin flip, so saying "draw"
         // is the honest word.
         name == null ? 'Draw - nobody took it.' : '$name takes it.',
-        style: text.titleMedium,
+        // The winner reads in the `winner` token (green = victory), a
+        // distinct signal from live/primary. A draw stays neutral.
+        style: text.titleMedium?.copyWith(
+          color: name == null ? null : context.palette.winner,
+          fontWeight: name == null ? null : FontWeight.bold,
+        ),
       ),
     ]);
   }

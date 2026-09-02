@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/agora_spectator_service.dart';
@@ -41,6 +45,19 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
   String _player1Name = 'Player 1';
   String _player2Name = 'Player 2';
 
+  // The "N watching" crowd count. A heartbeat (my own doc, refreshed) plus a
+  // live count of everyone with a fresh heartbeat - social proof for
+  // spectators and, later, crowd energy for performers.
+  Timer? _heartbeat;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _watchersSub;
+  int _watchers = 0;
+
+  CollectionReference<Map<String, dynamic>> get _viewers =>
+      FirebaseFirestore.instance
+          .collection('liveWatch')
+          .doc(widget.matchId)
+          .collection('viewers');
+
   @override
   void initState() {
     super.initState();
@@ -49,10 +66,37 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
 
   @override
   void dispose() {
+    _heartbeat?.cancel();
+    _watchersSub?.cancel();
+    // Drop my heartbeat so the count falls promptly when I leave. Best-effort:
+    // if it fails, the 30s freshness filter stops counting me anyway.
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) _viewers.doc(uid).delete().catchError((_) {});
     // Fire and forget: State.dispose cannot await, and leaving the channel
     // is what stops Agora billing this viewer.
     _spectator.dispose();
     super.dispose();
+  }
+
+  /// Registers this viewer's heartbeat and starts counting the crowd.
+  void _beginWatchCount() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    void beat() => _viewers
+        .doc(uid)
+        .set({'lastSeenMs': DateTime.now().millisecondsSinceEpoch});
+    beat();
+    _heartbeat = Timer.periodic(const Duration(seconds: 15), (_) => beat());
+    // Count only fresh heartbeats, so someone who closed the app without a
+    // clean exit is not counted forever.
+    _watchersSub = _viewers.snapshots().listen((snap) {
+      final cutoff = DateTime.now().millisecondsSinceEpoch - 30000;
+      final n = snap.docs.where((d) {
+        final ts = d.data()['lastSeenMs'];
+        return ts is num && ts > cutoff;
+      }).length;
+      if (mounted) setState(() => _watchers = n);
+    });
   }
 
   Future<void> _start() async {
@@ -75,6 +119,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
           _player1Name = data['player1Name'] as String? ?? 'Player 1';
           _player2Name = data['player2Name'] as String? ?? 'Player 2';
         });
+        _beginWatchCount();
       }
     } on FirebaseFunctionsException catch (e) {
       // The server's message is shown verbatim - it is the one that knows
@@ -102,6 +147,23 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text('Watching live'),
+        // The crowd count - social proof that this is where the action is.
+        // Shown once at least one heartbeat is in (always includes you).
+        actions: [
+          if (_watchers > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.remove_red_eye, size: 16),
+                  const SizedBox(width: 5),
+                  Text('$_watchers watching',
+                      style: Theme.of(context).textTheme.labelLarge),
+                ],
+              ),
+            ),
+        ],
         // Named so a viewer scrolling back knows which battle this is.
         bottom: widget.subtitle == null
             ? null

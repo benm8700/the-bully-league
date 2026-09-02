@@ -41,8 +41,11 @@ class AppearanceScreen extends StatelessWidget {
                 }
                 final data = snapshot.data!.data() ?? {};
                 final rankTitle = data['rankTitle'] as String?;
-                final equipped =
-                    (data['equippedSkin'] as String?) ?? kThemeIds.first;
+                final storedSkin = data['equippedSkin'] as String?;
+                final equipped = (storedSkin != null &&
+                        kEquippableSkins.contains(storedSkin))
+                    ? storedSkin
+                    : kBaseSkin;
                 final unlocked = ((data['unlockedSkins'] as List?) ?? const [])
                     .whereType<String>()
                     .toSet();
@@ -65,8 +68,8 @@ class AppearanceScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Card is yours from the start. Prestige skins are '
-                      'earned - and once earned, kept.',
+                      'The base look is yours from the start. Prestige skins '
+                      'are unlocked - and once unlocked, kept.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 16),
@@ -74,13 +77,14 @@ class AppearanceScreen extends StatelessWidget {
                       _SkinTile(
                         skin: skin,
                         equipped: equipped == skin.id,
-                        unlocked: skin.id == kThemeIds.first ||
+                        unlocked: skin.id == kBaseSkin ||
                             unlocked.contains(skin.id) ||
                             (skin.id == 'neon' && rankTitle == 'GOAT'),
                         onEquip: () {
-                          // Immediate (drives the app theme now) and
-                          // persisted (follows the account).
-                          kActiveTheme.value = skin.id;
+                          // Immediate (drives the app theme now, unless the
+                          // event window is overriding it) and persisted
+                          // (follows the account).
+                          kEquippedSkin.value = skin.id;
                           ref.set({'equippedSkin': skin.id},
                               SetOptions(merge: true));
                         },
@@ -110,12 +114,21 @@ class _Skin {
 }
 
 const _skins = <_Skin>[
-  _Skin(id: 'card', name: 'Card', tier: 'Base'),
+  _Skin(id: kBaseSkin, name: 'Comedy Night', tier: 'Base'),
   _Skin(
     id: 'neon',
     name: 'Neon',
     tier: 'Prestige',
     unlockHint: 'Reach GOAT to unlock',
+  ),
+  // Nightlife: once the automatic window skin, now a saved prestige unlock
+  // (the developer's favourite). No unlock mechanism ships yet - the plan is
+  // paid unlocks - so it shows locked until granted via unlockedSkins.
+  _Skin(
+    id: 'nightlife',
+    name: 'Nightlife',
+    tier: 'Prestige',
+    unlockHint: 'A premium look - unlock coming soon',
   ),
 ];
 

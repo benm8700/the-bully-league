@@ -343,19 +343,38 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     }
   }
 
-  // A tournament match's result belongs to its bracket, not just to the
-  // two players' ratings. Without this the only thing that ever advanced
-  // a round was debugAdvanceRound's coin flip.
-  if (match.mode === "tournament" && winnerId) {
+  // A tournament match's result belongs to its structure, not just to the
+  // two players' ratings. A CLIMB match advances the ladder (winner climbs,
+  // loser out); a bracket match advances its round. Both use mode
+  // "tournament", so the `climb` field is what routes them apart - checked
+  // first so a climb match never falls into the bracket path (which expects
+  // a slot it doesn't have).
+  if (match.mode === "tournament") {
     try {
-      const {recordTournamentResult} = require("./tournament");
-      const applied = await recordTournamentResult(match, winnerId);
-      if (applied.applied) {
-        console.log(`tournament advance for ${matchId}:`, JSON.stringify(applied));
+      if (match.climb) {
+        // A win climbs one climber and eliminates the other; a TIE (no
+        // winner - equal or zero votes) advances BOTH (the gauntlet tie rule,
+        // 2026-09-01). Either way the gauntlet MUST be moved, or the two
+        // climbers strand `in_match` on a settled match forever - the exact
+        // bug the 2026-09-01 dry run hit on a zero-vote tie.
+        const {applyClimbResult, applyClimbTie} = require("./climbPlay");
+        const applied = winnerId ?
+          await applyClimbResult(match, winnerId, matchId) :
+          await applyClimbTie(match, matchId);
+        console.log(`climb advance for ${matchId}:`, JSON.stringify(applied));
+      } else if (winnerId) {
+        // A bracket slot still needs a decisive winner to advance; a bracket
+        // tie is left to the endgame/forfeit sweep (out of scope for the
+        // gauntlet tie rule).
+        const {recordTournamentResult} = require("./tournament");
+        const applied = await recordTournamentResult(match, winnerId);
+        if (applied.applied) {
+          console.log(`tournament advance for ${matchId}:`, JSON.stringify(applied));
+        }
       }
     } catch (e) {
-      // A bracket an admin can fix beats a finalization that failed after
-      // already applying rating changes.
+      // A ladder/bracket an admin can fix beats a finalization that failed
+      // after already applying rating changes.
       console.error(`tournament result for ${matchId} failed:`, e.message);
     }
   }

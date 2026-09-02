@@ -74,6 +74,9 @@ async function makeUser(uid, i) {
     rating: 1200, rankTitle: "Average Joe", rankedMatchesPlayed: 0,
     wins: 0, losses: 0, accountStatus: "active", isAdmin: false,
     createdAt: Timestamp.now(),
+    // An approved intro is required to join a tournament (same gate as
+    // enterQueue), so the probe players must have one or check-in refuses.
+    profile: {introVideoUrl: `https://example.com/intro-${uid}.mp4`},
   });
 }
 
@@ -89,22 +92,35 @@ async function makeUser(uid, i) {
       minEntrants: 4, startsAtMs: soon, prizeType: "points",
       createdAt: Timestamp.now(),
     });
-    for (const uid of PLAYERS) {
+    // Pre-enter four of the five directly; PLAYERS[0] will JOIN through the
+    // callable, exercising the new one-tap enter+check-in path.
+    for (const uid of PLAYERS.slice(1)) {
       await db.collection("tournaments").doc(TOURNEY)
           .collection("entrants").doc(uid).set({joinedAt: Timestamp.now()});
     }
 
-    console.log("\ncheck-in");
+    console.log("\njoin (enter + check in)");
     let r = await call(PLAYERS[0], "checkInToTournament",
         {tournamentId: TOURNEY});
-    check("an entrant can check in once the window is open",
-        r.status === 200 && r.body.checkedIn === true,
+    check("a non-entrant joins a free live tournament in one tap",
+        r.status === 200 && r.body.checkedIn === true && r.body.joined === true,
         JSON.stringify(r.raw).slice(0, 160));
 
+    // An account with no approved intro video is refused - the mandatory
+    // intro gate runs before anyone is entered, so this cannot slip into the
+    // bracket. (Replaces the old "never entered cannot check in" assertion,
+    // which no longer holds now that joining auto-enters.)
     const outsider = `lt-out-${stamp}`;
-    await makeUser(outsider, 9);
+    await auth.createUser({uid: outsider, email: `${outsider}@example.com`,
+      password: "Test12345!"});
+    await db.collection("users").doc(outsider).set({
+      username: `LtOut${stamp}`, usernameLower: `ltout${stamp}`,
+      rating: 1200, rankTitle: "Average Joe", rankedMatchesPlayed: 0,
+      wins: 0, losses: 0, accountStatus: "active", isAdmin: false,
+      createdAt: Timestamp.now(),
+    });
     r = await call(outsider, "checkInToTournament", {tournamentId: TOURNEY});
-    check("someone who never entered cannot check in", r.status !== 200,
+    check("an account with no intro video cannot join", r.status !== 200,
         JSON.stringify(r.raw).slice(0, 120));
 
     // Four of the five arrive. The fifth is the one the bracket must

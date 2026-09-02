@@ -24,12 +24,19 @@ class LiveTally extends StatelessWidget {
     required this.player1Name,
     required this.player2Name,
     this.closesAtMs,
+    this.compact = false,
   });
 
   final String matchId;
   final String player1Name;
   final String player2Name;
   final int? closesAtMs;
+
+  /// Compact mode drops the inner Card wrapper and shrinks the numbers, for
+  /// embedding inside a list card (My Battles) that already provides its own
+  /// container - so battles pack more per page. The live vote screen uses
+  /// the full-size version.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -61,28 +68,26 @@ class LiveTally extends StatelessWidget {
   }
 
   Widget _hidden(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Icon(Icons.visibility_off_outlined),
-            const SizedBox(height: 8),
-            Text(
-              'The score is hidden until you vote',
-              style: Theme.of(context).textTheme.titleSmall,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'So nobody judges a battle by who is already winning.',
-              style: Theme.of(context).textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
-          ],
+    final content = Column(
+      children: [
+        const Icon(Icons.visibility_off_outlined),
+        const SizedBox(height: 8),
+        Text(
+          'The score is hidden until you vote',
+          style: Theme.of(context).textTheme.titleSmall,
+          textAlign: TextAlign.center,
         ),
-      ),
+        const SizedBox(height: 4),
+        Text(
+          'So nobody judges a battle by who is already winning.',
+          style: Theme.of(context).textTheme.bodySmall,
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
+    return compact
+        ? content
+        : Card(child: Padding(padding: const EdgeInsets.all(16), child: content));
   }
 
   Widget _scoreboard(BuildContext context, int p1, int p2) {
@@ -93,65 +98,75 @@ class LiveTally extends StatelessWidget {
     final leaderIsP1 = p1 > p2;
     final tied = p1 == p2;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+    final barH = compact ? 8.0 : 10.0;
+    final content = Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _side(context, player1Name, p1, highlight: !tied && leaderIsP1),
-                Text(
-                  tied ? 'TIED' : 'vs',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-                _side(context, player2Name, p2,
-                    highlight: !tied && !leaderIsP1, alignEnd: true),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Row(
-                children: [
-                  // The two player gels, never the accent - see AppPalette.
-                  // These were amber and colorScheme.primary, which
-                  // became the same colour the moment primary turned
-                  // brass, leaving a scoreboard nobody could read.
-                  Expanded(
-                    flex: (p1Share * 1000).round().clamp(1, 999),
-                    child: Container(height: 10, color: context.palette.gelA),
-                  ),
-                  Expanded(
-                    flex: ((1 - p1Share) * 1000).round().clamp(1, 999),
-                    child: Container(height: 10, color: context.palette.gelB),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
+            _side(context, player1Name, p1, highlight: !tied && leaderIsP1),
             Text(
-              total == 0
-                  ? 'No votes yet'
-                  : '$total ${total == 1 ? 'person has' : 'people have'} judged this',
-              style: Theme.of(context).textTheme.bodySmall,
+              tied ? 'TIED' : 'vs',
+              style: Theme.of(context).textTheme.labelLarge,
             ),
-            if (closesAtMs != null) ...[
-              const SizedBox(height: 2),
-              Text(
-                _closesIn(closesAtMs!),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+            _side(context, player2Name, p2,
+                highlight: !tied && !leaderIsP1, alignEnd: true),
           ],
         ),
-      ),
+        SizedBox(height: compact ? 8 : 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          // At ZERO votes the bar is a single neutral track, not a
+          // 50/50 gel split - a half-pink/half-purple bar reads as a
+          // real tied result rather than "nothing has happened yet".
+          child: total == 0
+              ? Container(
+                  height: barH,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                )
+              : Row(
+                  children: [
+                    // The two player gels, never the accent - see AppPalette.
+                    Expanded(
+                      flex: (p1Share * 1000).round().clamp(1, 999),
+                      child: Container(height: barH, color: context.palette.gelA),
+                    ),
+                    Expanded(
+                      flex: ((1 - p1Share) * 1000).round().clamp(1, 999),
+                      child: Container(height: barH, color: context.palette.gelB),
+                    ),
+                  ],
+                ),
+        ),
+        SizedBox(height: compact ? 6 : 10),
+        Text(
+          total == 0
+              ? 'No votes yet'
+              : '$total ${total == 1 ? 'person has' : 'people have'} judged this',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        if (closesAtMs != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            _closesIn(closesAtMs!),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ],
     );
+
+    // Compact drops the inner Card (its host card already frames it) and its
+    // 16px padding; full-size keeps the standalone Card for the vote screen.
+    return compact
+        ? content
+        : Card(child: Padding(padding: const EdgeInsets.all(16), child: content));
   }
 
   Widget _side(BuildContext context, String name, int votes,
       {required bool highlight, bool alignEnd = false}) {
+    final numberStyle = compact
+        ? Theme.of(context).textTheme.titleMedium
+        : Theme.of(context).textTheme.headlineSmall;
     return Expanded(
       child: Column(
         crossAxisAlignment:
@@ -167,9 +182,9 @@ class LiveTally extends StatelessWidget {
           ),
           Text(
             '$votes',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
-                ),
+            style: numberStyle?.copyWith(
+              fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
+            ),
           ),
         ],
       ),

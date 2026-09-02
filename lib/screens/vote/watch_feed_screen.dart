@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/friendly_error.dart';
+import '../../widgets/empty_state.dart';
 
 import '../../core/services/watch_feed_service.dart';
 import '../../widgets/turnstile_challenge.dart';
@@ -277,16 +278,12 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_matches!.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Text(
-            'No battles to watch yet.\nOnce ranked matches finish, they show '
-            'up here to be judged.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white70),
-          ),
-        ),
+      return const EmptyState(
+        icon: Icons.gavel_outlined,
+        title: 'Nothing to judge right now',
+        message: 'When battles finish they land here for you to vote on - and '
+            'judging earns you points. The most show up during Sixes and '
+            'Sevens, so check back then.',
       );
     }
 

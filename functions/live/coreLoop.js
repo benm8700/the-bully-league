@@ -85,6 +85,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       username: name, accountStatus: "active", rating: 1200,
       rankTitle: "Average Joe", rankedMatchesPlayed: 5, wins: 2, losses: 3,
       points: 0, pointsBalance: 0, isAdmin: false, createdAt: Timestamp.now(),
+      // Ranked/tournament queueing requires an approved intro video (its
+      // presence IS the approved flag). Give probe accounts one so the core
+      // loop can still exercise the queue past that gate.
+      profile: {introVideoUrl: "https://example.com/probe-intro.mp4"},
     }, extra));
     made.push(u.uid);
     await signIn(u.uid);

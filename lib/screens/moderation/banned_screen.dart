@@ -78,7 +78,9 @@ class _BannedScreenState extends State<BannedScreen> {
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(24),
+        // Bottom inset clears the gesture bar (S22 gesture-nav, 2026-09-01).
+        padding: EdgeInsets.fromLTRB(
+            24, 24, 24, 24 + MediaQuery.of(context).padding.bottom),
         child: _submitted
             ? const Center(
                 child: Text(

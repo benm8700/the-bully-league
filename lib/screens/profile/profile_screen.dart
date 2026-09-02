@@ -13,6 +13,7 @@ import '../account/delete_account_screen.dart';
 import '../settings/appearance_screen.dart';
 import '../settings/blocked_players_screen.dart';
 import 'form_card.dart';
+import 'intro_video_card.dart';
 
 const int kRequiredPhotoCount = 5;
 
@@ -256,6 +257,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const UsernameCard(),
                     const ReferrerField(),
                     const InviteCard(),
+                    const SizedBox(height: 24),
+                    // The mandatory intro video sits above photos because it
+                    // is the one profile item a player CANNOT battle without
+                    // (enforced in enterQueue), and it is the ammo the
+                    // opponent actually studies pre-match.
+                    const IntroVideoCard(),
                     const SizedBox(height: 24),
                     // States what is TRUE today rather than the eventual
                     // rule. Photos and manual approval are deliberately

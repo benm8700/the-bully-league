@@ -19,12 +19,18 @@ class MatchSettings {
     this.roundLengthSeconds = 15,
     this.countdownSeconds = 5,
     this.bioRevealSeconds = 60,
+    this.warmupSeconds = 30,
   });
 
   final int roundCount;
   final int roundLengthSeconds;
   final int countdownSeconds;
   final int bioRevealSeconds;
+
+  /// The live "Warmup Round" at the very start of a battle - both mics open,
+  /// open banter / staredown before round 1. Resolved server-side and
+  /// stamped on the match so both players run the same clock.
+  final int warmupSeconds;
 
   /// Total turns in a match - each round gives both players one turn.
   int get totalTurns => roundCount * 2;
@@ -38,6 +44,7 @@ class MatchSettings {
       roundLengthSeconds: read('roundLengthSeconds', fallback.roundLengthSeconds),
       countdownSeconds: read('countdownSeconds', fallback.countdownSeconds),
       bioRevealSeconds: read('bioRevealSeconds', fallback.bioRevealSeconds),
+      warmupSeconds: read('warmupSeconds', fallback.warmupSeconds),
     );
   }
 }

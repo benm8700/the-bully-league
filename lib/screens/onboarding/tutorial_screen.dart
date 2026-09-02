@@ -276,7 +276,8 @@ class _TutorialScreenState extends State<TutorialScreen> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.fromLTRB(
+              20, 20, 20, 20 + MediaQuery.of(context).padding.bottom),
           child: Column(
             children: [
               Text(
@@ -311,8 +312,9 @@ class _TutorialScreenState extends State<TutorialScreen> {
             'over you.',
         'Each turn is short and timed. When the clock runs out, your turn '
             'ends. You can also end early if you have landed your joke.',
-        'Ranked and tournament battles are recorded, and the best moments may '
-            'be posted. You confirm that before every match.',
+        'Your battles are recorded, and the best moments may be posted '
+            '(practice is the exception - those are never recorded). You '
+            'confirm that before every match.',
       ],
       action: 'Try a practice turn',
       onAction: _beginPractice,
@@ -394,7 +396,8 @@ class _TutorialScreenState extends State<TutorialScreen> {
         ),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.fromLTRB(
+              20, 20, 20, 20 + MediaQuery.of(context).padding.bottom),
           child: Column(
             children: [
               Text(
@@ -430,8 +433,9 @@ class _TutorialScreenState extends State<TutorialScreen> {
         // Pulled from live config rather than hardcoded, since the name and
         // hours are both provisional; the defaults match the live values,
         // so an unreadable config still prints the right sentence.
-        '${_windowConfig.name} is the busiest hour of the day - '
-            '${_windowHours()}. That is when you will find people fastest.',
+        '${_windowConfig.name} is the nightly tournament - ${_windowHours()}. '
+            'That is where the prizes and prestige are, and where you will '
+            'find people fastest.',
         'One more thing: your profile is the ammo your opponent gets. Fill it '
             'in, and it is funnier if it is true.',
       ],
@@ -459,7 +463,10 @@ class _Panel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(24),
+      // Bottom inset includes the system gesture bar so the action button
+      // never sits under the home gesture (found on a real S22, 2026-09-01).
+      padding: EdgeInsets.fromLTRB(
+          24, 24, 24, 24 + MediaQuery.of(context).padding.bottom),
       child: Column(
         children: [
           const Spacer(),
