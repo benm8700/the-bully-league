@@ -25,7 +25,6 @@ import '../onboarding/tutorial_screen.dart';
 import '../friends/challenge_screen.dart';
 import '../practice/solo_practice_screen.dart';
 import '../settings/notification_settings_screen.dart';
-import '../support/support_screen.dart';
 import '../info/rules_screen.dart';
 import '../vote/finalize_test_screen.dart';
 
@@ -196,51 +195,18 @@ class HomeScreen extends StatelessWidget {
                     // button was a second route to the same place. In its
                     // spot, the rules - the one thing a new player wants and
                     // had nowhere to find.
-                    // Rules, with the help menu (how a battle works /
-                    // support) moved down beside it - a confused player
-                    // looks next to the rules, not up in the app bar. The
-                    // tutorial replay costs nothing (local preview, simulated
-                    // opponent, no channel joined).
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const RulesScreen(),
-                            ),
-                          ),
-                          icon: const Icon(Icons.menu_book_outlined, size: 18),
-                          label: const Text('Rules'),
+                    // A single "How it works" entry, replacing the old Rules
+                    // button + help menu. It opens the rules, and the
+                    // interactive demo ("how a battle works") plus a support
+                    // link live at the bottom of that one screen.
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const RulesScreen(),
                         ),
-                        const SizedBox(width: 8),
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.help_outline),
-                          tooltip: 'Help',
-                          onSelected: (choice) {
-                            final route = choice == 'tutorial'
-                                ? MaterialPageRoute<void>(
-                                    builder: (_) =>
-                                        const TutorialScreen(replay: true),
-                                  )
-                                : MaterialPageRoute<void>(
-                                    builder: (_) => const SupportScreen(),
-                                  );
-                            Navigator.of(context).push(route);
-                          },
-                          itemBuilder: (context) => const [
-                            PopupMenuItem(
-                              value: 'tutorial',
-                              child: Text('How a battle works'),
-                            ),
-                            PopupMenuItem(
-                              value: 'support',
-                              child: Text('Support & feedback'),
-                            ),
-                          ],
-                        ),
-                      ],
+                      ),
+                      icon: const Icon(Icons.menu_book_outlined, size: 18),
+                      label: const Text('How it works'),
                     ),
                   ],
                 ),

@@ -1492,6 +1492,13 @@ Follow-ups from the real-device dry run, all the developer's calls.
   unlock coming soon" hint (no unlock mechanism ships yet). Added to
   `kEquippableSkins`. **NOTE FOR LATER (developer's idea): all skins may
   become PAID unlocks** - a monetization lever to design when IAP exists.
+- **IDEA TO PONDER (2026-09-09, developer): new skin designs unlockable by
+  WINNING TOURNAMENTS.** A competitive earn path for skins alongside (or
+  instead of) the paid-unlock and GOAT-locked routes - win a tournament, earn
+  a skin. Fits the "real stakes, status, prizes" motivation. Not yet designed:
+  which tournaments (the nightly gauntlet, or only bigger/special ones?),
+  whether skins are per-event/seasonal or permanent, and how it interacts with
+  the paid-unlock lever. Just capture for now.
 - **NEW APP-WIDE LIVE CUE replaces the skin swap** (`WindowLiveBar`,
   `lib/widgets/window_live_bar.dart`), mounted in `MainShell` above the tabs
   next to the service-status banner, so it shows on every tab during the
@@ -2632,6 +2639,14 @@ named ("BigMike sent 🔥 to PlayerTwo").
   transactional tipping - which decouples support from the verdict again and
   fits comedy-scene culture. Avoid the word "tip" throughout.
 
+- **IDEA TO PONDER (2026-09-09, developer): the tournament WINNER earns
+  heckle/gift items as a prize** - a stash of the buyable in-battle items
+  (tomatoes 🍅 etc.) awarded for winning a tournament, so the champion gets to
+  use them for free in future battles/events. Pairs with the skins-by-
+  tournament idea above as a "tournament rewards" theme. Not yet designed: how
+  many, which items, expiry, and how it squares with those items being a paid
+  (coins) revenue stream - free-won items must not cannibalise that. Capture
+  for now.
 - **HECKLES ARE PAID TOO, AND THE PLATFORM KEEPS 100% OF THEM — DECIDED
   (2026-08-26).** You can pay to heckle as well as support (throw a 🍅 that
   splats on the target's face, a 👻 that pops up and goes "boo"). Unlike
