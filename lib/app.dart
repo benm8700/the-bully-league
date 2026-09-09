@@ -15,6 +15,7 @@ import 'widgets/window_skin_controller.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/home/main_shell.dart';
 import 'screens/moderation/banned_screen.dart';
+import 'screens/onboarding/content_policy_screen.dart';
 
 /// The everyday base skin everyone gets. Comedy Night is the brand default;
 /// Card/Aurora and the other explorations are kept in app_theme.dart for
@@ -201,6 +202,18 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
         // and Sevens. Mounted here so it runs for every signed-in surface.
         if (accountStatus == 'banned') {
           return const WindowSkinController(child: BannedScreen());
+        }
+        // One-time content-policy + age acknowledgement. Gated on the
+        // `contentPolicyAcceptedAt` flag so it shows exactly once - and, being
+        // a flag rather than a signup step, it also catches every existing
+        // account on their next open. Only when the doc actually exists: a
+        // null doc means mid-signup, so fall through and it appears once the
+        // doc lands. Accept writes the flag and this stream re-renders into
+        // MainShell (Battle tab); Decline just holds the user on that screen.
+        if (data != null && data['contentPolicyAcceptedAt'] == null) {
+          return WindowSkinController(
+            child: ContentPolicyScreen(uid: widget.uid),
+          );
         }
         return const WindowSkinController(child: MainShell());
       },
