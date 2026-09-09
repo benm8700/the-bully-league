@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -808,24 +809,39 @@ class _IncomingChallengeBanner extends StatefulWidget {
 class _IncomingChallengeBannerState extends State<_IncomingChallengeBanner>
     with WidgetsBindingObserver {
   Map<String, dynamic>? _challenge;
+  Timer? _poll;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _load();
+    // POLL, not just load-once. This banner lives on Home, which sits in
+    // MainShell's IndexedStack and is built ONCE at login - it never re-inits
+    // when you switch tabs. So a challenge that arrives while you're already
+    // in the app (foreground, on Home) was invisible until a full relaunch:
+    // there's no resume event and no rebuild to trigger a reload, and the push
+    // is best-effort (it may not fire at all). Found on a 2-device test
+    // (2026-09-01). Friend battles are "battle now?", so the target has to see
+    // it live. Mirrors the challenger's poll in challenge_screen.dart. Cheap at
+    // beta scale - one callable every few seconds; revisit if it ever needs to
+    // scale (a listener would be lighter, but challenges are callable-only).
+    _poll = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (mounted) _load();
+    });
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Re-checked on resume, because the most likely way to arrive here is
-    // tapping the push notification, which brings the app forward.
+    // Re-checked on resume too (e.g. tapping the push notification brings the
+    // app forward); the poll above covers the already-foreground case.
     if (state == AppLifecycleState.resumed) _load();
   }
 
