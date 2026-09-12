@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/services/auth_service.dart';
+import '../../core/services/push_notification_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../account/delete_account_screen.dart';
 import '../settings/appearance_screen.dart';
@@ -49,6 +51,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   bool _loading = true;
   bool _saving = false;
+  bool _signingOut = false;
 
   /// Listed unless explicitly opted out, mirroring the server's rule that
   /// only a literal `false` hides someone. Defaulting to hidden would
@@ -380,6 +383,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 24),
                     const Divider(),
+                    const SizedBox(height: 12),
+                    // Sign out lives here now, off the Home app bar where a
+                    // one-tap logout was too easy to hit by accident. A
+                    // deliberate action in the account area, but plainly
+                    // findable (unlike delete, which is quieter still).
+                    OutlinedButton.icon(
+                      onPressed: _signingOut ? null : _signOut,
+                      icon: const Icon(Icons.logout, size: 18),
+                      label: const Text('Sign out'),
+                    ),
                     const SizedBox(height: 8),
                     // CCPA requires a user-facing way to delete an account
                     // and its data (see CLAUDE.md's Compliance / Account
@@ -402,6 +415,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
     );
+  }
+
+  /// Drops this device's push token before signing out, so the next person
+  /// to sign in here doesn't receive the previous account's match alerts.
+  /// Best-effort: a failure to clean up the token must not trap someone in
+  /// an account they're trying to leave, so sign-out proceeds regardless.
+  Future<void> _signOut() async {
+    setState(() => _signingOut = true);
+    final push = context.read<PushNotificationService>();
+    final auth = context.read<AuthService>();
+    try {
+      await push.unregister();
+    } catch (_) {
+      // Intentionally ignored - see above.
+    }
+    await auth.signOut();
+    // No setState after: signing out swaps this whole tree out via AuthGate.
   }
 
   Widget _requiredField(TextEditingController controller, String label) {

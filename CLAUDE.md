@@ -640,6 +640,30 @@ Raised by the developer: what protects someone who is unhappy that their match f
     - **Verified by running the real sweep against real Firestore**: an open round is announced to both players and marked on the bracket, a second sweep says nothing, near the deadline only the absentee is warned, nobody is chased once both have checked in, and closed or decided rounds send nothing. **7 live checks plus 15 local tests.**
 
 ## Problems To Solve Later (Backlog — flagged during planning, not yet designed)
+- **FOLLOW YOUR FAVOURITE COMEDIANS — NEW IDEA (2026-09-12, developer).** Let a
+  user FOLLOW comedians/roasters from inside the app. A followed comedian's
+  profile surfaces (a) LINKS to their stuff (socials, tickets, YouTube/TikTok,
+  their own site), and (b) TIMELY info pushed to the follower: when they are
+  roasting/performing next (in-app battles, the nightly gauntlet, live
+  tournaments, or real-world shows) and when a new video/clip drops. Effectively
+  a fan-follow + creator-broadcast layer on top of the existing player profiles.
+  - **Fits the direction already set**: it is the natural home for the "Talent"
+    framing (performers as showbiz talent) and the fandom-not-tipping gifting
+    model — following IS the relationship gifting monetises, and it gives the
+    creator moat something to compound (a following that follows you here).
+  - **Reuses pieces that exist**: the player directory (searchable profiles),
+    the notification-category system (a new `followed_performer` category,
+    mutable, absent-means-opted-in), and the push infra. A `follows/{followerUid}
+    /{targetUid}` (or a `followerUids`/`followingUids` pair) is the shape.
+  - **Design questions, not yet answered**: is following one-way (like) or does
+    it need consent; does a followed performer get a follower count / is it
+    shown (careful — that is popularity, a different axis from the skill rank,
+    and must not become a competing status ladder per the one-status-ladder
+    rule); how "performing next" is known for real-world shows (self-entered
+    by the performer? a schedule field?); external-link moderation/safety (links
+    leave the app to unvetted places — an 18+ UGC app pointing at arbitrary
+    external URLs is a store-review and safety surface); and how much of this is
+    a subscriber/creator feature vs free. Capture for now; design later.
 - **Desktop/PC client — NEW, V2 IDEA**: eventually let users join matches from a computer with a webcam, not just the mobile app. Not designed — would need its own client (likely a web client using Agora's Web SDK, given `VideoCallService` already abstracts the video provider) and raises open questions not yet explored: does desktop join ranked/tournament matches on equal footing with mobile, any framing/UX differences for a webcam vs. phone camera, etc. Flagged for V2, not blocking V1 mobile-first launch.
 - **Cosmetic store — RULED OUT by the developer**, in their words "stupid" for this product: "people aren't coming here to make cool profiles and have fun skins." The motivations are comedy skill, status, and real prizes. Points were re-pointed from a currency toward progression as a result; see the points-economy entry in the Open Items list for where that stands. The original draft is kept below only as a record of what was rejected.
 - **SUPERSEDED — original cosmetic store / reward economy design**: what points can be spent on (draft categories discussed: profile borders/frames, badge flair, alternate UI themes, match entrance effects, username styling) and what earns points (participation, wins, voting, streaks, referrals, rank-ups) — deferred, needs real playtesting to balance actual values. Basic structural approach discussed: a `cosmeticItems` collection + `ownedItemIds`/`equippedItems` on the user model, no payment processor needed since V1 stays earn-only.

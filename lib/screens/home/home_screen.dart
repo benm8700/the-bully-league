@@ -14,7 +14,6 @@ import 'package:provider/provider.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/entitlement_service.dart';
 import '../../core/services/matchmaking_service.dart';
-import '../../core/services/push_notification_service.dart';
 import '../../widgets/admin_only.dart';
 import '../../widgets/daily_quests.dart';
 import '../../widgets/event_window_banner.dart';
@@ -41,6 +40,9 @@ class HomeScreen extends StatelessWidget {
         actions: [
           // Help (how a battle works / support) lives next to the Rules
           // button at the bottom now, not up here.
+          // Sign out lives on the Profile tab now, NOT here - a one-tap
+          // logout on the top-right of the main screen was far too easy to
+          // hit by accident (a real user did exactly that).
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
             tooltip: 'Notifications',
@@ -49,11 +51,6 @@ class HomeScreen extends StatelessWidget {
                 builder: (_) => const NotificationSettingsScreen(),
               ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Sign out',
-            onPressed: () => _signOut(context, authService),
           ),
         ],
       ),
@@ -216,20 +213,6 @@ class HomeScreen extends StatelessWidget {
         },
       ),
     );
-  }
-
-  /// Drops this device's push token before signing out, so the next person
-  /// to sign in here doesn't receive the previous account's match alerts.
-  /// Best-effort: a failure to clean up the token must not trap someone in
-  /// an account they're trying to leave, so sign-out proceeds regardless.
-  Future<void> _signOut(BuildContext context, AuthService authService) async {
-    final push = context.read<PushNotificationService>();
-    try {
-      await push.unregister();
-    } catch (_) {
-      // Intentionally ignored - see above.
-    }
-    await authService.signOut();
   }
 }
 
@@ -1006,32 +989,10 @@ class _RankBadge extends StatelessWidget {
               )
             else
               meter,
-            const SizedBox(height: 8),
-            // ONE line, not three. This block had the record, a points
-            // total and a second progress bar stacked under the gauge -
-            // four rows of small grey text and two near-identical amber
-            // bars, which read as a wall of status rather than as an
-            // identity. The points progress moved down to sit with the
-            // quests, where everything else about earning lives.
-            Text(
-              '$wins-$losses',
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-            // Shown right under a rating that can fall, deliberately. This
-            // is the number that only ever climbs, so a player on a losing
-            // streak still has something going up next to something going
-            // down - which is the reason the currency exists at all.
-            // Shown right under a rating that can fall, deliberately, and
-            // shown as progress toward something REAL rather than as a
-            // bare count or an abstract title.
-            //
-            // A second ladder of point-earned titles was built here and
-            // removed: rank is the app's one status system, and a
-            // competing set of titles diluted it for the player and
-            // doubled the tuning for the developer. What survives is the
-            // part that was actually doing the work - a loss still earns
-            // points, so it still moves you toward a clip you can post.
-            // That beats a title because it converts into something.
+            // The win/loss record used to sit here under the card. Removed
+            // (developer's call, 2026-09-12) as redundant: tapping the card
+            // flips to a trophy back that already shows the record, win rate
+            // and career points. wins/losses are still passed to that back.
           ],
         );
       },

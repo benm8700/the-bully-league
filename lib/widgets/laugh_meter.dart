@@ -97,6 +97,13 @@ class _LaughMeterState extends State<LaughMeter> {
     final caption = meter['caption'] as String? ?? '';
     final state = meter['state'] as String? ?? 'climbing';
     final isGoat = state == 'goat';
+    // Progress as a number, shown beside the bar (developer request,
+    // 2026-09-12). NOTE: this deliberately softens the "hidden criteria"
+    // rule above - a precise percentage lets the secret tier thresholds be
+    // back-computed by watching it move. Kept because the developer asked
+    // for it and it is a one-line revert; the CAPTION stays numberless, so
+    // it is the only number in the card.
+    final percent = (fill * 100).round();
 
     final sig = context.palette.signature;
     final glow = isGoat || sig == 'glow';
@@ -123,11 +130,36 @@ class _LaughMeterState extends State<LaughMeter> {
         // rendering fault rather than a gauge. It needs the same
         // margin as everything else on the screen.
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: _Gauge(
-            fill: fill,
-            glow: glow,
-            segmented: context.palette.segmentedGauge,
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: _Gauge(
+                  fill: fill,
+                  glow: glow,
+                  segmented: context.palette.segmentedGauge,
+                ),
+              ),
+              const SizedBox(width: 12),
+              // The gauge's digital readout - a bold accent number that
+              // reads as part of the meter rather than a label bolted on.
+              Text(
+                '$percent%',
+                style: text.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: context.palette.accent,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                  shadows: [
+                    Shadow(
+                      color: context.palette.accent
+                          .withValues(alpha: glow ? 0.7 : 0.45),
+                      blurRadius: glow ? 16 : 10,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 10),
