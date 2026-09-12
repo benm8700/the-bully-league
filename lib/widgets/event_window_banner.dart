@@ -84,97 +84,56 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Icon(live ? Icons.local_fire_department : Icons.schedule,
-                        color: live ? context.palette.live : null),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            live ? '${config.name} is LIVE' : config.name,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 2),
-                          // Frames the window as what it now IS - the nightly
-                          // tournament, the one place prestige and prizes are
-                          // on the line - so it reads as the headline event
-                          // rather than just a points-multiplier hour.
-                          Text(
-                            live
-                                ? 'The nightly tournament is on - join the bracket'
-                                : 'The nightly tournament - win prestige & prizes',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                    color: context.palette.reward,
-                                    fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            live
-                                ? '${_remaining(window.end, now)} left - most people are online now'
-                                : 'Starts in ${_remaining(window.start, now)}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 2),
-                          // The canonical time stays "6-7 Pacific" so the name
-                          // means the same thing to everyone, but nobody should
-                          // have to do timezone arithmetic to use it.
-                          Text(
-                            _localTimeLabel(window, config),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          // The single most persuasive thing on this banner:
-                          // the objection is "nobody will be there," and a real
-                          // number answers it directly. Rendered only when
-                          // there IS somebody - "0 roasters online" is an
-                          // argument against opening the app.
-                          const _OnlineCountLine(),
-                      // The reward, said out loud. The backend has been
-                      // doubling points inside the window since it was
-                      // built, and nothing told anyone - a bonus nobody
-                      // knows about motivates nobody. Read from the same
-                      // live config the server uses, so retuning it to 3x
-                      // changes this copy too rather than leaving the app
-                      // promising the wrong number.
-                      _MultiplierLine(live: live),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                // The explicit CTA during the window. The whole card is
-                // tappable, but a card with no visible button is a weak
-                // affordance - many people never realise they can tap it. This
-                // is the headline's clear action, right at the decision point
-                // where the urgency (time left, 2x points) is being read. It
-                // reinforces the app-wide LIVE bar rather than duplicating it:
-                // the bar is the persistent glance-nudge, this is the in-context
-                // "do it now" button.
+                // LIVE state is unchanged: fire header (name, tagline, time
+                // left, hour, online count, 2x) then the Join / Watch actions.
                 if (live) ...[
+                  Row(
+                    children: [
+                      Icon(Icons.local_fire_department,
+                          color: context.palette.live),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${config.name} is LIVE',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'The nightly tournament is on - join the bracket',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                      color: context.palette.reward,
+                                      fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${_remaining(window.end, now)} left - most people are online now',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _localTimeLabel(window, config),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const _OnlineCountLine(),
+                            _MultiplierLine(live: true),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
-                  // Two entry points side by side. The GOLD "Join Tournament"
-                  // (metallic gold gradient + glow, so it reads like a
-                  // win-money/prize button, distinct from the pink "Roast
-                  // Someone Now" below) is the headline action for battlers.
-                  // The secondary "Watch" invites SPECTATORS in - people who do
-                  // not want to battle but will watch the live bracket and
-                  // vote/judge, which is the scarce resource the ladder runs
-                  // on. Both go to the tournament, where check-in AND the live
-                  // watch/vote list live.
                   Row(
                     children: [
                       _goldTournamentButton(context, 'Join Tournament'),
                       const SizedBox(width: 10),
-                      // Spectator entry, now COLOURED (filled purple secondary)
-                      // to actively pull people into watching + judging - votes
-                      // are the scarce resource the ladder runs on, so this is
-                      // worth encouraging, not just offering. Distinct from the
-                      // gold Join and the pink primary. An eye icon so it reads
-                      // as "watch" at a glance.
+                      // Spectator entry (filled purple) - pulls people into
+                      // watching + judging, the scarce resource the ladder
+                      // runs on.
                       FilledButton.icon(
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute(
@@ -197,19 +156,43 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
                     ],
                   ),
                 ],
-                // Before the window: the SAME gold tournament button (the
-                // developer's favourite, so it lives here too) leading to
-                // tonight's tournament, plus the "I'm in tonight" pre-commit.
-                // Once the window is running, "I'm in tonight" is a worse call
-                // to action than simply battling, so it only shows ahead.
+                // PRE-WINDOW, restructured (developer's design, 2026-09-12):
+                // the gold tournament button at the TOP, then the date/time of
+                // tonight's window, then the countdown, then "I'm in tonight".
                 if (!live) ...[
-                  const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: _goldTournamentButton(
-                        context, "Tonight's Tournament"),
+                        context, 'Tonight: 6s and 7s Tournament'),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
+                  // Full date + time of tonight's window, e.g.
+                  // "Friday, September 12, 6pm-7pm Pacific".
+                  Text(
+                    _windowDateLabel(window, config),
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  // Highlight only the remaining time (not "Starts in") in the
+                  // brand accent so the countdown grabs a little attention
+                  // against the dark box and gold button.
+                  Text.rich(
+                    TextSpan(
+                      style: Theme.of(context).textTheme.bodySmall,
+                      children: [
+                        const TextSpan(text: 'Starts in '),
+                        TextSpan(
+                          text: _remaining(window.start, now),
+                          style: TextStyle(
+                            color: context.palette.accent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   _CommitRow(dayKey: upcomingWindowDayKey(now, config)),
                 ],
               ],
@@ -245,6 +228,32 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
       return pacific;
     }
     return '$pacific - $local your time';
+  }
+
+  /// The full date + time of tonight's window, Pacific-anchored:
+  /// "Friday, September 12, 6pm-7pm Pacific". Deliberately "Pacific", not
+  /// "PST" - PST is winter-only (CLAUDE.md's copy note). Month/weekday names
+  /// are hardcoded rather than via `intl` to keep the fragile Android
+  /// toolchain free of another dependency, same reason the Pacific clock is
+  /// pure Dart.
+  String _windowDateLabel(
+    EventWindowOccurrence window,
+    EventWindowConfig config,
+  ) {
+    // Shift the UTC window start by the Pacific offset to read its Pacific
+    // wall-clock date components (same trick as upcomingWindowDayKey).
+    final p = window.start.add(pacificOffset(window.start));
+    const weekdays = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+      'Friday', 'Saturday', 'Sunday',
+    ];
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    final time =
+        '${_hour12(config.startHourPacific)}-${_hour12(config.endHourPacific)} Pacific';
+    return '${weekdays[p.weekday - 1]}, ${months[p.month - 1]} ${p.day}, $time';
   }
 
   String _hour12(int hour24) {
