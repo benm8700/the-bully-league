@@ -160,10 +160,24 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
                 // the gold tournament button at the TOP, then the date/time of
                 // tonight's window, then the countdown, then "I'm in tonight".
                 if (!live) ...[
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: _goldTournamentButton(
-                        context, 'Tonight: 6s and 7s Tournament'),
+                  // Gold tournament button + a "?" that opens the explainer
+                  // (what it is, the rules, the prize, the 2x bonus). A Wrap
+                  // rather than a Row so the icon drops to a second line on a
+                  // narrow screen instead of overflowing.
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _goldTournamentButton(
+                          context, 'Tonight: 6s and 7s Tournament'),
+                      IconButton(
+                        icon: const Icon(Icons.help_outline),
+                        iconSize: 20,
+                        visualDensity: VisualDensity.compact,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        tooltip: 'About this tournament',
+                        onPressed: () => _showTournamentInfo(context, config),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 10),
                   // Full date + time of tonight's window, e.g.
@@ -254,6 +268,78 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
     final time =
         '${_hour12(config.startHourPacific)}-${_hour12(config.endHourPacific)} Pacific';
     return '${weekdays[p.weekday - 1]}, ${months[p.month - 1]} ${p.day}, $time';
+  }
+
+  /// Explains the nightly tournament: what it is, the rules, the prize, and
+  /// the 2x bonus. Opened by the "?" beside the tournament button.
+  void _showTournamentInfo(BuildContext context, EventWindowConfig config) {
+    final hours =
+        '${_hour12(config.startHourPacific)}-${_hour12(config.endHourPacific)} Pacific';
+    final body = Theme.of(context).textTheme.bodyMedium;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(config.name),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'The nightly tournament - $hours, every night. One hour, one '
+                'crowd, one champion.',
+                style: body,
+              ),
+              const SizedBox(height: 16),
+              _infoHeading(context, 'How it works'),
+              Text(
+                'Hop in any time during the hour - everyone starts at 0 wins. '
+                "You're paired with someone who has the same number of wins as "
+                "you. Win, and you move up. Lose, and you're out - but you can "
+                'stick around to watch and vote. Keep winning to climb, and the '
+                'last one standing takes the crown. If the clock runs out '
+                "first, whoever's climbed highest wins it.",
+                style: body,
+              ),
+              const SizedBox(height: 16),
+              _infoHeading(context, 'The prize'),
+              Text(
+                'Prestige, and prizes when they are on the line. It is free to '
+                'enter and the champion takes the night. Bigger cash-prize '
+                'events run on top from time to time.',
+                style: body,
+              ),
+              const SizedBox(height: 16),
+              _infoHeading(context, 'The bonus'),
+              Text(
+                'Everything counts double during the hour - 2x points on every '
+                'battle AND every vote.',
+                style: body,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoHeading(BuildContext context, String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: context.palette.reward,
+            ),
+      ),
+    );
   }
 
   String _hour12(int hour24) {
