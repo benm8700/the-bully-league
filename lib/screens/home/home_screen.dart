@@ -115,14 +115,66 @@ class HomeScreen extends StatelessWidget {
                     // window. This is why the quests + points/XP bar moved
                     // BELOW it: the CTA being visible without scrolling beats
                     // the XP bar being above the fold.
-                    FilledButton(
-                      onPressed: () => _startMatch(context, 'ranked'),
-                      // "Roast a Stranger": names exactly what the app is (you
-                      // roast a random stranger), which the developer judged
-                      // reads better for the app's identity than "Roast Someone
-                      // Now" / "Find Opponent". "Find" read like browsing a
-                      // list rather than doing something.
-                      child: const Text('Roast a Stranger'),
+                    // "Roast a Stranger" is now a DARK CARD matching the
+                    // tournament box (developer's call, 2026-09-12) rather than
+                    // a loud solid-pink pill - the tournament is the headline,
+                    // so the one-on-one reads as its quieter sibling. Same Card
+                    // colour / InkWell / padding as EventWindowBanner, and an
+                    // Expanded so it stretches full-width like it. (Name kept:
+                    // it says exactly what the app is - you roast a stranger.)
+                    Card(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest,
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => _startMatch(context, 'ranked'),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 14),
+                          child: Row(
+                            children: [
+                              Icon(Icons.sports_mma,
+                                  color: context.palette.accent),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Roast a Stranger',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Get matched one-on-one with a random '
+                                      'roaster now',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(Icons.chevron_right,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 22),
                     // Daily progress - the quests and the points/clip (XP)
