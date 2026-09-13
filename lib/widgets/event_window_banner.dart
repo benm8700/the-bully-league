@@ -546,8 +546,9 @@ class _CommittedCountLine extends StatelessWidget {
         if (count == null || !count.isFresh || count.committedTonight <= 0) {
           return const SizedBox.shrink();
         }
+        final n = count.committedTonight;
         return Text(
-          '${count.committedTonight} in tonight',
+          n == 1 ? '1 person has signed up' : '$n people have signed up',
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),

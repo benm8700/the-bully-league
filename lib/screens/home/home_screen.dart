@@ -131,46 +131,60 @@ class HomeScreen extends StatelessWidget {
                         onTap: () => _startMatch(context, 'ranked'),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
-                          child: Row(
+                              horizontal: 16, vertical: 9),
+                          child: Column(
+                            // Stretch forces the card full-width like the
+                            // tournament box; the pill is wrapped in an Align
+                            // so it stays a content-width button.
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Icon(Icons.sports_mma,
-                                  color: context.palette.accent),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Roast a Stranger',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                              fontWeight: FontWeight.bold),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Get matched one-on-one with a random '
-                                      'roaster now',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ],
+                              // A clear pink pill BUTTON so it plainly reads as
+                              // tappable - mirrors the gold tournament pill's
+                              // placement, but pink (the action colour, not
+                              // gold) and a boxing glove instead of the trophy.
+                              // Sized to match the gold pill (same padding /
+                              // compact density) so the two boxes feel equal
+                              // rather than the pink one bulging larger.
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: FilledButton.icon(
+                                  onPressed: () =>
+                                      _startMatch(context, 'ranked'),
+                                  // Softer TONAL pink (tinted fill + pink
+                                  // text/icon), not the loud solid pink - it
+                                  // was pulling all the attention off the gold
+                                  // tournament box, which is the headline. Same
+                                  // family as the "I'm in tonight" tonal
+                                  // button, so it still clearly reads as a
+                                  // button without shouting.
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: context.palette.accent
+                                        .withValues(alpha: 0.20),
+                                    foregroundColor: context.palette.accent,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 9),
+                                    minimumSize: const Size(0, 0),
+                                    visualDensity: VisualDensity.compact,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  icon: const Icon(Icons.sports_mma, size: 16),
+                                  label: const Text('Roast a Stranger'),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Icon(Icons.chevron_right,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Get matched one-on-one with a random '
+                                'roaster now',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                              ),
                             ],
                           ),
                         ),
