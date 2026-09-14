@@ -60,6 +60,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _statusMessage;
   List<String> _photoUrls = [];
 
+  /// Read-only identity shown at the top of the screen. The username is
+  /// deliberately NOT editable here (developer's call, 2026-09-14): a profile
+  /// is where you see who you are, not where you are nudged to rename yourself.
+  /// The backend setUsername still exists for signup, so this is reversible.
+  String? _username;
+  String? _rankTitle;
+
   DocumentReference<Map<String, dynamic>> get _userRef => FirebaseFirestore
       .instance
       .collection('users')
@@ -84,10 +91,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _ammoTextController.text = profile['ammoText'] as String? ?? '';
     final photoUrls = (profile['photoUrls'] as List<dynamic>?)?.cast<String>() ?? [];
     final listed = snapshot.data()?['directoryListed'];
+    final username = snapshot.data()?['username'] as String?;
+    final rankTitle = snapshot.data()?['rankTitle'] as String?;
     if (mounted) {
       setState(() {
         _photoUrls = photoUrls;
         _directoryListed = listed != false;
+        _username = username;
+        _rankTitle = rankTitle;
         _loading = false;
       });
     }
@@ -253,14 +264,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Above the profile fields, because this is what a
-                    // returning player opens the screen for - the profile
-                    // itself is filled in once and rarely touched again.
-                    const FormCard(),
-                    const UsernameCard(),
-                    const ReferrerField(),
-                    const InviteCard(),
-                    const SizedBox(height: 24),
+                    // The player's actual username as a heading, read-only
+                    // (developer's call, 2026-09-14): the top of a profile is
+                    // your identity, not a prompt to rename yourself. The
+                    // change-username control and the "your form" stats card
+                    // that used to sit here are gone; the referral bits moved
+                    // down near settings, where occasional actions belong.
+                    _IdentityHeader(
+                      username: _username,
+                      rankTitle: _rankTitle,
+                      photoUrl: _photoUrls.isNotEmpty ? _photoUrls.first : null,
+                    ),
+                    const SizedBox(height: 28),
                     // The mandatory intro video sits above photos because it
                     // is the one profile item a player CANNOT battle without
                     // (enforced in enterQueue), and it is the ammo the
@@ -341,7 +356,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             )
                           : const Text('Save'),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    // Referral bits live down here, not at the top - inviting a
+                    // friend and recording who invited you are occasional
+                    // actions, not what a player opens their profile to do.
+                    const InviteCard(),
+                    const ReferrerField(),
+                    const SizedBox(height: 8),
                     const Divider(),
                     // Sits with the profile because being findable is a
                     // property of the profile, and it is the one control
@@ -446,6 +469,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(labelText: label),
+    );
+  }
+}
+
+/// The read-only identity at the top of the profile: avatar, username and
+/// rank title. The username is deliberately not editable here.
+class _IdentityHeader extends StatelessWidget {
+  const _IdentityHeader({this.username, this.rankTitle, this.photoUrl});
+
+  final String? username;
+  final String? rankTitle;
+  final String? photoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    final name =
+        (username != null && username!.isNotEmpty) ? username! : 'Your profile';
+    return Column(
+      children: [
+        CircleAvatar(
+          radius: 42,
+          backgroundColor: scheme.surfaceContainerHighest,
+          backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
+          child: photoUrl == null
+              ? Icon(Icons.person, size: 44, color: scheme.onSurfaceVariant)
+              : null,
+        ),
+        const SizedBox(height: 14),
+        Text(
+          name,
+          style: text.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        if (rankTitle != null && rankTitle!.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            rankTitle!,
+            style: text.titleSmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ],
     );
   }
 }
