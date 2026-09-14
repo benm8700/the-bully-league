@@ -14,7 +14,9 @@ import 'package:provider/provider.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/entitlement_service.dart';
 import '../../core/services/matchmaking_service.dart';
+import '../../core/services/presence.dart';
 import '../../widgets/admin_only.dart';
+import '../../widgets/battle_mode_card.dart';
 import '../../widgets/daily_quests.dart';
 import '../../widgets/event_window_banner.dart';
 import '../match/bio_reveal_screen.dart';
@@ -115,94 +117,87 @@ class HomeScreen extends StatelessWidget {
                     // window. This is why the quests + points/XP bar moved
                     // BELOW it: the CTA being visible without scrolling beats
                     // the XP bar being above the fold.
-                    // "Roast a Stranger" is now a DARK CARD matching the
-                    // tournament box (developer's call, 2026-09-12) rather than
-                    // a loud solid-pink pill - the tournament is the headline,
-                    // so the one-on-one reads as its quieter sibling. Same Card
-                    // colour / InkWell / padding as EventWindowBanner, and an
-                    // Expanded so it stretches full-width like it. (Name kept:
-                    // it says exactly what the app is - you roast a stranger.)
-                    Card(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surfaceContainerHighest,
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => _startMatch(context, 'ranked'),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 9),
-                          child: Column(
-                            // Stretch forces the card full-width like the
-                            // tournament box; the pill is wrapped in an Align
-                            // so it stays a content-width button.
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // A clear pink pill BUTTON so it plainly reads as
-                              // tappable - mirrors the gold tournament pill, but
-                              // pink (the action colour, not gold) and a boxing
-                              // glove instead of the trophy. Left-aligned and
-                              // sized to the SAME WIDTH as the gold "Tonight: 6s
-                              // and 7s Tournament" pill (developer's call,
-                              // 2026-09-14) - shared const kEventPillWidth so
-                              // the two pills stay matched, since their labels
-                              // differ and neither would otherwise be the same
-                              // width.
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: SizedBox(
-                                  width: kEventPillWidth,
-                                  child: FilledButton.icon(
-                                    onPressed: () =>
-                                        _startMatch(context, 'ranked'),
-                                    // Softer TONAL pink (tinted fill + pink
-                                    // text/icon), not the loud solid pink - it
-                                    // was pulling attention off the gold
-                                    // tournament box, which is the headline.
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: context.palette.accent
-                                          .withValues(alpha: 0.20),
-                                      foregroundColor: context.palette.accent,
-                                      // A thin pink outline that follows the
-                                      // pill, mirroring the gold pill's brown
-                                      // outline - it reads more plainly as a
-                                      // tappable button against the dark card
-                                      // (developer's call, 2026-09-14).
-                                      side: BorderSide(
-                                          color: context.palette.accent,
-                                          width: 1.5),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 9),
-                                      // Height from the padding, not the theme's
-                                      // tall 52, so it keeps the gold pill's
-                                      // chunk rather than towering over it.
-                                      minimumSize: const Size(0, 0),
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                    icon:
-                                        const Icon(Icons.sports_mma, size: 16),
-                                    label: const Text('Roast a Stranger'),
-                                  ),
+                    // "Roast a Stranger" and the tournament now render through
+                    // the SAME BattleModeCard shell (developer's redesign,
+                    // 2026-09-14): two options of one kind - a casual battle
+                    // NOW vs the prize event TONIGHT. The whole card is the tap
+                    // target; no pill nested inside.
+                    BattleModeCard(
+                      accent: context.palette.accent,
+                      icon: Icons.sports_mma,
+                      title: 'Roast a Stranger',
+                      subtitle: 'Battle a random roaster, one-on-one',
+                      status: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.circle,
+                              size: 9, color: context.palette.accent),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Play now',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: context.palette.accent,
+                                  fontWeight: FontWeight.w700,
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Get matched one-on-one with a random '
-                                'roaster now',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
-                              ),
-                            ],
                           ),
-                        ),
+                        ],
                       ),
+                      // A matching footer to the tournament card's commit
+                      // footer, so the two mode cards stay the same size. It
+                      // shows who is around to battle right now - the honest
+                      // parallel to the tournament's "N signed up" count.
+                      footer: StreamBuilder<OnlineCount?>(
+                        stream: onlineCountStream(),
+                        builder: (context, snap) {
+                          final c = snap.data;
+                          final live = c != null && c.isFresh && c.total > 0;
+                          // A tonal INFO chip (not a button), sized like the
+                          // tournament card's commit pill so the two cards end
+                          // up the same height.
+                          return Align(
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 9),
+                              decoration: BoxDecoration(
+                                color: context.palette.accent
+                                    .withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.circle,
+                                      size: 9,
+                                      color: live
+                                          ? context.palette.winner
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    live
+                                        ? c!.label
+                                        : 'Get matched with whoever is around',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      onTap: () => _startMatch(context, 'ranked'),
                     ),
                     const SizedBox(height: 22),
                     // Daily progress - the quests and the points/clip (XP)

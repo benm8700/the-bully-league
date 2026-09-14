@@ -8,6 +8,7 @@ import '../core/services/event_window.dart';
 import '../core/services/presence.dart';
 import '../screens/tournament/tournament_list_screen.dart';
 import '../theme/app_theme.dart';
+import 'battle_mode_card.dart';
 
 /// The always-visible countdown to the daily window.
 ///
@@ -65,154 +66,92 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
         final window = currentOrNextWindow(now, config);
         final live = window.contains(now);
 
-        return Card(
-          color: live
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            // The whole banner is the way in to tonight's tournament - tap to
-            // the tournament list, where check-in lives. The "I'm in tonight"
-            // button inside keeps its own tap.
-            onTap: () => Navigator.of(context).push(
+        final scheme = Theme.of(context).colorScheme;
+        final text = Theme.of(context).textTheme;
+
+        void openTournament() => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => const TournamentListScreen(),
               ),
+            );
+
+        // LIVE: the event is happening now. Red accent; the two actions (join
+        // the bracket / watch) sit in the footer so the card still reads as a
+        // single option with its own tap.
+        if (live) {
+          return BattleModeCard(
+            accent: context.palette.live,
+            icon: Icons.local_fire_department,
+            title: '${config.name} is LIVE',
+            subtitle: 'The nightly tournament is on - join the bracket',
+            status: Text(
+              '${_remaining(window.end, now)} left · most people are online now',
+              style: text.bodySmall,
             ),
-            child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            onTap: openTournament,
+            footer: Row(
               children: [
-                // LIVE state is unchanged: fire header (name, tagline, time
-                // left, hour, online count, 2x) then the Join / Watch actions.
-                if (live) ...[
-                  Row(
-                    children: [
-                      Icon(Icons.local_fire_department,
-                          color: context.palette.live),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${config.name} is LIVE',
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'The nightly tournament is on - join the bracket',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                      color: context.palette.reward,
-                                      fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${_remaining(window.end, now)} left - most people are online now',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _localTimeLabel(window, config),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            const _OnlineCountLine(),
-                            _MultiplierLine(live: true),
-                          ],
-                        ),
-                      ),
-                    ],
+                _goldTournamentButton(context, 'Join Tournament'),
+                const SizedBox(width: 10),
+                FilledButton.icon(
+                  onPressed: openTournament,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: scheme.secondary,
+                    foregroundColor: scheme.onSecondary,
+                    visualDensity: VisualDensity.compact,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _goldTournamentButton(context, 'Join Tournament'),
-                      const SizedBox(width: 10),
-                      // Spectator entry (filled purple) - pulls people into
-                      // watching + judging, the scarce resource the ladder
-                      // runs on.
-                      FilledButton.icon(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const TournamentListScreen(),
-                          ),
-                        ),
-                        style: FilledButton.styleFrom(
-                          backgroundColor:
-                              Theme.of(context).colorScheme.secondary,
-                          foregroundColor:
-                              Theme.of(context).colorScheme.onSecondary,
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 9),
-                        ),
-                        icon: const Icon(Icons.remove_red_eye_outlined,
-                            size: 16),
-                        label: const Text('Watch'),
-                      ),
-                    ],
+                  icon: const Icon(Icons.remove_red_eye_outlined, size: 16),
+                  label: const Text('Watch'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // PRE-WINDOW: the prize event, later tonight. Same BattleModeCard shell
+        // as Home's "Roast a Stranger" (developer's redesign, 2026-09-14), so
+        // the two read as two options of one kind - the prize event TONIGHT vs
+        // a casual battle NOW. Gold accent; the "?" explainer sits top-right
+        // and the "I'm in tonight" pre-commit in the footer, both genuinely
+        // different actions from the card's own tap.
+        return BattleModeCard(
+          accent: context.palette.reward,
+          icon: Icons.emoji_events,
+          title: config.name,
+          subtitle: 'The nightly bracket - win prestige & prizes',
+          status: Text.rich(
+            TextSpan(
+              style: text.bodySmall,
+              children: [
+                TextSpan(
+                    text:
+                        '${_hour12(config.startHourPacific)}-${_hour12(config.endHourPacific)} Pacific · starts in '),
+                TextSpan(
+                  text: _remaining(window.start, now),
+                  style: TextStyle(
+                    color: context.palette.reward,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
-                // PRE-WINDOW, restructured (developer's design, 2026-09-12):
-                // the gold tournament button at the TOP, then the date/time of
-                // tonight's window, then the countdown, then "I'm in tonight".
-                if (!live) ...[
-                  // Gold tournament button + a "?" that opens the explainer
-                  // (what it is, the rules, the prize, the 2x bonus). A Wrap
-                  // rather than a Row so the icon drops to a second line on a
-                  // narrow screen instead of overflowing.
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _goldTournamentButton(
-                          context, 'Tonight: 6s and 7s Tournament'),
-                      IconButton(
-                        icon: const Icon(Icons.help_outline),
-                        iconSize: 20,
-                        visualDensity: VisualDensity.compact,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        tooltip: 'About this tournament',
-                        onPressed: () => _showTournamentInfo(context, config),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  // Full date + time of tonight's window, e.g.
-                  // "Friday, September 12, 6pm-7pm Pacific".
-                  Text(
-                    _windowDateLabel(window, config),
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 4),
-                  // Highlight only the remaining time (not "Starts in") in the
-                  // brand accent so the countdown grabs a little attention
-                  // against the dark box and gold button.
-                  Text.rich(
-                    TextSpan(
-                      style: Theme.of(context).textTheme.bodySmall,
-                      children: [
-                        const TextSpan(text: 'Starts in '),
-                        TextSpan(
-                          text: _remaining(window.start, now),
-                          style: TextStyle(
-                            color: context.palette.accent,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _CommitRow(dayKey: upcomingWindowDayKey(now, config)),
-                ],
+                ),
               ],
             ),
           ),
+          trailing: IconButton(
+            icon: const Icon(Icons.help_outline),
+            iconSize: 20,
+            visualDensity: VisualDensity.compact,
+            color: scheme.onSurfaceVariant,
+            tooltip: 'About this tournament',
+            onPressed: () => _showTournamentInfo(context, config),
           ),
+          onTap: openTournament,
+          // The "I'm in tonight" pre-commit lives INSIDE the card (footer);
+          // Home's "Roast a Stranger" card carries a matching online-count
+          // footer so the two stay the same size (developer's call,
+          // 2026-09-14).
+          footer: _CommitRow(dayKey: upcomingWindowDayKey(now, config)),
         );
       },
     );
