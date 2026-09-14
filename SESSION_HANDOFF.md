@@ -4,6 +4,96 @@ Point-in-time snapshot to resume work. All **decisions** live in `CLAUDE.md`
 (a fresh session auto-reads it); this file is the transient "where we are /
 do this next" state. Overwrite or delete once resumed.
 
+## CURRENT STATE (2026-09-13 — read this first)
+
+**This is a DESIGN / POLISH phase, all on Home. Everything is committed on
+`master` (HEAD `613a675`). Nothing pushed to a remote.** The developer wants
+to keep polishing UI + device-testing rather than being pushed toward the
+Google Play / beta launch track (pinned memory `prefer-polish-over-launch-push`).
+The Play prep from an earlier session (AAB, `PLAY_LISTING.md`, a review
+account) is done and PARKED — do NOT drive toward it.
+
+### Design changes shipped this phase (all committed, all device-verified)
+- **"How it works"** — Home's Rules button + the old top "?" help menu merged
+  into one "How it works" box → a single screen (rules → the "Walk me through a
+  battle" demo → Support link). `0a89381`.
+- **First-run content-policy gate** ("Before you roast": 18+/offensive-comedy
+  consent; Accept → Battle tab, Decline → holds you there). Gated on a
+  per-account `contentPolicyAcceptedAt` flag, so it also catches existing
+  accounts. `content_policy_screen.dart`, wired in `_AccountStatusGate`. `c8206f6`.
+- **Friend-challenge banner** now polls (~6s) so an incoming challenge shows
+  live without a relaunch. `9efa88a`.
+- **Logout moved OFF Home's app bar** (too easy to mis-tap) → a "Sign out"
+  button on the Profile tab. `a0209a8`.
+- **Laugh Meter now shows a % readout** beside the gauge (bold accent pink).
+  NOTE: this softens the "hidden criteria" rule (a precise % lets tier
+  thresholds be back-computed) — kept per the developer's call; the caption
+  stays numberless. `a0209a8`.
+- **"0-0" record line removed** from under the rank card (redundant with the
+  flip-card back). `a0209a8`.
+- **Tournament box (`EventWindowBanner`) restructured** (pre-window state):
+  gold button **"Tonight: 6s and 7s Tournament"** at TOP → full date line
+  ("Saturday, September 12, 6pm-7pm Pacific") → countdown with the remaining
+  time highlighted accent-pink → "I'm in tonight". A **"?"** beside the gold
+  button opens an explainer dialog (what it is / how it works / prize / 2x
+  bonus, conversational copy). Count text is now "X people have signed up".
+  LIVE state (Join/Watch) unchanged. `59e4072`, `936362f`, `613a675`.
+  - **Dropped from the pre-window box** for the lean look: the "win prestige &
+    prizes" tagline, the "2x points during the hour" line, and the online count.
+- **"Roast a Stranger" restyled** into a dark card matching the tournament box,
+  with a COMPACT, soft **tonal-pink** pill button + subtitle — a quieter
+  matched pair so the gold tournament box stays the headline. `9a6d6be`,
+  `613a675`.
+
+### Two small OPEN "your call" items (not blocking)
+- Tournament date line says **"Pacific"**, not "PST" (PST is winter-only; it's
+  PDT now). Kept Pacific; developer can change.
+- The **"2x points during the hour"** hook was removed from the pre-window
+  tournament box for the clean look — offered to add it back (e.g. a small line
+  under the countdown); developer hasn't decided.
+
+### Backlog ideas captured in CLAUDE.md this phase (to ponder, NOT built)
+- **Follow your favourite comedians** (links to their stuff + notified when
+  they perform next / a new clip drops) — in the Backlog section, 2026-09-12.
+- **Skins unlockable by winning tournaments**; and the **tournament WINNER
+  earns heckle/gift items** (tomatoes etc.) — both under a "tournament rewards"
+  theme, 2026-09-09.
+
+### Devices (both on the current build)
+- **BOOT THE `Pixel_9` AVD** (`emulator -avd Pixel_9`) — that is the emulator
+  the developer uses (native 1080x2424 @ 420dpi, ~411 dp wide). Do NOT boot
+  `bully_league_test`: it is a tiny 320x640 @ mdpi (320 dp wide) edge-case AVD
+  and makes the UI look wrong (Wrap widgets wrap, e.g. the tournament box "?"
+  drops under the gold pill; things look chunky). Booting it by mistake this
+  session caused real confusion. 1080x2424 screenshot = Pixel_9; 320x640 =
+  bully_league_test.
+- **Emulator (Pixel_9, `emulator-5554`)** → runs a **DEBUG** build (red "DEBUG"
+  ribbon), currently logged in as **Door Guy**. Because it is debug-signed, a
+  **release** APK will NOT `-r` over it (INSTALL_FAILED_UPDATE_INCOMPATIBLE).
+  To update it in place while keeping the login, build a **debug** APK
+  (`flutter build apk --debug`) and `adb install -r` it. (PlayReviewer creds
+  `play-review@thebullyleague.app` / `BullyReview#2026` still work for a fresh
+  release install if ever needed.)
+- **Physical S22 over Wi-Fi adb** (`192.168.1.128`) → runs the **RELEASE** build,
+  logged in as **DryRunB** (a fresh 0-point account, so Home's yellow points bar
+  is hidden by design — `_PointsBalance` renders nothing at balance 0). The
+  Wi-Fi connection reconnected on its own this session; if it does drop, re-pair
+  via the phone's "Pair device with pairing code" screen (`adb pair <ip:port>
+  <code>`, developer reads out the code + port) then `adb connect` the
+  `_adb-tls-connect` address.
+- Cross-device battle can't be fully automated: the emulator's virtual mic can't
+  pass the pre-match mic gate (needs two real mics).
+
+### Iteration workflow that's been working
+Edit → `flutter build apk --release` (background) → `adb -s <dev> install -r` on
+both devices → force-stop + relaunch emulator → `exec-out screencap` to the
+scratchpad → Read the PNG. Commit each polish item after the developer approves
+the on-device look.
+
+---
+
+## Older history (2026-09-01 and before) — still accurate
+
 ## What was built and verified this session (all done — don't redo)
 
 1. **The nightly "climb" tournament — DONE, all 4 phases, deployed.**
