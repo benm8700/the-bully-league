@@ -361,6 +361,14 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
 /// Ink button. Deliberately a DIFFERENT colour from the pink "Roast a
 /// Stranger" primary so the two never read as the same action. Goes to the
 /// tournament, where check-in and the live watch/vote list live.
+/// Width of the gold "Tonight: 6s and 7s Tournament" pill's footprint, reused
+/// on Home so the "Roast a Stranger" pill matches it exactly (developer's call,
+/// 2026-09-14). The two labels differ, so neither would otherwise be the same
+/// width; pinning both to one value keeps them a matched pair. Tuned to the
+/// gold pill's rendered width on a ~411dp phone — revisit if the tournament
+/// label or the display font changes.
+const double kEventPillWidth = 272;
+
 Widget _goldTournamentButton(BuildContext context, String label) {
   return Material(
     color: Colors.transparent,
@@ -488,13 +496,21 @@ class _CommitRow extends StatelessWidget {
         // as the one true accent on the screen. A tonal fill + icon reads
         // as inviting without shouting louder than "Find Opponent".
         final reward = context.palette.reward;
-        // A compact button style so the banner stays tight - the default
-        // 48px tap target plus padding makes it taller than it needs to be.
+        // Height matched to the gold "Tonight" and pink "Roast a Stranger"
+        // pills (developer's call, 2026-09-14): the theme's FilledButton
+        // minimumSize (Size.fromHeight(52)) was making this box taller than
+        // those two, so it is dropped here (Size(0,0)) and the vertical padding
+        // set to 9 to mirror them. WIDTH is left to hug the label (content
+        // width) on purpose - only the height was matched.
+        // No visualDensity.compact here: the gold "Tonight" and pink "Roast a
+        // Stranger" pills use the default density, so compact would leave this
+        // one a few px shorter than them. minimumSize(0,0) + vertical padding 9
+        // matches their height exactly; width still hugs the label.
         final commitStyle = FilledButton.styleFrom(
           foregroundColor: reward,
-          visualDensity: VisualDensity.compact,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          minimumSize: const Size(0, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         );
         return Padding(
           padding: const EdgeInsets.only(top: 6),

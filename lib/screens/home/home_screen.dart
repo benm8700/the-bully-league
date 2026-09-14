@@ -139,37 +139,51 @@ class HomeScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               // A clear pink pill BUTTON so it plainly reads as
-                              // tappable - mirrors the gold tournament pill's
-                              // placement, but pink (the action colour, not
-                              // gold) and a boxing glove instead of the trophy.
-                              // Sized to match the gold pill (same padding /
-                              // compact density) so the two boxes feel equal
-                              // rather than the pink one bulging larger.
+                              // tappable - mirrors the gold tournament pill, but
+                              // pink (the action colour, not gold) and a boxing
+                              // glove instead of the trophy. Left-aligned and
+                              // sized to the SAME WIDTH as the gold "Tonight: 6s
+                              // and 7s Tournament" pill (developer's call,
+                              // 2026-09-14) - shared const kEventPillWidth so
+                              // the two pills stay matched, since their labels
+                              // differ and neither would otherwise be the same
+                              // width.
                               Align(
                                 alignment: Alignment.centerLeft,
-                                child: FilledButton.icon(
-                                  onPressed: () =>
-                                      _startMatch(context, 'ranked'),
-                                  // Softer TONAL pink (tinted fill + pink
-                                  // text/icon), not the loud solid pink - it
-                                  // was pulling all the attention off the gold
-                                  // tournament box, which is the headline. Same
-                                  // family as the "I'm in tonight" tonal
-                                  // button, so it still clearly reads as a
-                                  // button without shouting.
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: context.palette.accent
-                                        .withValues(alpha: 0.20),
-                                    foregroundColor: context.palette.accent,
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 9),
-                                    minimumSize: const Size(0, 0),
-                                    visualDensity: VisualDensity.compact,
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
+                                child: SizedBox(
+                                  width: kEventPillWidth,
+                                  child: FilledButton.icon(
+                                    onPressed: () =>
+                                        _startMatch(context, 'ranked'),
+                                    // Softer TONAL pink (tinted fill + pink
+                                    // text/icon), not the loud solid pink - it
+                                    // was pulling attention off the gold
+                                    // tournament box, which is the headline.
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: context.palette.accent
+                                          .withValues(alpha: 0.20),
+                                      foregroundColor: context.palette.accent,
+                                      // A thin pink outline that follows the
+                                      // pill, mirroring the gold pill's brown
+                                      // outline - it reads more plainly as a
+                                      // tappable button against the dark card
+                                      // (developer's call, 2026-09-14).
+                                      side: BorderSide(
+                                          color: context.palette.accent,
+                                          width: 1.5),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 9),
+                                      // Height from the padding, not the theme's
+                                      // tall 52, so it keeps the gold pill's
+                                      // chunk rather than towering over it.
+                                      minimumSize: const Size(0, 0),
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    icon:
+                                        const Icon(Icons.sports_mma, size: 16),
+                                    label: const Text('Roast a Stranger'),
                                   ),
-                                  icon: const Icon(Icons.sports_mma, size: 16),
-                                  label: const Text('Roast a Stranger'),
                                 ),
                               ),
                               const SizedBox(height: 8),
