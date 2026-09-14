@@ -82,12 +82,12 @@ class _MainShellState extends State<MainShell> {
           NavigationDestination(
             icon: Icon(Icons.sports_mma_outlined),
             selectedIcon: Icon(Icons.sports_mma),
-            label: 'Battle',
+            label: 'Home',
           ),
           NavigationDestination(
             icon: Icon(Icons.gavel_outlined),
             selectedIcon: Icon(Icons.gavel),
-            label: 'Judge',
+            label: 'Vote',
           ),
           NavigationDestination(
             icon: Icon(Icons.emoji_events_outlined),
