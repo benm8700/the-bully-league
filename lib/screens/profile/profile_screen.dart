@@ -250,16 +250,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Cinematic backstage background (developer's art, 2026-09-14), same
+    // pattern as the Ranks and My Battles screens: a transparent Scaffold
+    // over a fixed image with a dark base and a light scrim, so the profile
+    // form scrolls over the "House Lights Down" venue art. fitWidth +
+    // topCenter keeps the neon graffiti / stage at the top uncropped; the
+    // dark floor of the image sits behind the lower settings rows.
     return Scaffold(
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         title: const Text('Your Profile'),
         automaticallyImplyLeading: !widget.embedded,
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Form(
+      body: Stack(
+        children: [
+          const Positioned.fill(
+            child: ColoredBox(color: Color(0xFF0E0B14)),
+          ),
+          Positioned.fill(
+            child: Image.asset(
+              'assets/home/profile_background.png',
+              fit: BoxFit.fitWidth,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
+          ),
+          // Light scrim for legibility. The form fields carry their own dark
+          // fills, so this only has to lift white headings/labels off the
+          // bright neon at the top and settle the lower rows into the dark
+          // floor - a heavy scrim would wash out the art the developer chose.
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0x59000000),
+                    Color(0x1F000000),
+                    Color(0x73000000),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          _loading
+              ? const Center(child: CircularProgressIndicator())
+              : SafeArea(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      24,
+                      kToolbarHeight + 8,
+                      24,
+                      24 + MediaQuery.of(context).padding.bottom,
+                    ),
+                    child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -433,10 +481,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         style: TextStyle(color: Color(0xFFE05252)),
                       ),
                     ),
-                  ],
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
+        ],
+      ),
     );
   }
 

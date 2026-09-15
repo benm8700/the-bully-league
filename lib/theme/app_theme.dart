@@ -339,19 +339,32 @@ ThemeData _build({
     ),
     dividerTheme: DividerThemeData(color: scheme.outlineVariant, thickness: 1),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: scheme.surfaceContainerHigh,
-      indicatorColor: scheme.primary.withValues(alpha: 0.20),
+      // A deep near-black bar rather than the lighter mid-gray container, so
+      // it reads as part of the premium dark theme instead of a pale strip
+      // under the near-black screens. Blending black OVER the existing token
+      // keeps it darker than before on every skin, not just the base.
+      backgroundColor:
+          Color.alphaBlend(Colors.black.withValues(alpha: 0.40), scheme.surfaceContainerHigh),
+      // A clearer pink selection pill, plus a soft pink glow beneath the bar.
+      indicatorColor: scheme.primary.withValues(alpha: 0.24),
       surfaceTintColor: Colors.transparent,
-      labelTextStyle: WidgetStatePropertyAll(TextStyle(
-        fontFamily: bodyFont,
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        color: scheme.onSurfaceVariant,
-      )),
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(
+            fontFamily: bodyFont,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            // Selected label picks up the pink accent; unselected is dimmed
+            // so the current tab clearly reads as active.
+            color: s.contains(WidgetState.selected)
+                ? scheme.primary
+                : scheme.onSurfaceVariant.withValues(alpha: 0.72),
+          )),
       iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(
+          size: 26,
           color: s.contains(WidgetState.selected)
               ? scheme.primary
-              : scheme.onSurfaceVariant)),
+              : scheme.onSurfaceVariant.withValues(alpha: 0.80))),
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: scheme.inverseSurface,

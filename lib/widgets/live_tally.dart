@@ -180,8 +180,9 @@ class LiveTally extends StatelessWidget {
               fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
             ),
           ),
+          // The number now says "votes" so it never reads as a bare figure.
           Text(
-            '$votes',
+            '$votes ${votes == 1 ? 'vote' : 'votes'}',
             style: numberStyle?.copyWith(
               fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
             ),

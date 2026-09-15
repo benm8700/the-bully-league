@@ -86,7 +86,6 @@ class _MatchScreenState extends State<MatchScreen> {
   // disqualification.
   bool _violationEnded = false;
   bool _violationIAmReporter = false;
-  String? _violationReason;
 
   _Phase _phase = _Phase.waitingForOpponent;
   int _turnIndex = 0;
@@ -237,7 +236,6 @@ class _MatchScreenState extends State<MatchScreen> {
     if (_violationEnded) return;
     _violationEnded = true;
     _violationIAmReporter = iAmReporter;
-    _violationReason = reason;
     _ticker?.cancel();
 
     if (iAmReporter) {
@@ -512,13 +510,16 @@ class _MatchScreenState extends State<MatchScreen> {
             const SizedBox(height: 12),
             Text(
               _violationIAmReporter
-                  ? 'Our automated content check flagged something in this match '
-                      '(${_violationReason ?? 'content violation'}) and ended it. A '
-                      'report has been filed for review - this doesn\'t mean anyone\'s '
-                      'been banned, just that a human will take a look.'
-                  : 'This match was ended and reported by the other participant\'s '
-                      'device. If you think this was a mistake, you can reach out '
-                      'via Support & Feedback on Home.',
+                  ? 'Our automated visual check flagged something on camera and '
+                      'ended the match. This is about video only - never anything '
+                      'said - and it doesn\'t mean anyone\'s been banned; a human '
+                      'will take a look. If it got it wrong, reach out via Support '
+                      '& Feedback on Home.'
+                  : 'The automated visual check flagged something on camera and '
+                      'ended the match. This was NOT your opponent reporting you, '
+                      'and it is never about anything said - only video. If you '
+                      'think it got it wrong, reach out via Support & Feedback on '
+                      'Home.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),

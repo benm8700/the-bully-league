@@ -243,7 +243,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
       body: const [
         'You get matched with someone at your level. You take turns roasting '
             'each other on camera, and the community votes on who won.',
-        'It takes two minutes. Let\'s walk through it once so nothing catches '
+        'It takes 2 minutes. Let\'s walk through it once so nothing catches '
             'you off guard in a real battle.',
       ],
       action: 'Start',

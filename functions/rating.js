@@ -23,7 +23,7 @@ const RANK_TIERS = [
   {title: "Regular", minRating: 1300, minMatches: 15},
   {title: "Headliner", minRating: 1450, minMatches: 20},
   {title: "Legend", minRating: 1600, minMatches: 25},
-  {title: "Hall of Famer", minRating: 1800, minMatches: 30},
+  {title: "Featured Talent", minRating: 1800, minMatches: 30},
 ];
 
 /**
@@ -63,12 +63,13 @@ const XP_TIERS = [
   {title: "Regular", minXp: 1200},
   {title: "Headliner", minXp: 2000},
   {title: "Legend", minXp: 3200},
-  {title: "Hall of Famer", minXp: 5000},
+  {title: "Featured Talent", minXp: 5000},
 ];
 
 /** XP at which a player is eligible to be swapped into a GOAT slot - the
- * top of the earned ladder. Mirrors the old "must otherwise qualify for
- * Hall of Famer" rule, now measured in XP rather than matches. */
+ * top of the earned ladder. Mirrors the old "must otherwise qualify for the
+ * top earned tier (Featured Talent)" rule, now measured in XP rather than
+ * matches. */
 const GOAT_ELIGIBLE_MIN_XP = XP_TIERS[XP_TIERS.length - 1].minXp;
 
 /**
@@ -88,7 +89,7 @@ function computeTitleFromXp(xp) {
 
 const GOAT_TITLE = "GOAT";
 const GOAT_POOL_SIZE = 5;
-// Only players who'd otherwise qualify for Hall of Famer are even eligible
+// Only players who'd otherwise qualify for Featured Talent are even eligible
 // to be swapped in as GOAT - prevents a low-sample-size account with a
 // lucky streak from briefly topping the leaderboard by rating alone.
 const GOAT_ELIGIBLE_MIN_MATCHES = RANK_TIERS[RANK_TIERS.length - 1].minMatches;

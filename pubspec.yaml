@@ -73,6 +73,19 @@ flutter:
 
   assets:
     - assets/turnstile.html
+    # Home hero background art (developer-provided). tournament_hero.png
+    # (1080x1350) and roast_hero.png (1080x810) are pure background scenes -
+    # all dynamic text/buttons/countdowns are Flutter overlays, never baked in.
+    - assets/home/
+    # Rank tier badges (developer-provided illustrated crests), one per
+    # progression tier, shown on the Home Player Status card. Mapped by tier
+    # title in lib/widgets/home/rank_badges.dart.
+    - assets/ranks/
+    # Official Bully League header branding (the approved wordmark + tagline
+    # artwork). The reusable header logo, used on the Home app bar. The PNG
+    # already contains "THE BULLY LEAGUE / REAL PEOPLE. REAL ROASTS." - never
+    # re-render that text in Flutter alongside it.
+    - assets/branding/
 
   # BUNDLED rather than fetched through the google_fonts package, for two
   # reasons. It adds no dependency to a toolchain this project documents

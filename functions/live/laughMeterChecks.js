@@ -127,7 +127,7 @@ async function setState(fields) {
     const top = XP_TIERS[XP_TIERS.length - 1];
     await setState({rankTitle: top.title, points: top.minXp + 5000});
     r = await call(UID, "getLaughMeter", {});
-    check("Hall of Famer points at GOAT without faking progress toward it",
+    check("Featured Talent points at GOAT without faking progress toward it",
         r.body.nextTitle === GOAT_TITLE && r.body.state === "contender",
         JSON.stringify(r.body));
 

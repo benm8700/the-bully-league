@@ -56,7 +56,7 @@ check("THE GOAT CASE: displacement is reported honestly, not as decline", () => 
   // GOAT is a live top-five position, so it can be lost without losing a
   // match - somebody else simply passed you. Telling that player they got
   // worse is untrue and makes the ladder feel rigged.
-  const c = rankChangeFor(GOAT_TITLE, "Hall of Famer", {displacedFromGoat: true});
+  const c = rankChangeFor(GOAT_TITLE, "Featured Talent", {displacedFromGoat: true});
   assert.strictEqual(c.displaced, true);
   assert.strictEqual(c.message, GOAT_DISPLACED);
   assert.ok(!/worse/.test(c.message.replace("did not get worse", "")),
@@ -64,9 +64,9 @@ check("THE GOAT CASE: displacement is reported honestly, not as decline", () => 
 });
 
 check("losing GOAT by actually dropping rating uses the ordinary line", () => {
-  const c = rankChangeFor(GOAT_TITLE, "Hall of Famer", {displacedFromGoat: false});
+  const c = rankChangeFor(GOAT_TITLE, "Featured Talent", {displacedFromGoat: false});
   assert.strictEqual(c.displaced, false);
-  assert.ok(DOWN["Hall of Famer"].includes(c.message), c.message);
+  assert.ok(DOWN["Featured Talent"].includes(c.message), c.message);
 });
 
 check("EVERY rank has copy in BOTH directions", () => {

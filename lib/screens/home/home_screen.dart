@@ -1,23 +1,23 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../theme/app_theme.dart';
-
-import '../../widgets/laugh_meter.dart';
 import 'package:provider/provider.dart';
+
+import '../../theme/app_theme.dart';
+import '../rewards/rewards_screen.dart';
 
 import '../../core/services/auth_service.dart';
 import '../../core/services/entitlement_service.dart';
 import '../../core/services/matchmaking_service.dart';
-import '../../core/services/presence.dart';
 import '../../widgets/admin_only.dart';
-import '../../widgets/battle_mode_card.dart';
-import '../../widgets/daily_quests.dart';
+import '../../widgets/home/hero_mode_card.dart';
+import '../../widgets/home/player_status_card.dart';
+import '../../widgets/home/home_quick_actions.dart';
+import '../../widgets/home/featured_section.dart';
 import '../../widgets/event_window_banner.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
@@ -25,8 +25,8 @@ import '../match/recording_consent_screen.dart';
 import '../onboarding/tutorial_screen.dart';
 import '../friends/challenge_screen.dart';
 import '../practice/solo_practice_screen.dart';
+import '../settings/account_screen.dart';
 import '../settings/notification_settings_screen.dart';
-import '../info/rules_screen.dart';
 import '../vote/finalize_test_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -36,21 +36,56 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = context.read<AuthService>();
 
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('The Bully League'),
+        // The header logo is the WORDMARK-ONLY branding asset
+        // (assets/branding/bully_league_wordmark.png) - the approved
+        // bully_league_header.png with the "REAL PEOPLE. REAL ROASTS." tagline
+        // cropped off (developer's call, 2026-09-14). The full header PNG is
+        // kept in the repo untouched; this is a separate cropped file, so
+        // restoring the tagline is a one-line asset-path change. Sized by
+        // height only (BoxFit.contain preserves the aspect ratio - never
+        // stretched, cropped or recoloured), kept compact.
+        toolbarHeight: 72,
+        titleSpacing: 16,
+        title: Align(
+          alignment: Alignment.centerLeft,
+          child: Image.asset(
+            'assets/branding/bully_league_wordmark.png',
+            height: 44,
+            fit: BoxFit.contain,
+          ),
+        ),
         actions: [
-          // Help (how a battle works / support) lives next to the Rules
-          // button at the bottom now, not up here.
-          // Sign out lives on the Profile tab now, NOT here - a one-tap
-          // logout on the top-right of the main screen was far too easy to
-          // hit by accident (a real user did exactly that).
+          // The bell shows notification settings (no badge count).
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
             tooltip: 'Notifications',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => const NotificationSettingsScreen(),
+              ),
+            ),
+          ),
+          // The profile avatar opens ACCOUNT & SETTINGS - deliberately NOT
+          // the public Profile tab, which is the player's public identity.
+          // (Sign out used to be a top-right one-tap button that a real user
+          // hit by accident; it now lives one level in, inside Account.)
+          Padding(
+            padding: const EdgeInsets.only(right: 12, left: 4),
+            child: Tooltip(
+              message: 'Account',
+              child: InkResponse(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AccountScreen()),
+                ),
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: scheme.surfaceContainerHighest,
+                  child: Icon(Icons.person,
+                      size: 18, color: scheme.onSurfaceVariant),
+                ),
               ),
             ),
           ),
@@ -64,7 +99,6 @@ class HomeScreen extends StatelessWidget {
         stream: authService.authStateChanges(),
         initialData: authService.currentUser,
         builder: (context, snapshot) {
-          final username = snapshot.data?.displayName ?? 'Roaster';
           final uid = snapshot.data?.uid;
           // Scrollable rather than a bare centred Column: Home has grown
           // past what a small screen can show at once (seen live as a
@@ -81,20 +115,11 @@ class HomeScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Quiet on purpose. A greeting is furniture - the
-                    // player already knows who they are - and the first
-                    // pass had it as the loudest thing on the screen,
-                    // above their own rank. The rank is the identity
-                    // here, so the Laugh Meter below carries the size.
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        username.toUpperCase(),
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
+                    // The Player Status card IS the identity block now - the
+                    // old username greeting above it was redundant furniture
+                    // (the name is on the card's trophy context and the
+                    // header carries the brand), so it was removed in the
+                    // 2026-09-14 Home overhaul to match the reference.
                     if (uid != null) _RankBadge(uid: uid),
                     const SizedBox(height: 18),
                     // Anything urgent stays at the very top: a match
@@ -110,101 +135,29 @@ class HomeScreen extends StatelessWidget {
                     // check-in lives.
                     const EventWindowBanner(),
                     const SizedBox(height: 16),
-                    // The primary action sits DIRECTLY UNDER the headline so
-                    // it is always above the fold - even on a short real phone
-                    // (the layout was tuned on a taller emulator), and even
-                    // with the live-cue bar pushing content down during the
-                    // window. This is why the quests + points/XP bar moved
-                    // BELOW it: the CTA being visible without scrolling beats
-                    // the XP bar being above the fold.
-                    // "Roast a Stranger" and the tournament now render through
-                    // the SAME BattleModeCard shell (developer's redesign,
-                    // 2026-09-14): two options of one kind - a casual battle
-                    // NOW vs the prize event TONIGHT. The whole card is the tap
-                    // target; no pill nested inside.
-                    BattleModeCard(
-                      accent: context.palette.accent,
-                      icon: Icons.sports_mma,
-                      title: 'Roast a Stranger',
-                      subtitle: 'Battle a random roaster, one-on-one',
-                      status: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.circle,
-                              size: 9, color: context.palette.accent),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Play now',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                  color: context.palette.accent,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                        ],
-                      ),
-                      // A matching footer to the tournament card's commit
-                      // footer, so the two mode cards stay the same size. It
-                      // shows who is around to battle right now - the honest
-                      // parallel to the tournament's "N signed up" count.
-                      footer: StreamBuilder<OnlineCount?>(
-                        stream: onlineCountStream(),
-                        builder: (context, snap) {
-                          final c = snap.data;
-                          final live = c != null && c.isFresh && c.total > 0;
-                          // A tonal INFO chip (not a button), sized like the
-                          // tournament card's commit pill so the two cards end
-                          // up the same height.
-                          return Align(
-                            alignment: Alignment.centerLeft,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 9),
-                              decoration: BoxDecoration(
-                                color: context.palette.accent
-                                    .withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.circle,
-                                      size: 9,
-                                      color: live
-                                          ? context.palette.winner
-                                          : Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    live
-                                        ? c!.label
-                                        : 'Get matched with whoever is around',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      onTap: () => _startMatch(context, 'ranked'),
+                    // Secondary hero: Roast a Stranger (play now). Illustrated
+                    // red/blue VS artwork with the title, subtitle and FIND A
+                    // MATCH CTA as Flutter overlays - distinct from the gold
+                    // tournament hero above, with dark breathing room between.
+                    RoastHero(
+                      onFindMatch: () => _startMatch(context, 'ranked'),
                     ),
                     const SizedBox(height: 22),
-                    // Daily progress - the quests and the points/clip (XP)
-                    // bar - sits just under the primary action.
-                    const DailyQuests(),
-                    const SizedBox(height: 4),
-                    if (uid != null) _PointsBalanceForUser(uid: uid),
+                    // Quick Actions row (Home overhaul): Daily Challenges /
+                    // Free Rewards / Current Streak. The Daily Challenges card
+                    // opens the full quests in a sheet, so the tall inline
+                    // quest list is no longer shown here (one route, not two).
+                    if (uid != null) HomeQuickActions(uid: uid),
+                    const SizedBox(height: 14),
+                    // Slim wallet line: "N Points" + Rewards ->. The old
+                    // milestone bar moved into the Rewards screen; Home keeps
+                    // only the glanceable balance and a way in.
+                    if (uid != null) _WalletBarForUser(uid: uid),
+                    // Featured spotlight (promotional/comedian clips). Renders
+                    // NOTHING at launch - there is no real featured content yet
+                    // and an empty section would look broken. Intentionally
+                    // kept; must not be removed. See FeaturedSection.
+                    const FeaturedSection(),
                     const SizedBox(height: 24),
                     // Everything below is navigation rather than the
                     // day's business, and the rule says so without a
@@ -226,16 +179,7 @@ class HomeScreen extends StatelessWidget {
                     // Sits with the battle actions because it IS a way to
                     // start a battle - and with a thin pool it is the most
                     // reliable one there is.
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const ChallengeScreen(),
-                        ),
-                      ),
-                      icon: const Icon(Icons.person_add_alt_1_outlined,
-                          size: 18),
-                      label: const Text('Battle a friend'),
-                    ),
+                    const _BattleFriendCard(),
                     // Solo practice is no longer offered here - Home is for
                     // battling and the day's business, not warm-ups. It
                     // still lives where it is actually wanted: the
@@ -260,26 +204,8 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    // The "Tournaments" button was removed: Sixes and Sevens
-                    // IS the tournament, and its headline banner above already
-                    // taps through to the tournament list, so a separate
-                    // button was a second route to the same place. In its
-                    // spot, the rules - the one thing a new player wants and
-                    // had nowhere to find.
-                    // A single "How it works" entry, replacing the old Rules
-                    // button + help menu. It opens the rules, and the
-                    // interactive demo ("how a battle works") plus a support
-                    // link live at the bottom of that one screen.
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const RulesScreen(),
-                        ),
-                      ),
-                      icon: const Icon(Icons.menu_book_outlined, size: 18),
-                      label: const Text('How it works'),
-                    ),
+                    // "How it works" moved off Home into Account & Settings
+                    // (the top-right profile icon), under the account/email.
                   ],
                 ),
               ),
@@ -388,186 +314,6 @@ class _TrialStatusState extends State<_TrialStatus> {
         message,
         textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.bodySmall,
-      ),
-    );
-  }
-}
-
-/// The spendable points balance, framed by what it actually buys.
-///
-/// A bare count says nothing about whether the number is going anywhere,
-/// and points are only worth caring about because they convert into a
-/// captioned clip of your own battle. So this states the distance to that,
-/// which also means a LOSS still visibly moves you forward - playing earns
-/// points win or lose, and that is the retention job the currency exists
-/// to do.
-///
-/// Renders nothing at zero: "0 points" is an argument against bothering.
-class _PointsBalance extends StatefulWidget {
-  const _PointsBalance({required this.balance});
-
-  final num? balance;
-
-  @override
-  State<_PointsBalance> createState() => _PointsBalanceState();
-}
-
-/// A single spendable-reward milestone: the balance at which it becomes
-/// affordable, an emoji that marks the spot, and a short name.
-typedef _Reward = ({int price, String emoji, String label});
-
-class _PointsBalanceState extends State<_PointsBalance> {
-  /// Mirror the server defaults so the bar never renders wrong numbers and
-  /// then corrects itself jarringly (functions/clipGrants.js and
-  /// functions/points.js). Overwritten by config the moment it arrives.
-  int _clipPrice = 500;
-  int _dayPassPrice = 300;
-
-  @override
-  void initState() {
-    super.initState();
-    FirebaseFirestore.instance
-        .collection('config')
-        .doc('pointsSettings')
-        .get()
-        .then((snap) {
-      final data = snap.data();
-      final clip = (data?['clipPrice'] as num?)?.toInt();
-      final pass = (data?['dayPassPrice'] as num?)?.toInt();
-      if (!mounted) return;
-      setState(() {
-        if (clip != null && clip > 0) _clipPrice = clip;
-        if (pass != null && pass > 0) _dayPassPrice = pass;
-      });
-    }).catchError((_) {
-      // The defaults are fine answers; never block Home on this.
-      return null;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final balance = (widget.balance ?? 0).toInt();
-    if (balance <= 0) return const SizedBox.shrink();
-
-    final text = Theme.of(context).textTheme;
-    // The things points buy, in price order. An emoji marks the exact
-    // balance at which each becomes affordable.
-    final rewards = <_Reward>[
-      (price: _clipPrice, emoji: '🎬', label: 'clip'),
-      (price: _dayPassPrice, emoji: '🎟️', label: 'day pass'),
-    ]..sort((a, b) => a.price.compareTo(b.price));
-    final scale = rewards.last.price.toDouble();
-
-    // The next thing they cannot yet afford - the honest "keep going" line.
-    _Reward? next;
-    for (final r in rewards) {
-      if (balance < r.price) {
-        next = r;
-        break;
-      }
-    }
-
-    // Currency has its own themed token (money reads as money) and it is
-    // deliberately NOT the rank gauge's colour, so a glance tells the two
-    // bars apart - the top one is your RANK climbing, this is your WALLET
-    // filling toward things to buy.
-    final gold = context.palette.currency;
-    final trackColor = Theme.of(context).colorScheme.surfaceContainerHighest;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 6, 28, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '$balance points',
-            textAlign: TextAlign.center,
-            style: text.bodySmall?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final w = constraints.maxWidth;
-              const markerW = 36.0;
-              // Emoji/price sit centred on their price point, clamped so an
-              // end milestone never overflows the bar.
-              double left(double frac) =>
-                  (frac * w - markerW / 2).clamp(0.0, w - markerW);
-              final fill = (balance / scale).clamp(0.0, 1.0);
-              return SizedBox(
-                height: 50,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // The emoji milestones, just above the track. Lit once
-                    // affordable, dimmed until then.
-                    for (final r in rewards)
-                      Positioned(
-                        left: left(r.price / scale),
-                        top: 0,
-                        width: markerW,
-                        child: Opacity(
-                          opacity: balance >= r.price ? 1.0 : 0.32,
-                          child: Text(
-                            r.emoji,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 19),
-                          ),
-                        ),
-                      ),
-                    // The wallet track + gold fill.
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top: 26,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: Stack(
-                          children: [
-                            Container(
-                                height: 6,
-                                width: double.infinity,
-                                color: trackColor),
-                            FractionallySizedBox(
-                              widthFactor: fill,
-                              child: Container(height: 6, color: gold),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    // The price under each milestone, gold once reached.
-                    for (final r in rewards)
-                      Positioned(
-                        left: left(r.price / scale),
-                        top: 34,
-                        width: markerW,
-                        child: Text(
-                          '${r.price}',
-                          textAlign: TextAlign.center,
-                          style: text.labelSmall?.copyWith(
-                            color: balance >= r.price ? gold : null,
-                            fontWeight: balance >= r.price
-                                ? FontWeight.bold
-                                : null,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 8),
-          Text(
-            next == null
-                ? 'You can afford anything here - go spend it.'
-                : '${next.price - balance} more for a ${next.label} ${next.emoji}',
-            textAlign: TextAlign.center,
-            style: text.bodySmall,
-          ),
-        ],
       ),
     );
   }
@@ -1026,252 +772,31 @@ class _RankBadge extends StatelessWidget {
           return const SizedBox.shrink();
         }
         final data = snapshot.data!.data()!;
-        // Handed to the meter so a failed or slow gauge still shows who
-        // the player is. This document is already streamed here.
+        // Handed to the card so a failed or slow meter/rank query still
+        // shows who the player is. This document is already streamed here.
         final rankTitle = data['rankTitle'] as String?;
-        final wins = data['wins'] as num? ?? 0;
-        final losses = data['losses'] as num? ?? 0;
-        final username = data['username'] as String? ?? 'You';
-        final points = data['points'] as num? ?? 0;
+        final points = data['points'] as num?;
 
-        // The rank card is a COLLECTIBLE PLAYER CARD (the reason the Card
-        // look was chosen): tap it and it flips to a trophy back with your
-        // record, win rate and career points - the shareable face. Only
-        // the framed skins have a card to turn over; plainer skins show
-        // the meter as before. This is deliberately YOUR OWN card only -
-        // flipping other people's cards to reveal their stats/bio would
-        // walk back the "opponent rank hidden pre-match" and directory-
-        // privacy decisions (see CLAUDE.md).
-        final meter = LaughMeter(fallbackTitle: rankTitle);
-        final hasCard = context.palette.signature == 'frame';
-        return Column(
-          children: [
-            // The Laugh Meter carries the rank title and the climb toward
-            // the next one - now the climb is XP, not Elo. As of the XP
-            // ladder (2026-08-25) the Elo rating is hidden EVERYWHERE (it
-            // only runs matchmaking underneath); it is no longer shown here
-            // or in the profile stats.
-            if (hasCard)
-              _FlipRankCard(
-                front: meter,
-                back: _RankCardBack(
-                  username: username,
-                  title: rankTitle,
-                  wins: wins,
-                  losses: losses,
-                  points: points,
-                ),
-              )
-            else
-              meter,
-            // The win/loss record used to sit here under the card. Removed
-            // (developer's call, 2026-09-12) as redundant: tapping the card
-            // flips to a trophy back that already shows the record, win rate
-            // and career points. wins/losses are still passed to that back.
-          ],
+        // The Home overhaul (2026-09-14) replaced the tap-to-flip
+        // collectible card with a single horizontal PLAYER STATUS card:
+        // tier + rank badge + XP progress on the left, GLOBAL RANK on the
+        // right. This shows numbers (XP and position), a deliberate
+        // softening of the hidden-criteria rule - the developer's call to
+        // match the reference. The card degrades to the fallback title if
+        // the meter/rank queries fail, so the identity never disappears.
+        return PlayerStatusCard(
+          uid: uid,
+          fallbackTitle: rankTitle,
+          fallbackPoints: points,
         );
       },
     );
   }
 }
 
-/// Tap-to-flip wrapper for the rank card. Renders [front] and [back] as the
-/// two faces of one card that rotates around its vertical axis on tap.
-///
-/// Both faces are kept mounted in a Stack sized to the front, so the layout
-/// height never jumps mid-flip (the swap happens at 90 degrees, when the
-/// card is edge-on and invisible anyway). The back is pre-rotated 180 so it
-/// is not mirror-imaged once it faces the viewer.
-class _FlipRankCard extends StatefulWidget {
-  const _FlipRankCard({required this.front, required this.back});
-
-  final Widget front;
-  final Widget back;
-
-  @override
-  State<_FlipRankCard> createState() => _FlipRankCardState();
-}
-
-class _FlipRankCardState extends State<_FlipRankCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 460),
-  );
-  bool _showBack = false;
-
-  void _flip() {
-    setState(() => _showBack = !_showBack);
-    _showBack ? _c.forward() : _c.reverse();
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      // Opaque so a tap anywhere over the card - including the transparent
-      // margin around the framed panel - turns it.
-      behavior: HitTestBehavior.opaque,
-      onTap: _flip,
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (context, _) {
-          final t = _c.value;
-          final frontUp = t < 0.5;
-          return Transform(
-            alignment: Alignment.center,
-            transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.0012)
-              ..rotateY(t * math.pi),
-            child: Stack(
-              children: [
-                Opacity(opacity: frontUp ? 1 : 0, child: widget.front),
-                Positioned.fill(
-                  child: Opacity(
-                    opacity: frontUp ? 0 : 1,
-                    child: Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.identity()..rotateY(math.pi),
-                      child: widget.back,
-                    ),
-                  ),
-                ),
-                // A quiet hint that the card turns, shown only on the front.
-                if (frontUp)
-                  Positioned(
-                    top: 4,
-                    right: 28,
-                    child: Opacity(
-                      opacity: 0.45,
-                      child: Icon(Icons.flip_camera_android_outlined,
-                          size: 15, color: scheme.onSurface),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// The back of the rank card - a shareable "player card" trophy face: the
-/// username, the earned title, and the three stats a player would screenshot
-/// (record, win rate, career points). Matches the LaughMeter's framed panel
-/// so it reads as the same card turned over.
-class _RankCardBack extends StatelessWidget {
-  const _RankCardBack({
-    required this.username,
-    required this.title,
-    required this.wins,
-    required this.losses,
-    required this.points,
-  });
-
-  final String username;
-  final String? title;
-  final num wins;
-  final num losses;
-  final num points;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    final total = wins + losses;
-    final winRate = total > 0 ? ((wins / total) * 100).round() : 0;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.palette.accent, width: 1.5),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            context.palette.accent.withValues(alpha: 0.10),
-            scheme.surfaceContainer,
-            context.palette.gelB.withValues(alpha: 0.10),
-          ],
-        ),
-      ),
-      // FittedBox guards against overflow: the back is sized to match the
-      // front card (Positioned.fill in the flip), and the front's height
-      // varies with the rank title and the gauge state, so the trophy
-      // content scales down to fit rather than overflowing a tight box.
-      child: Center(
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                username,
-                style:
-                    text.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (title != null) ...[
-                const SizedBox(height: 2),
-                Text(title!,
-                    style: text.bodySmall, textAlign: TextAlign.center),
-              ],
-              const SizedBox(height: 16),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _stat(context, '$wins-$losses', 'RECORD'),
-                  const SizedBox(width: 22),
-                  _stat(context, '$winRate%', 'WIN RATE'),
-                  const SizedBox(width: 22),
-                  _stat(context, '$points', 'CAREER'),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _stat(BuildContext context, String value, String label) {
-    final text = Theme.of(context).textTheme;
-    return Column(
-      children: [
-        Text(
-          value,
-          style: text.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: context.palette.accent,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(label,
-            style: text.bodySmall?.copyWith(letterSpacing: 0.5)),
-      ],
-    );
-  }
-}
-
-/// The points balance, streamed for one user.
-///
-/// Split out because the balance moved OUT of the identity block and
-/// down beside the quests, away from the stream _RankBadge already had.
-/// Grouping it with the quests is the point: everything about what you
-/// can earn today now sits together, instead of a second progress bar
-/// competing with the rank gauge for the same glance.
-class _PointsBalanceForUser extends StatelessWidget {
-  const _PointsBalanceForUser({required this.uid});
+/// Streams the user's spendable balance for the Home wallet line.
+class _WalletBarForUser extends StatelessWidget {
+  const _WalletBarForUser({required this.uid});
 
   final String uid;
 
@@ -1285,11 +810,218 @@ class _PointsBalanceForUser extends StatelessWidget {
       builder: (context, snapshot) {
         final data = snapshot.data?.data();
         if (data == null) return const SizedBox.shrink();
-        return _PointsBalance(
-          balance: (data['pointsBalance'] ?? data['points']) as num?,
-        );
+        final balance =
+            ((data['pointsBalance'] ?? data['points']) as num?)?.toInt() ?? 0;
+        return _WalletBar(balance: balance);
       },
     );
   }
 }
+
+/// A slim wallet line: "N Points" on the left, "Rewards ->" on the right.
+///
+/// The whole strip taps through to the Rewards screen, where the milestone
+/// list and redemption now live (the old Home milestone bar moved there).
+class _WalletBar extends StatelessWidget {
+  const _WalletBar({required this.balance});
+
+  final int balance;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final gold = context.palette.currency;
+    final accent = context.palette.accent;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Material(
+        color: scheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const RewardsScreen()),
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                Icon(Icons.monetization_on, color: gold, size: 18),
+                const SizedBox(width: 7),
+                Text(
+                  '$balance',
+                  style: text.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: gold,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Points',
+                  style: text.bodyMedium
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+                const Spacer(),
+                Text(
+                  'Rewards',
+                  style: text.labelLarge?.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(Icons.arrow_forward, color: accent, size: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Battle a Friend - a SECONDARY mode, so a compact premium PURPLE card
+/// (identity/secondary colour per the app's colour hierarchy) that is quieter
+/// than the gold Tournament banner and the pink Roast a Stranger hero, but
+/// more premium than a plain outlined button. The whole card is tappable.
+class _BattleFriendCard extends StatelessWidget {
+  const _BattleFriendCard();
+
+  static const Color _violet = Color(0xFFC08CEE);
+  static const Color _border = Color(0xFF9A4FD0);
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ChallengeScreen()),
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              // Subtle plum illumination top-left into near-black navy.
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF241A33), Color(0xFF100C18)],
+              ),
+              border: Border.all(color: _border.withValues(alpha: 0.5)),
+              boxShadow: [
+                // Very restrained purple perimeter glow.
+                BoxShadow(
+                  color: _border.withValues(alpha: 0.16),
+                  blurRadius: 16,
+                  spreadRadius: -5,
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+              child: Row(
+                children: [
+                  const _DuelIcon(),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 1,
+                    height: 34,
+                    color: Colors.white.withValues(alpha: 0.12),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'BATTLE A FRIEND',
+                          style: text.titleSmall?.copyWith(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Challenge someone you know',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(
+                            fontSize: 11.5,
+                            color: const Color(0xFFA79FB2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 20,
+                    color: _violet.withValues(alpha: 0.75),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A compact purple "two people + microphone" mark for Battle a Friend:
+/// two-person silhouette with a small mic sitting between/below them, so it
+/// reads immediately as "play against someone you know."
+class _DuelIcon extends StatelessWidget {
+  const _DuelIcon();
+
+  static const Color _violet = Color(0xFFC08CEE);
+  static const Color _micViolet = Color(0xFFDBBAF6);
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 32,
+      height: 30,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          // Two people, lifted a little so the mic tucks in below them.
+          const Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: Icon(Icons.people_alt, color: _violet, size: 25),
+          ),
+          // The competitive element: a small mic between/near them, on a dark
+          // disc so it stays legible against the silhouettes.
+          Positioned(
+            bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(
+                color: Color(0xFF140F1E),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.mic, color: _micViolet, size: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 

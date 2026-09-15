@@ -72,6 +72,14 @@ function laughMeter(user) {
       state: GOAT_STATE,
       fill: 1,
       nextTitle: null,
+      // xp/nextXp back the Home status card's "870 / 1,200 XP" readout
+      // (2026-09-14, developer's call to show the numbers on the status
+      // card - a deliberate softening of the hidden-criteria rule, same as
+      // the meter's percent readout). GOAT has no "next", so nextXp is null
+      // and the card shows the career XP alone.
+      xp,
+      tierXp: null,
+      nextXp: null,
       caption: `Top ${GOAT_POOL_SIZE} in the world. Someone is coming for it.`,
     };
   }
@@ -84,7 +92,8 @@ function laughMeter(user) {
   const next = XP_TIERS[current + 1] ?? null;
 
   if (!next) {
-    // Hall of Famer. The only thing above is GOAT, which cannot be reached
+    // Featured Talent (the top earned tier). The only thing above is GOAT,
+    // which cannot be reached
     // by crossing an XP number - it is the top five by hidden skill - so
     // showing a fill toward it would be inventing progress that does not
     // exist. Point at the leaderboard instead.
@@ -93,6 +102,11 @@ function laughMeter(user) {
       state: CONTENDER_STATE,
       fill: 1,
       nextTitle: GOAT_TITLE,
+      // GOAT is a live leaderboard position, not an XP threshold, so there
+      // is no numeric "next" to show - the card falls back to the career XP.
+      xp,
+      tierXp: XP_TIERS[current].minXp,
+      nextXp: null,
       caption: `Only the top ${GOAT_POOL_SIZE} hold GOAT. Out-battle one of them.`,
     };
   }
@@ -108,6 +122,12 @@ function laughMeter(user) {
     state: CLIMBING_STATE,
     fill,
     nextTitle: next.title,
+    // The status card reads "870 / 1,200 XP": career XP over the NEXT
+    // title's threshold. tierXp is this title's floor, so the bar can fill
+    // between the two if a caller wants it band-relative rather than fill.
+    xp,
+    tierXp: here.minXp,
+    nextXp: next.minXp,
     caption: climbingCaption(fill, next.title),
   };
 }

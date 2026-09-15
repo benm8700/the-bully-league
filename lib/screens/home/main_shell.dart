@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/rank_change_popup.dart';
 import '../../widgets/service_status_banner.dart';
-import '../../widgets/window_live_bar.dart';
+// WindowLiveBar import removed with the live-bar usage (2026-09-14); restore
+// both together to bring the Sixes and Sevens top cue back.
 import '../leaderboard/leaderboard_screen.dart';
 import '../profile/profile_screen.dart';
 import '../vote/my_battles_screen.dart';
@@ -68,10 +69,10 @@ class _MainShellState extends State<MainShell> {
       body: Column(
         children: [
           const ServiceStatusBanner(),
-          // The unmistakable "the show is on" cue during Sixes and Sevens,
-          // app-wide above the tabs (the replacement for the dropped
-          // Nightlife skin swap). Renders nothing outside the window.
-          const WindowLiveBar(),
+          // The Sixes and Sevens live cue (WindowLiveBar) is REMOVED for now
+          // (developer's call, 2026-09-14) - the red top bar during the window
+          // was getting in the way of Home design review. The widget still
+          // exists; re-add `const WindowLiveBar(),` here to restore it.
           Expanded(child: IndexedStack(index: _index, children: _screens)),
         ],
       ),
@@ -80,13 +81,13 @@ class _MainShellState extends State<MainShell> {
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.sports_mma_outlined),
-            selectedIcon: Icon(Icons.sports_mma),
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
             label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.gavel_outlined),
-            selectedIcon: Icon(Icons.gavel),
+            icon: Icon(Icons.thumb_up_outlined),
+            selectedIcon: Icon(Icons.thumb_up),
             label: 'Vote',
           ),
           NavigationDestination(

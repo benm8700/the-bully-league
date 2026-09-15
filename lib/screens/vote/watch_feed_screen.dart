@@ -247,11 +247,39 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Cinematic "make the call" comedy-club background (developer's art,
+    // 2026-09-14). It sits BEHIND the feed: a playing clip fills the screen
+    // opaquely, so the art only shows in the loading / empty / error states -
+    // exactly where a bare black screen looked most unfinished. A light scrim
+    // keeps the empty-state / error copy legible over the busy stage art.
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        top: false,
-        child: _buildBody(),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              'assets/home/vote_background.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, _, _) => const ColoredBox(color: Colors.black),
+            ),
+          ),
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x4D000000), Color(0x1A000000), Color(0x66000000)],
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: _buildBody(),
+          ),
+        ],
       ),
     );
   }

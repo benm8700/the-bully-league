@@ -351,7 +351,7 @@ already handles honestly ("someone else got better").
     6. Regular
     7. Headliner
     8. Legend
-    9. Hall of Famer
+    9. Featured Talent  (RENAMED from "Hall of Famer" on 2026-09-14 so the tier title matches the illustrated badge art in assets/ranks/; the rename is applied in functions/rating.js's XP_TIERS + RANK_TIERS and functions/rankChange.js's copy. No account was at this tier, so no migration was needed. Fits the "Talent" showbiz framing. NOTE the badge-number wrinkle: rank_08_featured_talent.png sits below rank_09_legend.png in file order, but Featured Talent is ABOVE Legend on the ladder - the filename numbering does not match tier order, kept as-is per the developer.)
     10. GOAT
   - **Bottom tier — DECIDED**: no 11th tier added below Average Joe. Average Joe remains the floor of the ladder.
   - **Promotion mechanic — DECIDED**: each tier requires BOTH a rating threshold AND a minimum number of ranked matches played to unlock (prevents a lucky early win streak from vaulting a low-sample-size account into a high tier — same logic as "placement matches" in games like League of Legends). Exact thresholds/match minimums not yet set — needs starting placement (1200) to land somewhere in the middle of the ladder, not at the bottom, so new players can move in either direction.
@@ -641,6 +641,53 @@ Raised by the developer: what protects someone who is unhappy that their match f
     - **Verified by running the real sweep against real Firestore**: an open round is announced to both players and marked on the bracket, a second sweep says nothing, near the deadline only the absentee is warned, nobody is chased once both have checked in, and closed or decided rounds send nothing. **7 live checks plus 15 local tests.**
 
 ## Problems To Solve Later (Backlog — flagged during planning, not yet designed)
+- **EARNABLE BADGES / ACHIEVEMENTS — NEW IDEA (2026-09-14, developer).** Give
+  players badges they can earn for doing different things - milestones and
+  one-off accomplishments (e.g. first win, a win streak, judging a lot of
+  battles, playing during Sixes and Sevens, winning a tournament, a comeback
+  after being down, etc.). A collectible layer of recognition on top of the
+  daily quests, shown on the profile.
+  - **THE GUARDRAIL, because of the one-status-ladder rule (see the memory /
+    the ONE STATUS LADDER note): rank is the single STATUS ladder, and badges
+    must not become a second one.** Badges are ACHIEVEMENTS (many small
+    parallel yes/no accomplishments), not a competing title/level ladder -
+    they mark "you did X," never "you rank above Y." They must not be
+    orderable into a rival prestige track, and they should not drive
+    matchmaking, rating, or a second leaderboard. Fine to display on the
+    profile as a case/wall; keep them off surfaces where they'd read as a
+    competing rank.
+  - **Reuse what exists rather than building a parallel economy**: the quest
+    system already tracks per-day metrics off events that fire (castVote,
+    completeMatch, finalizeMatch), and the points ledger records lifetime
+    battles/wins/votes with timestamps - a lot of badge criteria can ride the
+    same signals. A `badges`/`earnedBadges` field on the user doc (earned +
+    kept, like the XP titles and unlocked skins) is the natural shape.
+  - **Not yet designed**: the actual badge list and criteria, the art, whether
+    any are secret/rare, whether a few are cosmetic-unlock or purely earned
+    (this project rules out cosmetic PURCHASES but earned recognition is fine),
+    and exactly where they surface. Capture for now; design later.
+- **BUG TO INVESTIGATE — a match was auto-reported/ended after the developer
+  said "cunt" on camera (2026-09-14, seen in a live video test).** The
+  developer saw a screen saying they "had been reported by the other person."
+  This should NOT happen on SPEECH: the content policy is explicitly
+  free-speech (slurs/offensive language ALLOWED) with NO real-time speech
+  moderation, so a spoken word must never trigger a report or an auto-end.
+  **Leading hypothesis: it was the VISUAL moderation false-firing, not the
+  word.** In-match frames are sampled to Cloud Vision SafeSearch, and on an
+  adult/racy/violent hit `_handleContentViolation` auto-ENDS the match and
+  auto-files a report into the `reports` queue (functions/visualModeration.js
+  + match_screen.dart). A false positive there (SafeSearch flagging a face /
+  gesture / lighting as "racy") would end the match and file a report exactly
+  as described - the timing near the swear word is likely coincidence.
+  **Two things to check when this is picked up:** (1) whether the SafeSearch
+  bands/thresholds are too sensitive (reuses the profile-photo thresholds);
+  and (2) the END-SCREEN COPY - the other participant's notice apparently
+  reads as "you were reported by the other person," which misattributes an
+  AUTOMATED moderation end to the opponent. Even once the sensitivity is
+  fixed, the copy should say the system flagged the video, not that the
+  opponent reported you. Also confirm there is genuinely no speech/transcript
+  path that could report (captioning runs only on RECORDED clips after the
+  match, not live, so it should be clear - verify). Not yet triaged.
 - **FOLLOW YOUR FAVOURITE COMEDIANS — NEW IDEA (2026-09-12, developer).** Let a
   user FOLLOW comedians/roasters from inside the app. A followed comedian's
   profile surfaces (a) LINKS to their stuff (socials, tickets, YouTube/TikTok,
@@ -921,7 +968,17 @@ into `syncGoatTier` for tamper-resistance, though cosmetics don't strictly
 need it. NEXT: take Card to full polish across every screen (feed cards,
 vote screen, the collectible-card language).
 
-## Flippable player card on Home — DECIDED AND BUILT (2026-09-01)
+## Flippable player card on Home — DECIDED AND BUILT (2026-09-01), then RETIRED (2026-09-14)
+
+**SUPERSEDED by the Home overhaul (2026-09-14): the tap-to-flip card was
+REPLACED by the horizontal Player Status card (see "Home screen overhaul"
+below).** The developer chose this directly when asked, to match the overhaul
+reference. `_FlipRankCard` and `_RankCardBack` were deleted from
+`home_screen.dart`; the trophy-back stats (record, win rate, career points)
+are gone from Home for now (still on the profile FormCard / My Battles). The
+flip metaphor and the guardrail below (never flip OTHER people's cards to
+reveal private stats) are kept on record in case a collectible card returns.
+Original decision follows.
 
 The Home rank card is now a **tap-to-flip collectible player card**: tap it
 and it rotates around its vertical axis to a **trophy back** showing the
@@ -3095,3 +3152,164 @@ A user can sign up (Firebase Auth email/password), the app checks their Play Age
   - **Still explicitly forbidden: increasing a frequent voter's VOTE WEIGHT.** It is the obvious-sounding reward and the wrong one - it concentrates influence over outcomes in a small group and is straightforwardly gameable. Reputation-weighted voting is filed under V2 vote integrity and must not arrive through the incentives door.
 - Paid ambassador/referral program — payout structure and target communities not yet designed.
 - Daily quest system — BUILT (`functions/quests.js`): three quests a day chosen deterministically from the Pacific day key, one of them always a judging quest, rewards paid from the existing points ledger. The weekly recap is built too. Reward VALUES remain placeholders like the rank thresholds.
+
+## Home screen overhaul — IN PROGRESS (2026-09-14)
+
+A full redesign of the Flutter Home screen to a premium mobile-game
+aesthetic, driven by a developer-supplied reference image treated as the
+PRIMARY VISUAL SOURCE OF TRUTH. Two cinematic hero cards were built first
+(previous work); this section covers the header, the status card, and the
+account screen. Built and device-verified on the emulator (Pixel_9, debug).
+
+**HERO ART IS PURE BACKGROUND, all dynamic text is a Flutter overlay.**
+`lib/widgets/home/hero_mode_card.dart` (`HeroModeCard` + `RoastHero`) and
+`event_window_banner.dart`'s tournament hero lay the developer's PNGs
+(`assets/home/tournament_hero.png` 1254x1254, `roast_hero.png` 1536x1024)
+behind a glow border + scrim, with TOURNAMENT / 8 ROASTERS. 1 CHAMPION. /
+info chips / ENTER TOURNAMENT and ROAST A STRANGER / RANDOM OPPONENT. REAL
+ROASTS. / FIND A MATCH all as live Flutter widgets. Tournament = gold glow;
+Roast = pink glow; dark breathing room between them, no "OR" divider. The
+card aspect ratios match the art (tournament 1:1, roast 3:2) so the side
+banners/faces are not cropped. The Roast "VS" sits above the title via
+`centerAlignment: Alignment(0, -0.5)` (it overlapped the title at dead
+centre).
+
+**HEADER — wordmark + tagline + bell + profile avatar.** The AppBar is now
+two lines ("The Bully League" over "REAL PEOPLE. REAL ROASTS.",
+toolbarHeight 72) with the notifications bell and a circular profile avatar.
+**The avatar opens ACCOUNT & SETTINGS, deliberately NOT the public Profile
+tab** — the bottom Profile tab is the player's public identity; the avatar
+is account management. New `AccountScreen`
+(`lib/screens/settings/account_screen.dart`) is a hub over screens that
+already exist: Notifications, Appearance, Blocked players, Sign out, Delete
+account. (Sign out lives one level in here, not as a top-right one-tap
+button a real user once hit by accident.)
+
+**PLAYER STATUS CARD — replaces the flip card, and SHOWS NUMBERS.**
+`lib/widgets/home/player_status_card.dart` (`PlayerStatusCard`) is one
+horizontal gold-bordered panel: on the left a rank-medal emblem + the tier
+title (e.g. DOOR GUY) + an XP progress bar + "870 / 1,200 XP"; on the right
+"GLOBAL RANK #1,482".
+- **This DELIBERATELY SOFTENS the hidden-criteria / "laugh meter leaks no
+  numbers" rule** — the card shows career XP over the next title's threshold
+  and the exact global position. The developer chose this explicitly
+  (2026-09-14) to match the reference, continuing the same softening the
+  meter's percent readout already made (2026-09-12). It does NOT reverse
+  one-status-ladder: it is still the one XP title, just with numbers.
+- **XP/nextXP/tier are SERVED, not re-derived on the client.**
+  `functions/laughMeter.js` now returns `xp`, `tierXp` and `nextXp` alongside
+  the existing `title`/`fill`/`caption`, so the ladder thresholds stay in one
+  place (functions/rating.js) — the client never hardcodes them. Deployed to
+  `getLaughMeter`. GOAT/Hall-of-Famer have no numeric "next", so `nextXp` is
+  null and the card shows the career XP alone with a full bar.
+- **GLOBAL RANK is a client-side count aggregation** of users out-rating me,
+  +1 — the exact query the Ranks board uses for the viewer's own position. It
+  reads the hidden Elo and shows only the POSITION, never the rating.
+- **Identity never disappears**: a failed meter still shows the streamed
+  fallback title; a failed rank query just hides the rank column. The old
+  username greeting line above the card was removed as redundant (the header
+  carries the brand, the card carries the identity).
+
+**A firebase deploy discovery-timeout bit again**: the first
+`firebase deploy --only functions:getLaughMeter` failed with "Cannot
+determine backend specification. Timeout after 10000" (the codebase is slow
+to load for export discovery) yet exited 0, so the old function stayed live
+and the card showed "870 XP" with no "/1,200". Fixed by redeploying with
+`FUNCTIONS_DISCOVERY_TIMEOUT=120`. Worth remembering: a green `firebase
+deploy` exit is not proof the function updated — verify the live behaviour.
+
+**OVERHAUL — REMAINING ITEMS NOW BUILT (2026-09-14).**
+- **Tournament banner side text — BUILT.** `HeroBannerText` on the tournament
+  hero's `left`/`right` slots (functions/event_window_banner.dart +
+  hero_mode_card.dart): LEFT `BE FUNNY / WIN VOTES / TAKE THE / CROWN`, RIGHT
+  `PRIZES / STATUS / FAME`, small warm light-gold uppercase. Positioned by
+  FRACTIONAL alignment over the art's OUTER banners (the art is a 1254x1254
+  square in a 1:1 card, so BoxFit.cover crops nothing and the text stays
+  locked to the banners at any width). The outer banners' crown emblems sit at
+  ~7.5%/~92.5% across — the text centres on those (an earlier attempt landed
+  in the gap between the outer and inner banners; there are two banners per
+  side). `sideBannerX`/`sideBannerY` tune the placement.
+- **Quick Actions row — BUILT + wired** (`lib/widgets/home/home_quick_actions.dart`):
+  Daily Challenges (opens the `DailyQuests` sheet), Free Rewards (a "Soon"
+  PLACEHOLDER — a real feature, backlogged), Current Streak (live `voteStreak.days`).
+  It REPLACED the tall inline `DailyQuests` list on Home (one route to quests,
+  not two).
+- **Featured section — BUILT and INTENTIONALLY HIDDEN AT LAUNCH**
+  (`lib/widgets/home/featured_section.dart`, `FeaturedSection`). With an empty
+  `items` list it renders **absolutely nothing** — no heading, no placeholder
+  cards, no "Coming Soon", no blank space — because there is no real curated
+  content yet and an empty section reads as a bug. **The architecture
+  (`FeaturedSection` + `FeaturedItem` + the horizontal card row) MUST NOT BE
+  REMOVED** just because it is invisible: it is the home for
+  promotional/comedian spotlight clips (CLAUDE.md's Discovery/feed "Featured"
+  decision). It is mounted on Home as `const FeaturedSection()` (empty). To
+  light it up later, feed it a non-empty `items` list (a `featured` Firestore
+  collection or curated config, plus the matching read rule) — nothing else
+  changes. It deliberately does NOT query Firestore now, so it costs no
+  per-load reads while hidden.
+
+**Other overhaul tweaks the developer made along the way (all built):** the
+Home header uses the approved branding PNG (`assets/branding/bully_league_header.png`);
+the red Sixes-and-Sevens `WindowLiveBar` was removed from the top of the shell
+(it obstructed design review; the widget remains, one line to restore); the
+"I'm in tonight" pre-commit button was removed from the tournament banner (the
+`_CommitRow` widget remains).
+
+**PLAYER STATUS CARD — iterated heavily to a PURPLE identity design (final,
+2026-09-14).** After several reference passes (`design_reference/` holds the
+images), the card is a premium rounded rectangle
+(`lib/widgets/home/player_status_card.dart`): a **thin purple/magenta border**
+with a restrained purple glow, a rich near-black / dark navy-purple base with
+**plum illumination toward the top-left/edges** (centre stays dark), the real
+illustrated rank crest floating with a warm **gold** ambient glow behind it,
+bold white rank title, a **glossy rounded gold XP capsule** on a dark charcoal
+track, muted-gray XP number, a faint purple-gray divider, and GOLD on the data
+only (badge glow, XP fill, Global Rank number, chevron). This encodes the
+color hierarchy the developer stated is intentional (see the memory
+`color-hierarchy-identity-purple-event-gold`): **identity/progression =
+dark + purple/magenta + gold data accents; tournament/event = gold/amber**,
+and the identity card must not visually compete with the gold Tournament hero.
+XP/progression/Global-Rank logic and the rank-asset mapping are unchanged. A
+recurring gotcha worth noting: when the XP bar was switched to a rounded
+capsule it collapsed to a stub because a `Stack` of only `Positioned.fill` +
+`FractionallySizedBox` children has no intrinsic width — the fix was a
+full-width `SizedBox` track child to size the bar.
+
+**Rank badge assets:** the 10 crests live in `assets/ranks/`
+(`rank_01_open_micer.png` ... `rank_10_goat.png`, mapped by tier title in
+`rank_badges.dart`, `BoxFit.contain`, no clip/square). The developer's "final"
+export had the editor's transparency **checkerboard baked in as opaque pixels**
+around each crest (showing as a "white outline"); a one-off flood-fill cleanup
+(`sharp`, border-connected gray+light pixels -> alpha 0, originals backed up)
+restored true transparency. **If fresh badge exports ever look outlined again,
+they were flattened onto the checkerboard — re-run that cleanup or re-export
+with a genuine alpha channel.**
+
+### Rank tier badges on the Player Status card — BUILT (2026-09-14)
+
+The developer supplied 10 illustrated rank crests in `assets/ranks/`
+(`rank_01_open_micer.png` ... `rank_10_goat.png`), added to `pubspec.yaml`
+(`assets/ranks/`). `lib/widgets/home/rank_badges.dart` maps them by the tier
+TITLE the backend returns (`rankBadgeAsset(title)` + a `RankBadge` widget),
+and the Player Status card renders the player's actual crest (~60px, soft
+gold glow) in place of the interim drawn shield. The shield remains only as a
+fallback for an unmapped title or a failed image load, so the badge slot is
+never empty.
+
+**NAMING MISMATCH — RESOLVED by renaming the tier (developer's call,
+2026-09-14).** The backend's 9th tier was titled "Hall of Famer" but the
+badge set named that crest "Featured Talent" and shipped no "hall_of_famer"
+file. The developer chose to **rename the tier "Hall of Famer" → "Featured
+Talent"** so the title matches the art. Applied in `functions/rating.js`
+(XP_TIERS + RANK_TIERS), `functions/rankChange.js` (the UP/DOWN copy re-keyed
+and reworded off the "Hall of Fame / plaque / archive" imagery onto a
+"featured / on the poster / the draw" theme), the live-check description, the
+rankChange test, and the client badge map (`rank_badges.dart`). Tests pass
+(rankChange 16, laughMeter 14, rating 17). **No migration needed** — no
+account is at that tier (5000 XP), so no stored `rankTitle` said "Hall of
+Famer". The remaining **badge-number wrinkle is accepted as-is**:
+`rank_08_featured_talent.png` is numbered below `rank_09_legend.png`, yet
+Featured Talent is ABOVE Legend on the ladder — the filenames just do not
+track tier order, which is harmless. Historical CLAUDE.md prose still
+mentions "Hall of Famer" in explanatory passages; the authoritative rank
+list (Ranking System) and the code are the source of truth.

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
 
 /// The skill ladder - the in-app equivalent of the website homepage's
@@ -45,12 +46,59 @@ class LeaderboardScreen extends StatelessWidget {
     // A single ranked list. The "Hall of Fame" tab was removed - Hall of
     // Fame was dropped from the design (the GOAT top-five serves the
     // fame/prestige purpose), so a second tab for it was dead UI.
+    final text = Theme.of(context).textTheme;
+    final accent = context.palette.accent;
     return Scaffold(
+      backgroundColor: Colors.transparent,
+      // The cinematic stage background runs behind everything, including the
+      // transparent app bar / title.
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Ranks'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         automaticallyImplyLeading: !embedded,
+        // Bold Bully-League styling rather than the plain serif heading.
+        title: Text(
+          'RANKS',
+          style: text.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: accent,
+            letterSpacing: 2,
+          ),
+        ),
       ),
-      body: _buildPlayers(context, query),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Dark base fills whatever the artwork doesn't cover (see below).
+          const ColoredBox(color: Color(0xFF0E0B14)),
+          // fitWidth + topCenter: show the WHOLE artwork at full width without
+          // cropping or zooming, anchored to the top so the upper composition
+          // stays visible. Any area the image doesn't reach falls back to the
+          // dark base above rather than being filled by a zoom-crop.
+          Image.asset(
+            'assets/home/ranks_background.png',
+            fit: BoxFit.fitWidth,
+            alignment: Alignment.topCenter,
+            errorBuilder: (_, _, _) =>
+                const ColoredBox(color: Color(0xFF0E0B14)),
+          ),
+          // A light scrim only - the production artwork already has a dark,
+          // open middle for the list, so this just adds a little depth top and
+          // bottom without hiding the microphone or the crowd.
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x3D000000), Color(0x0A000000), Color(0x59000000)],
+              ),
+            ),
+          ),
+          SafeArea(child: _buildPlayers(context, query)),
+        ],
+      ),
     );
   }
 
@@ -82,12 +130,20 @@ class LeaderboardScreen extends StatelessWidget {
         final onBoard = me != null && docs.any((d) => d.id == me);
 
         return ListView.separated(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          // Top padding clears the transparent app bar (title sits over the
+          // art); the list starts just below it.
+          padding: const EdgeInsets.fromLTRB(0, kToolbarHeight + 8, 0, 16),
           // One extra row when the viewer is NOT on the board - their own
           // position, appended after the hundredth. A scoreboard you
           // cannot find yourself on is just a list of other people.
           itemCount: docs.length + (onBoard || me == null ? 0 : 1),
-          separatorBuilder: (_, _) => const Divider(height: 1),
+          separatorBuilder: (_, _) => Divider(
+            height: 1,
+            thickness: 0.5,
+            indent: 16,
+            endIndent: 16,
+            color: Colors.white.withValues(alpha: 0.08),
+          ),
           itemBuilder: (context, index) {
             if (index >= docs.length) return const _YourPosition();
             final data = docs[index].data();
@@ -136,12 +192,72 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    // EVERY row shows its position number (a real ranking). An actual GOAT
-    // additionally carries the 🐐, so their row reads "1 🐐". Everyone else -
-    // including a top-five player who is not (yet) a GOAT - is just their
-    // number.
+    final gold = context.palette.reward;
+
+    // THE VIEWER'S OWN ROW is the premium gold row (per the reference): a warm
+    // dark-gold translucent tile, a thin gold border and restrained glow, a
+    // gold crown + gold rank number, and a white name.
+    if (isMe) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: gold.withValues(alpha: 0.22),
+              blurRadius: 14,
+              spreadRadius: -2,
+            ),
+          ],
+        ),
+        child: ListTile(
+          dense: true,
+          visualDensity: const VisualDensity(vertical: -3),
+          minVerticalPadding: 4,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          tileColor: Color.alphaBlend(
+            gold.withValues(alpha: 0.15),
+            Colors.black.withValues(alpha: 0.5),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: gold.withValues(alpha: 0.7)),
+          ),
+          leading: SizedBox(
+            width: 52,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('👑', style: TextStyle(fontSize: 16)),
+                const SizedBox(width: 4),
+                Text(
+                  '$position',
+                  style: text.titleMedium
+                      ?.copyWith(color: gold, fontWeight: FontWeight.w900),
+                ),
+              ],
+            ),
+          ),
+          title: Text(
+            '$username (you)',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: text.bodyLarge
+                ?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          trailing: Text(
+            '$wins-$losses',
+            style: text.bodyMedium
+                ?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    }
+
+    // EVERY other row shows its position number (a real ranking). An actual
+    // GOAT additionally carries the 🐐. Understated over the art: a dark glass
+    // tile, white name, muted-grey number and record.
     final marker = isGoat ? '$position 🐐' : '$position';
     // DENSE single-line rows so the top ~25 fit without scrolling - the
     // board's job is a scoreboard you can scan, not a few oversized cards.
@@ -150,14 +266,17 @@ class _Row extends StatelessWidget {
       visualDensity: const VisualDensity(vertical: -3),
       minVerticalPadding: 4,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      tileColor: isMe ? scheme.primaryContainer.withValues(alpha: 0.35) : null,
+      // Dark GLASS, not opaque black, so the artwork stays subtly visible.
+      tileColor: Colors.black.withValues(alpha: 0.36),
       leading: SizedBox(
         width: 46,
         child: Text(
           marker,
           textAlign: TextAlign.center,
           style: text.titleMedium?.copyWith(
-              color: isGoat ? null : scheme.onSurfaceVariant),
+              color: isGoat
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.6)),
         ),
       ),
       // A pure skill ladder: position, name, record. No Elo number (hidden)
@@ -166,14 +285,15 @@ class _Row extends StatelessWidget {
       // Elo-free signal that belongs on a competitive board - kept on the
       // trailing edge so each row is a single scannable line.
       title: Text(
-        isMe ? '$username (you)' : username,
+        username,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: text.bodyLarge?.copyWith(
-            fontWeight: isMe ? FontWeight.bold : FontWeight.w500),
+        style: text.bodyLarge
+            ?.copyWith(color: Colors.white, fontWeight: FontWeight.w500),
       ),
       trailing: Text('$wins-$losses',
-          style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant)),
+          style: text.bodyMedium
+              ?.copyWith(color: Colors.white.withValues(alpha: 0.6))),
     );
   }
 }

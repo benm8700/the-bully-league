@@ -9,23 +9,49 @@ const client = new vision.ImageAnnotatorClient();
 
 // Cloud Vision's SafeSearch returns a likelihood band per category
 // (UNKNOWN/VERY_UNLIKELY/UNLIKELY/POSSIBLE/LIKELY/VERY_LIKELY) rather than
-// a score - reject at LIKELY or above, matching CLAUDE.md's Content
-// Policy & Moderation scope: nudity/explicit physical acts, NOT language
-// (the free-speech policy stays untouched - this is visual-only).
+// a score. This is VISUAL-only moderation (nudity/explicit physical acts).
+// It never touches LANGUAGE - the free-speech content policy is absolute:
+// slurs and any/all spoken language are allowed by design and nothing in
+// this codebase ever moderates what is said.
+//
+// Two strictness levels, deliberately different:
+//  - PROFILE PHOTOS + INTRO VIDEOS (pre-publication, reliable, store-critical
+//    nudity gate): reject at LIKELY or above across adult/racy/violence.
+//  - LIVE IN-MATCH FRAMES: reject ONLY blatant nudity (adult == VERY_LIKELY).
+//    This was loosened hard (developer's call, 2026-09-14) after the live
+//    detector false-fired on an ordinary face/gesture/dark room and
+//    auto-ended a real battle. Dropping the "racy" and "violence" categories
+//    removes that entire false-positive class - those are what trip on a
+//    lit face, a lunge at the camera, or a dim room - while the single
+//    unambiguous VERY_LIKELY-adult band still catches actual exposure in a
+//    random-stranger video app (the Omegle-style legal/store exposure).
 const REJECT_LEVELS = new Set(["LIKELY", "VERY_LIKELY"]);
+const LIVE_FRAME_REJECT_LEVELS = new Set(["VERY_LIKELY"]);
+const LIVE_FRAME_CATEGORIES = ["adult"];
+const ALL_CATEGORIES = ["adult", "racy", "violence"];
 
-function verdictFromSafeSearch(safeSearch, {failureReason}) {
+const CATEGORY_REASON = {
+  adult: "Flagged for adult content.",
+  racy: "Flagged for suggestive content.",
+  violence: "Flagged for violent content.",
+};
+
+function verdictFromSafeSearch(safeSearch, {
+  failureReason,
+  rejectLevels = REJECT_LEVELS,
+  categories = ALL_CATEGORIES,
+  approveOnMissing = false,
+}) {
   if (!safeSearch) {
-    return {approved: false, reason: failureReason};
+    // Pre-publication gates (photos/intro) reject an unreadable image so an
+    // un-analysable file can't slip through. The LIVE path fails OPEN
+    // instead: a transient empty result must never auto-end a real battle.
+    return approveOnMissing ? {approved: true} : {approved: false, reason: failureReason};
   }
-  if (REJECT_LEVELS.has(safeSearch.adult)) {
-    return {approved: false, reason: "Flagged for adult content."};
-  }
-  if (REJECT_LEVELS.has(safeSearch.racy)) {
-    return {approved: false, reason: "Flagged for suggestive content."};
-  }
-  if (REJECT_LEVELS.has(safeSearch.violence)) {
-    return {approved: false, reason: "Flagged for violent content."};
+  for (const category of categories) {
+    if (rejectLevels.has(safeSearch[category])) {
+      return {approved: false, reason: CATEGORY_REASON[category]};
+    }
   }
   return {approved: true};
 }
@@ -57,8 +83,13 @@ async function moderateImageContent(base64Content) {
   const [result] = await client.safeSearchDetection({
     image: {content: Buffer.from(base64Content, "base64")},
   });
+  // Live in-match frames use the loosened rule: blatant nudity only
+  // (adult == VERY_LIKELY), no racy/violence. See the note above REJECT_LEVELS.
   return verdictFromSafeSearch(result.safeSearchAnnotation, {
     failureReason: "Could not analyze this frame.",
+    rejectLevels: LIVE_FRAME_REJECT_LEVELS,
+    categories: LIVE_FRAME_CATEGORIES,
+    approveOnMissing: true,
   });
 }
 

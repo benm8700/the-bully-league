@@ -68,10 +68,10 @@ const UP = {
     "Legend. Your sets get described secondhand, badly, by people who were there.",
     "You have crossed into the part where newer players study you.",
   ],
-  "Hall of Famer": [
-    "They will show your clips to people who were not even there.",
-    "Hall of Famer. You are archive footage now, in the best way.",
-    "Hall of Famer. Whatever happens next, this part is permanent.",
+  "Featured Talent": [
+    "Featured Talent. Your name is on the poster now, not the fine print.",
+    "Featured Talent. People are buying tickets because of you.",
+    "You are the draw now. The whole show gets built around you.",
   ],
   [GOAT_TITLE]: [
     "Do not let this go to your head, but you are funnier than everyone else.",
@@ -118,14 +118,14 @@ const DOWN = {
     "Down to Headliner, which is a sentence that annoys almost everyone.",
   ],
   "Legend": [
-    "Legend only. The Hall can wait.",
+    "Legend only. Top billing can wait.",
     "Back to Legend. Tragic, obviously.",
-    "Still a Legend. Just no longer an exhibit.",
+    "Still a Legend. Just no longer the headline name.",
   ],
-  "Hall of Famer": [
-    "Out of the top five and back into the Hall.",
-    "Hall of Famer again. The plaque stays, the crown does not.",
-    "You are back among the greats, rather than above them.",
+  "Featured Talent": [
+    "Out of the top five and back to Featured Talent.",
+    "Featured Talent again. Your name stays on the poster, the crown does not.",
+    "You are back among the best, rather than above them.",
   ],
   [GOAT_TITLE]: [
     "Somehow you are still the GOAT. Nobody is happy about it.",
