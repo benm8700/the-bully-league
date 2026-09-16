@@ -486,6 +486,31 @@ exports.sweepClimb = onSchedule("every 1 minutes", async () => {
   }
 });
 
+// The Daily Gauntlet SWISS format (2026-09-16 redesign): async all-day signup,
+// presence-based live pairing, "most wins" wins - see swissPlay.js. Runs
+// alongside the climb; the daily creator flips to it once verified.
+exports.signUpGauntlet = onCall((request) => {
+  const {signUpGauntlet} = require("./swissPlay");
+  return signUpGauntlet(request.auth, request.data);
+});
+
+exports.gauntletPoll = onCall((request) => {
+  const {gauntletPoll} = require("./swissPlay");
+  return gauntletPoll(request.auth, request.data);
+});
+
+// The gauntlet's backstop: settles played matches, forfeits no-shows (present
+// player wins), and crowns the most-wins champion at the window's end.
+exports.sweepGauntlet = onSchedule("every 1 minutes", async () => {
+  const {sweepGauntlet} = require("./swissPlay");
+  try {
+    const result = await sweepGauntlet();
+    if (result.swept > 0) console.log("sweepGauntlet:", JSON.stringify(result));
+  } catch (err) {
+    console.error("sweepGauntlet failed:", err);
+  }
+});
+
 /**
  * Closes rounds whose window has expired. Without this the window is
  * decoration and a bracket stalls the first time somebody loses interest.

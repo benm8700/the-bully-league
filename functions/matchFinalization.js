@@ -351,7 +351,18 @@ async function finalizeMatch(matchId, {force = false} = {}) {
   // a slot it doesn't have).
   if (match.mode === "tournament") {
     try {
-      if (match.climb) {
+      if (match.swiss) {
+        // Daily Gauntlet's SWISS format: a win moves the record (winner +1
+        // win, loser +1 loss, both back to waiting - non-elimination); a TIE
+        // (no winner) scores neither. Either way the gauntlet MUST be moved or
+        // the two entrants strand `in_match` on a settled match forever.
+        const {applySwissResult, applySwissTie} = require("./swissPlay");
+        const applied = winnerId ?
+          await applySwissResult(match, winnerId, matchId) :
+          await applySwissTie(match, matchId);
+        console.log(`gauntlet(swiss) advance for ${matchId}:`,
+            JSON.stringify(applied));
+      } else if (match.climb) {
         // A win climbs one climber and eliminates the other; a TIE (no
         // winner - equal or zero votes) advances BOTH (the gauntlet tie rule,
         // 2026-09-01). Either way the gauntlet MUST be moved, or the two
