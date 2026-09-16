@@ -4,6 +4,11 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
+import '../profile/performer_profile_screen.dart';
+
+/// The Fame board's accent - the brand PINK (follow/social), so Fame reads as
+/// its own axis, distinct from the skill Ranks board.
+const Color _fameAccent = Color(0xFFFF3B6B);
 
 /// The skill ladder - the in-app equivalent of the website homepage's
 /// "top 5 roasters" concept (CLAUDE.md's Website — Account & Tournament
@@ -35,7 +40,7 @@ class LeaderboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final query = FirebaseFirestore.instance
+    final skillQuery = FirebaseFirestore.instance
         .collection('users')
         .orderBy('rating', descending: true)
         // 100 rather than 50: the board is the app's one public
@@ -43,69 +48,89 @@ class LeaderboardScreen extends StatelessWidget {
         // outside it feel like a real distance to close.
         .limit(kBoardSize);
 
-    // A single ranked list. The "Hall of Fame" tab was removed - Hall of
-    // Fame was dropped from the design (the GOAT top-five serves the
-    // fame/prestige purpose), so a second tab for it was dead UI.
-    final text = Theme.of(context).textTheme;
-    final accent = context.palette.accent;
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      // The cinematic stage background runs behind everything, including the
-      // transparent app bar / title.
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
+    // THE FAME BOARD - a second axis beside skill. Ordered by follower count
+    // (popularity), which the developer wants public as a real motivator: play
+    // and get famous, and here is where the fame is measured. It is
+    // deliberately a DIFFERENT board from Ranks (fame vs skill) - a Fame board
+    // beside the skill board is coherent; it only becomes the one-status-
+    // ladder problem if it competes to BE the skill answer, which it does not.
+    // Ranks stays the FIRST/primary tab. Only players with at least one
+    // follower appear - a board of zeroes is not a board.
+    final fameQuery = FirebaseFirestore.instance
+        .collection('users')
+        .where('followerCount', isGreaterThan: 0)
+        .orderBy('followerCount', descending: true)
+        .limit(kBoardSize);
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        automaticallyImplyLeading: !embedded,
-        // Bold Bully-League styling rather than the plain serif heading.
-        title: Text(
-          'RANKS',
-          style: text.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w900,
-            color: accent,
-            letterSpacing: 2,
+        // The cinematic stage background runs behind everything, including the
+        // transparent app bar / tabs.
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          automaticallyImplyLeading: !embedded,
+          bottom: TabBar(
+            // Ranks keeps the neutral accent; Fame the pink so the selected
+            // tab colour itself signals which axis you're on.
+            indicatorColor: Colors.white,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white.withValues(alpha: 0.55),
+            labelStyle: const TextStyle(
+                fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 15),
+            tabs: const [
+              Tab(text: 'RANKS'),
+              Tab(text: 'FAME'),
+            ],
           ),
         ),
-      ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Dark base fills whatever the artwork doesn't cover (see below).
-          const ColoredBox(color: Color(0xFF0E0B14)),
-          // fitWidth + topCenter: show the WHOLE artwork at full width without
-          // cropping or zooming, anchored to the top so the upper composition
-          // stays visible. Any area the image doesn't reach falls back to the
-          // dark base above rather than being filled by a zoom-crop.
-          Image.asset(
-            'assets/home/ranks_background.png',
-            fit: BoxFit.fitWidth,
-            alignment: Alignment.topCenter,
-            errorBuilder: (_, _, _) =>
-                const ColoredBox(color: Color(0xFF0E0B14)),
-          ),
-          // A light scrim only - the production artwork already has a dark,
-          // open middle for the list, so this just adds a little depth top and
-          // bottom without hiding the microphone or the crowd.
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x3D000000), Color(0x0A000000), Color(0x59000000)],
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            const ColoredBox(color: Color(0xFF0E0B14)),
+            Image.asset(
+              'assets/home/ranks_background.png',
+              fit: BoxFit.fitWidth,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, _, _) =>
+                  const ColoredBox(color: Color(0xFF0E0B14)),
+            ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0x3D000000),
+                    Color(0x0A000000),
+                    Color(0x59000000)
+                  ],
+                ),
               ),
             ),
-          ),
-          SafeArea(child: _buildPlayers(context, query)),
-        ],
+            SafeArea(
+              child: TabBarView(
+                children: [
+                  _buildPlayers(context, skillQuery, fame: false),
+                  _buildPlayers(context, fameQuery, fame: true),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildPlayers(
     BuildContext context,
-    Query<Map<String, dynamic>> query,
-  ) {
+    Query<Map<String, dynamic>> query, {
+    required bool fame,
+  }) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: query.snapshots(),
       builder: (context, snapshot) {
@@ -119,24 +144,29 @@ class LeaderboardScreen extends StatelessWidget {
         }
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) {
-          return const EmptyState(
-            icon: Icons.leaderboard_outlined,
-            title: 'No one on the board yet',
-            message: 'Play a battle and you could be the first name '
-                'on the board.',
+          return EmptyState(
+            icon: fame ? Icons.favorite_border : Icons.leaderboard_outlined,
+            title: fame ? 'No fans yet' : 'No one on the board yet',
+            message: fame
+                ? 'Get funny in front of a crowd and people will follow '
+                    'you. The most-followed comedians show up here.'
+                : 'Play a battle and you could be the first name '
+                    'on the board.',
           );
         }
         final me = FirebaseAuth.instance.currentUser?.uid;
         final onBoard = me != null && docs.any((d) => d.id == me);
+        // The self-row is appended only on the skill board - fame position by
+        // follower count is far less meaningful, and a fan-less new account
+        // isn't on the fame board at all (the query excludes zero-follower
+        // users), so there is nothing honest to append.
+        final appendSelf = !fame && !onBoard && me != null;
 
         return ListView.separated(
-          // Top padding clears the transparent app bar (title sits over the
-          // art); the list starts just below it.
-          padding: const EdgeInsets.fromLTRB(0, kToolbarHeight + 8, 0, 16),
-          // One extra row when the viewer is NOT on the board - their own
-          // position, appended after the hundredth. A scoreboard you
-          // cannot find yourself on is just a list of other people.
-          itemCount: docs.length + (onBoard || me == null ? 0 : 1),
+          // Clears the transparent app bar AND the tab bar above the list.
+          padding: const EdgeInsets.fromLTRB(
+              0, kToolbarHeight + kTextTabBarHeight + 8, 0, 16),
+          itemCount: docs.length + (appendSelf ? 1 : 0),
           separatorBuilder: (_, _) => Divider(
             height: 1,
             thickness: 0.5,
@@ -148,12 +178,16 @@ class LeaderboardScreen extends StatelessWidget {
             if (index >= docs.length) return const _YourPosition();
             final data = docs[index].data();
             return _Row(
+              uid: docs[index].id,
               position: index + 1,
               username: data['username'] as String? ?? 'Roaster',
               wins: data['wins'] as num? ?? 0,
               losses: data['losses'] as num? ?? 0,
               isMe: docs[index].id == me,
-              isGoat: data['rankTitle'] == 'GOAT',
+              isGoat: !fame && data['rankTitle'] == 'GOAT',
+              fameCount: fame
+                  ? ((data['followerCount'] as num?) ?? 0).toInt()
+                  : null,
             );
           },
         );
@@ -178,6 +212,8 @@ class _Row extends StatelessWidget {
     required this.losses,
     this.isMe = false,
     this.isGoat = false,
+    this.uid,
+    this.fameCount,
   });
 
   final int position;
@@ -189,6 +225,38 @@ class _Row extends StatelessWidget {
   /// True only for an account that actually holds the GOAT title, not merely
   /// one sitting in the top five rows.
   final bool isGoat;
+
+  /// The player's uid, so a tap opens their fame page. Null on the appended
+  /// self-position row (which the viewer doesn't need to tap into).
+  final String? uid;
+
+  /// When non-null this is a FAME row: the trailing shows this follower count
+  /// (in pink) instead of the win-loss record.
+  final int? fameCount;
+
+  VoidCallback? _tap(BuildContext context) => uid == null
+      ? null
+      : () => PerformerProfileScreen.open(context, uid!, username: username);
+
+  /// Trailing content: a follower count on the fame board, else the record.
+  Widget _trailing(TextTheme text, {required Color recordColor}) {
+    if (fameCount != null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.favorite, size: 13, color: _fameAccent),
+          const SizedBox(width: 4),
+          Text(
+            '$fameCount',
+            style: text.bodyMedium
+                ?.copyWith(color: _fameAccent, fontWeight: FontWeight.w800),
+          ),
+        ],
+      );
+    }
+    return Text('$wins-$losses',
+        style: text.bodyMedium?.copyWith(color: recordColor));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -213,6 +281,7 @@ class _Row extends StatelessWidget {
         ),
         child: ListTile(
           dense: true,
+          onTap: _tap(context),
           visualDensity: const VisualDensity(vertical: -3),
           minVerticalPadding: 4,
           contentPadding: const EdgeInsets.symmetric(horizontal: 12),
@@ -246,11 +315,7 @@ class _Row extends StatelessWidget {
             style: text.bodyLarge
                 ?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
           ),
-          trailing: Text(
-            '$wins-$losses',
-            style: text.bodyMedium
-                ?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
+          trailing: _trailing(text, recordColor: Colors.white),
         ),
       );
     }
@@ -263,6 +328,7 @@ class _Row extends StatelessWidget {
     // board's job is a scoreboard you can scan, not a few oversized cards.
     return ListTile(
       dense: true,
+      onTap: _tap(context),
       visualDensity: const VisualDensity(vertical: -3),
       minVerticalPadding: 4,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -291,9 +357,7 @@ class _Row extends StatelessWidget {
         style: text.bodyLarge
             ?.copyWith(color: Colors.white, fontWeight: FontWeight.w500),
       ),
-      trailing: Text('$wins-$losses',
-          style: text.bodyMedium
-              ?.copyWith(color: Colors.white.withValues(alpha: 0.6))),
+      trailing: _trailing(text, recordColor: Colors.white.withValues(alpha: 0.6)),
     );
   }
 }

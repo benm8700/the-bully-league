@@ -289,7 +289,7 @@ async function _createClimbMatch(db, ref, tournamentId, a, b) {
   const matchRef = db.collection("matches").doc(matchId);
   const [p1, p2] = [a, b].sort();
 
-  await db.runTransaction(async (tx) => {
+  const created = await db.runTransaction(async (tx) => {
     const s = await tx.get(ref);
     const climbers = climbersOf(s.data());
     const ca = climbers.find((c) => c.uid === a);
@@ -340,7 +340,21 @@ async function _createClimbMatch(db, ref, tournamentId, a, b) {
     const updated = markInMatch(climbers, [a, b]).map((c) =>
       (c.uid === a || c.uid === b) ? {...c, currentMatchId: matchId} : c);
     tx.update(ref, {"climb.climbers": updated});
+    return !existing.exists;
   });
+
+  if (created) {
+    // Best-effort: pull each player's followers into the live view to watch
+    // them battle - the payoff that makes followers worth wanting. A push
+    // failing must never affect the pairing. Deduped once per performer per
+    // tournament inside the helper.
+    try {
+      const {notifyFollowersOfGauntletPairing} = require("./follows");
+      await notifyFollowersOfGauntletPairing(tournamentId, [p1, p2]);
+    } catch (e) {
+      console.error("gauntlet follower notify failed:", e.message);
+    }
+  }
 }
 
 /**

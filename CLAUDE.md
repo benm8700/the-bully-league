@@ -3374,3 +3374,89 @@ day - the vote-streak habit loop applied to simply showing up.
   needed.
 - **NOT built:** a day-7 clip-token/day-pass climax (kept points-only for V1),
   and any push/reminder that a reward is waiting (the Home dot is the only cue).
+
+## Fame (Follow comedians) — V1 BUILT (2026-09-16)
+
+The app's SECOND axis, and the developer's core pitch made real: "play this
+app and you can get famous - here is the roadmap to fame." Rank answers "how
+good are you"; fame answers "how much of a draw are you." Followers are a
+deliberately DIFFERENT axis from skill, which is why a public follower count
+and a Fame board are wanted here even though a second SKILL/title ladder is
+not (see the `fame-is-the-pitch` and `one-status-ladder` memories).
+
+**The design (grilled with the developer, 2026-09-16):**
+- **One-way follow** (no approval), like TikTok/YouTube. Blocks still apply.
+- **Follower count is PUBLIC** - shown on profiles AND as the actual number
+  next to names (developer's explicit call, overriding the initial private-
+  count caution: a visible count is a real motivator). No star/marker - the
+  number itself is the recognition.
+- **A "Fame" tab beside Ranks** ordered by follower count. The developer asked
+  directly whether a most-followed board is harmful; the answer landed on: no
+  real harm as long as it's clearly a DIFFERENT axis (fame vs skill), Ranks
+  stays the primary tab, and - the load-bearing guardrail - **it carries NO
+  rewards in V1**, which is what keeps it un-farmable (nothing to win = little
+  reason to farm follows; and a farmed follow that never watches adds no real
+  crowd).
+- **No feed boost, ever** - followers must not push your clips up the
+  merit-ranked Judge feed (grind-for-visibility is separately ruled out). The
+  honest reach reward is your OWN crowd choosing to watch YOU.
+- **In-app only for V1** - external links (socials/tickets) are a deferred
+  fast-follow (curated handles + a leaving-the-app confirmation, never free-
+  text URLs, because an 18+ app pointing at arbitrary URLs is a store/safety
+  surface).
+
+**What makes followers worth wanting (the flywheel):** be funny in front of a
+crowd -> they follow you -> your crowd grows -> you perform to a bigger room ->
+your clips reach further -> more follow. The payoff is recognition + audience,
+never currency or power.
+
+**BUILT:**
+- **Backend** (`functions/follows.js`): a follow is a client-written own-doc at
+  `follows/{targetUid}/followers/{followerUid}` (firestore.rules: own-write
+  only, self-follow refused, so one account adds at most one follower to a
+  target - same threat model as the live watcher count). `onFollowCreated` /
+  `onFollowDeleted` triggers maintain the authoritative `users.followerCount`
+  (floored at 0, in a transaction), which is PROTECTED in firestore.rules so
+  it can't be faked. `getPendingFameMilestone` drives the milestone popup,
+  mirroring getPendingRankChange (first look records silently; marks seen so
+  it fires once). `lastSeenFameMilestone` is protected too. Milestones:
+  10/50/100/500/1000 followers, each with an on-brand celebratory line.
+- **Notifications** (new `followed_performer` category, absent = opted-in):
+  `notifyFollowersOfGauntletPairing` fires when a followed comedian is PAIRED
+  in the gauntlet/live tournament (hooked into climbPlay.js `_createClimbMatch`
+  post-commit) - "X is up now, come watch" -> tap to spectate. Deduped once
+  per performer per tournament (their first pairing), so a heavy battler never
+  spams fans into muting. `notifyFollowersOfClip` fires when a highlight is
+  published (hooked into publishHighlight.js) - "X dropped a new clip",
+  deduped by a `fameClipNotified` flag on the match. Both best-effort. Fires
+  only for gauntlet matches (spectatable + the performer consented to an
+  audience), NEVER private ranked battles (no spectator path, no audience
+  consent).
+- **Client**: `follows_service.dart` (follow/unfollow + live isFollowing);
+  `performer_profile_screen.dart` - the fame page (name/face/rank crest/big
+  pink follower count/Follow button/their published clips), PUBLIC fields only
+  (hometown/ammo stay hidden), reachable by tapping any player row on the
+  Ranks or Fame board; the Fame tab in `leaderboard_screen.dart` (rows show a
+  pink ❤ + count); `fame_milestone_popup.dart` wired into main_shell after the
+  rank + badge popups. Fame wears the brand PINK throughout, distinct from the
+  skill board and the gold event surfaces.
+- **Indexes**: two composite indexes (player1Id/player2Id + highlight.published)
+  for the profile clips query, deployed. The clips query is best-effort (a
+  missing index / error degrades to "No public clips yet"), so it's safe.
+- **4 pure tests** (`functions/test/follows.test.js`: milestone thresholds).
+  **Verified on the emulator end to end**: RANKS/FAME tabs render; tapping a
+  player opens their fame page ("0 Followers", Follow); tapping Follow fired
+  the trigger, the streamed count rose to "1 Follower" and the button flipped
+  to "Following"; the Fame tab then listed PlayerTwo at #1 with "❤ 1". The two
+  fresh callables/triggers deployed with no manual IAM fix.
+
+**NOT built (fast-follows):** Follow buttons on the live spectator view, a
+completed battle (opponent), and Judge-feed clips (the Ranks/Fame board is the
+V1 discovery path); the follower count next to names in the live "Tonight's
+Talent" lineup; external links (curated handles); performer-authored "I'm live"
+broadcasts to followers (a possible future creator/subscriber perk); and clips
+actually rendering on the profile (the index is ready, but beta has no
+published clips to show). Fame is also the front of the FUTURE creator-economy
+funnel (following -> crowd -> gifts/support when gifting ships -> the "earn
+from your fans" hook), which is economy work for the developer's planned
+advisor review, so V1 stays reward-free.

@@ -49,7 +49,7 @@ service cloud.firestore {
           'judgeVotesToday', 'judgeDayKey', 'judgeCalls',
           'careerRankedMatches', 'skipsUsedToday', 'skipsResetDate',
           'takedowns', 'lastNotifiedRankTitle', 'lastSeenRankTitle',
-          'dailyReward',
+          'dailyReward', 'followerCount', 'lastSeenFameMilestone',
         ]);
 
       // Uses .get(field, default) rather than direct field access - a
@@ -155,6 +155,17 @@ service cloud.firestore {
         // Written only by claimDailyReward.
         request.resource.data.get('dailyReward', null) ==
           resource.data.get('dailyReward', null) &&
+        // The fame follower count, and the last fame milestone the player
+        // has been shown a popup for. followerCount is maintained by the
+        // onFollow* triggers and drives the public Fame board, so a client
+        // able to write it could put itself at the top of that board and
+        // fake the "roadmap to fame" outright. lastSeenFameMilestone is
+        // written by getPendingFameMilestone; a client that could rewind it
+        // would replay the milestone popup forever.
+        request.resource.data.get('followerCount', null) ==
+          resource.data.get('followerCount', null) &&
+        request.resource.data.get('lastSeenFameMilestone', null) ==
+          resource.data.get('lastSeenFameMilestone', null) &&
         // When they last voted, which enforces the minimum gap between
         // votes. A client that could rewind it would vote as fast as it
         // liked, which is the exact behaviour the gap exists to price up.
@@ -219,6 +230,29 @@ service cloud.firestore {
     // only what is theirs.
     match /challenges/{challengeId} {
       allow read, write: if false;
+    }
+
+    // Fame follows: one document per (target, follower) pair, marking that
+    // `followerUid` follows `targetUid`. Own-write only - a client can make
+    // ITSELF follow or unfollow someone, and nothing more, so at worst one
+    // account adds one follower to a target. That is the same threat model
+    // as the live watcher count (own-write, vanity), and it is why the Fame
+    // board carries NO rewards in V1: with nothing to win, there is little
+    // reason to farm follows, and a farmed follow that never watches adds no
+    // real crowd anyway. The authoritative followerCount is maintained by a
+    // Cloud Function trigger (not writable here), so it cannot be inflated
+    // beyond one-per-account through this path.
+    //
+    // Read is restricted to the follower's own membership doc, which is all
+    // the client needs to render its Follow state; the public follower
+    // COUNT is exposed through users.followerCount, not by reading the list.
+    // Self-follow is refused.
+    match /follows/{targetUid}/followers/{followerUid} {
+      allow read: if request.auth != null && request.auth.uid == followerUid;
+      allow create: if request.auth != null &&
+        request.auth.uid == followerUid && followerUid != targetUid;
+      allow delete: if request.auth != null && request.auth.uid == followerUid;
+      allow update: if false;
     }
 
     // Username claims, one document per lowercased name, holding the uid

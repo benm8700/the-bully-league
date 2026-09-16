@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/badges/badge_popup.dart';
+import '../../widgets/fame_milestone_popup.dart';
 import '../../widgets/rank_change_popup.dart';
 import '../../widgets/service_status_banner.dart';
 // WindowLiveBar import removed with the live-bar usage (2026-09-14); restore
@@ -45,10 +46,11 @@ class _MainShellState extends State<MainShell> {
     // put one on.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      // Sequential so a rank-change and a badge popup never stack on top of
-      // each other. Rank first (it's the primary status moment), then badges.
+      // Sequential so the popups never stack on top of each other. Rank
+      // first (the primary status moment), then badges, then fame.
       await RankChangePopup.maybeShow(context);
       if (mounted) await BadgePopup.maybeShow(context);
+      if (mounted) await FameMilestonePopup.maybeShow(context);
     });
   }
 

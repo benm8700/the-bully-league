@@ -15,7 +15,7 @@ const {getMessaging} = require("firebase-admin/messaging");
 /** Every category a user can mute. Match-found is deliberately included:
  * it is the most useful notification in the app, but forcing it on anyone
  * is how an app earns a system-level block, which silences everything. */
-const CATEGORIES = ["match_found", "event_window", "vote_reminder", "tournament", "rank_change", "weekly_recap"];
+const CATEGORIES = ["match_found", "event_window", "vote_reminder", "tournament", "rank_change", "weekly_recap", "followed_performer"];
 
 /** FCM's documented per-request ceiling for multicast sends. */
 const MULTICAST_LIMIT = 500;

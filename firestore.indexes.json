@@ -101,6 +101,34 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "matches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "player1Id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "highlight.published",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "matches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "player2Id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "highlight.published",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

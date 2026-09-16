@@ -142,6 +142,17 @@ async function publishHighlight(matchId) {
     console.error(`publish notification failed for ${matchId}:`, e.message);
   }
 
+  // Tell each participant's FOLLOWERS a new clip dropped - the "new video"
+  // fame trigger. Deduped by a flag on the match so a re-publish never
+  // re-notifies. Best-effort.
+  try {
+    const {notifyFollowersOfClip} = require("./follows");
+    const match = snap.data();
+    await notifyFollowersOfClip(matchId, [match.player1Id, match.player2Id]);
+  } catch (e) {
+    console.error(`clip follower notify failed for ${matchId}:`, e.message);
+  }
+
   return {published: true, renditions: Object.keys(publicUrls), publicUrls};
 }
 

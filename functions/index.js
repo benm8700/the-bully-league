@@ -1205,6 +1205,18 @@ exports.getDailyRewardState = onCall((request) => {
 });
 
 /**
+ * Fame (follows). onFollowCreated/onFollowDeleted maintain the authoritative
+ * followerCount that drives the public Fame board (follows themselves are
+ * own-write client docs); getPendingFameMilestone drives the milestone popup.
+ * See functions/follows.js.
+ */
+const follows = require("./follows");
+exports.onFollowCreated = follows.onFollowCreated;
+exports.onFollowDeleted = follows.onFollowDeleted;
+exports.getPendingFameMilestone = onCall((request) =>
+  follows.getPendingFameMilestone(request.auth));
+
+/**
  * LIVE tournaments. The async format is untouched; these only ever act on
  * tournaments marked format: "live".
  */
