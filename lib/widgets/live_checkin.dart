@@ -26,6 +26,7 @@ class LiveCheckIn extends StatefulWidget {
     required this.tournamentId,
     required this.tournament,
     required this.checkedIn,
+    this.onConsent,
   });
 
   final String tournamentId;
@@ -34,6 +35,11 @@ class LiveCheckIn extends StatefulWidget {
   /// Whether the signed-in player is already in tonight's bracket (their
   /// entrant document records a check-in).
   final bool checkedIn;
+
+  /// Optional recording-consent gate run before check-in, so joining shows
+  /// the same acknowledgement Roast a Stranger does. Returns whether the
+  /// player consented; check-in is aborted on a no.
+  final Future<bool> Function()? onConsent;
 
   @override
   State<LiveCheckIn> createState() => _LiveCheckInState();
@@ -75,6 +81,12 @@ class _LiveCheckInState extends State<LiveCheckIn> {
   bool get _isLive => widget.tournament['format'] == 'live';
 
   Future<void> _join() async {
+    // Recording-consent acknowledgement before joining, matching Roast a
+    // Stranger. Aborted if the player declines.
+    if (widget.onConsent != null) {
+      final ok = await widget.onConsent!();
+      if (!ok || !mounted) return;
+    }
     setState(() {
       _busy = true;
       _error = null;

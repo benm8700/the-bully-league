@@ -21,8 +21,35 @@ class TournamentDetailScreen extends StatefulWidget {
 }
 
 class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
+  /// The arena art, shown as a DIM light-touch wash only at the top of this
+  /// screen, fading fast to near-black - a restrained echo of the full Home
+  /// hero and the My Tournaments list, not a fourth full wallpaper.
+  static const _detailBgAsset = 'assets/home/tournament_background.png';
+
   bool _busy = false;
   String? _statusMessage;
+
+  /// Whether this player has already given recording consent for this
+  /// tournament this session, so joining and each subsequent battle don't
+  /// re-prompt.
+  bool _consented = false;
+
+  /// Shows the same recording-consent acknowledgement Roast a Stranger shows
+  /// before joining - now shown when JOINING a tournament too, not only right
+  /// before a battle (developer's call, 2026-09-15). Returns whether the
+  /// player consented; caches a yes for the rest of this tournament session so
+  /// the first battle after joining does not ask again.
+  Future<bool> _ensureConsent() async {
+    if (_consented) return true;
+    final consented = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
+    );
+    if (consented == true) {
+      _consented = true;
+      return true;
+    }
+    return false;
+  }
 
   DocumentReference<Map<String, dynamic>> get _tournamentRef =>
       FirebaseFirestore.instance.collection('tournaments').doc(widget.tournamentId);
@@ -61,10 +88,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   /// and the camera check is worth more here, not less, since a bracket
   /// match cannot simply be requeued if the setup is bad.
   Future<void> _playMatch() async {
-    final consented = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
-    );
-    if (consented != true || !mounted) return;
+    if (!await _ensureConsent() || !mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PreMatchScreen(
@@ -76,6 +100,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   }
 
   Future<void> _join() async {
+    if (!await _ensureConsent() || !mounted) return;
     setState(() {
       _busy = true;
       _statusMessage = null;
@@ -145,10 +170,54 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Tournament')),
-      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: _tournamentRef.snapshots(),
-        builder: (context, tournamentSnapshot) {
+      backgroundColor: const Color(0xFF070509),
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text('Tournament', style: TextStyle(color: Colors.white)),
+      ),
+      body: Stack(
+        children: [
+          // Light-touch arena wash: the same crown/crowd art as the Home hero
+          // and the My Tournaments list, but dim (60%) and only at the very
+          // top, fading fast to near-black by ~a third down - the same world
+          // as a restrained echo rather than a fourth full-screen background.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Opacity(
+              opacity: 0.6,
+              child: Image.asset(
+                _detailBgAsset,
+                fit: BoxFit.fitWidth,
+                alignment: Alignment.topCenter,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0x40000000),
+                    Color(0xCC070509),
+                    Color(0xFF070509),
+                    Color(0xFF070509),
+                  ],
+                  stops: [0.0, 0.20, 0.34, 1.0],
+                ),
+              ),
+            ),
+          ),
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: _tournamentRef.snapshots(),
+            builder: (context, tournamentSnapshot) {
           if (!tournamentSnapshot.hasData || !tournamentSnapshot.data!.exists) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -185,7 +254,12 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
               final checkedIn = hasCheckedIn(myEntrant);
 
               return ListView(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  MediaQuery.of(context).padding.top + kToolbarHeight + 8,
+                  24,
+                  24 + MediaQuery.of(context).padding.bottom,
+                ),
                 children: [
                   Text(name, style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 8),
@@ -201,12 +275,25 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                     const SizedBox(height: 16),
                     if (status == 'open' || status == 'in_progress')
                       FilledButton.icon(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ClimbScreen(
-                                tournamentId: widget.tournamentId, name: name),
-                          ),
-                        ),
+                        onPressed: () async {
+                          // Recording-consent acknowledgement before joining,
+                          // same as Roast a Stranger; ClimbScreen is told it
+                          // is already consented so the first battle does not
+                          // ask again. Capture the navigator before the await
+                          // so no BuildContext is used across the async gap.
+                          final navigator = Navigator.of(context);
+                          final consented = await _ensureConsent();
+                          if (!consented || !mounted) return;
+                          await navigator.push(
+                            MaterialPageRoute(
+                              builder: (_) => ClimbScreen(
+                                tournamentId: widget.tournamentId,
+                                name: name,
+                                consented: true,
+                              ),
+                            ),
+                          );
+                        },
                         icon: const Icon(Icons.trending_up),
                         label: const Text('Enter the gauntlet'),
                       )
@@ -250,6 +337,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                     tournamentId: widget.tournamentId,
                     tournament: tournament,
                     checkedIn: checkedIn,
+                    // Recording-consent acknowledgement before checking in,
+                    // matching Roast a Stranger.
+                    onConsent: _ensureConsent,
                   ),
                   if (winnerId != null) Text('Winner: ${_short(winnerId)}'),
                   const SizedBox(height: 24),
@@ -313,7 +403,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
               );
             },
           );
-        },
+            },
+          ),
+        ],
       ),
     );
   }

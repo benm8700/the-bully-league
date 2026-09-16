@@ -23,10 +23,19 @@ import 'live_viewer_screen.dart';
 ///   - eliminated-> you're out; watch the finals.
 ///   - done      -> the champion is crowned.
 class ClimbScreen extends StatefulWidget {
-  const ClimbScreen({super.key, required this.tournamentId, this.name});
+  const ClimbScreen({
+    super.key,
+    required this.tournamentId,
+    this.name,
+    this.consented = false,
+  });
 
   final String tournamentId;
   final String? name;
+
+  /// True when recording consent was already given at join (Enter the
+  /// gauntlet), so the first battle does not ask a second time.
+  final bool consented;
 
   @override
   State<ClimbScreen> createState() => _ClimbScreenState();
@@ -43,6 +52,9 @@ class _ClimbScreenState extends State<ClimbScreen> {
   // the result is settling.
   String? _routedMatchId;
   bool _navigating = false;
+  // Recording consent for this gauntlet session. Seeded true when consent was
+  // given at join, so battles proceed without re-prompting.
+  late bool _consented = widget.consented;
 
   String get _uid => FirebaseAuth.instance.currentUser!.uid;
 
@@ -122,10 +134,15 @@ class _ClimbScreenState extends State<ClimbScreen> {
   Future<void> _goToMatch(MatchPairing pairing) async {
     _navigating = true;
     _poll?.cancel();
-    final consented = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
-    );
-    if (consented == true && mounted) {
+    // Consent was given at join (Enter the gauntlet); don't ask again. Only
+    // prompt here as a fallback if we somehow arrived unconsented.
+    if (!_consented) {
+      final consented = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
+      );
+      if (consented == true) _consented = true;
+    }
+    if (_consented && mounted) {
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => PreMatchScreen(mode: 'tournament', climbPairing: pairing),
