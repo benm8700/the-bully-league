@@ -7,6 +7,7 @@ import '../../widgets/admin_only.dart';
 import '../../widgets/live_checkin.dart';
 import '../../widgets/watch_live_list.dart';
 import 'climb_screen.dart';
+import 'gauntlet_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import 'tournament_lobby_screen.dart';
@@ -242,6 +243,10 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
               // no pre-seeded bracket, entrants list, or check-in - joining is
               // the ClimbScreen, and the bracket-specific UI below is skipped.
               final isClimb = tournament['format'] == 'climb';
+              // The new Daily Gauntlet SWISS format: async signup + study, then
+              // a live "most wins" event. One entry into GauntletScreen, which
+              // owns signup/roster/battling; bracket UI below is skipped.
+              final isSwiss = tournament['format'] == 'swiss';
               // Whether the signed-in player is already in tonight's bracket,
               // read from their own entrant document (one listener, not two).
               Map<String, dynamic>? myEntrant;
@@ -300,6 +305,28 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                     else
                       const Text('This gauntlet has finished.'),
                   ],
+                  if (isSwiss) ...[
+                    const SizedBox(height: 16),
+                    if (status == 'open' || status == 'in_progress')
+                      FilledButton.icon(
+                        onPressed: () async {
+                          final navigator = Navigator.of(context);
+                          final consented = await _ensureConsent();
+                          if (!consented || !mounted) return;
+                          await navigator.push(MaterialPageRoute(
+                            builder: (_) => GauntletScreen(
+                              tournamentId: widget.tournamentId,
+                              name: name,
+                              consented: true,
+                            ),
+                          ));
+                        },
+                        icon: const Icon(Icons.emoji_events),
+                        label: const Text('Enter the Daily Gauntlet'),
+                      )
+                    else
+                      const Text('This gauntlet has finished.'),
+                  ],
                   // THE ENTRANT COUNT IS HIDDEN FROM PLAYERS, on purpose.
                   //
                   // "3 entrants" reads as dead and stops the fourth person
@@ -318,7 +345,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                   // real risk, so it is stated in words instead.
                   // Entrant count / cancellation risk is a bracket concept -
                   // a climb has no fixed entrant list (it uses climb.climbers).
-                  if (!isClimb) ...[
+                  if (!isClimb && !isSwiss) ...[
                     Text(_entrantStatus(status, entrantIds.length, minEntrants)),
                     // The developer sees the real number, since running an
                     // event means knowing whether it will actually fill.
@@ -347,7 +374,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                   // there, joining is the one-tap LiveCheckIn above, and a
                   // second "Join" button would be exactly the two-step
                   // confusion this redesign removed.
-                  if (isOpen && !isLive && !isClimb)
+                  if (isOpen && !isLive && !isClimb && !isSwiss)
                     FilledButton(
                       onPressed: _busy ? null : (isEntrant ? _withdraw : _join),
                       child: Text(isEntrant ? 'Withdraw' : 'Join'),
@@ -358,7 +385,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                   // flag, and an entrant tapping "Advance Round" would be
                   // told "Admin only" - which reads as a broken app rather
                   // than as a control that was never theirs.
-                  if (isOpen && !isClimb)
+                  if (isOpen && !isClimb && !isSwiss)
                     AdminOnly(
                       child: OutlinedButton(
                         onPressed: _busy ? null : () => _callDebugFunction('generateTournamentBracket'),

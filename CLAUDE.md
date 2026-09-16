@@ -3562,10 +3562,38 @@ while adding the developer's all-day study idea.
   win more -> fame + prizes. Studying and joining early are both rewarded.
 
 ### Build status / sequencing
-- **Built:** only the rename.
-- **Design-complete, NOT built:** the Swiss format, the async-signup/study
-  roster, the points-entry special tournaments, and all economy numbers.
-- Recommended sequencing: lock this with the advisor (economy numbers), then
-  build the settled version once rather than rebuilding as it evolves. The
-  format change (Swiss + roster) is not economy-gated and could be built ahead
-  of the economy if desired; the special-tournament entry IS economy-central.
+- **Built (2026-09-16): the Swiss format engine, backend, AND the async
+  signup + study client.**
+  - `functions/swissTournament.js` (pure engine) - Swiss pairing seeded by
+    record then closest hidden Elo (so pairing is "closest rank"), non-
+    elimination W-L, ties, forfeits, standings (wins/losses/strength-of-
+    schedule), champion = most wins at window end. 16 checks + 1,200
+    randomised full-tournament simulations.
+  - `functions/swissPlay.js` (wiring) - async all-day signup (locks at window
+    open), presence-gated live pairing (a `swiss.presence` map so day-old
+    no-shows aren't handed a live opponent), result/tie/forfeit application
+    from finalize, the `sweepGauntlet` backstop. Callables `signUpGauntlet` /
+    `gauntletPoll` / scheduled `sweepGauntlet`, all deployed and smoke-verified
+    (sweep runs clean against real Firestore, callables respond at the app
+    layer). `matchFinalization.js` routes `match.swiss`.
+  - `lib/screens/tournament/gauntlet_screen.dart` (`GauntletScreen`) - signup
+    view, the **"Tonight's Field"** study roster (every entrant's intro + ammo,
+    with a plain **"Near your rank"** chip on same-title entrants, sorted
+    first - NOT a hyped cue, per the developer), the live standing/watch view,
+    and the champion. Wired into `tournament_detail_screen.dart` behind a
+    `format == 'swiss'` branch (bracket UI skipped). **Verified on the
+    emulator end to end for the ASYNC half**: enter -> consent -> signup ->
+    "You're in tonight's field" -> the roster (PlayerTwo/Door Guy flagged
+    "Near your rank" and sorted above SoloProbe/Average Joe) -> study sheet
+    with the opponent's ammo.
+- **NOT yet done:** (1) the LIVE battling half is only engine-simulation +
+  smoke tested - a real 2-device dry run in the window is the remaining
+  verification, the same gap the climb had; (2) the daily creator still makes
+  `format: "climb"` - flip `dailyTournament.js` to `format: "swiss"` +
+  `swiss:{entrants:[]}` only after the live dry run; (3) the projected-first-
+  matchup preview (the roster shows the field + near-rank, not yet a single
+  fluctuating projected opponent); (4) the points-entry special tournaments
+  and all economy numbers (advisor review).
+- Runs in PARALLEL and UNUSED until the daily creator is flipped, so nothing
+  changes for real users yet - the single-elim climb is still tonight's live
+  Daily Gauntlet.

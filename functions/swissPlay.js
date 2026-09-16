@@ -129,13 +129,17 @@ async function signUpGauntlet(auth, data) {
         "Record your intro video before you sign up - your opponents study " +
         "it all day.");
   }
+  // Stamp the hidden Elo so pairing seeds by closest rank (see byScore). Read
+  // once at signup; a later rating drift over the day is negligible for one
+  // night's pairing.
+  const rating = (userSnap.data() || {}).rating ?? STARTING_RATING;
 
   await db.runTransaction(async (tx) => {
     const s = await tx.get(ref);
     const entrants = entrantsOf(s.data());
     if (entrants.some((e) => e.uid === uid)) return; // already signed up
     const next = [...entrants, {
-      uid, wins: 0, losses: 0, opponents: [],
+      uid, wins: 0, losses: 0, opponents: [], rating,
       status: S.STATUS.waiting, joinedMs: nowMs, currentMatchId: null,
     }];
     tx.update(ref, {"swiss.entrants": next});

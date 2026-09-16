@@ -50,13 +50,19 @@ function uidCmp(a, b) {
 }
 
 /**
- * Pairing order: best record first (most wins, then fewest losses), then
- * earliest sign-up, then uid. Used to seed Swiss pairing so people near the
- * top of the standings meet each other.
+ * Pairing order: best record first (most wins, then fewest losses), then by
+ * RATING (closest hidden Elo), then earliest sign-up, then uid. Seeding by
+ * rating within a record group is what makes pairing "closest rank" - people
+ * of similar skill and the same record meet each other, which is the
+ * developer's intent for the format and what makes the roster's "near your
+ * rank" study guidance and the projected first matchup honest. `rating` is the
+ * hidden Elo (never shown); a missing rating sorts as 0. Used only to ORDER
+ * pairing, never the final standings (those are by performance alone).
  */
 function byScore(a, b) {
   return (b.wins - a.wins) ||
     (a.losses - b.losses) ||
+    ((b.rating || 0) - (a.rating || 0)) ||
     (a.joinedMs - b.joinedMs) ||
     uidCmp(a.uid, b.uid);
 }
