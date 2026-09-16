@@ -113,14 +113,25 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: text.titleMedium?.copyWith(
-            fontSize: 19,
-            fontWeight: FontWeight.w800,
-            color: Colors.white, // strong white
+        // Scale-to-fit rather than ellipsis: a longer rank title like
+        // "Average Joe" or "The Funny Friend" was clipping to "Averag..." on
+        // real phones where this column is narrower than the emulator. FittedBox
+        // shrinks the one line to fit the available width instead of truncating.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              title,
+              maxLines: 1,
+              softWrap: false,
+              style: text.titleMedium?.copyWith(
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+                color: Colors.white, // strong white
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 11),
