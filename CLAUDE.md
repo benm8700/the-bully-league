@@ -3586,9 +3586,21 @@ while adding the developer's all-day study idea.
     "You're in tonight's field" -> the roster (PlayerTwo/Door Guy flagged
     "Near your rank" and sorted above SoloProbe/Average Joe) -> study sheet
     with the opponent's ammo.
-- **NOT yet done:** (1) the LIVE battling half is only engine-simulation +
-  smoke tested - a real 2-device dry run in the window is the remaining
-  verification, the same gap the climb had; (2) the daily creator still makes
+- **The wiring is now LIVE-VERIFIED end to end** (`functions/live/swissChecks.js`,
+  22 checks against the deployed backend, all green): signup + intro gate +
+  signups closing at window open; presence-gated pairing (a silent entrant is
+  never handed a match); non-elimination results (winner 1-0 and loser 0-1 both
+  stay in); Swiss re-pairing (the two winners meet, no rematch of a round-1
+  pair); and the most-wins champion, with `sweepGauntlet` running clean. This
+  exercises the exact seams a 2-device battle would, plus edge cases a manual
+  run would not.
+- **NOT yet done:** (1) a literal 2-device Agora battle in the live window has
+  NOT been run - but the battle screen flow reuses the climb's already-device-
+  proven path unchanged (same PreMatchScreen/bio-reveal/Agora battle, short
+  `s_<hash>` match ids so the climb's channel-length bug can't recur), and the
+  wiring is live-verified above, so the residual on-device risk is low; do the
+  interactive 2-device run (a human is needed for the mic gate) before the
+  daily flip if desired; (2) the daily creator still makes
   `format: "climb"` - flip `dailyTournament.js` to `format: "swiss"` +
   `swiss:{entrants:[]}` only after the live dry run; (3) the projected-first-
   matchup preview (the roster shows the field + near-rank, not yet a single
