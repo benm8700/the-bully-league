@@ -1190,6 +1190,21 @@ exports.getDayPassState = onCall((request) => {
 });
 
 /**
+ * Free Rewards: a daily login reward, claimed once per Pacific day, on an
+ * escalating 7-day cycle - see functions/dailyReward.js. Server-minted
+ * (it grants points), so it is a callable rather than a client write.
+ */
+exports.claimDailyReward = onCall((request) => {
+  const {claimDailyReward} = require("./dailyReward");
+  return claimDailyReward(request.auth);
+});
+
+exports.getDailyRewardState = onCall((request) => {
+  const {getDailyRewardState} = require("./dailyReward");
+  return getDailyRewardState(request.auth);
+});
+
+/**
  * LIVE tournaments. The async format is untouched; these only ever act on
  * tournaments marked format: "live".
  */

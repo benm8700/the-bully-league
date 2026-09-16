@@ -1095,6 +1095,18 @@ BIGGER special events (real cash) can still be scheduled on top later.
   to represent the app. Builds real loyalty to the app that made them. A
   standout non-cash prize that doubles as marketing (a comedian the app sent
   to a real stage is a story and a clip).
+- **MORE PRIZE / REWARD IDEAS (developer, 2026-09-15) - capture only, NOT
+  decided or costed:** a concert ticket, a Comedy Store ticket, a flight to
+  LA, and a PS5. These are the same "standout physical/experiential prize"
+  vein as the best-man fly-out - aspirational, story-worthy, and legally
+  clean while tournaments stay skill-contests (a fixed non-cash prize is not
+  the sweepstakes/1099/geofencing regime that cash triggers). The LA flight
+  and Comedy Store ticket also double as marketing (send our champion to the
+  real comedy world) and pair naturally with the fly-out idea. **All prize/
+  reward economics here are PROVISIONAL - the developer intends to review the
+  whole rewards/monetization/XP model with an advisor before finalizing, so
+  treat these as a candidate list to price and choose from later, not a
+  commitment.**
 - **This whole path depends on the live-tournament + spectator plumbing,
   which has NEVER run with real people on real devices** - built and tested
   against the backend, not battle-tested live. Do a controlled dry run
@@ -3230,8 +3242,8 @@ deploy` exit is not proof the function updated — verify the live behaviour.
   in the gap between the outer and inner banners; there are two banners per
   side). `sideBannerX`/`sideBannerY` tune the placement.
 - **Quick Actions row — BUILT + wired** (`lib/widgets/home/home_quick_actions.dart`):
-  Daily Challenges (opens the `DailyQuests` sheet), Free Rewards (a "Soon"
-  PLACEHOLDER — a real feature, backlogged), Current Streak (live `voteStreak.days`).
+  Daily Challenges (opens the `DailyQuests` sheet), Free Rewards (BUILT
+  2026-09-15 - the daily-login reward, see below), Current Streak (live `voteStreak.days`).
   It REPLACED the tall inline `DailyQuests` list on Home (one route to quests,
   not two).
 - **Featured section — BUILT and INTENTIONALLY HIDDEN AT LAUNCH**
@@ -3313,3 +3325,52 @@ Featured Talent is ABOVE Legend on the ladder — the filenames just do not
 track tier order, which is harmless. Historical CLAUDE.md prose still
 mentions "Hall of Famer" in explanatory passages; the authoritative rank
 list (Ranking System) and the code are the source of truth.
+
+## Free Rewards — daily login reward — BUILT (2026-09-15)
+
+The Home "Free Rewards" quick-action card, previously a "coming soon"
+placeholder, is now a real daily-login reward. Open the app, tap Claim once
+per Pacific day; escalating 7-day cycle that resets to day 1 if you miss a
+day - the vote-streak habit loop applied to simply showing up.
+
+- **PURE CLAIM** (the developer's design choice): no battle, no vote, no
+  activity - the whole job is a reason to OPEN the app daily.
+- **Schedule (placeholder, in config):** days 1-7 pay 20/30/40/50/60/80/**150**,
+  day 7 being a big points CLIMAX rather than a separate reward type (a clip
+  token / day pass) - kept to ONE currency for V1 to minimise integration
+  surface; a trivial future upgrade. ~430/week for showing up, well under
+  active-play earnings.
+- **Server-minted, so a Cloud Function not a client write** (`functions/dailyReward.js`,
+  `claimDailyReward` + `getDailyRewardState`, deployed). Points flow through
+  `awardPoints` (the one XP/points chokepoint), idempotent per Pacific day via
+  a `daily_reward_<dayKey>` ledger entry - a retried tap or two racing devices
+  can never pay twice. The cycle bookkeeping (`dailyReward: {lastClaimDay,
+  cycleDay}` on the user doc) is written in a transaction and **protected in
+  firestore.rules** (a client that could rewind `lastClaimDay` would re-claim
+  freely). The Pacific day key matches the streak/quests/day-pass/event window.
+- **Values live in `config/pointsSettings.dailyRewards` ({schedule:[7],
+  enabled})**, bounds-checked (a dirty or wrong-length schedule is discarded
+  wholesale for the default; only an explicit `enabled:false` disables). So
+  the whole reward can be retuned or switched off from the console without a
+  release - which is deliberate, because **the developer intends to review the
+  entire rewards/monetization/XP model with an advisor**, and these numbers are
+  provisional placeholders for that review (see the memory
+  `economy-needs-advisor-review`).
+- **Client:** `lib/core/services/daily_reward_service.dart` (callable wrappers,
+  fails quiet - a failed state fetch shows NO "claim ready" cue rather than a
+  false one) + `lib/screens/rewards/daily_reward_sheet.dart` (a gold-themed
+  claim sheet: the 7-day cycle as day tiles, today ringed/lit, claimed days
+  checked, day 7 accented with a trophy, a gold Claim button flipping to
+  "Claimed today - come back tomorrow" with a "+N points" flourish). The Home
+  card (`home_quick_actions.dart`) is now a stateful `_FreeRewardsCard` showing
+  a gold "claim ready" dot when unclaimed, opening the sheet on tap.
+- **14 pure tests** (`functions/test/dailyReward.test.js`: cycle advance/wrap/
+  reset, config validation, Pacific prev-day arithmetic). **Verified on the
+  emulator end to end:** the card showed the ready dot, the sheet rendered the
+  cycle, claiming flipped D1 to a check with "+20 points", the wallet balance
+  rose 570 -> 590 (proving the real server mint), the state re-fetched to
+  "Claimed today", and the card's dot cleared. Both fresh callables returned
+  the app-level JSON auth error (not a Cloud Run 401), so no manual IAM fix was
+  needed.
+- **NOT built:** a day-7 clip-token/day-pass climax (kept points-only for V1),
+  and any push/reminder that a reward is waiting (the Home dot is the only cue).

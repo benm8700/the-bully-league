@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/services/daily_reward_service.dart';
+import '../../screens/rewards/daily_reward_sheet.dart';
 import '../daily_quests.dart';
 
 /// The Home "Quick Actions" row - three compact cards: Daily Challenges,
@@ -16,9 +18,10 @@ import '../daily_quests.dart';
 ///  - Current Streak shows the live vote-streak day count from the user
 ///    document (`voteStreak.days`), rendered as a prominent gold "N DAYS" with
 ///    a flame that grows more energetic as the streak climbs.
-///  - Free Rewards is a PLACEHOLDER (developer's call, 2026-09-14): it is a
-///    real backlog feature with no backend yet, so tapping it says as much
-///    rather than pretending to work. See CLAUDE.md's backlog for the design.
+///  - Free Rewards (BUILT 2026-09-15) opens the daily-login-reward claim
+///    sheet and shows a gold "claim ready" dot when today's reward is
+///    unclaimed. See lib/screens/rewards/daily_reward_sheet.dart and
+///    functions/dailyReward.js.
 class HomeQuickActions extends StatelessWidget {
   const HomeQuickActions({super.key, required this.uid});
 
@@ -26,7 +29,6 @@ class HomeQuickActions extends StatelessWidget {
 
   // Accent palette straight from the reference PNG's spec panel.
   static const Color _pink = Color(0xFFFF3B6B); // Challenges
-  static const Color _gold = Color(0xFFFFC107); // Rewards + streak value
 
   @override
   Widget build(BuildContext context) {
@@ -50,19 +52,9 @@ class HomeQuickActions extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Expanded(
+            const Expanded(
               flex: 31,
-              child: _QuickCard(
-                // Solid wrapped gift box (approved), not the outline card.
-                icon: Icons.redeem,
-                accent: _gold,
-                label: 'Free\nRewards',
-                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Free Rewards is coming soon.'),
-                  ),
-                ),
-              ),
+              child: _FreeRewardsCard(),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -83,6 +75,79 @@ class HomeQuickActions extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
         child: DailyQuests(),
       ),
+    );
+  }
+}
+
+/// The Free Rewards card - opens the daily-reward claim sheet, and shows a
+/// gold "claim ready" dot when today's reward is unclaimed.
+///
+/// The reward state is fetched once when the card builds (it lives in the
+/// Home tab's IndexedStack, so initState fires at shell creation) and again
+/// after the sheet closes, so claiming clears the dot. A failed fetch simply
+/// shows no dot - the reward is a bonus, so a false "ready" cue is worse
+/// than a missing one.
+class _FreeRewardsCard extends StatefulWidget {
+  const _FreeRewardsCard();
+
+  @override
+  State<_FreeRewardsCard> createState() => _FreeRewardsCardState();
+}
+
+class _FreeRewardsCardState extends State<_FreeRewardsCard> {
+  static const Color _gold = Color(0xFFFFC107);
+  final _service = DailyRewardService();
+  bool _claimable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final state = await _service.state();
+    if (!mounted) return;
+    setState(() => _claimable = state?.claimable ?? false);
+  }
+
+  Future<void> _open() async {
+    await DailyRewardSheet.show(context, service: _service);
+    if (mounted) _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final card = _QuickCard(
+      // Solid wrapped gift box (approved), not the outline card.
+      icon: Icons.redeem,
+      accent: _gold,
+      label: 'Free\nRewards',
+      onTap: _open,
+    );
+    if (!_claimable) return card;
+    // A small gold "ready" dot in the top-right corner when claimable.
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        card,
+        Positioned(
+          top: -3,
+          right: -3,
+          child: Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: _gold,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF0E0C12), width: 2),
+              boxShadow: [
+                BoxShadow(color: _gold.withValues(alpha: 0.6), blurRadius: 6),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

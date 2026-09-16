@@ -49,6 +49,7 @@ service cloud.firestore {
           'judgeVotesToday', 'judgeDayKey', 'judgeCalls',
           'careerRankedMatches', 'skipsUsedToday', 'skipsResetDate',
           'takedowns', 'lastNotifiedRankTitle', 'lastSeenRankTitle',
+          'dailyReward',
         ]);
 
       // Uses .get(field, default) rather than direct field access - a
@@ -148,6 +149,12 @@ service cloud.firestore {
           resource.data.get('dayPassExpiresAtMs', null) &&
         request.resource.data.get('dailyAwards', null) ==
           resource.data.get('dailyAwards', null) &&
+        // The daily-login-reward cycle state (last claim day + cycle day). A
+        // client that could rewind lastClaimDay would re-claim the reward
+        // any number of times a day, minting the currency the claim mints.
+        // Written only by claimDailyReward.
+        request.resource.data.get('dailyReward', null) ==
+          resource.data.get('dailyReward', null) &&
         // When they last voted, which enforces the minimum gap between
         // votes. A client that could rewind it would vote as fast as it
         // liked, which is the exact behaviour the gap exists to price up.
