@@ -121,7 +121,9 @@ class HomeScreen extends StatelessWidget {
                     // header carries the brand), so it was removed in the
                     // 2026-09-14 Home overhaul to match the reference.
                     if (uid != null) _RankBadge(uid: uid),
-                    const SizedBox(height: 18),
+                    // Tightened so the compact HUD sits closer to the Tournament
+                    // hero, leaving a little more of Roast a Stranger visible.
+                    const SizedBox(height: 12),
                     // Anything urgent stays at the very top: a match
                     // waiting, or somebody challenging you.
                     const _ActiveMatchBanner(),

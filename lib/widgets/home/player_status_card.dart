@@ -134,9 +134,9 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
             ),
           ),
         ),
-        const SizedBox(height: 11),
-        _XpBar(fill: fill, gold: gold),
-        const SizedBox(height: 7),
+        const SizedBox(height: 8),
+        _XpBar(fill: fill),
+        const SizedBox(height: 4),
         Text(
           nextXp != null
               ? '${_comma(xp)} / ${_comma(nextXp)} XP'
@@ -157,11 +157,8 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
     // element here). All clipped to the card by the ClipRRect above.
     final content = Stack(
       children: [
-        // Metallic reflective sheen: a single soft diagonal band of light
-        // lilac sweeping top-left -> bottom-right across the whole pillbox,
-        // like light glancing off brushed purple metal. Kept low-alpha so it
-        // reads as a tint/glint on the surface, never a hard stripe, and sits
-        // UNDER the plum edge glows + gold badge glow + text (all added after).
+        // Very faint diagonal sheen - a whisper of light on the surface, not a
+        // metallic stripe. Kept minimal so the card reads dark and quiet.
         Positioned.fill(
           child: IgnorePointer(
             child: DecoratedBox(
@@ -171,9 +168,9 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
                   end: Alignment.bottomRight,
                   colors: [
                     Colors.transparent,
-                    const Color(0xFFD9A8FF).withValues(alpha: 0.09),
-                    const Color(0xFFF0DBFF).withValues(alpha: 0.28),
-                    const Color(0xFFD9A8FF).withValues(alpha: 0.09),
+                    const Color(0xFFD9A8FF).withValues(alpha: 0.02),
+                    const Color(0xFFE7C6FF).withValues(alpha: 0.06),
+                    const Color(0xFFD9A8FF).withValues(alpha: 0.02),
                     Colors.transparent,
                   ],
                   stops: const [0.0, 0.38, 0.5, 0.62, 1.0],
@@ -182,33 +179,20 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
             ),
           ),
         ),
+        // A single subtle plum accent glow at the top-left only (the purple is
+        // an ACCENT, not the whole panel). The bottom-right glow was dropped so
+        // the card stays predominantly near-black.
         Positioned(
-          left: -26,
-          top: -26,
+          left: -30,
+          top: -30,
           child: Container(
-            width: 200,
-            height: 160,
+            width: 190,
+            height: 150,
             decoration: const BoxDecoration(
               gradient: RadialGradient(
                 center: Alignment.topLeft,
                 radius: 1.0,
-                colors: [Color(0x8C7C3AA6), Colors.transparent], // plum ~0.55
-                stops: [0.0, 1.0],
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          right: -26,
-          bottom: -26,
-          child: Container(
-            width: 180,
-            height: 145,
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment.bottomRight,
-                radius: 1.0,
-                colors: [Color(0x556A2F92), Colors.transparent], // plum ~0.33
+                colors: [Color(0x3D7C3AA6), Colors.transparent], // plum ~0.24
                 stops: [0.0, 1.0],
               ),
             ),
@@ -224,7 +208,7 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
-                    colors: [gold.withValues(alpha: 0.26), Colors.transparent],
+                    colors: [gold.withValues(alpha: 0.22), Colors.transparent],
                     stops: const [0.0, 1.0],
                   ),
                 ),
@@ -233,27 +217,28 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(8, 12, 10, 12),
+          // Tight vertical padding keeps this a compact HUD (~15% shorter than
+          // before) even with the larger badge; the badge is the height driver.
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
           child: IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // The illustrated rank crest, floating directly on the card
-                // (BoxFit.contain, transparent, no square, no clip). Pulled a
-                // little left (smaller left padding + tighter gap) so the XP
-                // bar in the middle column gets more room to run longer.
-                RankBadge(title: title, size: 66),
+                // The illustrated rank crest - the main visual element of the
+                // HUD (progression badges are collectible rank emblems), so it
+                // is the largest thing here even as everything else is quieted.
+                RankBadge(title: title, size: 74),
                 const SizedBox(width: 12),
                 Expanded(child: rankColumn),
                 if (_rank != null) ...[
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   // Thin subtle vertical divider (a faint purple-gray).
                   Container(
                     width: 1,
                     margin: const EdgeInsets.symmetric(vertical: 3),
                     color: const Color(0xFFB48AD4).withValues(alpha: 0.22),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 8),
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,8 +265,11 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
                       ),
                     ],
                   ),
+                  const SizedBox(width: 2),
+                  // A small, conventional, MUTED chevron - just a tap
+                  // affordance, not a bright gold decorative element.
                   Icon(Icons.chevron_right,
-                      color: gold.withValues(alpha: 0.85), size: 22),
+                      color: Colors.white.withValues(alpha: 0.45), size: 18),
                 ],
               ],
             ),
@@ -309,32 +297,27 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
+              // Subtler purple border ring - a dimmer, less saturated plum than
+              // the old bright magenta so the frame reads as a quiet accent.
               gradient: const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0xFFC44FDA), Color(0xFF9A38C0), Color(0xFF6E2A94)],
+                colors: [Color(0xFF6E3A94), Color(0xFF512873), Color(0xFF381C50)],
                 stops: [0.0, 0.5, 1.0],
               ),
               boxShadow: [
                 // Depth.
                 const BoxShadow(
                   color: Colors.black,
-                  blurRadius: 18,
-                  offset: Offset(0, 8),
-                ),
-                // Restrained purple/pink exterior glow - strongest at the
-                // perimeter, extremely subtle beyond (not a neon sign).
-                BoxShadow(
-                  color: const Color(0xFFB44AD4).withValues(alpha: 0.30),
-                  blurRadius: 22,
-                  spreadRadius: -2,
-                ),
-                // A touch brighter along the top edge.
-                const BoxShadow(
-                  color: Color(0x2ED060E8),
                   blurRadius: 14,
-                  spreadRadius: -3,
-                  offset: Offset(0, -4),
+                  offset: Offset(0, 6),
+                ),
+                // One very subtle purple edge glow - present for premium depth,
+                // nowhere near a neon halo (reduced from the old bright glow).
+                BoxShadow(
+                  color: const Color(0xFFB44AD4).withValues(alpha: 0.14),
+                  blurRadius: 14,
+                  spreadRadius: -4,
                 ),
               ],
             ),
@@ -347,19 +330,20 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
                   // edge illumination and the gold badge glow are layered in
                   // `content`, and the centre stays predominantly dark.
                   decoration: const BoxDecoration(
-                    // Purple metallic base: a graduated dark-plum metal rather
-                    // than near-black, so the reflective sheen (layered in
-                    // `content`) has a coloured surface to glint off. Lighter
-                    // plum top-left falling to a deep aubergine bottom-right.
+                    // Near-black base with only a faint purple-navy cast at the
+                    // top-left, falling to true near-black. The purple is an
+                    // accent (reinforced by the single top-left glow above),
+                    // not a bright panel - the card stays quieter than the
+                    // Tournament artwork below it.
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        Color(0xFF3B2A55),
-                        Color(0xFF241634),
-                        Color(0xFF160D22),
+                        Color(0xFF17122A),
+                        Color(0xFF0C0A14),
+                        Color(0xFF08070C),
                       ],
-                      stops: [0.0, 0.55, 1.0],
+                      stops: [0.0, 0.5, 1.0],
                     ),
                   ),
                   child: content,
@@ -373,78 +357,40 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
   }
 }
 
-/// The XP progress track - a long, slim bright-gold fill on a very dark rail.
+/// The XP progress track - thin, long, clean: a restrained gold fill on a
+/// dark-gray rail, no glossy sheen or glow. Reads premium rather than like a
+/// generic thick progress bar.
 class _XpBar extends StatelessWidget {
-  const _XpBar({required this.fill, required this.gold});
+  const _XpBar({required this.fill});
 
   final double fill;
-  final Color gold;
 
   @override
   Widget build(BuildContext context) {
-    const h = 12.0;
+    const h = 7.0;
     final f = fill.clamp(0.0, 1.0);
     return ClipRRect(
       borderRadius: BorderRadius.circular(h / 2),
       child: Stack(
         children: [
-          // Track: a rounded GRAY capsule (neutral, no blue/teal) with a subtle
-          // top-to-bottom shade. This full-width child sizes the whole bar.
-          SizedBox(
+          // Track: a flat dark-gray rail. This full-width child sizes the bar.
+          const SizedBox(
             width: double.infinity,
             height: h,
-            child: const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFF4C4C4C), Color(0xFF2B2B2B)],
-                ),
-              ),
-            ),
+            child: ColoredBox(color: Color(0xFF2A2A2E)),
           ),
-          // Gold fill: left-aligned, fractional width, full height. The
-          // bright-top -> deep-bottom gradient gives the glossy 3D look; a
-          // white top sheen adds the gloss highlight.
+          // Restrained gold fill: a clean left-to-right gradient, no glow, no
+          // white sheen - quiet and premium on a thin bar.
           Positioned.fill(
             child: FractionallySizedBox(
               alignment: Alignment.centerLeft,
               widthFactor: f,
-              child: DecoratedBox(
+              child: const DecoratedBox(
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color(0xFFFFE79A),
-                      Color(0xFFF3C01E),
-                      Color(0xFFCB8B0C),
-                    ],
-                    stops: [0.0, 0.5, 1.0],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: gold.withValues(alpha: 0.55),
-                      blurRadius: 6,
-                    ),
-                  ],
-                ),
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: Container(
-                    height: h * 0.34,
-                    margin: const EdgeInsets.fromLTRB(3, 1.5, 3, 0),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(h),
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.white.withValues(alpha: 0.5),
-                          Colors.white.withValues(alpha: 0.0),
-                        ],
-                      ),
-                    ),
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [Color(0xFFF2CE5A), Color(0xFFD9A21E)],
                   ),
                 ),
               ),
