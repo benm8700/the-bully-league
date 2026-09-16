@@ -58,7 +58,7 @@ class RulesScreen extends StatelessWidget {
           ),
           const _Rule(
             icon: Icons.local_fire_department_outlined,
-            title: 'Sixes and Sevens',
+            title: 'The Daily Gauntlet',
             body: 'The nightly tournament, 6-7pm Pacific. It is the main event '
                 'and where the prestige and prizes are. Check in when it '
                 'opens, and battle through the bracket. Miss it and you can '

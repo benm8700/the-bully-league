@@ -3460,3 +3460,112 @@ published clips to show). Fame is also the front of the FUTURE creator-economy
 funnel (following -> crowd -> gifts/support when gifting ships -> the "earn
 from your fans" hook), which is economy work for the developer's planned
 advisor review, so V1 stays reward-free.
+
+## Economy + Daily Gauntlet redesign — DECISION RECORD (2026-09-16)
+
+A consolidated design the developer settled in conversation, to be reviewed
+with an advisor before building (economy numbers are provisional - see the
+`economy-needs-advisor-review` memory). **NOTHING here is built yet except the
+rename** (below); the current single-elimination climb engine stays live until
+the new format is built. This record SUPERSEDES the older "Sixes and Sevens IS
+the daily tournament / single-elim climb" prose where they conflict.
+
+### Rename: "Sixes and Sevens" -> "Daily Gauntlet" (DONE)
+The nightly event is now branded **"Daily Gauntlet"** in all user-facing copy.
+"gauntlet" was already the format's user-facing name ("you're in the
+gauntlet"), so the daily event IS the gauntlet - consistent. Changed the live
+`config/eventWindow.name` to "Daily Gauntlet" (so the banner, push, tutorial
+line update with no release), plus the code defaults (`functions/eventWindow.js`,
+`lib/core/services/event_window.dart`, `lib/app.dart`'s `kWindowName`) and the
+two hardcoded UI strings (Rules screen, notification-settings category). The
+time (6-7pm Pacific) is unchanged; only the NAME changed. Code comments still
+say "Sixes and Sevens" (historical, harmless).
+
+### The points economy: points buy TOURNAMENT ENTRY
+The long-open "what are points FOR" question is answered: **points' primary
+purpose is entry into the big/special prize tournaments.** This ties the whole
+economy to the two things this audience actually wants - prizes and fame - and
+makes the free nightly play the on-ramp to the paid prize events.
+- **The Daily Gauntlet stays FREE to enter, always.** It is the liquidity/crowd
+  engine, not a prize event. Gating it (even with earned points) backfires: the
+  6pm push brings the most fresh installs, and a new player who hasn't earned
+  points would find the marquee event locked on their first night; and the money
+  in a live tournament is the CROWD (watching, gifting, fame), which a gate guts.
+  This preserves the free-battler carve-out the monetization model depends on.
+- **Special/big tournaments require entry** - points now, cash later (cash needs
+  the deferred payment processor + entity). Free members spend earned points;
+  the entry is a TON of points - **deliberately high enough to be achievable but
+  so steep that subscribing is clearly the better path** (a subscriber's monthly
+  free/discounted entries beat grinding). Exact amount is advisor-review +
+  config-tunable.
+- **Subscribers** get a capped number of free entries per month (the schema
+  field `freeTournamentEntriesRemainingThisMonth` already exists) plus
+  discounted fees - already in the monetization model.
+- Buildable points-only with no processor when ready; the entry-deduction rides
+  the existing points-spend path (pointsBalance + ledger, like the day pass).
+
+### Special tournaments (scheduling) - NOT built
+Occasional, admin-scheduled big events (a weekend "$1,000 night", etc.) that
+carry the real prizes and the points/cash entry. The mechanism when built: an
+admin creates a special-tournament doc (start time, entry cost, prize); joining
+deducts the entry (points, or a subscriber free-entry) before check-in. The
+daily one is never gated; only these are. Cash prizes/entry trip the deferred
+geofencing/1099/processor/entity machinery; points-entry with points/no prize
+is clean today.
+
+### Daily Gauntlet - NEW FORMAT: Swiss "most wins", non-elimination
+Replaces single-elimination. The developer's goals: everyone keeps playing (no
+early knockout), most wins wins, and skill decides it rather than bracket luck.
+- **NOT true round-robin.** Everyone-plays-everyone is quadratic (N-1 live
+  battles each) and a live ~10-14min battle means one player fits ~4-5 battles
+  in the hour - true round-robin only works for ~5 people. The scalable form
+  that meets every goal is **Swiss / "most wins"**: everyone plays a set number
+  of rounds (~4-5, config), each round paired against someone with a similar
+  record they haven't faced, and the **most wins at 7pm wins**. Nobody is
+  eliminated; skill (not a lucky draw) surfaces the winner.
+- **It's an EVOLUTION of the existing climb engine, not a rebuild.** The climb
+  already pairs by same-win-count. The changes: a loss no longer eliminates
+  (track a W-L record), pair Swiss-style (similar record, no rematch), and rank
+  by wins at window end with a tiebreak (Swiss standard: strength of opponents /
+  head-to-head).
+- **Stays LIVE in the window.** All battles still happen 6-7pm - this protects
+  the live crowd, spectating, the fame system (followers get "X is up now,
+  watch" and show up), the future gifting economy, and the "one crowd at one
+  time" liquidity thesis. All-day async battles would spread the crowd out and
+  undercut all of that.
+- Champion crowned at window end by most wins.
+
+### Async signup + the study phase (the "Tonight's Field" roster) - NEW
+Async PREP, live PERFORMANCE - the reconciliation that keeps the event live
+while adding the developer's all-day study idea.
+- **Sign up any time during the day; battle live in the window. Signups CLOSE
+  at 6pm** (field locks) - late joins would make the whole study-the-field
+  promise meaningless.
+- **"Tonight's Field" roster**: every signed-up entrant is viewable all day -
+  anyone can open anyone's intro video + ammo and study them. This is a
+  DELIBERATE reversal of the usual ammo-privacy stance (ammo is normally shown
+  only to your matched opponent, because a searchable ammo database is a
+  harassment surface). It is defensible IN a tournament because entering is
+  opting in to being studied - but it is a real reversal, made on purpose.
+- **Likely-opponent guidance, kept SIMPLE and DIRECT (the developer's explicit
+  copy steer - not cheesy/hype).** Because it's Swiss, the exact bracket can't
+  be predicted (that's what makes it skill, not luck) - but the entrants NEAR
+  YOUR RANK are who you'll mostly face across the rounds. Surface them plainly:
+  a quiet **"Near your rank"** grouping/label, NOT "Study these first - you're
+  most likely to face them!!". Everyone stays visible (open study); the near-
+  rank set is just a plain pointer to where your study matters most.
+- A **provisional projected first matchup** may be shown, refining as more
+  people sign up, clearly marked provisional until the 6pm lock - the "closer to
+  start, the more accurate" mechanic, honest about being a projection.
+- **The incentive loop this creates** (the point of the whole redesign): sign up
+  early -> more time to study the field -> sharper opponent-specific jokes ->
+  win more -> fame + prizes. Studying and joining early are both rewarded.
+
+### Build status / sequencing
+- **Built:** only the rename.
+- **Design-complete, NOT built:** the Swiss format, the async-signup/study
+  roster, the points-entry special tournaments, and all economy numbers.
+- Recommended sequencing: lock this with the advisor (economy numbers), then
+  build the settled version once rather than rebuilding as it evolves. The
+  format change (Swiss + roster) is not economy-gated and could be built ahead
+  of the economy if desired; the special-tournament entry IS economy-central.

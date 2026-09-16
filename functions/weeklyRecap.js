@@ -104,7 +104,7 @@ function worthSending(summary) {
  *
  * Pure.
  */
-function recapCopy(summary, {windowName = "Sixes and Sevens"} = {}) {
+function recapCopy(summary, {windowName = "Daily Gauntlet"} = {}) {
   const {matchesPlayed, wins, votesCast, pointsEarned} = summary;
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 

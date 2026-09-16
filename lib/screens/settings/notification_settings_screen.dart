@@ -31,7 +31,7 @@ class NotificationSettingsScreen extends StatelessWidget {
     ),
     _Category(
       key: 'event_window',
-      title: 'Sixes and Sevens',
+      title: 'The Daily Gauntlet',
       description: 'When the daily prime-time hour starts, and a last call '
           'before it ends.',
     ),

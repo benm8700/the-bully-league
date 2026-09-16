@@ -323,7 +323,7 @@ async function _createClimbMatch(db, ref, tournamentId, a, b) {
         // The climb IS the Sixes and Sevens event and it is free to enter, so
         // unlike a paid bracket its matches DO count toward the daily 2x window
         // bonus - this is exactly "turning up to Sixes and Sevens".
-        eventWindow: {qualified: true, name: s.data().name ?? "Sixes and Sevens"},
+        eventWindow: {qualified: true, name: s.data().name ?? "Daily Gauntlet"},
         origin: "climb",
         climb: {tournamentId},
         status: "pending",

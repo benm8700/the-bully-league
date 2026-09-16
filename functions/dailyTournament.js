@@ -65,7 +65,7 @@ function dailyTournamentPlan(nowMs, config) {
     create: true,
     dayKey,
     startsAtMs,
-    name: (config.name && config.name.trim()) || "Sixes and Sevens",
+    name: (config.name && config.name.trim()) || "Daily Gauntlet",
   };
 }
 
