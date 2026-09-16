@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/badges/badges.dart';
 import '../../core/services/matchmaking_service.dart';
+import '../../widgets/badges/featured_badge.dart';
 import '../../widgets/looping_video.dart';
 import 'match_screen.dart';
 import 'matchmaking_screen.dart';
@@ -363,6 +365,13 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
                   style: Theme.of(context).textTheme.headlineMedium,
                   textAlign: TextAlign.center,
                 ),
+                // The opponent's featured badge - a bit of identity/ammo
+                // context. Rank/rating stays hidden (anti-sandbagging); a
+                // badge is an achievement, not a strength read.
+                if (featuredBadge(_opponent) != null) ...[
+                  const SizedBox(height: 8),
+                  Center(child: FeaturedBadge(def: featuredBadge(_opponent))),
+                ],
                 const SizedBox(height: 4),
                 Text(
                   'Here\'s your ammo. Use it.',

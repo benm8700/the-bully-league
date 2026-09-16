@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/badges/badge_popup.dart';
 import '../../widgets/rank_change_popup.dart';
 import '../../widgets/service_status_banner.dart';
 // WindowLiveBar import removed with the live-bar usage (2026-09-14); restore
@@ -42,8 +43,12 @@ class _MainShellState extends State<MainShell> {
     // not every time someone taps back to the first tab. Deferred past the
     // first frame because it shows a dialog and needs a mounted route to
     // put one on.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) RankChangePopup.maybeShow(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      // Sequential so a rank-change and a badge popup never stack on top of
+      // each other. Rank first (it's the primary status moment), then badges.
+      await RankChangePopup.maybeShow(context);
+      if (mounted) await BadgePopup.maybeShow(context);
     });
   }
 

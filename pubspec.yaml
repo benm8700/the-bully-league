@@ -86,6 +86,10 @@ flutter:
     # already contains "THE BULLY LEAGUE / REAL PEOPLE. REAL ROASTS." - never
     # re-render that text in Flutter alongside it.
     - assets/branding/
+    # Earnable achievement badges (developer-provided illustrated medallions),
+    # one PNG per badge id, shown in the profile badge case + featured chip.
+    # Mapped by id in lib/core/badges/badges.dart via lib/widgets/badges/.
+    - assets/badges/
 
   # BUNDLED rather than fetched through the google_fonts package, for two
   # reasons. It adds no dependency to a toolchain this project documents

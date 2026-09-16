@@ -8,9 +8,12 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/badges/badges.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../core/services/visual_moderation_service.dart';
+import '../../widgets/badges/badge_case.dart';
+import '../../widgets/badges/featured_badge.dart';
 import '../account/delete_account_screen.dart';
 import '../settings/appearance_screen.dart';
 import '../settings/blocked_players_screen.dart';
@@ -67,6 +70,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _username;
   String? _rankTitle;
 
+  /// The full user document, used for the badge case + featured badge.
+  Map<String, dynamic>? _userData;
+
   DocumentReference<Map<String, dynamic>> get _userRef => FirebaseFirestore
       .instance
       .collection('users')
@@ -80,7 +86,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfile() async {
     final snapshot = await _userRef.get();
-    final profile = snapshot.data()?['profile'] as Map<String, dynamic>? ?? {};
+    final data = snapshot.data();
+    final profile = data?['profile'] as Map<String, dynamic>? ?? {};
     _professionController.text = profile['profession'] as String? ?? '';
     _educationController.text = profile['education'] as String? ?? '';
     _hometownController.text = profile['hometown'] as String? ?? '';
@@ -90,17 +97,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _favoriteFoodController.text = profile['favoriteFood'] as String? ?? '';
     _ammoTextController.text = profile['ammoText'] as String? ?? '';
     final photoUrls = (profile['photoUrls'] as List<dynamic>?)?.cast<String>() ?? [];
-    final listed = snapshot.data()?['directoryListed'];
-    final username = snapshot.data()?['username'] as String?;
-    final rankTitle = snapshot.data()?['rankTitle'] as String?;
+    final listed = data?['directoryListed'];
+    final username = data?['username'] as String?;
+    final rankTitle = data?['rankTitle'] as String?;
     if (mounted) {
       setState(() {
         _photoUrls = photoUrls;
         _directoryListed = listed != false;
         _username = username;
         _rankTitle = rankTitle;
+        _userData = data;
         _loading = false;
       });
+    }
+  }
+
+  /// Pins a badge as the featured one. A plain client write - badges are pure
+  /// recognition with no reward, so nothing needs a server guard (same as the
+  /// equipped skin). Updates the local copy so the header/case react at once.
+  Future<void> _setFeaturedBadge(String badgeId) async {
+    final data = Map<String, dynamic>.from(_userData ?? {});
+    final badges = Map<String, dynamic>.from(
+        (data['badges'] as Map?)?.cast<String, dynamic>() ?? {});
+    badges['featured'] = badgeId;
+    data['badges'] = badges;
+    setState(() => _userData = data);
+    try {
+      await _userRef.set({'badges': {'featured': badgeId}}, SetOptions(merge: true));
+    } catch (_) {
+      // Cosmetic-only; a failed pin isn't worth interrupting the profile.
     }
   }
 
@@ -322,6 +347,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       username: _username,
                       rankTitle: _rankTitle,
                       photoUrl: _photoUrls.isNotEmpty ? _photoUrls.first : null,
+                      featured: featuredBadge(_userData),
+                    ),
+                    const SizedBox(height: 24),
+                    BadgeCase(
+                      stats: BadgeStats.fromUser(_userData),
+                      earnedIds: resolveEarnedIds(_userData),
+                      featuredId: storedFeaturedId(_userData),
+                      onFeature: _setFeaturedBadge,
                     ),
                     const SizedBox(height: 28),
                     // The mandatory intro video sits above photos because it
@@ -527,11 +560,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 /// The read-only identity at the top of the profile: avatar, username and
 /// rank title. The username is deliberately not editable here.
 class _IdentityHeader extends StatelessWidget {
-  const _IdentityHeader({this.username, this.rankTitle, this.photoUrl});
+  const _IdentityHeader(
+      {this.username, this.rankTitle, this.photoUrl, this.featured});
 
   final String? username;
   final String? rankTitle;
   final String? photoUrl;
+  final BadgeDef? featured;
 
   @override
   Widget build(BuildContext context) {
@@ -561,6 +596,10 @@ class _IdentityHeader extends StatelessWidget {
             rankTitle!,
             style: text.titleSmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
+        ],
+        if (featured != null) ...[
+          const SizedBox(height: 10),
+          FeaturedBadge(def: featured),
         ],
       ],
     );

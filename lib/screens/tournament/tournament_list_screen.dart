@@ -235,7 +235,6 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
         final doc = selected[i];
         return _TournamentCard(
           data: doc.data(),
-          thumbnailAsset: _backgroundAsset,
           onTap: () => _openTournament(doc.id),
         );
       },
@@ -534,12 +533,10 @@ class _FilterPills extends StatelessWidget {
 class _TournamentCard extends StatelessWidget {
   const _TournamentCard({
     required this.data,
-    required this.thumbnailAsset,
     required this.onTap,
   });
 
   final Map<String, dynamic> data;
-  final String thumbnailAsset;
   final VoidCallback onTap;
 
   @override
@@ -587,31 +584,28 @@ class _TournamentCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // LEFT: square tournament artwork thumbnail.
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: SizedBox(
-                      width: 54,
-                      height: 54,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                              color: (isChampionship ? gold : Colors.white)
-                                  .withValues(alpha: 0.18)),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Image.asset(
-                          thumbnailAsset,
-                          fit: BoxFit.cover,
-                          alignment: Alignment.topCenter,
-                          errorBuilder: (_, _, _) => ColoredBox(
-                            color: const Color(0xFF1A1622),
-                            child: Icon(Icons.emoji_events,
-                                color: gold, size: 26),
-                          ),
-                        ),
+                  // LEFT: a gold trophy EMBLEM tile rather than the repeated
+                  // arena photo - a small designed crest reads as intentional
+                  // where the same full picture on every card read as reused
+                  // wallpaper. Championship tiles get a brighter gold edge.
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      gradient: RadialGradient(
+                        center: const Alignment(-0.4, -0.5),
+                        radius: 1.2,
+                        colors: [
+                          gold.withValues(alpha: isChampionship ? 0.30 : 0.20),
+                          const Color(0xFF15111E),
+                        ],
+                      ),
+                      border: Border.all(
+                        color: gold.withValues(alpha: isChampionship ? 0.55 : 0.28),
                       ),
                     ),
+                    child: Icon(Icons.emoji_events, color: gold, size: 28),
                   ),
                   const SizedBox(width: 12),
                   // CENTER: name, metadata, stage, next-battle.
