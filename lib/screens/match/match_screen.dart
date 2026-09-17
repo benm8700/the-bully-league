@@ -613,20 +613,41 @@ class _MatchScreenState extends State<MatchScreen> {
 
   Widget _buildCountdownOverlay() {
     final isMe = _activeUid == _myUid;
+    // Shadows so the text stays legible over a live - possibly bright - video
+    // feed now that we only dim rather than black it out.
+    const shadows = [
+      Shadow(blurRadius: 12, color: Colors.black),
+      Shadow(blurRadius: 24, color: Colors.black),
+    ];
     return ColoredBox(
-      color: Colors.black87,
+      // A light dim, NOT a blackout: keep the opponent visible during the
+      // get-ready beat so you can still size them up (developer's call,
+      // 2026-09-17). Blacking the feed out threw away a chance to look at
+      // your opponent.
+      color: Colors.black.withValues(alpha: 0.35),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               isMe ? 'Your turn coming up' : "Opponent's turn coming up",
-              style: const TextStyle(color: Colors.white, fontSize: 22),
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 22, shadows: shadows),
             ),
             const SizedBox(height: 16),
-            Text(
-              '$_secondsRemaining',
-              style: const TextStyle(color: Colors.white, fontSize: 64, fontWeight: FontWeight.bold),
+            // A "Get ready" message rather than a ticking number - the
+            // developer's call (2026-09-16): the countdown still lasts the
+            // configured time and then the turn starts, but the number felt
+            // unnecessary.
+            const Text(
+              'Get ready',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 40,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1,
+                shadows: shadows,
+              ),
             ),
           ],
         ),

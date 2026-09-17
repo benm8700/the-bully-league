@@ -54,19 +54,27 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
-  /// Kept alive across tab switches via IndexedStack rather than rebuilt,
-  /// so the vote queue doesn't refetch and the live tallies don't drop
-  /// their listeners every time someone glances at another tab.
-  static const _screens = [
-    HomeScreen(),
-    WatchFeedScreen(embedded: true),
-    MyBattlesScreen(embedded: true),
-    LeaderboardScreen(embedded: true),
-    ProfileScreen(embedded: true),
-  ];
+  /// The Vote/Judge tab, whose feed autoplays a clip WITH SOUND. Named so
+  /// the shell can tell that tab when it is not the one on screen.
+  static const _voteTabIndex = 1;
 
   @override
   Widget build(BuildContext context) {
+    // Kept alive across tab switches via IndexedStack rather than rebuilt,
+    // so the vote queue doesn't refetch and the live tallies don't drop
+    // their listeners every time someone glances at another tab.
+    //
+    // Built here (not a `const` field) so `WatchFeedScreen` learns whether
+    // its tab is currently visible: because IndexedStack keeps every tab
+    // MOUNTED, a feed clip would otherwise keep playing its audio while you
+    // are on another tab. It pauses when isActiveTab is false.
+    final screens = [
+      const HomeScreen(),
+      WatchFeedScreen(embedded: true, isActiveTab: _index == _voteTabIndex),
+      const MyBattlesScreen(embedded: true),
+      const LeaderboardScreen(embedded: true),
+      const ProfileScreen(embedded: true),
+    ];
     return Scaffold(
       // Above the tabs rather than on Home, deliberately: an outage
       // affects every screen, and someone stuck on the Judge tab watching
@@ -80,7 +88,7 @@ class _MainShellState extends State<MainShell> {
           // (developer's call, 2026-09-14) - the red top bar during the window
           // was getting in the way of Home design review. The widget still
           // exists; re-add `const WindowLiveBar(),` here to restore it.
-          Expanded(child: IndexedStack(index: _index, children: _screens)),
+          Expanded(child: IndexedStack(index: _index, children: screens)),
         ],
       ),
       bottomNavigationBar: NavigationBar(

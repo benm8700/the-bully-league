@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../core/services/agora_video_service.dart';
 import '../../core/services/event_window.dart';
 import '../../core/services/video_call_service.dart';
+import '../../widgets/framing_silhouette.dart';
 
 /// Mandatory one-time onboarding before a player's first match
 /// (CLAUDE.md's Onboarding tutorial decision).
@@ -268,10 +269,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
                   color: Colors.black,
                   child: Center(child: CircularProgressIndicator()),
                 ),
-              const CustomPaint(
-                painter: _FramingGuidePainter(),
-                child: SizedBox.expand(),
-              ),
+              const FramingSilhouette(),
             ],
           ),
         ),
@@ -281,13 +279,15 @@ class _TutorialScreenState extends State<TutorialScreen> {
           child: Column(
             children: [
               Text(
-                'Get your face inside the oval',
+                'Set up your shot',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               const Text(
-                'Good light on your face, phone steady, and close enough that '
-                'people can read your expression. Half the joke is the delivery.',
+                'Rest your phone against something so it stays still — a steady '
+                'shot beats everything. Then sit back so your head and '
+                'shoulders fill the outline, with good light on your face. '
+                'Half the joke is the delivery.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -345,11 +345,14 @@ class _TutorialScreenState extends State<TutorialScreen> {
                         const Text('Your turn coming up',
                             style: TextStyle(color: Colors.white, fontSize: 22)),
                         const SizedBox(height: 16),
-                        Text('$_secondsRemaining',
-                            style: const TextStyle(
+                        // "Get ready" rather than a ticking number, matching the
+                        // real match countdown (2026-09-16).
+                        const Text('Get ready',
+                            style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 64,
-                                fontWeight: FontWeight.bold)),
+                                fontSize: 40,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1)),
                       ],
                     ),
                   ),
@@ -489,28 +492,4 @@ class _Panel extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Same oval as the real pre-match check, so the framing practised here is
-/// the framing they'll see for real.
-class _FramingGuidePainter extends CustomPainter {
-  const _FramingGuidePainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.8)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    final center = Offset(size.width / 2, size.height * 0.42);
-    final rect = Rect.fromCenter(
-      center: center,
-      width: size.width * 0.55,
-      height: size.height * 0.6,
-    );
-    canvas.drawOval(rect, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

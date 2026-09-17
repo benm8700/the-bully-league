@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/home_action_button.dart';
+
 import '../../theme/app_theme.dart';
 import '../../widgets/admin_only.dart';
 import 'tournament_detail_screen.dart';
@@ -88,6 +90,7 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: const [HomeActionButton()],
       ),
       floatingActionButton: AdminOnly(
         child: FloatingActionButton.extended(
@@ -357,6 +360,21 @@ String _stageLabel(Map<String, dynamic> t) {
   return 'ROUND ${rounds.length}';
 }
 
+/// The human format descriptor for the metadata line. Derived from the real
+/// format id: the gauntlet formats are not single-elimination brackets (the
+/// swiss one is non-elimination outright), so only an actual bracket earns
+/// the "Single Elimination" label.
+String _formatLabel(Map<String, dynamic> t) {
+  switch (t['format']) {
+    case 'swiss':
+      return 'Most Wins';
+    case 'climb':
+      return 'Gauntlet';
+    default:
+      return 'Single Elimination';
+  }
+}
+
 /// "Next battle in ..." from the real start time, or null when not relevant.
 String? _nextBattleLabel(Map<String, dynamic> t) {
   final status = t['status'] as String? ?? 'open';
@@ -552,10 +570,14 @@ class _TournamentCard extends StatelessWidget {
     final nextBattle = _nextBattleLabel(data);
     final isChampionship = name.toLowerCase().contains('championship');
 
-    // Metadata line: "N Roasters • Single Elimination".
+    // Metadata line: "N Roasters • <format>". The format label is derived
+    // from the real format id rather than hardcoded - a gauntlet is not a
+    // single-elimination bracket, and the swiss Daily Gauntlet is
+    // non-elimination entirely, so labelling either "Single Elimination"
+    // was wrong.
     final metaParts = <String>[
       if (roasters != null) '$roasters Roasters',
-      'Single Elimination',
+      _formatLabel(data),
     ];
 
     final frac = (field != null && field > 0 && alive != null)

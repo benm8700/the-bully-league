@@ -26,6 +26,11 @@ const {RANK_TIERS, GOAT_TITLE} = require("./rating");
  * you read it.
  */
 
+// TODO (developer review, 2026-09-16): go over EVERY per-rank phrase below
+// (all 10 ranks x UP/DOWN x 3 variants, plus GOAT_DISPLACED) together and
+// rewrite any that miss. Nothing here is locked - this is a pass to make
+// each line land.
+
 /** Arriving at a rank, having climbed to it. */
 const UP = {
   "Average Joe": [

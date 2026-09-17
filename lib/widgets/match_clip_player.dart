@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../core/route_observer.dart';
+
 /// Plays a match's highlight clip, so someone judging a battle can
 /// actually watch it.
 ///
@@ -43,12 +45,19 @@ class MatchClipPlayer extends StatefulWidget {
 }
 
 class _MatchClipPlayerState extends State<MatchClipPlayer>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, RouteAware {
   VideoPlayerController? _controller;
   bool _initialising = false;
   String? _error;
   bool _watchedEnough = false;
-  bool _wasPlayingBeforeBackground = false;
+
+  // The three conditions that must ALL hold for the clip to actually play.
+  // The clip loops for rewatching, so without the route half it kept playing
+  // the match's round audio underneath the next screen (heard on a device,
+  // 2026-09-16). It never auto-plays, so _wantPlaying starts false.
+  bool _wantPlaying = false;
+  bool _appForeground = true;
+  bool _routeVisible = true;
 
   /// Measured from the player's own reported position rather than a wall
   /// clock, so leaving it paused, or backgrounding the app, does not
@@ -96,6 +105,40 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    if (route != null) appRouteObserver.subscribe(this, route);
+  }
+
+  /// Play only when the user wants it AND the app is foreground AND this is
+  /// the visible route. Everything routes through here so "resume" can never
+  /// fire while the clip is still hidden.
+  void _syncPlayback() {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    final shouldPlay = _wantPlaying && _appForeground && _routeVisible;
+    if (shouldPlay && !c.value.isPlaying) {
+      c.play();
+    } else if (!shouldPlay && c.value.isPlaying) {
+      c.pause();
+    }
+  }
+
+  // RouteAware: covered by another screen -> pause; visible again -> resume.
+  @override
+  void didPushNext() {
+    _routeVisible = false;
+    _syncPlayback();
+  }
+
+  @override
+  void didPopNext() {
+    _routeVisible = true;
+    _syncPlayback();
+  }
+
+  @override
   void didUpdateWidget(MatchClipPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoUrl != widget.videoUrl) {
@@ -140,22 +183,15 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
     }
   }
 
-  /// Pause on background so a looping clip never keeps playing its audio
-  /// unattended; resume only if it was playing when we left.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final c = _controller;
-    if (c == null || !c.value.isInitialized) return;
-    if (state == AppLifecycleState.resumed) {
-      if (_wasPlayingBeforeBackground) c.play();
-    } else {
-      _wasPlayingBeforeBackground = c.value.isPlaying;
-      c.pause();
-    }
+    _appForeground = state == AppLifecycleState.resumed;
+    _syncPlayback();
   }
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     _controller?.removeListener(_onTick);
     _controller?.dispose();
@@ -198,9 +234,11 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
           // the wrong place for them.
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => setState(() {
-              controller.value.isPlaying ? controller.pause() : controller.play();
-            }),
+            onTap: () {
+              _wantPlaying = !_wantPlaying;
+              _syncPlayback();
+              setState(() {});
+            },
             child: AnimatedOpacity(
               opacity: controller.value.isPlaying ? 0 : 1,
               duration: const Duration(milliseconds: 150),

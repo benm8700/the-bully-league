@@ -5,6 +5,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/home_action_button.dart';
+
 import '../../core/services/matchmaking_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/looping_video.dart';
@@ -157,7 +159,14 @@ class _GauntletScreenState extends State<GauntletScreen> {
     }
     _navigating = false;
     if (mounted) {
-      _routedMatchId = null;
+      // Do NOT reset _routedMatchId here. PreMatchScreen hands off to the bio
+      // reveal via pushReplacement, which completes THIS push's future while
+      // the player is still on the bio reveal - so polling resumes underneath.
+      // Keeping the routed id means a poll that still reports the SAME pending
+      // match is skipped (matchId == _routedMatchId) rather than re-pushing the
+      // pre-match check on top of the battle. Only a NEW match (next round, a
+      // fresh id) routes. Resetting it caused an infinite pre-match loop -
+      // found on the 2026-09-16 two-phone dry run.
       _startPolling();
     }
   }
@@ -188,7 +197,10 @@ class _GauntletScreenState extends State<GauntletScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.name ?? 'Daily Gauntlet')),
+      appBar: AppBar(
+        title: Text(widget.name ?? 'Daily Gauntlet'),
+        actions: const [HomeActionButton()],
+      ),
       // The tournament doc drives the roster + timing live; the poll drives the
       // battle state on top of it.
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(

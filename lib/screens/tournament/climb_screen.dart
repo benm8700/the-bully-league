@@ -5,6 +5,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/home_action_button.dart';
+
 import '../../core/services/matchmaking_service.dart';
 import '../../theme/app_theme.dart';
 import '../match/pre_match_screen.dart';
@@ -178,7 +180,10 @@ class _ClimbScreenState extends State<ClimbScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.name ?? 'The Gauntlet')),
+      appBar: AppBar(
+        title: Text(widget.name ?? 'The Gauntlet'),
+        actions: const [HomeActionButton()],
+      ),
       body: _buildBody(context),
     );
   }

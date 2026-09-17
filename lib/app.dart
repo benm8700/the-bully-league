@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'core/route_observer.dart';
 import 'core/services/age_verification_service.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/cloud_vision_moderation_service.dart';
@@ -92,6 +93,9 @@ class BullyLeagueApp extends StatelessWidget {
           final theme = appTheme(themeId);
           return MaterialApp(
             title: 'The Bully League',
+            // Lets the looping video players pause when covered by another
+            // screen, not just when the app is backgrounded (route_observer.dart).
+            navigatorObservers: [appRouteObserver],
             // One theme, whichever direction the picker has selected.
             // Each direction sets its own brightness, so themeMode is
             // forced to match rather than following the device.

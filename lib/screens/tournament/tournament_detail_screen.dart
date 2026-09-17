@@ -3,6 +3,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/home_action_button.dart';
+
 import '../../widgets/admin_only.dart';
 import '../../widgets/live_checkin.dart';
 import '../../widgets/watch_live_list.dart';
@@ -178,6 +180,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text('Tournament', style: TextStyle(color: Colors.white)),
+        actions: const [HomeActionButton()],
       ),
       body: Stack(
         children: [

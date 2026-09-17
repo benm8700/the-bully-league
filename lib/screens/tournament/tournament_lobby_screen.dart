@@ -5,6 +5,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/home_action_button.dart';
+
 import '../../core/services/matchmaking_service.dart';
 import '../match/match_screen.dart';
 
@@ -118,7 +120,10 @@ class _TournamentLobbyScreenState extends State<TournamentLobbyScreen> {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Your Match')),
+      appBar: AppBar(
+        title: const Text('Your Match'),
+        actions: const [HomeActionButton()],
+      ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32),

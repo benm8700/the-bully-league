@@ -6,19 +6,19 @@ import '../../widgets/clip_reactions.dart';
 import '../moderation/report_screen.dart';
 import '../../widgets/live_tally.dart';
 
-/// One battle, full screen, with the choice laid over the players' faces.
+/// One battle, full screen. You watch the clip, PRE-SELECT the roaster you
+/// think won (a green ring around their camera square), then CONFIRM at the
+/// end - rather than casting instantly.
 ///
-/// THE CHOICE SITS ON THE VIDEO, not in a list below it. The rendered clip
-/// is a fixed vertical stack - player 1 on top, player 2 underneath - so
-/// tapping a half is unambiguous. The screen this replaced listed usernames
-/// as buttons, which asked someone who had just watched two minutes of a
-/// stranger to remember which name went with which face. Tapping the person
-/// is spatial rather than nominal, and needs no memory at all.
+/// PICKING IS SPATIAL. The rendered clip is a fixed vertical stack - player 1
+/// on top, player 2 underneath - so tapping the top or bottom half picks that
+/// person, no names to read (names would clutter the middle of the faces; the
+/// name you picked is shown only on the Submit button). The pick is a green
+/// ring, not a vote: nothing is cast until you hit Submit, which unlocks once
+/// most of the clip has played so the final round is seen first.
 ///
-/// The choice appears only once most of the clip has played, so the last
-/// round is seen before anyone commits. Round boundaries aren't recorded in
-/// the render - only the raw match knows them - so this is a fraction of
-/// duration, which with the default three rounds lands in the final one.
+/// Playback is manual: it does NOT loop. A small corner button pauses/resumes
+/// and replays; tapping the video itself picks a roaster.
 class FeedPage extends StatefulWidget {
   const FeedPage({
     super.key,
@@ -47,19 +47,42 @@ class FeedPage extends StatefulWidget {
   State<FeedPage> createState() => _FeedPageState();
 }
 
-/// Fraction of the clip that must play before the choice appears. With the
+/// Fraction of the clip that must play before Submit unlocks. With the
 /// default three rounds this lands inside the final one.
 const _revealAfter = 0.65;
+
+/// The green pre-selection ring / confirm accent.
+const _pickGreen = Color(0xFF3DDC84);
 
 class _FeedPageState extends State<FeedPage> {
   VideoPlayerController? _controller;
   bool _failed = false;
   double _progress = 0;
 
-  /// Set once this viewer has picked, whether that was a real ballot or a
-  /// private call on a settled match.
+  /// True once the clip has played to the end. It does not loop (developer's
+  /// call, 2026-09-16), so at the end it holds on the last frame and the corner
+  /// button offers a replay.
+  bool _ended = false;
+
+  /// The roaster tapped as the likely winner - a green ring, NOT a cast vote.
+  String? _preselectedPlayerId;
+
+  /// Set once the vote (or settled-battle call) has actually been submitted.
   String? _chosenPlayerId;
   bool _submitting = false;
+
+  /// Can this viewer act on this battle - cast a real vote, or make a private
+  /// "call" on a settled battle with a decisive result? If not (already voted,
+  /// a participant watching their own, a tie), there is nothing to pick and it
+  /// just shows the video and the tally/verdict.
+  bool get _canAct =>
+      widget.match.canVote || widget.match.verdict?.outcome == 'decided';
+
+  /// Submit / the result box appear only once most of the clip has played.
+  bool get _revealed => _progress >= _revealAfter || _ended || _failed;
+
+  bool get _resultShown =>
+      _chosenPlayerId != null || (!_canAct && _revealed);
 
   @override
   void initState() {
@@ -73,8 +96,38 @@ class _FeedPageState extends State<FeedPage> {
     if (old.isActive != widget.isActive) {
       final c = _controller;
       if (c == null) return;
-      widget.isActive ? c.play() : c.pause();
+      if (widget.isActive) {
+        // Returning to a clip that had finished starts it over rather than
+        // sitting frozen on the last frame.
+        if (_ended) {
+          c.seekTo(Duration.zero);
+          _ended = false;
+        }
+        c.play();
+      } else {
+        c.pause();
+      }
     }
+  }
+
+  /// The corner button: pause/resume, or restart once ended. Playback is
+  /// manual now - tapping the video picks a roaster instead.
+  void _togglePlay() {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    final atEnd =
+        c.value.position >= c.value.duration - const Duration(milliseconds: 60);
+    setState(() {
+      if (_ended || atEnd) {
+        c.seekTo(Duration.zero);
+        c.play();
+        _ended = false;
+      } else if (c.value.isPlaying) {
+        c.pause();
+      } else {
+        c.play();
+      }
+    });
   }
 
   Future<void> _load() async {
@@ -86,7 +139,7 @@ class _FeedPageState extends State<FeedPage> {
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
     try {
       await controller.initialize();
-      await controller.setLooping(true);
+      await controller.setLooping(false);
       controller.addListener(_onTick);
       if (!mounted) {
         await controller.dispose();
@@ -105,10 +158,15 @@ class _FeedPageState extends State<FeedPage> {
     if (c == null || !c.value.isInitialized) return;
     final total = c.value.duration.inMilliseconds;
     if (total <= 0) return;
-    final next = c.value.position.inMilliseconds / total;
+    final pos = c.value.position.inMilliseconds;
+    final next = pos / total;
+    final ended = !c.value.isPlaying && pos >= total - 60;
     // Rebuild only when it matters - this fires many times a second.
-    if ((next - _progress).abs() > 0.01) {
-      setState(() => _progress = next);
+    if ((next - _progress).abs() > 0.01 || ended != _ended) {
+      setState(() {
+        _progress = next;
+        _ended = ended;
+      });
     }
   }
 
@@ -119,8 +177,19 @@ class _FeedPageState extends State<FeedPage> {
     super.dispose();
   }
 
-  bool get _choiceVisible =>
-      _chosenPlayerId == null && (_progress >= _revealAfter || _failed);
+  /// Tapping a roaster's half of the video pre-selects them - a green ring,
+  /// switchable, no vote cast yet.
+  void _preselect(String id) {
+    if (!_canAct || _chosenPlayerId != null) return;
+    setState(() => _preselectedPlayerId = id);
+  }
+
+  /// Confirm the pre-selected roaster - THIS is where a vote is actually cast.
+  void _submit() {
+    final id = _preselectedPlayerId;
+    if (id == null || _submitting) return;
+    _choose(id);
+  }
 
   Future<void> _choose(String playerId) async {
     if (_submitting) return;
@@ -132,12 +201,12 @@ class _FeedPageState extends State<FeedPage> {
       final ok = await widget.onVote(playerId);
       if (!mounted) return;
       // A failed ballot must not look like a cast one, or the viewer
-      // believes they judged a battle they didn't.
+      // believes they judged a battle they didn't. Keep the pre-selection so
+      // they can just hit Submit again.
       if (!ok) setState(() => _chosenPlayerId = null);
     } else if (widget.match.verdict?.outcome == 'decided') {
       // A call on a settled battle. Only worth recording where there was a
-      // right answer - a tie has none, so calling it is neither right nor
-      // wrong and should not count against a judge.
+      // right answer - a tie has none.
       widget.onCall(widget.match.matchId, playerId);
     }
     if (mounted) setState(() => _submitting = false);
@@ -145,18 +214,21 @@ class _FeedPageState extends State<FeedPage> {
 
   @override
   Widget build(BuildContext context) {
+    final controller = _controller;
+    final paused = controller != null && !controller.value.isPlaying;
+    final ringForPlayer1 = _preselectedPlayerId == widget.match.player1Id;
     return ColoredBox(
       color: Colors.black,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (_controller != null)
+          if (controller != null)
             FittedBox(
               fit: BoxFit.cover,
               child: SizedBox(
-                width: _controller!.value.size.width,
-                height: _controller!.value.size.height,
-                child: VideoPlayer(_controller!),
+                width: controller.value.size.width,
+                height: controller.value.size.height,
+                child: VideoPlayer(controller),
               ),
             )
           else
@@ -166,13 +238,30 @@ class _FeedPageState extends State<FeedPage> {
                       style: TextStyle(color: Colors.white70))
                   : const CircularProgressIndicator(),
             ),
-          if (_choiceVisible) ..._choiceOverlay(context),
-          if (_chosenPlayerId != null) _afterChoice(context),
+          // Green pre-selection ring around the chosen roaster's square.
+          if (_canAct && _chosenPlayerId == null && _preselectedPlayerId != null)
+            _ring(context, top: ringForPlayer1),
+          // Tap zones for picking - whole top half / whole bottom half - while
+          // there is still something to pick.
+          if (_canAct && _chosenPlayerId == null) ..._pickZones(context),
+          // Paused/ended cue, unless the result box is already covering it.
+          if (paused && !_resultShown)
+            IgnorePointer(
+              child: Center(
+                child: Icon(
+                  _ended ? Icons.replay_rounded : Icons.play_arrow_rounded,
+                  size: 64,
+                  color: Colors.white.withValues(alpha: 0.6),
+                ),
+              ),
+            ),
+          if (controller != null) _playPauseButton(context, paused),
+          if (_canAct && _chosenPlayerId == null && _revealed)
+            _submitBar(context),
+          if (_resultShown) _resultBox(context),
           _header(context),
           _reportButton(context),
-          // Sits low and out of the way of both faces, and stays available
-          // whether or not the choice has been made - reacting is not a
-          // judgement and should not wait on one.
+          // Sits low and out of the way of both faces, always available.
           Positioned(
             left: 16,
             right: 16,
@@ -187,72 +276,131 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
-  /// One tap target per player, each covering that player's half of the
-  /// frame, matching the stacked layout of the render itself.
-  List<Widget> _choiceOverlay(BuildContext context) {
+  /// Two full-height tap targets, top and bottom, matching the stacked render.
+  /// No labels - names would sit over the faces; the picked name shows on the
+  /// Submit button instead.
+  List<Widget> _pickZones(BuildContext context) {
     final m = widget.match;
+    final half = MediaQuery.of(context).size.height / 2;
     return [
       Positioned(
-        top: 0, left: 0, right: 0, bottom: null,
-        height: MediaQuery.of(context).size.height / 2,
-        child: _half(m.player1Username, () => _choose(m.player1Id), true),
+        top: 0,
+        left: 0,
+        right: 0,
+        height: half,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _preselect(m.player1Id),
+        ),
       ),
       Positioned(
-        bottom: 0, left: 0, right: 0,
-        height: MediaQuery.of(context).size.height / 2,
-        child: _half(m.player2Username, () => _choose(m.player2Id), false),
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: half,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _preselect(m.player2Id),
+        ),
       ),
     ];
   }
 
-  Widget _half(String name, VoidCallback onTap, bool top) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Align(
-        alignment: top ? Alignment.bottomCenter : Alignment.topCenter,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              child: Text(
-                widget.match.canVote
-                    ? '$name won'
-                    : widget.match.alreadyVoted
-                        // You have already had your say on this one, so
-                        // there is nothing to call - tapping just reveals
-                        // where it stands.
-                        ? name
-                        : 'Call it: $name',
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-            ),
+  Widget _ring(BuildContext context, {required bool top}) {
+    final half = MediaQuery.of(context).size.height / 2;
+    return Positioned(
+      top: top ? 0 : half,
+      left: 0,
+      right: 0,
+      height: half,
+      child: IgnorePointer(
+        child: Container(
+          margin: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            border: Border.all(color: _pickGreen, width: 4),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(color: _pickGreen.withValues(alpha: 0.4), blurRadius: 12),
+            ],
           ),
         ),
       ),
     );
   }
 
-  /// After a pick: for an open match, confirmation. For a settled one, the
-  /// verdict, and whether the crowd agreed.
-  Widget _afterChoice(BuildContext context) {
+  /// A small circular play/pause/replay control, tucked top-right under the
+  /// report button so it never covers a face or the reactions.
+  Widget _playPauseButton(BuildContext context, bool paused) {
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 60,
+      right: 8,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.5),
+          shape: BoxShape.circle,
+        ),
+        child: IconButton(
+          icon: Icon(
+            _ended
+                ? Icons.replay_rounded
+                : paused
+                    ? Icons.play_arrow_rounded
+                    : Icons.pause_rounded,
+            color: Colors.white,
+            size: 22,
+          ),
+          tooltip: paused ? 'Play' : 'Pause',
+          onPressed: _togglePlay,
+        ),
+      ),
+    );
+  }
+
+  /// The confirm bar: disabled with a hint until a roaster is picked, then it
+  /// names the pick - the ONLY place a name appears on this screen.
+  Widget _submitBar(BuildContext context) {
+    final m = widget.match;
+    final picked = _preselectedPlayerId;
+    final name = picked == m.player1Id
+        ? m.player1Username
+        : picked == m.player2Id
+            ? m.player2Username
+            : null;
+    final label = name == null
+        ? 'Tap a roaster to pick a winner'
+        : m.canVote
+            ? 'Submit: $name won'
+            : 'Call it: $name';
+    return Positioned(
+      left: 24,
+      right: 24,
+      bottom: MediaQuery.of(context).padding.bottom + 84,
+      child: FilledButton(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 52),
+          backgroundColor: name == null ? null : _pickGreen,
+          foregroundColor: name == null ? null : Colors.black,
+        ),
+        onPressed: (picked == null || _submitting) ? null : _submit,
+        child: _submitting
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  /// After submitting (or, for a battle you cannot act on, once revealed): the
+  /// confirmation, and where allowed the live tally / verdict.
+  Widget _resultBox(BuildContext context) {
     final v = widget.match.verdict;
     String line;
     if (widget.match.canVote) {
       line = _submitting ? 'Casting your vote...' : 'Judged. Swipe for the next one.';
     } else if (v == null && widget.match.windowOpen) {
-      // Rewatching something you already judged, or your own battle, while
-      // voting is still running. There is no verdict yet - saying "nobody
-      // judged this" here would be flatly wrong, and it is what this said
-      // before.
       line = widget.match.isParticipant
           ? 'Your battle is still with the crowd.'
           : 'You judged this one. Still being decided.';
@@ -274,64 +422,45 @@ class _FeedPageState extends State<FeedPage> {
     }
 
     return Align(
-      alignment: Alignment.center,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 32),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.75),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              line,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-            ),
-            // Having voted is exactly what earns the live score - the gate
-            // exists to stop a judgement being biased, and yours is
-            // already cast. Participants qualify too, since they can never
-            // vote on their own match and so have nothing left to bias.
-            if (widget.match.windowOpen &&
-                (widget.match.alreadyVoted || widget.match.isParticipant)) ...[
-              const SizedBox(height: 12),
-              LiveTally(
-                matchId: widget.match.matchId,
-                player1Name: widget.match.player1Username,
-                player2Name: widget.match.player2Username,
+        alignment: Alignment.center,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 32),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.75),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                line,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
+              if (widget.match.windowOpen &&
+                  (widget.match.alreadyVoted || widget.match.isParticipant)) ...[
+                const SizedBox(height: 12),
+                LiveTally(
+                  matchId: widget.match.matchId,
+                  player1Name: widget.match.player1Username,
+                  player2Name: widget.match.player2Username,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
-      ),
     );
   }
 
-  /// Flagging a battle from the feed.
-  ///
-  /// REQUIRED, not a nicety. Apple's Guideline 1.2 names random and
-  /// anonymous chat apps directly and requires a mechanism for users to
-  /// flag objectionable content. This feed is the app's primary content
-  /// surface and one of five bottom-nav tabs - it was previously possible
-  /// to report only by finishing a match, taking the post-match prompt
-  /// into the vote queue and opening a specific battle, which a spectator
-  /// scrolling clips would never find. A reviewer opening this tab and
-  /// seeing no way to report is a rejection.
-  ///
-  /// Deliberately quiet: a small icon opposite the header rather than a
-  /// prominent control, because this is a video-first screen and the
-  /// report flow's own copy is careful that harsh roasting is EXPECTED
-  /// and not reportable. It needs to be findable, not inviting.
+  /// Flagging a battle from the feed. REQUIRED for Apple's Guideline 1.2 -
+  /// this feed is the app's primary content surface, so a reviewer must be
+  /// able to report from here. Deliberately quiet: a small icon, since harsh
+  /// roasting is expected and not itself reportable.
   Widget _reportButton(BuildContext context) {
     return Positioned(
       top: MediaQuery.of(context).padding.top + 8,
       right: 8,
-      // On a dark scrim, like the header. A bare white icon disappears
-      // entirely against a bright clip - seen on a device, where it was
-      // invisible over a pale background. A report control a reviewer
-      // cannot find is the same as not having one.
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.5),
@@ -346,9 +475,7 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
-  /// A battle has two people in it, so reporting has to ask which - the
-  /// alternative is guessing, and filing against the wrong person is
-  /// worse than asking one extra question.
+  /// A battle has two people in it, so reporting has to ask which.
   Future<void> _openReport(BuildContext context) async {
     final m = widget.match;
     final choice = await showModalBottomSheet<String>(
@@ -395,7 +522,7 @@ class _FeedPageState extends State<FeedPage> {
   Widget _header(BuildContext context) {
     final m = widget.match;
     final label = m.canVote
-        ? 'Who won?'
+        ? 'Tap who won'
         : m.isParticipant
             ? 'Your battle'
             : '${m.voteCount} ${m.voteCount == 1 ? "vote" : "votes"}';

@@ -19,15 +19,26 @@ import 'feed_page.dart';
 /// between every video would make judging a chore, and votes are what the
 /// whole ranking system runs on.
 class WatchFeedScreen extends StatefulWidget {
-  const WatchFeedScreen({super.key, this.embedded = false});
+  const WatchFeedScreen({super.key, this.embedded = false, this.isActiveTab = true});
 
   final bool embedded;
+
+  /// Whether this is the tab currently on screen. False while the viewer is
+  /// on another bottom-nav tab - the shell keeps every tab MOUNTED in an
+  /// IndexedStack, so without this the feed clip would keep playing its audio
+  /// off-screen (a real device looped a battle's audio after switching away,
+  /// 2026-09-16). Defaults true for standalone/pushed use.
+  final bool isActiveTab;
 
   @override
   State<WatchFeedScreen> createState() => _WatchFeedScreenState();
 }
 
-class _WatchFeedScreenState extends State<WatchFeedScreen> {
+class _WatchFeedScreenState extends State<WatchFeedScreen>
+    with WidgetsBindingObserver {
+  /// The feed clip only plays when the app is foreground. The feed has audio,
+  /// so a backgrounded/locked phone must not keep it running.
+  bool _appForeground = true;
   final _service = WatchFeedService();
   final _pageController = PageController();
 
@@ -49,11 +60,22 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final foreground = state == AppLifecycleState.resumed;
+    if (foreground != _appForeground) {
+      // Rebuild so the active FeedPage recomputes isActive and pauses/plays.
+      setState(() => _appForeground = foreground);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // Anything left over goes now, or leaving the tab loses it.
     _flushCalls();
     _pageController.dispose();
@@ -328,7 +350,10 @@ class _WatchFeedScreenState extends State<WatchFeedScreen> {
         return FeedPage(
           key: ValueKey(match.matchId),
           match: match,
-          isActive: i == _index,
+          // Plays only when it is the page in view AND this tab is on screen
+          // AND the app is foreground - otherwise its audio would keep looping
+          // off-tab or in the background.
+          isActive: i == _index && widget.isActiveTab && _appForeground,
           onVote: (playerId) => _vote(match.matchId, playerId),
           onCall: _recordCall,
         );

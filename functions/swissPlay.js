@@ -176,14 +176,39 @@ async function gauntletPoll(auth, data) {
   // Record presence by path (no array rewrite). Best-effort.
   await ref.update({[`swiss.presence.${uid}`]: nowMs}).catch(() => {});
 
-  // Already in a match - hand it back so the client (re)joins it.
+  // Already flagged in a match. Three cases:
+  //  - genuinely live -> hand it back so the client (re)joins the battle;
+  //  - completed but not yet finalized -> wait for the sweep to settle it
+  //    (applying the result is what frees the entrant);
+  //  - DEAD (missing, abandoned, disqualified, or vote-finalized with our
+  //    result never applied) -> heal our OWN entry back to waiting so pairing
+  //    can pick us up again. This is the catch-all for a match settled
+  //    OUTSIDE the gauntlet's own paths - e.g. releaseUnresponsive or a
+  //    bio-reveal end, which abandon the match but know nothing about swiss
+  //    entrants. Without it the entrant is stranded in_match forever on a
+  //    dead match, can never be re-paired, and the client only ever sees its
+  //    own dead battle ("you are in this battle - open it from the bracket").
   if (me.status === S.STATUS.inMatch && me.currentMatchId) {
     const m = await db.collection("matches").doc(me.currentMatchId).get();
-    if (m.exists && m.data().status !== "completed" && !m.data().voteFinalized) {
-      return {state: "in_match", ...matchPairing({...m.data(), id: m.id}, uid),
+    const md = m.exists ? m.data() : null;
+    const live = md && md.status !== "completed" &&
+      md.status !== "abandoned" && md.status !== "disqualified" &&
+      !md.voteFinalized;
+    if (live) {
+      return {state: "in_match", ...matchPairing({...md, id: m.id}, uid),
         standing: S.standingFor(entrants, uid)};
     }
-    return {state: "waiting", standing: S.standingFor(entrants, uid)};
+    const dead = !md || md.voteFinalized === true ||
+      md.status === "abandoned" || md.status === "disqualified";
+    if (!dead) {
+      // Completed, awaiting finalize: the sweep settles it and frees us.
+      return {state: "waiting", standing: S.standingFor(entrants, uid)};
+    }
+    await _healStrandedEntrant(db, ref, uid, me.currentMatchId);
+    // Re-read so the pairing pass below sees us as a waiting entrant.
+    entrants = entrantsOf((await ref.get()).data());
+    me = entrants.find((e) => e.uid === uid);
+    if (!me) return {state: "waiting", standing: []};
   }
 
   if (t.status === "completed") {
@@ -293,6 +318,30 @@ async function _createSwissMatch(db, ref, tournamentId, a, b) {
       console.error("gauntlet follower notify failed:", e.message);
     }
   }
+}
+
+/**
+ * Reset a stranded entrant (flagged in_match on a dead match) back to
+ * waiting so pairing can pick them up again. Heals only the CALLER's own
+ * entry - each player heals themselves on their own poll, so neither ever
+ * mutates the other's state. Idempotent: only acts while the entrant is
+ * still on THIS match. The 0-0 record and opponents list are untouched: an
+ * abandoned no-contest never played, so nothing about it should score.
+ */
+async function _healStrandedEntrant(db, ref, uid, matchId) {
+  await db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists) return;
+    const entrants = entrantsOf(s.data());
+    const me = entrants.find((e) => e.uid === uid);
+    if (!me || me.currentMatchId !== matchId ||
+        me.status !== S.STATUS.inMatch) {
+      return;
+    }
+    const next = entrants.map((e) => e.uid === uid ?
+      {...e, status: S.STATUS.waiting, currentMatchId: null} : e);
+    tx.update(ref, {"swiss.entrants": next});
+  });
 }
 
 /** Champion check + write, shared by result/tie application. */

@@ -93,7 +93,7 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
               )
             : _CountdownPill(
                 icon: Icons.schedule,
-                leading: 'Starts ',
+                leading: 'Starts in ',
                 value: _remaining(window.start, now),
                 color: context.palette.reward,
               );

@@ -5,6 +5,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/home_action_button.dart';
+
 import '../../core/services/agora_spectator_service.dart';
 import '../../core/services/spectator_service.dart';
 import '../../widgets/live_vote_panel.dart';
@@ -150,6 +152,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
         // The crowd count - social proof that this is where the action is.
         // Shown once at least one heartbeat is in (always includes you).
         actions: [
+          const HomeActionButton(),
           if (_watchers > 0)
             Padding(
               padding: const EdgeInsets.only(right: 14),
