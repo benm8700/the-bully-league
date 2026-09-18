@@ -680,25 +680,56 @@ Raised by the developer: what protects someone who is unhappy that their match f
     (it currently shows the generic Sixes-and-Sevens nudge).
   - Natural fit for the deferred GOAT-tier perks bucket. Prizes/rewards here
     are provisional (advisor pass).
-- **PER-ROUND VOTING + "FUNNIEST ROUND" BOARD — NEW IDEA (2026-09-17,
-  developer).** Two linked pieces.
-  - **Per-round voting (a fairness upgrade, NOT a no-op):** judges pick a
-    winner for EACH round as it ends (one tap per round, then a final submit),
-    in ranked and tournament/gauntlet play. The match winner becomes "most
-    rounds won" instead of one overall vote. Upside: forces judges to weigh
-    every round, and produces per-round outcome data for free. Real work,
-    though: it changes how castVote/finalize tally a match and how
-    vote-confidence (the rating math) reads the result, and the per-round UI
-    must stay ONE TAP so it doesn't undo the "voting takes too long" fix.
-  - **Funniest-round board (its own tab, e.g. under Ranks):** a content
-    highlight board giving players a single shareable moment to chase. KEY
-    CLARIFICATION: per-round WIN votes tell you who won a round, NOT which round
-    was funniest - so the board should rank by MOST-WATCHED / most-rewatched
-    round (or reactions), since replays are the truest "this was funny" signal.
-    Needs per-round clip segments (the render pipeline already knows round
-    boundaries from turn timestamps).
-  - **Guardrail (one-status-ladder):** keep the funniest-round board a
-    content/"hall of fame for moments" surface, never a second skill rank.
+- **PER-ROUND VOTING + "BEST ROUND(S)" BOARD — BUILT (2026-09-18).** Both
+  linked pieces shipped and are device-verified. (Renamed from "Funniest" to
+  "Best round(s)" at the developer's request — the board tab reads "BEST
+  ROUNDS", the vote-surface flame prompt reads "Best round?"; the Firestore
+  fields keep the `funniest*` names, which is harmless internal plumbing.)
+  - **Per-round voting — BUILT.** A ballot now carries `picks` ({roundIndex:
+    winnerUid}) instead of one overall `votedForPlayerId`, plus an OPTIONAL
+    `funniestRound` (0-based, validated `< roundCount`, shown as round N+1).
+    `castVote` (index.js) accepts and validates both; `matchFinalization.js`
+    normalises legacy single-vote ballots into per-round picks (so old ballots
+    still count), tallies per round via `perRoundVoting.js`
+    (`tallyBallots`/`matchResultFromRounds`), and the match winner is **most
+    rounds won**. The best-round flame is aggregated at finalize into
+    `funniestRound` + `funniestRoundVotes` on the match doc. The UI stays ONE
+    TAP per round across all three vote surfaces (vote screen, live vote panel,
+    feed page), so it does not undo the "voting takes too long" fix. Note this
+    changed what vote-confidence reads (rounds-won rather than one tally).
+  - **Best Rounds board — BUILT** (`functions/funniestRounds.js`,
+    `getFunniestRounds`; `FunniestRoundsTab` under Ranks). Orders completed,
+    finalized battles by `funniestRoundVotes` (a single-field range+order, no
+    composite index; `voteFinalized` filtered in code). It is a CONTENT board —
+    a hall of fame for moments — and never touches rating or the rank titles,
+    per the one-status-ladder rule. **It differs from the original "rank by
+    most-rewatched" idea**: it ranks by the judges' explicit best-round flame
+    votes, which is a cheaper and more direct signal than rewatch counts and
+    needs no view-tracking.
+  - **Best-round-ONLY playback — BUILT** (the developer's explicit ask: "only
+    the round that is voted best shows up and not the entire battle"). The HOST
+    device captures each turn's start/end as clip-relative offsets (from when
+    recording began), pairs them into per-round windows, and sends them with
+    `completeMatch`. `sanitiseRoundBoundaries` (matchmaking.js) validates the
+    array — rejecting the WHOLE thing on any bad entry (a half-right list would
+    seek to the wrong place, worse than the full-clip fallback), bounded in
+    count — and stores it as `roundBoundaries` OUTSIDE the settle transaction,
+    like `captureQuality`, so a host that loses the settle race still records
+    it. `getFunniestRounds` returns the best round's `startMs`/`endMs`;
+    `MatchClipPlayer` (given both) seeks there on load and LOOPS within that
+    window instead of the whole clip. **Verified on the S22**: the board player
+    opens at the round start and loops within the round window, never reaching
+    the clip end. **KNOWN LIMITS**: (1) boundaries are host wall-clock offsets
+    and do NOT account for dead-air trimming in the render pipeline — currently
+    a non-issue because trimming is a no-op (emulator silence → no transcript →
+    no cut), but if real speech ever gets transcribed and trimmed, the windows
+    will drift and need remapping through the same trim plan; (2) the
+    lead-in/lead-out buffer (1500ms/800ms) absorbs Agora spin-up latency and
+    wants tuning against real footage; (3) only battles played AFTER this ships
+    record boundaries — older ones fall back to the full clip, which is the
+    honest degradation.
+  - **Guardrail (one-status-ladder), still honoured:** the Best Rounds board is
+    a content/"hall of fame for moments" surface, never a second skill rank.
 - **SUBSCRIPTION vs THE LADDER - RESOLVED (2026-09-17), do not re-litigate.**
   The developer wanted "you basically need a subscription to climb / reach the
   top." This is ALREADY satisfied cleanly by the existing model and must NOT be
