@@ -108,6 +108,11 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
 
     const gold = _gold;
 
+    // The top two tiers get a GOLD title (the developer's call) so the most
+    // prestigious ranks read as prestige; every other tier stays white.
+    const prestigeTitles = {'Legend', 'GOAT'};
+    final titleColor = prestigeTitles.contains(title) ? gold : Colors.white;
+
     // Rank title + XP bar + XP number.
     final rankColumn = Column(
       mainAxisSize: MainAxisSize.min,
@@ -129,7 +134,7 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
               style: text.titleMedium?.copyWith(
                 fontSize: 19,
                 fontWeight: FontWeight.w800,
-                color: Colors.white, // strong white
+                color: titleColor, // gold for Legend/GOAT, else white
               ),
             ),
           ),
