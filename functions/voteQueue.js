@@ -1,6 +1,7 @@
 const {getFirestore} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {VOTE_WINDOW_MS} = require("./matchFinalization");
+const {clipUrl} = require("./watchFeed");
 
 /**
  * Serves the matches that most need a vote.
@@ -108,18 +109,19 @@ async function getMatchesNeedingVotes(auth, data) {
       mode: match.mode ?? "ranked",
       voteCount: match.voteCount ?? 0,
       msRemaining: msRemaining(match, nowMs),
-      // The clip to judge. VERTICAL first here, unlike the website, which
-      // prefers landscape - this is a phone, and a stacked 9:16 cut fills
-      // the screen where a 16:9 one is a letterboxed strip.
-      //
-      // Null when the highlight isn't published, which is currently most
-      // matches: rendering is on-demand and admin-only, and publishing is
-      // a deliberate human gate. The client renders that case honestly
-      // rather than pretending there is something to watch.
-      videoUrl: match.highlight?.published === true ?
-        (match.highlight.publicUrls?.vertical ??
-         match.highlight.publicUrls?.landscape ?? null) :
-        null,
+      // The clip to judge, resolved the SAME way as the Judge feed
+      // (watchFeed.clipUrl): a published highlight uses its permanent
+      // public URL, and an UNPUBLISHED render gets a short-lived signed
+      // URL. Reusing that helper is deliberate - previously the queue
+      // only served published clips, so in practice it showed no clip at
+      // all (publishing needs the 24h objection window closed, but the
+      // queue only lists open-window matches), making queue-judging
+      // effectively blind. Serving unreviewed renders to signed-in
+      // in-app voters is the documented intent (external posting keeps
+      // the human gate); VERTICAL is preferred inside clipUrl, which is
+      // right for a phone. Null only when there is genuinely no render,
+      // which the client renders honestly.
+      videoUrl: await clipUrl(match),
     });
   }
 
