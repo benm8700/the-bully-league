@@ -74,6 +74,32 @@ class _RankChangeDialog extends StatelessWidget {
   static const _gold = Color(0xFFF4C838);
   static const _purple = Color(0xFF9C4DCC);
 
+  /// The headline with the earned rank name coloured [goldName] so it pops
+  /// out of the otherwise-white sentence. The server sends the full sentence
+  /// as [title] (".. the rank of Legend") and the bare rank as [rankTitle],
+  /// so the rank name is the trailing slice - split there and recolour it.
+  /// Falls back to a plain white headline if the two don't line up.
+  Widget _headlineText(BuildContext context, Color goldName) {
+    final style = Theme.of(context).textTheme.headlineMedium?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+        );
+    final r = rankTitle;
+    if (r != null && r.isNotEmpty && title.endsWith(r)) {
+      return RichText(
+        textAlign: TextAlign.center,
+        text: TextSpan(
+          style: style,
+          children: [
+            TextSpan(text: title.substring(0, title.length - r.length)),
+            TextSpan(text: r, style: TextStyle(color: goldName)),
+          ],
+        ),
+      );
+    }
+    return Text(title, textAlign: TextAlign.center, style: style);
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
@@ -136,13 +162,15 @@ class _RankChangeDialog extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
+            // Headline ABOVE the badge (developer's call, 2026-09-18), with
+            // the earned RANK NAME in gold so it stands out from the white
+            // rest of the sentence.
+            _headlineText(context, up ? _gold : accent),
+            const SizedBox(height: 14),
             // The signature: the earned crest pops in over its own glow. It
-            // is the HERO of the popup (developer's call) and was enlarged
-            // again (2026-09-18) - the box was tightened around it so the
-            // shield dominates. FittedBox(scaleDown) keeps the big size on a
-            // normal phone while guaranteeing it can never overflow the box
-            // on a narrow screen.
+            // is the HERO of the popup - big, in a FittedBox(scaleDown) so it
+            // can never overflow the box on a narrow screen.
             TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: 1),
               duration: const Duration(milliseconds: 700),
@@ -169,16 +197,8 @@ class _RankChangeDialog extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: text.headlineMedium?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
+            // The one-liner sits BELOW the badge.
             Text(
               message,
               textAlign: TextAlign.center,
@@ -197,12 +217,9 @@ class _RankChangeDialog extends StatelessWidget {
                   foregroundColor: up ? Colors.black : Colors.white,
                 ),
                 onPressed: () => Navigator.of(context).pop(),
-                // Direction-specific: a cocky confirm on a promotion, a dry
-                // one on a demotion ("Nice" there would read as the app not
-                // noticing what it just said).
-                child: Text(
-                  up ? 'Damn right' : 'Fine',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                child: const Text(
+                  'Accept',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
             ),
