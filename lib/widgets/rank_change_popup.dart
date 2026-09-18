@@ -113,7 +113,7 @@ class _RankChangeDialog extends StatelessWidget {
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topCenter,
@@ -162,12 +162,12 @@ class _RankChangeDialog extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             // Headline ABOVE the badge (developer's call, 2026-09-18), with
             // the earned RANK NAME in gold so it stands out from the white
             // rest of the sentence.
             _headlineText(context, up ? _gold : accent),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
             // The signature: the earned crest pops in over its own glow. It
             // is the HERO of the popup - big, in a FittedBox(scaleDown) so it
             // can never overflow the box on a narrow screen.
@@ -182,7 +182,7 @@ class _RankChangeDialog extends StatelessWidget {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
@@ -197,7 +197,7 @@ class _RankChangeDialog extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
             // The one-liner sits BELOW the badge.
             Text(
               message,
@@ -207,12 +207,12 @@ class _RankChangeDialog extends StatelessWidget {
                 height: 1.35,
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
                 style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 50),
+                  minimumSize: const Size(0, 46),
                   backgroundColor: up ? _gold : const Color(0xFF3A3446),
                   foregroundColor: up ? Colors.black : Colors.white,
                 ),
