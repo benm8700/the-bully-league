@@ -867,9 +867,43 @@ async function getActiveMatch(auth) {
  * rating sweep never reconsiders them, matching the previous behaviour
  * where a violation-ended match was simply never written at all.
  */
+/**
+ * Validates the per-round clip windows the host sends with completeMatch.
+ *
+ * Rejects the WHOLE array on any malformed entry rather than keeping a
+ * partial one - a half-right boundary list would seek the Best Rounds
+ * player to the wrong place, which is worse than falling back to the full
+ * clip. Each entry is {round, startMs, endMs} with endMs strictly after
+ * startMs and everything non-negative; bounded in count so a bad client
+ * cannot write an unbounded array onto the match document.
+ *
+ * Pure and exported for tests.
+ * @param {*} raw the client-supplied value
+ * @return {?Array<{round:number,startMs:number,endMs:number}>} clean list
+ *   or null
+ */
+function sanitiseRoundBoundaries(raw) {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > 20) return null;
+  const out = [];
+  for (const r of raw) {
+    if (!r || typeof r !== "object") return null;
+    const round = Number(r.round);
+    const startMs = Number(r.startMs);
+    const endMs = Number(r.endMs);
+    if (![round, startMs, endMs].every(Number.isFinite)) return null;
+    if (round < 0 || round > 50 || startMs < 0 || endMs <= startMs) return null;
+    out.push({
+      round: Math.trunc(round),
+      startMs: Math.round(startMs),
+      endMs: Math.round(endMs),
+    });
+  }
+  return out;
+}
+
 async function completeMatch(auth, data, creds = null) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-  const {matchId, outcome = "completed", quality} = data || {};
+  const {matchId, outcome = "completed", quality, roundBoundaries} = data || {};
   if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
   if (!["completed", "abandoned"].includes(outcome)) {
     throw new HttpsError("invalid-argument", "outcome must be 'completed' or 'abandoned'.");
@@ -899,6 +933,20 @@ async function completeMatch(auth, data, creds = null) {
     await matchRef.update({
       ["captureQuality." + auth.uid]: cleanQuality,
     }).catch((e) => console.error("quality report failed:", e.message));
+  }
+
+  // Per-round time windows in the recorded clip, sent by the HOST device
+  // (the only one that drives the turn timer). Each is [startMs, endMs]
+  // measured from when recording started, i.e. offsets into the final
+  // clip. They let the Best Rounds board play ONLY the voted-best round
+  // instead of the whole battle. Written before the settle and OUTSIDE it,
+  // like captureQuality: only the host sends them so there is no race, but
+  // keeping it independent means a host that loses the settle race still
+  // records them. Never fatal - a bad report must not stop a settle.
+  const cleanBoundaries = sanitiseRoundBoundaries(roundBoundaries);
+  if (cleanBoundaries) {
+    await matchRef.update({roundBoundaries: cleanBoundaries})
+        .catch((e) => console.error("round boundaries failed:", e.message));
   }
 
   // Claim the settle in a TRANSACTION, not a read-then-write. Both
@@ -1253,6 +1301,7 @@ module.exports = {
   getActiveMatch,
   RECORDED_MODES,
   ELITE_RANK_TITLES,
+  sanitiseRoundBoundaries,
   // Every queue that exists, so the online-count publisher (presence.js)
   // sweeps exactly the same set of modes matchmaking uses rather than
   // keeping its own list that could silently drift out of step.

@@ -21,9 +21,19 @@ class MatchClipPlayer extends StatefulWidget {
     required this.videoUrl,
     this.onWatchedEnough,
     this.watchSecondsRequired = 0,
+    this.startMs,
+    this.endMs,
   });
 
   final String? videoUrl;
+
+  /// Optional clip segment. When BOTH are set (and endMs > startMs) the
+  /// player shows ONLY [startMs, endMs] of the clip - it seeks there on
+  /// load and loops within that window rather than the whole clip. This is
+  /// what lets the Best Rounds board play just the voted-best round instead
+  /// of the entire battle. Null = play the whole clip (the old behaviour).
+  final int? startMs;
+  final int? endMs;
 
   /// Called once the clip has genuinely played for [watchSecondsRequired]
   /// seconds, so a caller can unlock a vote button.
@@ -64,6 +74,14 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
   /// count. That is the point: the exploit being priced up is SPEED.
   Duration _furthestReached = Duration.zero;
 
+  /// The round window, when this player is in segment mode.
+  bool get _segmented =>
+      widget.startMs != null &&
+      widget.endMs != null &&
+      widget.endMs! > widget.startMs!;
+  Duration get _segStart => Duration(milliseconds: widget.startMs ?? 0);
+  Duration get _segEnd => Duration(milliseconds: widget.endMs ?? 0);
+
   @override
   void initState() {
     super.initState();
@@ -88,7 +106,20 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
 
   void _onTick() {
     final controller = _controller;
-    if (controller == null || _watchedEnough) return;
+    if (controller == null) return;
+    // Segment mode: loop within the round window rather than the whole clip.
+    // Runs even after the watch gate is satisfied (the board has no gate),
+    // so it must come before the _watchedEnough return below.
+    if (_segmented) {
+      final duration = controller.value.duration;
+      final end = _segEnd > duration && duration > Duration.zero
+          ? duration
+          : _segEnd;
+      if (controller.value.position >= end) {
+        controller.seekTo(_segStart);
+      }
+    }
+    if (_watchedEnough) return;
     final position = controller.value.position;
     // The clip loops, so position resets - keep the furthest point rather
     // than the current one, or a loop would reset progress toward the
@@ -158,9 +189,12 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
     try {
       await controller.initialize();
-      // Loops because these are short clips and a judge will often want a
-      // second look at a line before deciding.
-      await controller.setLooping(true);
+      // Full-clip looping only when NOT segmented. In segment mode the
+      // native loop is off and _onTick loops within [startMs, endMs]
+      // instead, and we seek to the round's start so the first frame - and
+      // the poster while paused - is the round rather than the clip's open.
+      await controller.setLooping(!_segmented);
+      if (_segmented) await controller.seekTo(_segStart);
       if (!mounted) {
         await controller.dispose();
         return;

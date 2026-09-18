@@ -11,6 +11,8 @@ class FunniestRound {
     required this.player2Username,
     required this.videoUrl,
     required this.roundCount,
+    this.startMs,
+    this.endMs,
   });
 
   final String matchId;
@@ -23,6 +25,15 @@ class FunniestRound {
   final String? videoUrl;
   final int roundCount;
 
+  /// The best round's window WITHIN the clip, in milliseconds. Present only
+  /// for battles that recorded per-round boundaries (host-captured at match
+  /// time); null for older ones, where the player falls back to the whole
+  /// clip. When both are set the player shows ONLY this round.
+  final int? startMs;
+  final int? endMs;
+
+  bool get hasSegment => startMs != null && endMs != null && endMs! > startMs!;
+
   static FunniestRound fromMap(Map<String, dynamic> m) => FunniestRound(
         matchId: m['matchId'] as String? ?? '',
         round: (m['round'] as num?)?.toInt(),
@@ -31,6 +42,8 @@ class FunniestRound {
         player2Username: m['player2Username'] as String? ?? 'Player 2',
         videoUrl: m['videoUrl'] as String?,
         roundCount: (m['roundCount'] as num?)?.toInt() ?? 3,
+        startMs: (m['startMs'] as num?)?.toInt(),
+        endMs: (m['endMs'] as num?)?.toInt(),
       );
 }
 

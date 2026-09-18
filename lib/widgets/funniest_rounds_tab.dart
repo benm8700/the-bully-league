@@ -148,7 +148,15 @@ class _FunniestRoundsTabState extends State<FunniestRoundsTab> {
               style: const TextStyle(fontSize: 14),
             ),
           ),
-          body: Center(child: MatchClipPlayer(videoUrl: r.videoUrl)),
+          // When the battle recorded per-round boundaries, play ONLY the
+          // voted-best round; otherwise fall back to the whole clip.
+          body: Center(
+            child: MatchClipPlayer(
+              videoUrl: r.videoUrl,
+              startMs: r.startMs,
+              endMs: r.endMs,
+            ),
+          ),
         ),
       ),
     );

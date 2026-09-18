@@ -349,11 +349,16 @@ class MatchmakingService {
     String matchId, {
     String outcome = 'completed',
     Map<String, Object?>? quality,
+    // Host-only per-round clip windows ([{round,startMs,endMs}]) so the
+    // Best Rounds board can play just the voted-best round. Null from the
+    // guest, and for any match the host couldn't capture.
+    List<Map<String, int>>? roundBoundaries,
   }) async {
     await _call('completeMatch', {
       'matchId': matchId,
       'outcome': outcome,
       'quality': ?quality,
+      'roundBoundaries': ?roundBoundaries,
     });
   }
 }

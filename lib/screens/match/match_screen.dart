@@ -69,6 +69,16 @@ class _MatchScreenState extends State<MatchScreen> {
   bool? _isHost;
   int? _myUid;
   int? _opponentUid;
+
+  /// HOST-ONLY per-round clip windows. Recording starts at host election,
+  /// so [_recordingStartMs] (device wall-clock) is the clip's origin on the
+  /// host's own clock; every turn's start/end is measured from it, giving
+  /// offsets into the final clip. Paired into per-round windows and sent
+  /// with completeMatch, they let the Best Rounds board play ONLY the
+  /// voted-best round rather than the whole battle. Only the host drives
+  /// the timer, so only the host captures these; the guest sends nothing.
+  int? _recordingStartMs;
+  final List<Map<String, int>> _turnSpans = [];
   StreamSubscription<Map<String, dynamic>>? _msgSub;
   StreamSubscription<RawVideoFrame>? _frameSampleSub;
   StreamSubscription<RawVideoFrame>? _localFrameSub;
@@ -307,6 +317,9 @@ class _MatchScreenState extends State<MatchScreen> {
       // Only the host asks, so the two devices don't race; the backend
       // treats a duplicate as a no-op anyway. Exhibition matches are
       // declined server-side (CLAUDE.md's recording scope decision).
+      // The clip's origin on the host's clock: turn offsets below are
+      // measured from here so they line up with the recorded clip.
+      _recordingStartMs = DateTime.now().millisecondsSinceEpoch;
       unawaited(_matchmakingService.startRecording(widget.pairing.matchId));
       unawaited(_runHostSequence());
     }
@@ -382,11 +395,42 @@ class _MatchScreenState extends State<MatchScreen> {
       await _matchmakingService.completeMatch(
         widget.pairing.matchId,
         quality: _quality.summary,
+        roundBoundaries: _roundBoundaries(),
       );
       if (mounted) setState(() => _matchCompleted = true);
     } catch (e) {
       if (mounted) setState(() => _matchSaveError = 'Could not save match: $e');
     }
+  }
+
+  /// HOST-ONLY: pair the captured turn spans into per-round clip windows.
+  /// A round is two consecutive turns (player 1 then player 2), so round R
+  /// runs from turn 2R's start to turn 2R+1's end. Returns null for the
+  /// guest (no capture) or an incomplete one.
+  ///
+  /// A small LEAD-IN/LEAD-OUT buffer absorbs the gap between when the host
+  /// asked to record and when Agora actually began capturing (the clip's
+  /// true origin sits a beat later than [_recordingStartMs]), plus a little
+  /// context - better to show a hair extra than to clip the start of the
+  /// round. The exact buffer wants tuning against real recorded footage;
+  /// the whole caption/trim/render path has never run on real speech.
+  List<Map<String, int>>? _roundBoundaries() {
+    if (_isHost != true || _turnSpans.isEmpty) return null;
+    const leadInMs = 1500;
+    const leadOutMs = 800;
+    final byTurn = {for (final s in _turnSpans) s['turn']!: s};
+    final out = <Map<String, int>>[];
+    final rounds = _turnSpans.length ~/ 2;
+    for (var r = 0; r < rounds; r++) {
+      final a = byTurn[2 * r];
+      final b = byTurn[2 * r + 1];
+      if (a == null || b == null) continue;
+      final start = (a['start']! - leadInMs).clamp(0, 1 << 30);
+      final end = b['end']! + leadOutMs;
+      if (end <= start) continue;
+      out.add({'round': r, 'startMs': start, 'endMs': end});
+    }
+    return out.isEmpty ? null : out;
   }
 
   Future<void> _hostAdvance({
@@ -406,11 +450,25 @@ class _MatchScreenState extends State<MatchScreen> {
     });
 
     if (duration == 0) return;
+    // Capture the actual [start,end] of each TURN (offsets into the clip),
+    // so a round's window can be built from its two turns. Only turns are
+    // captured - the countdown/warmup are not part of a "round".
+    final isTurn = phase == _Phase.turn && _recordingStartMs != null;
+    final startMs = isTurn
+        ? DateTime.now().millisecondsSinceEpoch - _recordingStartMs!
+        : 0;
     if (allowEarlyEnd) {
       _earlyEndCompleter = Completer<void>();
       await Future.any([Future.delayed(Duration(seconds: duration)), _earlyEndCompleter!.future]);
     } else {
       await Future.delayed(Duration(seconds: duration));
+    }
+    if (isTurn) {
+      _turnSpans.add({
+        'turn': turnIndex,
+        'start': startMs,
+        'end': DateTime.now().millisecondsSinceEpoch - _recordingStartMs!,
+      });
     }
   }
 
