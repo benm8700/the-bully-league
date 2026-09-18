@@ -11,6 +11,30 @@ const {
 const VOTE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * Normalise a stored ballot to the per-round shape {weight, picks}.
+ *
+ * Handles BOTH the new per-round ballots ({picks: {"0": uid, ...}}) and the
+ * LEGACY single-vote ballots ({votedForPlayerId}). A legacy ballot is read
+ * as picking that player in EVERY round - which makes a fully-legacy match
+ * settle identically to the old "most overall votes" rule (every round has
+ * the same tally, so the overall leader wins every round), so in-flight
+ * matches voted under the old model still finalize correctly.
+ */
+function ballotToRoundPicks(data, roundCount, player1Id, player2Id) {
+  const w = Number(data && data.weight);
+  const weight = Number.isFinite(w) && w > 0 ? w : 1;
+  if (data && data.picks && typeof data.picks === "object") {
+    return {weight, picks: data.picks};
+  }
+  const picks = {};
+  const legacy = data && data.votedForPlayerId;
+  if (legacy === player1Id || legacy === player2Id) {
+    for (let i = 0; i < roundCount; i++) picks[String(i)] = legacy;
+  }
+  return {weight, picks};
+}
+
+/**
  * When a match's 24-hour voting window starts.
  *
  * Completion, not pairing. Match documents are created at PAIRING time
@@ -125,21 +149,39 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     return {skipped: "window-open"};
   }
 
+  // PER-ROUND VOTING (2026-09-17): the winner is whoever won the MOST
+  // ROUNDS, not one overall vote. Each ballot picks a winner per round; a
+  // tied round counts for neither, and an equal number of rounds won is an
+  // overall tie (winnerId null) - which preserves the existing tie rule.
+  const {tallyBallots, matchResultFromRounds} = require("./perRoundVoting");
   const ballotsSnap = await db.collection("votes").doc(matchId).collection("ballots").get();
+  const roundCount = Math.max(1, Math.trunc(Number(match.settings?.roundCount) || 3));
+  const ballots = ballotsSnap.docs.map((doc) =>
+    ballotToRoundPicks(doc.data(), roundCount, match.player1Id, match.player2Id));
+  const {rounds, totalWeight} =
+      tallyBallots(ballots, match.player1Id, match.player2Id, roundCount);
+  const result = matchResultFromRounds(rounds, match.player1Id, match.player2Id);
+  const winnerId = result.winnerId;
+  const roundsWon = {
+    player1: result.roundsWonP1,
+    player2: result.roundsWonP2,
+    tied: result.roundsTied,
+  };
+  // Per-player TOTAL round-weight, kept for the margin/share displays
+  // (autoRender's voteMargin, watchFeed's verdict). Used only as a ratio, so
+  // its absolute scale (roughly roundCount x the judge count) does not matter
+  // - the winner and rating magnitude come from the fields above.
   let player1Weight = 0;
   let player2Weight = 0;
-  for (const doc of ballotsSnap.docs) {
-    const data = doc.data();
-    const weight = data.weight ?? 1;
-    if (data.votedForPlayerId === match.player1Id) player1Weight += weight;
-    else if (data.votedForPlayerId === match.player2Id) player2Weight += weight;
+  for (const r of rounds) {
+    player1Weight += r.p1;
+    player2Weight += r.p2;
   }
-
-  let winnerId = null;
-  if (player1Weight > player2Weight) winnerId = match.player1Id;
-  else if (player2Weight > player1Weight) winnerId = match.player2Id;
-  // else: tie - winnerId stays null, no rating change for either player
-  // (CLAUDE.md's Tie votes decision - NOT the standard Elo 0.5/0.5 treatment).
+  // CONFIDENCE is keyed to the JUDGE COUNT (weighted ballots), not the
+  // round-weight sum - a match is well-judged when many people judged it,
+  // and each person casts one ballot however many rounds it covers. This
+  // keeps the confidence magnitude identical to the pre-per-round behaviour.
+  const judgeWeight = totalWeight;
 
   // A FRIEND BATTLE GETS A REAL VERDICT AND NOTHING ELSE.
   //
@@ -161,8 +203,9 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     await matchRef.update({
       voteFinalized: true,
       winnerId,
+      roundsWon,
       voteConfidence: voteConfidence(
-          player1Weight + player2Weight, match.settings?.fullConfidenceVotes),
+          judgeWeight, match.settings?.fullConfidenceVotes),
       player1FinalWeight: player1Weight,
       player2FinalWeight: player2Weight,
     });
@@ -216,7 +259,7 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     // rather than by whatever the config says a day later. Falls back to
     // the default for matches recorded before this was configurable.
     const confidence = voteConfidence(
-        player1Weight + player2Weight,
+        judgeWeight,
         match.settings?.fullConfidenceVotes,
     );
 
@@ -308,6 +351,7 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     tx.update(matchRef, {
       voteFinalized: true,
       winnerId,
+      roundsWon,
       player1FinalWeight: player1Weight,
       player2FinalWeight: player2Weight,
       // Recorded so a thin result is explicable after the fact - "why did

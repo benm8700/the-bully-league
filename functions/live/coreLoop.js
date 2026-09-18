@@ -171,8 +171,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     // protection working, so this path - and with it the daily voting
     // streak - cannot be driven from a script and is covered by its own
     // unit and live checks instead.
+    // Per-round picks (the winner is whoever won the most rounds): this
+    // judge gives every round to p1, so p1 takes the match 3-0. Exercises
+    // the real per-round tally path rather than the legacy single-vote shape.
     await db.collection("votes").doc(matchId).collection("ballots")
-        .doc(judge).set({votedForPlayerId: p1, weight: 1,
+        .doc(judge).set({picks: {"0": p1, "1": p1, "2": p1}, weight: 1,
           timestamp: Timestamp.now()});
 
     // ---- 5. FINALIZE --------------------------------------------------

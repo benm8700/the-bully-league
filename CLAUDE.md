@@ -641,6 +641,53 @@ Raised by the developer: what protects someone who is unhappy that their match f
     - **Verified by running the real sweep against real Firestore**: an open round is announced to both players and marked on the bracket, a second sweep says nothing, near the deadline only the absentee is warned, nobody is chased once both have checked in, and closed or decided rounds send nothing. **7 live checks plus 15 local tests.**
 
 ## Problems To Solve Later (Backlog — flagged during planning, not yet designed)
+- **ELITE TOP-TIER LEAGUE (rank 9 + GOAT only) — NEW IDEA (2026-09-17,
+  developer).** A lightweight, exclusive game mode only Featured Talent and
+  GOAT can enter, mimicking ranked play but stripped down: skips the
+  tutorial/warnings/consent friction (elite players know the ropes), immediate
+  direct play, and a DIFFERENT format tuned to be more watchable - e.g. less
+  research/ammo time and a punchier round setup like 2 rounds x 20s (exact
+  numbers TBD). The point is a high-stakes, entertaining showcase for the best
+  comedians. Relatively cheap: reuse the match machinery + a new per-mode
+  format in config/matchSettings + an entitlement gate on rank.
+  - **Liquidity will be terrible at first and that is ACCEPTED (developer's
+    call):** nobody has reached Featured Talent (5000 XP) yet, so the mode's
+    empty state should be a charming "you've unlocked the elite league, but not
+    enough legends have made it here yet - soon" message that reads as a flex
+    (you're early, this is exclusive) rather than a broken empty queue.
+  - Natural fit for the deferred GOAT-tier perks bucket ("decide what the top
+    unlocks when someone's actually there"). Don't build until players approach
+    that tier; capture now. Prizes/rewards here are provisional (advisor pass).
+- **PER-ROUND VOTING + "FUNNIEST ROUND" BOARD — NEW IDEA (2026-09-17,
+  developer).** Two linked pieces.
+  - **Per-round voting (a fairness upgrade, NOT a no-op):** judges pick a
+    winner for EACH round as it ends (one tap per round, then a final submit),
+    in ranked and tournament/gauntlet play. The match winner becomes "most
+    rounds won" instead of one overall vote. Upside: forces judges to weigh
+    every round, and produces per-round outcome data for free. Real work,
+    though: it changes how castVote/finalize tally a match and how
+    vote-confidence (the rating math) reads the result, and the per-round UI
+    must stay ONE TAP so it doesn't undo the "voting takes too long" fix.
+  - **Funniest-round board (its own tab, e.g. under Ranks):** a content
+    highlight board giving players a single shareable moment to chase. KEY
+    CLARIFICATION: per-round WIN votes tell you who won a round, NOT which round
+    was funniest - so the board should rank by MOST-WATCHED / most-rewatched
+    round (or reactions), since replays are the truest "this was funny" signal.
+    Needs per-round clip segments (the render pipeline already knows round
+    boundaries from turn timestamps).
+  - **Guardrail (one-status-ladder):** keep the funniest-round board a
+    content/"hall of fame for moments" surface, never a second skill rank.
+- **SUBSCRIPTION vs THE LADDER - RESOLVED (2026-09-17), do not re-litigate.**
+  The developer wanted "you basically need a subscription to climb / reach the
+  top." This is ALREADY satisfied cleanly by the existing model and must NOT be
+  implemented by rigging XP: free players battle ranked ONLY in the daily
+  window while subscribers battle any time, so subscribers play far more
+  matches and climb far faster - same XP per match for everyone (convenience,
+  not pay-to-win). A stubborn free player can still crawl to the top in windows
+  (a celebrated story). "Ranks should be hard/slow" is just XP-threshold tuning
+  (advisor pass). Never make XP-per-match or rank thresholds depend on
+  subscription - that turns the STATUS ladder pay-to-win, which every
+  monetization decision protects against.
 - **EARNABLE BADGES / ACHIEVEMENTS — NEW IDEA (2026-09-14, developer).** Give
   players badges they can earn for doing different things - milestones and
   one-off accomplishments (e.g. first win, a win streak, judging a lot of

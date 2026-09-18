@@ -43,6 +43,29 @@ function tallyFieldFor(votedForPlayerId, match) {
   return null;
 }
 
+/**
+ * Which player a whole ballot leans toward, for the head-to-head scoreboard.
+ *
+ * Per-round ballots ({picks: {"0": uid, ...}}) lean to whoever the voter gave
+ * more rounds; a tie leans to neither. A legacy single-vote ballot
+ * ({votedForPlayerId}) leans to that player. Pure and null-safe.
+ */
+function ballotLean(ballot, match) {
+  if (!ballot || !match) return null;
+  if (ballot.picks && typeof ballot.picks === "object") {
+    let p1 = 0;
+    let p2 = 0;
+    for (const pick of Object.values(ballot.picks)) {
+      if (pick === match.player1Id) p1 += 1;
+      else if (pick === match.player2Id) p2 += 1;
+    }
+    if (p1 > p2) return match.player1Id;
+    if (p2 > p1) return match.player2Id;
+    return null;
+  }
+  return ballot.votedForPlayerId ?? null;
+}
+
 exports.onVoteCast = onDocumentCreated("votes/{matchId}/ballots/{voterId}", async (event) => {
   const {matchId} = event.params;
   const db = getFirestore();
@@ -58,7 +81,7 @@ exports.onVoteCast = onDocumentCreated("votes/{matchId}/ballots/{voterId}", asyn
   // actually decides the winner. Raw is what a viewer expects a
   // scoreboard to mean; the weighting exists to blunt burner accounts and
   // only rarely changes the outcome relative to the raw count.
-  const field = tallyFieldFor(ballot.votedForPlayerId, match);
+  const field = tallyFieldFor(ballotLean(ballot, match), match);
   if (!field) return;
 
   await matchRef.collection("tally").doc("live").set({
@@ -69,3 +92,4 @@ exports.onVoteCast = onDocumentCreated("votes/{matchId}/ballots/{voterId}", asyn
 });
 
 module.exports.tallyFieldFor = tallyFieldFor;
+module.exports.ballotLean = ballotLean;

@@ -33,8 +33,8 @@ class RankChangePopup {
       if (title == null || message == null) return;
       final up = change['direction'] == 'up';
       // The bare rank name (e.g. "Door Guy") for the crest lookup - `title` is
-      // the headline sentence ("You are now Door Guy"), which the badge map
-      // wouldn't match.
+      // the headline sentence ("Congratulations! You achieved the rank of
+      // Door Guy"), which the badge map wouldn't match.
       final rankTitle = change['to'] as String?;
 
       await showDialog<void>(
@@ -66,7 +66,7 @@ class _RankChangeDialog extends StatelessWidget {
   final bool up;
 
   /// The bare rank name for the crest (e.g. "Door Guy"), distinct from the
-  /// headline [title] ("You are now Door Guy").
+  /// headline [title] ("Congratulations! You achieved the rank of Door Guy").
   final String? rankTitle;
 
   // Identity palette (see the color-hierarchy note): dark base, purple/magenta
@@ -104,7 +104,14 @@ class _RankChangeDialog extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
+        // Scrolls if the content is taller than the screen allows - the
+        // top-rank messages (Featured Talent especially) are a paragraph.
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.82,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // Eyebrow: what just happened, in one loud little word.
@@ -191,6 +198,8 @@ class _RankChangeDialog extends StatelessWidget {
               ),
             ),
           ],
+            ),
+          ),
         ),
       ),
     );

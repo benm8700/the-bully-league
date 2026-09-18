@@ -136,12 +136,15 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     throw new HttpsError("unauthenticated", "Must be signed in to vote.");
   }
   const voterId = request.auth.uid;
-  const {matchId, votedForPlayerId, turnstileToken} = request.data || {};
+  // PER-ROUND VOTING: `picks` is a {roundIndex: winnerUid} map. A bare
+  // `votedForPlayerId` is the legacy single-vote shape from older clients,
+  // read below as that player winning every round.
+  const {matchId, votedForPlayerId, picks, turnstileToken} = request.data || {};
 
-  if (!matchId || !votedForPlayerId) {
+  if (!matchId || (!picks && !votedForPlayerId)) {
     throw new HttpsError(
         "invalid-argument",
-        "matchId and votedForPlayerId are required.",
+        "matchId and a per-round pick are required.",
     );
   }
 
@@ -208,8 +211,31 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   if (voterId === match.player1Id || voterId === match.player2Id) {
     throw new HttpsError("permission-denied", "Match participants can't vote on their own match.");
   }
-  if (votedForPlayerId !== match.player1Id && votedForPlayerId !== match.player2Id) {
-    throw new HttpsError("invalid-argument", "votedForPlayerId must be one of the two match players.");
+
+  // Normalise to a per-round {roundIndex: winnerUid} map. Every pick must
+  // name one of the two match players (the "who may be voted FOR" guard),
+  // and every round index must be within this match's round count.
+  const roundCount = Math.max(1, Math.trunc(Number(match.settings?.roundCount) || 3));
+  const normalizedPicks = {};
+  if (picks && typeof picks === "object") {
+    for (const [round, pick] of Object.entries(picks)) {
+      const idx = Math.trunc(Number(round));
+      if (!Number.isFinite(idx) || idx < 0 || idx >= roundCount) {
+        throw new HttpsError("invalid-argument", `Round ${round} is not part of this match.`);
+      }
+      if (pick !== match.player1Id && pick !== match.player2Id) {
+        throw new HttpsError("invalid-argument", "Each pick must be one of the two match players.");
+      }
+      normalizedPicks[String(idx)] = pick;
+    }
+  } else if (votedForPlayerId === match.player1Id || votedForPlayerId === match.player2Id) {
+    // Legacy single-vote client: that player wins every round.
+    for (let i = 0; i < roundCount; i++) normalizedPicks[String(i)] = votedForPlayerId;
+  } else {
+    throw new HttpsError("invalid-argument", "Your pick must be one of the two match players.");
+  }
+  if (Object.keys(normalizedPicks).length === 0) {
+    throw new HttpsError("invalid-argument", "Pick a winner for at least one round.");
   }
 
   if (Date.now() > voteWindowEndMs(match)) {
@@ -244,7 +270,7 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
 
   await voterRef.set({lastVoteAtMs: now}, {merge: true});
   await ballotRef.set({
-    votedForPlayerId,
+    picks: normalizedPicks,
     weight,
     timestamp: FieldValue.serverTimestamp(),
   });

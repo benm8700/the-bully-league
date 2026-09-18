@@ -8,7 +8,7 @@
  * Run: node test/voteCount.test.js
  */
 const assert = require("assert");
-const {tallyFieldFor} = require("../voteCount");
+const {tallyFieldFor, ballotLean} = require("../voteCount");
 
 let checks = 0;
 function check(label, fn) {
@@ -52,6 +52,29 @@ check("an empty player id on the match never swallows a ballot", () => {
   // an absent player1Id, `undefined === undefined` would quietly credit
   // player 1 for a ballot that named nobody.
   assert.strictEqual(tallyFieldFor(undefined, {player2Id: "bob"}), null);
+});
+
+// ---- ballotLean (per-round -> which side of the scoreboard) --------------
+check("a per-round ballot leans to whoever won more rounds", () => {
+  assert.strictEqual(
+      ballotLean({picks: {0: "alice", 1: "alice", 2: "bob"}}, match), "alice");
+  assert.strictEqual(
+      ballotLean({picks: {0: "bob", 1: "bob", 2: "alice"}}, match), "bob");
+});
+
+check("a per-round ballot split evenly leans to neither", () => {
+  assert.strictEqual(
+      ballotLean({picks: {0: "alice", 1: "bob"}}, match), null);
+});
+
+check("a legacy single-vote ballot still leans to that player", () => {
+  assert.strictEqual(ballotLean({votedForPlayerId: "bob"}, match), "bob");
+});
+
+check("a junk or empty ballot leans to nobody", () => {
+  assert.strictEqual(ballotLean({}, match), null);
+  assert.strictEqual(ballotLean(null, match), null);
+  assert.strictEqual(ballotLean({picks: {0: "carol"}}, match), null);
 });
 
 console.log(`\n${checks} checks passed.`);
