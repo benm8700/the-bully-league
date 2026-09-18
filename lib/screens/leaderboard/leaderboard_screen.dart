@@ -89,7 +89,7 @@ class LeaderboardScreen extends StatelessWidget {
             tabs: const [
               Tab(text: 'RANKS'),
               Tab(text: 'FAME'),
-              Tab(text: 'FUNNIEST'),
+              Tab(text: 'BEST ROUNDS'),
             ],
           ),
         ),

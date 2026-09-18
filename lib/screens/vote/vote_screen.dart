@@ -105,7 +105,7 @@ class _VoteScreenState extends State<VoteScreen> {
       children: [
         Icon(Icons.local_fire_department, color: scheme.primary, size: 18),
         const SizedBox(width: 6),
-        Text('Funniest round?', style: Theme.of(context).textTheme.bodySmall),
+        Text('Best round?', style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(width: 10),
         for (int r = 0; r < roundCount; r++)
           Padding(

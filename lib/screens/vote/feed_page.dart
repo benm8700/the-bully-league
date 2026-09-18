@@ -378,7 +378,7 @@ class _FeedPageState extends State<FeedPage> {
       children: [
         const Icon(Icons.local_fire_department, color: flame, size: 16),
         const SizedBox(width: 4),
-        const Text('Funniest?',
+        const Text('Best?',
             style: TextStyle(color: Colors.white70, fontSize: 12)),
         const SizedBox(width: 8),
         for (int r = 0; r < _roundCount; r++)

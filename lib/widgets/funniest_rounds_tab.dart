@@ -52,9 +52,9 @@ class _FunniestRoundsTabState extends State<FunniestRoundsTab> {
         padding: EdgeInsets.symmetric(horizontal: 24),
         child: EmptyState(
           icon: Icons.local_fire_department_outlined,
-          title: 'No funniest rounds yet',
+          title: 'No best rounds yet',
           message: 'Judge some battles and tap the flame on the round that '
-              'got you. The funniest rounds land here.',
+              'got you. The best rounds land here.',
         ),
       );
     }
@@ -103,8 +103,8 @@ class _FunniestRoundsTabState extends State<FunniestRoundsTab> {
                       const SizedBox(height: 4),
                       Text(
                         r.round == null
-                            ? 'Funniest round'
-                            : 'Round ${r.round! + 1} - the funniest',
+                            ? 'Best round'
+                            : 'Round ${r.round! + 1} - best round',
                         style: const TextStyle(
                             color: Colors.white70, fontSize: 13),
                       ),
