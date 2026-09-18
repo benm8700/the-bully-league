@@ -16,6 +16,7 @@ class FeedMatch {
     required this.videoUrl,
     required this.verdict,
     required this.reactionCounts,
+    required this.roundCount,
   });
 
   final String matchId;
@@ -50,6 +51,10 @@ class FeedMatch {
   /// a scrolling feed is a lot of sockets for a number nobody watches move.
   final Map<String, int> reactionCounts;
 
+  /// How many rounds this match had, so the judge picks a winner per round.
+  /// Defaults to the standard 3 when the feed doesn't carry it.
+  final int roundCount;
+
   static FeedMatch fromMap(Map<String, dynamic> m) => FeedMatch(
         matchId: m['matchId'] as String,
         player1Id: m['player1Id'] as String? ?? '',
@@ -65,6 +70,7 @@ class FeedMatch {
         verdict: FeedVerdict.fromMap(m['verdict']),
         reactionCounts: ((m['reactionCounts'] as Map?) ?? const {})
             .map((k, v) => MapEntry(k as String, (v as num).toInt())),
+        roundCount: (m['roundCount'] as num?)?.toInt() ?? 3,
       );
 }
 
@@ -175,14 +181,15 @@ class WatchFeedService {
   /// landing. A bonus nobody notices motivates nobody.
   Future<VoteReward> castVote({
     required String matchId,
-    required String votedForPlayerId,
+    required Map<int, String> picks,
     String? turnstileToken,
   }) async {
     final result = await FirebaseFunctions.instance
         .httpsCallable('castVote')
         .call<Map<String, dynamic>>({
       'matchId': matchId,
-      'votedForPlayerId': votedForPlayerId,
+      // Per-round winners keyed by round index (as strings for the wire).
+      'picks': picks.map((k, v) => MapEntry(k.toString(), v)),
       // ignore: use_null_aware_elements
       if (turnstileToken != null) 'turnstileToken': turnstileToken,
     });

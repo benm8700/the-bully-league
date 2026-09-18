@@ -46,6 +46,10 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
   bool _voted = false;
   String? _error;
 
+  /// Per-round winner picks (round index -> playerId). The match goes to
+  /// whoever won the most rounds.
+  final Map<int, String> _picks = {};
+
   @override
   void initState() {
     super.initState();
@@ -63,7 +67,8 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
     super.dispose();
   }
 
-  Future<void> _vote(String playerId) async {
+  Future<void> _submit(int roundCount) async {
+    if (_picks.length < roundCount || _busy) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -73,7 +78,7 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
           .httpsCallable('castVote')
           .call<Map<String, dynamic>>({
         'matchId': widget.matchId,
-        'votedForPlayerId': playerId,
+        'picks': _picks.map((k, v) => MapEntry(k.toString(), v)),
       });
       if (mounted) {
         setState(() {
@@ -120,12 +125,15 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
             : Duration(
                 milliseconds: endMs - DateTime.now().millisecondsSinceEpoch);
         final closed = left != null && left.isNegative;
+        final roundCount =
+            (((match['settings'] as Map?)?['roundCount'] as num?)?.toInt() ?? 3)
+                .clamp(1, 12);
 
         if (closed) {
           _nudgeSettle();
           return _counting(context);
         }
-        return _ballot(context, left);
+        return _ballot(context, left, roundCount);
       },
     );
   }
@@ -151,7 +159,7 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
     );
   }
 
-  Widget _ballot(BuildContext context, Duration? left) {
+  Widget _ballot(BuildContext context, Duration? left, int roundCount) {
     final text = Theme.of(context).textTheme;
     if (_voted) {
       return _shell(context, [
@@ -164,28 +172,32 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
         ),
       ]);
     }
+    final allPicked = _picks.length >= roundCount;
     return _shell(context, [
       Text(
-        left == null ? 'Who won?' : 'Who won? ${left.inSeconds}s left',
+        left == null
+            ? 'Who won each round?'
+            : 'Who won each round? ${left.inSeconds}s left',
         style: text.titleMedium,
       ),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          Expanded(
-            child: FilledButton(
-              onPressed: _busy ? null : () => _vote(widget.player1Id),
-              child: Text(widget.player1Name, overflow: TextOverflow.ellipsis),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: FilledButton(
-              onPressed: _busy ? null : () => _vote(widget.player2Id),
-              child: Text(widget.player2Name, overflow: TextOverflow.ellipsis),
-            ),
-          ),
-        ],
+      const SizedBox(height: 10),
+      for (int r = 0; r < roundCount; r++) ...[
+        _roundRow(context, r),
+        const SizedBox(height: 8),
+      ],
+      const SizedBox(height: 2),
+      SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: (!allPicked || _busy) ? null : () => _submit(roundCount),
+          child: _busy
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(allPicked ? 'Submit' : 'Pick every round'),
+        ),
       ),
       if (_error != null) ...[
         const SizedBox(height: 10),
@@ -195,6 +207,46 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
                 ?.copyWith(color: Theme.of(context).colorScheme.error)),
       ],
     ]);
+  }
+
+  Widget _roundRow(BuildContext context, int round) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 62,
+          child: Text('Round ${round + 1}',
+              style: Theme.of(context).textTheme.labelMedium),
+        ),
+        Expanded(child: _roundChoice(round, widget.player1Id, widget.player1Name)),
+        const SizedBox(width: 8),
+        Expanded(child: _roundChoice(round, widget.player2Id, widget.player2Name)),
+      ],
+    );
+  }
+
+  Widget _roundChoice(int round, String id, String name) {
+    final scheme = Theme.of(context).colorScheme;
+    final green = context.palette.winner;
+    final sel = _picks[round] == id;
+    return OutlinedButton(
+      onPressed: _busy ? null : () => setState(() => _picks[round] = id),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+        backgroundColor: sel ? green.withValues(alpha: 0.18) : null,
+        side: BorderSide(
+          color: sel ? green : scheme.outlineVariant,
+          width: sel ? 2 : 1,
+        ),
+      ),
+      child: Text(
+        name,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: scheme.onSurface,
+          fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+    );
   }
 
   /// Voting has closed but the result has not landed yet. Says so, rather

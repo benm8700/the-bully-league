@@ -53,7 +53,9 @@ class _VoteScreenState extends State<VoteScreen> {
 
   bool _watchedEnough = false;
 
-  String? _selectedPlayerId;
+  /// Per-round winner picks (round index -> playerId). The match goes to
+  /// whoever won the most rounds.
+  final Map<int, String> _picks = {};
   String? _turnstileToken;
   bool _submitting = false;
   String? _errorMessage;
@@ -62,8 +64,8 @@ class _VoteScreenState extends State<VoteScreen> {
   /// immediately rather than waiting on the ballot document to round-trip.
   bool _justVoted = false;
 
-  Future<void> _submitVote() async {
-    if (_selectedPlayerId == null || _turnstileToken == null) return;
+  Future<void> _submitVote(int roundCount) async {
+    if (_picks.length < roundCount || _turnstileToken == null) return;
     setState(() {
       _submitting = true;
       _errorMessage = null;
@@ -73,7 +75,8 @@ class _VoteScreenState extends State<VoteScreen> {
       final callable = FirebaseFunctions.instance.httpsCallable('castVote');
       await callable.call({
         'matchId': widget.matchId,
-        'votedForPlayerId': _selectedPlayerId,
+        // Per-round winners keyed by round index (strings for the wire).
+        'picks': _picks.map((k, v) => MapEntry(k.toString(), v)),
         'turnstileToken': _turnstileToken,
       });
       if (!mounted) return;
@@ -108,6 +111,9 @@ class _VoteScreenState extends State<VoteScreen> {
           final player2Id = match['player2Id'] as String;
           final isParticipant = myUid == player1Id || myUid == player2Id;
           final closesAtMs = _closesAtMs(match);
+          final roundCount =
+              (((match['settings'] as Map?)?['roundCount'] as num?)?.toInt() ?? 3)
+                  .clamp(1, 12);
 
           return FutureBuilder<List<String>>(
             future: _usernames(player1Id, player2Id),
@@ -122,6 +128,7 @@ class _VoteScreenState extends State<VoteScreen> {
                 player2Name: names[1],
                 isParticipant: isParticipant,
                 closesAtMs: closesAtMs,
+                roundCount: roundCount,
               );
             },
           );
@@ -139,6 +146,7 @@ class _VoteScreenState extends State<VoteScreen> {
     required String player2Name,
     required bool isParticipant,
     required int? closesAtMs,
+    required int roundCount,
   }) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       // Your own ballot, which is the only one any client may read. Its
@@ -176,23 +184,29 @@ class _VoteScreenState extends State<VoteScreen> {
               ),
               const SizedBox(height: 20),
               if (canVote) ...[
-                Text('Who won this roast battle?',
+                Text('Who won each round?',
                     style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 16),
-                _PlayerChoice(
-                  label: player1Name,
-                  color: context.palette.gelA,
-                  selected: _selectedPlayerId == player1Id,
-                  onTap: () => setState(() => _selectedPlayerId = player1Id),
-                ),
-                const SizedBox(height: 8),
-                _PlayerChoice(
-                  label: player2Name,
-                  color: context.palette.gelB,
-                  selected: _selectedPlayerId == player2Id,
-                  onTap: () => setState(() => _selectedPlayerId = player2Id),
+                const SizedBox(height: 6),
+                Text(
+                  'The match goes to whoever wins the most rounds.',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 16),
+                for (int r = 0; r < roundCount; r++) ...[
+                  _RoundPicker(
+                    round: r,
+                    player1Id: player1Id,
+                    player1Name: player1Name,
+                    player2Id: player2Id,
+                    player2Name: player2Name,
+                    gelA: context.palette.gelA,
+                    gelB: context.palette.gelB,
+                    selected: _picks[r],
+                    onPick: (id) => setState(() => _picks[r] = id),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                const SizedBox(height: 6),
                 TurnstileChallenge(
                     onToken: (token) => setState(() => _turnstileToken = token)),
                 const SizedBox(height: 16),
@@ -203,13 +217,20 @@ class _VoteScreenState extends State<VoteScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
+                ] else if (_picks.length < roundCount) ...[
+                  Text(
+                    'Pick a winner for every round.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
                 ],
                 FilledButton(
-                  onPressed: (_selectedPlayerId != null &&
+                  onPressed: (_picks.length >= roundCount &&
                           _turnstileToken != null &&
                           _watchedEnough &&
                           !_submitting)
-                      ? _submitVote
+                      ? () => _submitVote(roundCount)
                       : null,
                   child: _submitting
                       ? const SizedBox(
@@ -319,50 +340,79 @@ class _VoteScreenState extends State<VoteScreen> {
   }
 }
 
-class _PlayerChoice extends StatelessWidget {
-  const _PlayerChoice({
-    required this.label,
-    required this.color,
+/// One round's winner picker: "Round N" and the two players as choices. The
+/// gel colours are the SAME ones the players wear on the scoreboard and in
+/// the burned-in clip captions, so "who is who" reads consistently.
+class _RoundPicker extends StatelessWidget {
+  const _RoundPicker({
+    required this.round,
+    required this.player1Id,
+    required this.player1Name,
+    required this.player2Id,
+    required this.player2Name,
+    required this.gelA,
+    required this.gelB,
     required this.selected,
-    required this.onTap,
+    required this.onPick,
   });
 
-  final String label;
-
-  /// The player's gel colour - the SAME one they wear on the scoreboard and
-  /// in the burned-in clip captions, so "who is who" reads consistently on
-  /// every two-player surface.
-  final Color color;
-  final bool selected;
-  final VoidCallback onTap;
+  final int round;
+  final String player1Id;
+  final String player1Name;
+  final String player2Id;
+  final String player2Name;
+  final Color gelA;
+  final Color gelB;
+  final String? selected;
+  final ValueChanged<String> onPick;
 
   @override
   Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 68,
+          child: Text('Round ${round + 1}',
+              style: Theme.of(context).textTheme.labelMedium),
+        ),
+        Expanded(child: _choice(context, player1Id, player1Name, gelA)),
+        const SizedBox(width: 8),
+        Expanded(child: _choice(context, player2Id, player2Name, gelB)),
+      ],
+    );
+  }
+
+  Widget _choice(BuildContext context, String id, String name, Color color) {
     final scheme = Theme.of(context).colorScheme;
+    final isSel = selected == id;
     return OutlinedButton(
-      onPressed: onTap,
+      onPressed: () => onPick(id),
       style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        backgroundColor: selected ? color.withValues(alpha: 0.16) : null,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        backgroundColor: isSel ? color.withValues(alpha: 0.18) : null,
         side: BorderSide(
-          color: selected ? color : scheme.outlineVariant,
-          width: selected ? 2 : 1,
+          color: isSel ? color : scheme.outlineVariant,
+          width: isSel ? 2 : 1,
         ),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 12,
-            height: 12,
+            width: 10,
+            height: 10,
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(label,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(name,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: scheme.onSurface)),
           ),
-          if (selected) Icon(Icons.check_circle, color: color, size: 20),
+          if (isSel) ...[
+            const SizedBox(width: 6),
+            Icon(Icons.check_circle, color: color, size: 16),
+          ],
         ],
       ),
     );

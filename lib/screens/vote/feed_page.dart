@@ -6,19 +6,18 @@ import '../../widgets/clip_reactions.dart';
 import '../moderation/report_screen.dart';
 import '../../widgets/live_tally.dart';
 
-/// One battle, full screen. You watch the clip, PRE-SELECT the roaster you
-/// think won (a green ring around their camera square), then CONFIRM at the
-/// end - rather than casting instantly.
+/// One battle, full screen. You watch the clip, then pick a winner for EACH
+/// round in a panel and CONFIRM - the match goes to whoever won the most
+/// rounds (developer's call, 2026-09-17), which forces judges to weigh every
+/// round rather than one overall impression.
 ///
-/// PICKING IS SPATIAL. The rendered clip is a fixed vertical stack - player 1
-/// on top, player 2 underneath - so tapping the top or bottom half picks that
-/// person, no names to read (names would clutter the middle of the faces; the
-/// name you picked is shown only on the Submit button). The pick is a green
-/// ring, not a vote: nothing is cast until you hit Submit, which unlocks once
-/// most of the clip has played so the final round is seen first.
+/// The picker unlocks once most of the clip has played, so the final round is
+/// seen before you commit. Nothing is cast until Submit; the button names the
+/// computed winner. The rendered clip is a fixed vertical stack (player 1 on
+/// top), and the round chips are ordered to match (player 1 on the left).
 ///
 /// Playback is manual: it does NOT loop. A small corner button pauses/resumes
-/// and replays; tapping the video itself picks a roaster.
+/// and replays.
 class FeedPage extends StatefulWidget {
   const FeedPage({
     super.key,
@@ -35,9 +34,9 @@ class FeedPage extends StatefulWidget {
   /// running at once.
   final bool isActive;
 
-  /// Casts a real ballot. Null result means it failed; the page keeps the
-  /// choice visible so it can be retried.
-  final Future<bool> Function(String votedForPlayerId) onVote;
+  /// Casts a real ballot - a per-round map {roundIndex: winnerId}. False
+  /// result means it failed; the page keeps the picks so it can be retried.
+  final Future<bool> Function(Map<int, String> picks) onVote;
 
   /// Records a call on a SETTLED battle - a private guess against a result
   /// already decided. Never a ballot, and it never touches anyone's rating.
@@ -64,12 +63,34 @@ class _FeedPageState extends State<FeedPage> {
   /// button offers a replay.
   bool _ended = false;
 
-  /// The roaster tapped as the likely winner - a green ring, NOT a cast vote.
-  String? _preselectedPlayerId;
+  /// Per-round winner picks (round index -> playerId), before submitting.
+  /// The match winner is whoever won the most rounds.
+  final Map<int, String> _picks = {};
 
-  /// Set once the vote (or settled-battle call) has actually been submitted.
+  /// Set once the vote (or settled-battle call) has actually been submitted -
+  /// the computed winner (most rounds won), used by the result box.
   String? _chosenPlayerId;
   bool _submitting = false;
+
+  int get _roundCount => widget.match.roundCount.clamp(1, 12);
+  bool get _allPicked => _picks.length >= _roundCount;
+
+  /// Winner by most rounds won, or null on a tie (possible only with an even
+  /// round count).
+  String? get _computedWinner {
+    var p1 = 0;
+    var p2 = 0;
+    for (final id in _picks.values) {
+      if (id == widget.match.player1Id) {
+        p1++;
+      } else if (id == widget.match.player2Id) {
+        p2++;
+      }
+    }
+    if (p1 > p2) return widget.match.player1Id;
+    if (p2 > p1) return widget.match.player2Id;
+    return null;
+  }
 
   /// Can this viewer act on this battle - cast a real vote, or make a private
   /// "call" on a settled battle with a decisive result? If not (already voted,
@@ -177,37 +198,38 @@ class _FeedPageState extends State<FeedPage> {
     super.dispose();
   }
 
-  /// Tapping a roaster's half of the video pre-selects them - a green ring,
-  /// switchable, no vote cast yet.
-  void _preselect(String id) {
+  /// Pick a winner for one round (green highlight, no vote cast yet).
+  void _pickRound(int round, String playerId) {
     if (!_canAct || _chosenPlayerId != null) return;
-    setState(() => _preselectedPlayerId = id);
+    setState(() => _picks[round] = playerId);
   }
 
-  /// Confirm the pre-selected roaster - THIS is where a vote is actually cast.
+  /// Confirm all rounds - THIS is where a vote is actually cast. The winner
+  /// is whoever won the most rounds.
   void _submit() {
-    final id = _preselectedPlayerId;
-    if (id == null || _submitting) return;
-    _choose(id);
+    if (!_allPicked || _submitting) return;
+    final winner = _computedWinner;
+    if (winner == null) return; // a tie - nothing decisive to submit
+    _choose(winner);
   }
 
-  Future<void> _choose(String playerId) async {
+  Future<void> _choose(String winnerId) async {
     if (_submitting) return;
     setState(() {
       _submitting = true;
-      _chosenPlayerId = playerId;
+      _chosenPlayerId = winnerId;
     });
     if (widget.match.canVote) {
-      final ok = await widget.onVote(playerId);
+      final ok = await widget.onVote(Map<int, String>.from(_picks));
       if (!mounted) return;
       // A failed ballot must not look like a cast one, or the viewer
-      // believes they judged a battle they didn't. Keep the pre-selection so
-      // they can just hit Submit again.
+      // believes they judged a battle they didn't. Keep the picks so they
+      // can just hit Submit again.
       if (!ok) setState(() => _chosenPlayerId = null);
     } else if (widget.match.verdict?.outcome == 'decided') {
       // A call on a settled battle. Only worth recording where there was a
       // right answer - a tie has none.
-      widget.onCall(widget.match.matchId, playerId);
+      widget.onCall(widget.match.matchId, winnerId);
     }
     if (mounted) setState(() => _submitting = false);
   }
@@ -216,7 +238,6 @@ class _FeedPageState extends State<FeedPage> {
   Widget build(BuildContext context) {
     final controller = _controller;
     final paused = controller != null && !controller.value.isPlaying;
-    final ringForPlayer1 = _preselectedPlayerId == widget.match.player1Id;
     return ColoredBox(
       color: Colors.black,
       child: Stack(
@@ -238,12 +259,6 @@ class _FeedPageState extends State<FeedPage> {
                       style: TextStyle(color: Colors.white70))
                   : const CircularProgressIndicator(),
             ),
-          // Green pre-selection ring around the chosen roaster's square.
-          if (_canAct && _chosenPlayerId == null && _preselectedPlayerId != null)
-            _ring(context, top: ringForPlayer1),
-          // Tap zones for picking - whole top half / whole bottom half - while
-          // there is still something to pick.
-          if (_canAct && _chosenPlayerId == null) ..._pickZones(context),
           // Paused/ended cue, unless the result box is already covering it.
           if (paused && !_resultShown)
             IgnorePointer(
@@ -257,7 +272,7 @@ class _FeedPageState extends State<FeedPage> {
             ),
           if (controller != null) _playPauseButton(context, paused),
           if (_canAct && _chosenPlayerId == null && _revealed)
-            _submitBar(context),
+            _pickerPanel(context),
           if (_resultShown) _resultBox(context),
           _header(context),
           _reportButton(context),
@@ -276,52 +291,117 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
-  /// Two full-height tap targets, top and bottom, matching the stacked render.
-  /// No labels - names would sit over the faces; the picked name shows on the
-  /// Submit button instead.
-  List<Widget> _pickZones(BuildContext context) {
+  /// The per-round picker: a winner for each round, then Submit. The match
+  /// goes to whoever won the most rounds (shown on the Submit button). The
+  /// top player in the stacked clip is player 1 - the chips are ordered to
+  /// match (player 1 on the left).
+  Widget _pickerPanel(BuildContext context) {
     final m = widget.match;
-    final half = MediaQuery.of(context).size.height / 2;
-    return [
-      Positioned(
-        top: 0,
-        left: 0,
-        right: 0,
-        height: half,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _preselect(m.player1Id),
+    final winner = _computedWinner;
+    final winnerName = winner == m.player1Id
+        ? m.player1Username
+        : winner == m.player2Id
+            ? m.player2Username
+            : null;
+    final label = !_allPicked
+        ? 'Pick a winner for every round'
+        : winnerName == null
+            ? "It's a tie - break it on the last round"
+            : m.canVote
+                ? 'Submit: $winnerName won'
+                : 'Call it: $winnerName';
+    return Positioned(
+      left: 12,
+      right: 12,
+      bottom: MediaQuery.of(context).padding.bottom + 64,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Who won each round?',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            for (int r = 0; r < _roundCount; r++) _roundRow(context, r),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                  backgroundColor: (_allPicked && winner != null)
+                      ? _pickGreen
+                      : null,
+                  foregroundColor: (_allPicked && winner != null)
+                      ? Colors.black
+                      : null,
+                ),
+                onPressed: (!_allPicked || winner == null || _submitting)
+                    ? null
+                    : _submit,
+                child: _submitting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(label,
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
         ),
       ),
-      Positioned(
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: half,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _preselect(m.player2Id),
-        ),
-      ),
-    ];
+    );
   }
 
-  Widget _ring(BuildContext context, {required bool top}) {
-    final half = MediaQuery.of(context).size.height / 2;
-    return Positioned(
-      top: top ? 0 : half,
-      left: 0,
-      right: 0,
-      height: half,
-      child: IgnorePointer(
-        child: Container(
-          margin: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            border: Border.all(color: _pickGreen, width: 4),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(color: _pickGreen.withValues(alpha: 0.4), blurRadius: 12),
-            ],
+  Widget _roundRow(BuildContext context, int round) {
+    final m = widget.match;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 62,
+            child: Text('Round ${round + 1}',
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          ),
+          Expanded(child: _playerChip(round, m.player1Id, m.player1Username)),
+          const SizedBox(width: 6),
+          Expanded(child: _playerChip(round, m.player2Id, m.player2Username)),
+        ],
+      ),
+    );
+  }
+
+  Widget _playerChip(int round, String playerId, String name) {
+    final selected = _picks[round] == playerId;
+    return GestureDetector(
+      onTap: () => _pickRound(round, playerId),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? _pickGreen : Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? _pickGreen : Colors.white24,
+          ),
+        ),
+        child: Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: selected ? Colors.black : Colors.white,
+            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13,
           ),
         ),
       ),
@@ -356,42 +436,6 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
-  /// The confirm bar: disabled with a hint until a roaster is picked, then it
-  /// names the pick - the ONLY place a name appears on this screen.
-  Widget _submitBar(BuildContext context) {
-    final m = widget.match;
-    final picked = _preselectedPlayerId;
-    final name = picked == m.player1Id
-        ? m.player1Username
-        : picked == m.player2Id
-            ? m.player2Username
-            : null;
-    final label = name == null
-        ? 'Tap a roaster to pick a winner'
-        : m.canVote
-            ? 'Submit: $name won'
-            : 'Call it: $name';
-    return Positioned(
-      left: 24,
-      right: 24,
-      bottom: MediaQuery.of(context).padding.bottom + 84,
-      child: FilledButton(
-        style: FilledButton.styleFrom(
-          minimumSize: const Size(0, 52),
-          backgroundColor: name == null ? null : _pickGreen,
-          foregroundColor: name == null ? null : Colors.black,
-        ),
-        onPressed: (picked == null || _submitting) ? null : _submit,
-        child: _submitting
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
 
   /// After submitting (or, for a battle you cannot act on, once revealed): the
   /// confirmation, and where allowed the live tally / verdict.
@@ -522,7 +566,7 @@ class _FeedPageState extends State<FeedPage> {
   Widget _header(BuildContext context) {
     final m = widget.match;
     final label = m.canVote
-        ? 'Tap who won'
+        ? 'Judge each round'
         : m.isParticipant
             ? 'Your battle'
             : '${m.voteCount} ${m.voteCount == 1 ? "vote" : "votes"}';
