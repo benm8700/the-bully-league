@@ -22,6 +22,7 @@ import '../../widgets/event_window_banner.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
+import '../elite/elite_league_screen.dart';
 import '../onboarding/tutorial_screen.dart';
 import '../friends/challenge_screen.dart';
 import '../practice/solo_practice_screen.dart';
@@ -144,6 +145,12 @@ class HomeScreen extends StatelessWidget {
                     RoastHero(
                       onFindMatch: () => _startMatch(context, 'ranked'),
                     ),
+                    // The Elite League entry. Shown ONLY to Featured Talent
+                    // + GOAT and renders nothing for everyone else (like
+                    // FeaturedSection), so it never clutters Home for the
+                    // players who can't enter - it is a reward you see
+                    // appear when you reach the top.
+                    if (uid != null) _EliteLeagueCard(uid: uid),
                     const SizedBox(height: 22),
                     // Quick Actions row (Home overhaul): Daily Challenges /
                     // Free Rewards / Current Streak. The Daily Challenges card
@@ -815,6 +822,92 @@ class _WalletBarForUser extends StatelessWidget {
         final balance =
             ((data['pointsBalance'] ?? data['points']) as num?)?.toInt() ?? 0;
         return _WalletBar(balance: balance);
+      },
+    );
+  }
+}
+
+/// The Elite League entry, shown ONLY to Featured Talent + GOAT.
+///
+/// Renders nothing for everyone else - not a locked/greyed teaser, nothing
+/// at all - so Home stays clean for the players who can't enter and the
+/// card simply APPEARS the day you reach the top, which is the reward.
+/// Eligibility is checked here as a convenience; the real gate is
+/// server-side in matchmaking.js (ELITE_RANK_TITLES), the source of truth.
+class _EliteLeagueCard extends StatelessWidget {
+  const _EliteLeagueCard({required this.uid});
+
+  final String uid;
+
+  // Mirrors the server's ELITE_RANK_TITLES. Kept in sync by hand (two
+  // strings); the server enforces regardless of what the client shows.
+  static const _eligible = {'Featured Talent', 'GOAT'};
+  static const _gold = Color(0xFFF4C838);
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final rankTitle = snapshot.data?.data()?['rankTitle'] as String?;
+        if (rankTitle == null || !_eligible.contains(rankTitle)) {
+          return const SizedBox.shrink();
+        }
+        final text = Theme.of(context).textTheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const EliteLeagueScreen()),
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: LinearGradient(
+                    colors: [
+                      _gold.withValues(alpha: 0.18),
+                      _gold.withValues(alpha: 0.05),
+                    ],
+                  ),
+                  border: Border.all(color: _gold.withValues(alpha: 0.5)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.emoji_events_rounded,
+                        color: _gold, size: 30),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('ELITE LEAGUE',
+                              style: text.titleMedium?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1,
+                              )),
+                          const SizedBox(height: 2),
+                          Text('Featured Talent & GOAT only · 2x20',
+                              style: text.bodySmall?.copyWith(
+                                color: _gold.withValues(alpha: 0.9),
+                              )),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, color: _gold),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
       },
     );
   }

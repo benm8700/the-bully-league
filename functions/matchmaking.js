@@ -22,7 +22,14 @@ const {stopRecording, writeRecordingState} = require("./cloudRecording");
 // distinguishes a friend battle from a video call. Two separate questions,
 // answered differently: does it move rating (no), and does it produce
 // something (yes).
-const RECORDED_MODES = ["ranked", "tournament", "friend"];
+const RECORDED_MODES = ["ranked", "tournament", "friend", "elite"];
+
+/** The Elite League: a rank-gated, stripped-down showcase mode only the top
+ * of the ladder may enter. It mimics ranked (recorded, clippable, moves the
+ * hidden Elo) but runs a punchier format (2x20 - see config/matchSettings
+ * perMode.elite) tuned to be more watchable. Access is by RANK, not by the
+ * monetization tier, so entitlement.js allows it and this list gates it. */
+const ELITE_RANK_TITLES = ["Featured Talent", "GOAT"];
 
 /**
  * Real matchmaking (Build Order step 4's missing half). Replaces the
@@ -57,7 +64,7 @@ const RECORDED_MODES = ["ranked", "tournament", "friend"];
  * *notification*, keeping these callables for the pairing itself.
  */
 
-const MODES = ["exhibition", "ranked"];
+const MODES = ["exhibition", "ranked", "elite"];
 
 /** Every 30s of waiting widens the acceptable tier gap by one, per
  * CLAUDE.md's matchmaking fallback decision ("gradually widen the tier
@@ -230,6 +237,18 @@ async function enterQueue(auth, data) {
           "Record your intro video before you battle - your opponent needs " +
           "something to work with.");
     }
+  }
+
+  // The ELITE LEAGUE gate. Only the top of the ladder (Featured Talent +
+  // GOAT) may enter - that exclusivity IS the mode. The client hides the
+  // entry for everyone else, but this is the actual enforcement; the
+  // client's visibility is only a convenience.
+  if (mode === "elite" && !ELITE_RANK_TITLES.includes(user.rankTitle)) {
+    throw new HttpsError(
+        "failed-precondition",
+        "The Elite League is for Featured Talent and GOAT only. Climb the " +
+        "ranks to unlock it.",
+        {reason: "elite-rank-required"});
   }
 
   // The ranked unlock gate is GONE - Ranked is available immediately. The
@@ -1233,6 +1252,7 @@ module.exports = {
   startMatchRecording,
   getActiveMatch,
   RECORDED_MODES,
+  ELITE_RANK_TITLES,
   // Every queue that exists, so the online-count publisher (presence.js)
   // sweeps exactly the same set of modes matchmaking uses rather than
   // keeping its own list that could silently drift out of step.

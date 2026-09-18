@@ -179,6 +179,14 @@ function battleEntitlement({user, mode, nowMs, windowConfig, config}) {
   // subscriber feature. Challenging a name you already know is not.
   if (mode === "friend") return allow();
 
+  // THE ELITE LEAGUE is gated by RANK, not by the monetization tier: only
+  // Featured Talent + GOAT reach it (enforced in matchmaking.js's
+  // enterQueue). A player who has ground to the top of the ladder should
+  // not then be told the window is closed - so it is allowed here at every
+  // tier, like tournament and friend, rather than being lumped in with
+  // practice below (mode !== "ranked") and window-gated.
+  if (mode === "elite") return allow();
+
   const isPractice = mode !== "ranked";
 
   // Rule that binds everyone, subscribers included: the window is

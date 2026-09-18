@@ -641,23 +641,45 @@ Raised by the developer: what protects someone who is unhappy that their match f
     - **Verified by running the real sweep against real Firestore**: an open round is announced to both players and marked on the bracket, a second sweep says nothing, near the deadline only the absentee is warned, nobody is chased once both have checked in, and closed or decided rounds send nothing. **7 live checks plus 15 local tests.**
 
 ## Problems To Solve Later (Backlog — flagged during planning, not yet designed)
-- **ELITE TOP-TIER LEAGUE (rank 9 + GOAT only) — NEW IDEA (2026-09-17,
-  developer).** A lightweight, exclusive game mode only Featured Talent and
-  GOAT can enter, mimicking ranked play but stripped down: skips the
-  tutorial/warnings/consent friction (elite players know the ropes), immediate
-  direct play, and a DIFFERENT format tuned to be more watchable - e.g. less
-  research/ammo time and a punchier round setup like 2 rounds x 20s (exact
-  numbers TBD). The point is a high-stakes, entertaining showcase for the best
-  comedians. Relatively cheap: reuse the match machinery + a new per-mode
-  format in config/matchSettings + an entitlement gate on rank.
-  - **Liquidity will be terrible at first and that is ACCEPTED (developer's
-    call):** nobody has reached Featured Talent (5000 XP) yet, so the mode's
-    empty state should be a charming "you've unlocked the elite league, but not
-    enough legends have made it here yet - soon" message that reads as a flex
-    (you're early, this is exclusive) rather than a broken empty queue.
-  - Natural fit for the deferred GOAT-tier perks bucket ("decide what the top
-    unlocks when someone's actually there"). Don't build until players approach
-    that tier; capture now. Prizes/rewards here are provisional (advisor pass).
+- **ELITE TOP-TIER LEAGUE (rank 9 + GOAT only) — BUILT (2026-09-18).** A
+  rank-gated showcase mode only Featured Talent and GOAT may enter, mimicking
+  ranked (recorded, clippable, moves the hidden Elo, finalizes normally) but
+  with a punchier, more-watchable format. Reuses the whole existing match
+  machinery - it is a new queue MODE (`elite`), not a new pipeline.
+  - **Format lives in `config/matchSettings` perMode.elite** (2 rounds x 20s,
+    30s bio reveal, 20s warmup, 3s countdown), stamped server-side at pairing
+    like every other timing, so it retunes from the console with no release.
+    `resolveSettings` is generic over mode, so no code change was needed there.
+  - **The gate is by RANK, not by the monetization tier.** `enterQueue`
+    (matchmaking.js) refuses `elite` unless `rankTitle` is in
+    `ELITE_RANK_TITLES = ["Featured Talent", "GOAT"]`; `battleEntitlement`
+    (entitlement.js) `allow()`s elite unconditionally so a player who ground
+    to the top is never also told the window is closed. `elite` is in `MODES`
+    and `RECORDED_MODES`; it is NOT exhibition/friend (so it moves rating) and
+    NOT tournament (so no bracket advancement) - it falls through finalize as
+    ranked-like automatically. Recording consent is NOT skipped (all-party
+    consent is legal, not friction); the tutorial gate is naturally already
+    satisfied for anyone at this rank.
+  - **The "charming empty-state flex" is the `EliteLeagueScreen`**
+    (`lib/screens/elite/elite_league_screen.dart`): "you made it to the top...
+    almost nobody has, so the arena is quiet - you're early to the most
+    exclusive room." A gold `_EliteLeagueCard` on Home is shown ONLY to
+    eligible players (streams the user doc's `rankTitle`) and renders NOTHING
+    for everyone else, like FeaturedSection - so it appears the day you reach
+    the top rather than teasing a lock. Enter -> recording consent ->
+    pre-match -> the `elite` matchmaking queue (standing-challenge mechanic
+    covers the empty pool).
+  - **Liquidity is terrible and that is ACCEPTED** - nobody is at 5000 XP yet,
+    so the queue is empty; the flex framing is the whole point.
+  - **Verified**: 8 live checks against the deployed backend (ineligible
+    refused; two eligible players pair into an elite match stamped 2 rounds /
+    20s / 30s reveal) plus on-device (the card shows for a primed Featured
+    Talent account, the screen renders, and the card vanishes live when the
+    rank is restored). **Still provisional / not built**: any prize or reward
+    for the elite league (advisor pass), and elite-specific quiet-queue copy
+    (it currently shows the generic Sixes-and-Sevens nudge).
+  - Natural fit for the deferred GOAT-tier perks bucket. Prizes/rewards here
+    are provisional (advisor pass).
 - **PER-ROUND VOTING + "FUNNIEST ROUND" BOARD — NEW IDEA (2026-09-17,
   developer).** Two linked pieces.
   - **Per-round voting (a fairness upgrade, NOT a no-op):** judges pick a
