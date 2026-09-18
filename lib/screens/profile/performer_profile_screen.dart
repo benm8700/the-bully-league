@@ -88,8 +88,12 @@ class PerformerProfileScreen extends StatelessWidget {
                       const SizedBox(width: 6),
                       Text(
                         rankTitle,
+                        // Gold for the two top tiers (matching Home/Profile) so
+                        // the most prestigious ranks read as prestige.
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.75),
+                              color: rankTitle == 'Legend' || rankTitle == 'GOAT'
+                                  ? const Color(0xFFF4C838)
+                                  : Colors.white.withValues(alpha: 0.75),
                               fontWeight: FontWeight.w600,
                             ),
                       ),

@@ -574,6 +574,9 @@ class _IdentityHeader extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final name =
         (username != null && username!.isNotEmpty) ? username! : 'Your profile';
+    // The two top tiers get a gold title (matching the Home status card) so the
+    // most prestigious ranks read as prestige; lower tiers stay muted.
+    final prestige = rankTitle == 'Legend' || rankTitle == 'GOAT';
     return Column(
       children: [
         CircleAvatar(
@@ -594,7 +597,12 @@ class _IdentityHeader extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             rankTitle!,
-            style: text.titleSmall?.copyWith(color: scheme.onSurfaceVariant),
+            style: text.titleSmall?.copyWith(
+              color: prestige
+                  ? const Color(0xFFF4C838)
+                  : scheme.onSurfaceVariant,
+              fontWeight: prestige ? FontWeight.w800 : null,
+            ),
           ),
         ],
         if (featured != null) ...[
