@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/funniest_rounds_tab.dart';
 import '../profile/performer_profile_screen.dart';
 
 /// The Fame board's accent - the brand PINK (follow/social), so Fame reads as
@@ -63,7 +64,7 @@ class LeaderboardScreen extends StatelessWidget {
         .limit(kBoardSize);
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         // The cinematic stage background runs behind everything, including the
@@ -85,6 +86,7 @@ class LeaderboardScreen extends StatelessWidget {
             tabs: const [
               Tab(text: 'RANKS'),
               Tab(text: 'FAME'),
+              Tab(text: 'FUNNIEST'),
             ],
           ),
         ),
@@ -117,6 +119,7 @@ class LeaderboardScreen extends StatelessWidget {
                 children: [
                   _buildPlayers(context, skillQuery, fame: false),
                   _buildPlayers(context, fameQuery, fame: true),
+                  const FunniestRoundsTab(),
                 ],
               ),
             ),

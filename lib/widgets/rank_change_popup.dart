@@ -136,8 +136,10 @@ class _RankChangeDialog extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 22),
-            // The signature: the earned crest pops in over its own glow.
+            const SizedBox(height: 14),
+            // The signature: the earned crest pops in over its own glow. Made
+            // the HERO of the popup (developer's call, 2026-09-18) - a small
+            // crest read as boring, so it now dominates the card.
             TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: 1),
               duration: const Duration(milliseconds: 700),
@@ -147,21 +149,21 @@ class _RankChangeDialog extends StatelessWidget {
                 child: Transform.scale(scale: 0.6 + 0.4 * t, child: child),
               ),
               child: Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      glow.withValues(alpha: up ? 0.45 : 0.18),
+                      glow.withValues(alpha: up ? 0.5 : 0.2),
                       Colors.transparent,
                     ],
-                    stops: const [0.15, 1.0],
+                    stops: const [0.2, 1.0],
                   ),
                 ),
-                child: RankBadge(title: rankTitle, size: 132),
+                child: RankBadge(title: rankTitle, size: 240),
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
             Text(
               title,
               textAlign: TextAlign.center,
@@ -189,10 +191,11 @@ class _RankChangeDialog extends StatelessWidget {
                   foregroundColor: up ? Colors.black : Colors.white,
                 ),
                 onPressed: () => Navigator.of(context).pop(),
-                // Direction-specific: "Nice" under a demotion roast reads as
-                // the app not noticing what it just said.
+                // Direction-specific: a cocky confirm on a promotion, a dry
+                // one on a demotion ("Nice" there would read as the app not
+                // noticing what it just said).
                 child: Text(
-                  up ? 'Obviously' : 'Fine',
+                  up ? 'Damn right' : 'Fine',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),

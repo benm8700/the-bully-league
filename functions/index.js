@@ -139,7 +139,8 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   // PER-ROUND VOTING: `picks` is a {roundIndex: winnerUid} map. A bare
   // `votedForPlayerId` is the legacy single-vote shape from older clients,
   // read below as that player winning every round.
-  const {matchId, votedForPlayerId, picks, turnstileToken} = request.data || {};
+  const {matchId, votedForPlayerId, picks, funniestRound, turnstileToken} =
+      request.data || {};
 
   if (!matchId || (!picks && !votedForPlayerId)) {
     throw new HttpsError(
@@ -238,6 +239,15 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     throw new HttpsError("invalid-argument", "Pick a winner for at least one round.");
   }
 
+  // Optional "which round was funniest" mark - the signal behind the
+  // Funniest Rounds board. Must be a real round index; anything else is
+  // simply dropped rather than rejected, since it is a bonus, not the vote.
+  let funniestRoundIdx = null;
+  if (funniestRound !== null && funniestRound !== undefined) {
+    const fr = Math.trunc(Number(funniestRound));
+    if (Number.isFinite(fr) && fr >= 0 && fr < roundCount) funniestRoundIdx = fr;
+  }
+
   if (Date.now() > voteWindowEndMs(match)) {
     throw new HttpsError("failed-precondition", "The 24-hour voting window for this match has closed.");
   }
@@ -272,6 +282,8 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   await ballotRef.set({
     picks: normalizedPicks,
     weight,
+    // Only stored when a real round was marked; absent otherwise.
+    ...(funniestRoundIdx !== null ? {funniestRound: funniestRoundIdx} : {}),
     timestamp: FieldValue.serverTimestamp(),
   });
 
@@ -1165,6 +1177,11 @@ exports.recordJudgeCalls = onCall((request) => {
 exports.getWatchFeed = onCall((request) => {
   const {getWatchFeed} = require("./watchFeed");
   return getWatchFeed(request.auth, request.data);
+});
+
+exports.getFunniestRounds = onCall((request) => {
+  const {getFunniestRounds} = require("./funniestRounds");
+  return getFunniestRounds(request.auth, request.data);
 });
 
 exports.getMatchesNeedingVotes = onCall((request) => {

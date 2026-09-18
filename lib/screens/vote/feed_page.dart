@@ -34,9 +34,11 @@ class FeedPage extends StatefulWidget {
   /// running at once.
   final bool isActive;
 
-  /// Casts a real ballot - a per-round map {roundIndex: winnerId}. False
-  /// result means it failed; the page keeps the picks so it can be retried.
-  final Future<bool> Function(Map<int, String> picks) onVote;
+  /// Casts a real ballot - a per-round map {roundIndex: winnerId}, plus the
+  /// optional funniest-round index. False result means it failed; the page
+  /// keeps the picks so it can be retried.
+  final Future<bool> Function(Map<int, String> picks, int? funniestRound)
+      onVote;
 
   /// Records a call on a SETTLED battle - a private guess against a result
   /// already decided. Never a ballot, and it never touches anyone's rating.
@@ -66,6 +68,10 @@ class _FeedPageState extends State<FeedPage> {
   /// Per-round winner picks (round index -> playerId), before submitting.
   /// The match winner is whoever won the most rounds.
   final Map<int, String> _picks = {};
+
+  /// Optional: which round the judge found funniest - the signal behind the
+  /// Funniest Rounds board. Separate from who won the round.
+  int? _funniestRound;
 
   /// Set once the vote (or settled-battle call) has actually been submitted -
   /// the computed winner (most rounds won), used by the result box.
@@ -220,7 +226,8 @@ class _FeedPageState extends State<FeedPage> {
       _chosenPlayerId = winnerId;
     });
     if (widget.match.canVote) {
-      final ok = await widget.onVote(Map<int, String>.from(_picks));
+      final ok =
+          await widget.onVote(Map<int, String>.from(_picks), _funniestRound);
       if (!mounted) return;
       // A failed ballot must not look like a cast one, or the viewer
       // believes they judged a battle they didn't. Keep the picks so they
@@ -329,6 +336,8 @@ class _FeedPageState extends State<FeedPage> {
             ),
             const SizedBox(height: 8),
             for (int r = 0; r < _roundCount; r++) _roundRow(context, r),
+            const SizedBox(height: 8),
+            _funniestRow(context),
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
@@ -358,6 +367,44 @@ class _FeedPageState extends State<FeedPage> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Optional "which round was funniest" - the Funniest Rounds board signal.
+  /// One tap, separate from picking the round winner.
+  Widget _funniestRow(BuildContext context) {
+    const flame = Color(0xFFEA4C6D);
+    return Row(
+      children: [
+        const Icon(Icons.local_fire_department, color: flame, size: 16),
+        const SizedBox(width: 4),
+        const Text('Funniest?',
+            style: TextStyle(color: Colors.white70, fontSize: 12)),
+        const SizedBox(width: 8),
+        for (int r = 0; r < _roundCount; r++)
+          GestureDetector(
+            onTap: () => setState(
+                () => _funniestRound = _funniestRound == r ? null : r),
+            child: Container(
+              margin: const EdgeInsets.only(right: 6),
+              width: 30,
+              height: 30,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _funniestRound == r
+                    ? flame
+                    : Colors.white.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text('${r + 1}',
+                  style: TextStyle(
+                    color: _funniestRound == r ? Colors.white : Colors.white70,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  )),
+            ),
+          ),
+      ],
     );
   }
 

@@ -182,6 +182,7 @@ class WatchFeedService {
   Future<VoteReward> castVote({
     required String matchId,
     required Map<int, String> picks,
+    int? funniestRound,
     String? turnstileToken,
   }) async {
     final result = await FirebaseFunctions.instance
@@ -190,6 +191,8 @@ class WatchFeedService {
       'matchId': matchId,
       // Per-round winners keyed by round index (as strings for the wire).
       'picks': picks.map((k, v) => MapEntry(k.toString(), v)),
+      // ignore: use_null_aware_elements
+      if (funniestRound != null) 'funniestRound': funniestRound,
       // ignore: use_null_aware_elements
       if (turnstileToken != null) 'turnstileToken': turnstileToken,
     });

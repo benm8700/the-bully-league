@@ -169,7 +169,8 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
   /// The challenge is raised BEFORE the vote rather than after a rejection,
   /// so the interruption lands once at the start of a judging run instead
   /// of arriving as an error mid-scroll.
-  Future<bool> _vote(String matchId, Map<int, String> picks) async {
+  Future<bool> _vote(
+      String matchId, Map<int, String> picks, int? funniestRound) async {
     try {
       if (_votesRemaining <= 0) {
         final token = await _requestChallenge();
@@ -181,6 +182,7 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
       final reward = await _service.castVote(
         matchId: matchId,
         picks: picks,
+        funniestRound: funniestRound,
       );
       if (mounted) {
         setState(() => _votesRemaining -= 1);
@@ -354,7 +356,7 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
           // AND the app is foreground - otherwise its audio would keep looping
           // off-tab or in the background.
           isActive: i == _index && widget.isActiveTab && _appForeground,
-          onVote: (picks) => _vote(match.matchId, picks),
+          onVote: (picks, funniest) => _vote(match.matchId, picks, funniest),
           onCall: _recordCall,
         );
       },

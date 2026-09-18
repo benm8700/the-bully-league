@@ -85,4 +85,35 @@ function tallyBallots(ballots, player1Id, player2Id, roundCount) {
   return {rounds, ballotCount: list.length, totalWeight};
 }
 
-module.exports = {roundOutcome, matchResultFromRounds, tallyBallots};
+/**
+ * The "funniest round" of a match, from the optional per-ballot marks.
+ *
+ * Each ballot may carry `funniestRound` (a round index). Returns the round
+ * with the most WEIGHTED marks and that weight, or null if nobody marked one.
+ * This is the signal behind the Funniest Rounds board - deliberately separate
+ * from who WON a round (winning a round is not the same as being funniest).
+ *
+ * @param {Array<{funniestRound?:number, weight?:number}>} ballots
+ * @returns {{round:number, votes:number}|null}
+ */
+function funniestRound(ballots) {
+  const tally = {};
+  let best = null;
+  let bestWeight = 0;
+  for (const b of Array.isArray(ballots) ? ballots : []) {
+    const idx = b && b.funniestRound;
+    if (!Number.isInteger(idx) || idx < 0) continue;
+    const w = Number(b.weight);
+    const weight = Number.isFinite(w) && w > 0 ? w : 1;
+    tally[idx] = (tally[idx] || 0) + weight;
+    if (tally[idx] > bestWeight) {
+      bestWeight = tally[idx];
+      best = idx;
+    }
+  }
+  return best === null ? null : {round: best, votes: bestWeight};
+}
+
+module.exports = {
+  roundOutcome, matchResultFromRounds, tallyBallots, funniestRound,
+};

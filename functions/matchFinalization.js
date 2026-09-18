@@ -153,7 +153,8 @@ async function finalizeMatch(matchId, {force = false} = {}) {
   // ROUNDS, not one overall vote. Each ballot picks a winner per round; a
   // tied round counts for neither, and an equal number of rounds won is an
   // overall tie (winnerId null) - which preserves the existing tie rule.
-  const {tallyBallots, matchResultFromRounds} = require("./perRoundVoting");
+  const {tallyBallots, matchResultFromRounds, funniestRound} =
+      require("./perRoundVoting");
   const ballotsSnap = await db.collection("votes").doc(matchId).collection("ballots").get();
   const roundCount = Math.max(1, Math.trunc(Number(match.settings?.roundCount) || 3));
   const ballots = ballotsSnap.docs.map((doc) =>
@@ -166,6 +167,14 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     player1: result.roundsWonP1,
     player2: result.roundsWonP2,
     tied: result.roundsTied,
+  };
+  // The funniest round, from the optional per-ballot marks - the signal the
+  // Funniest Rounds board ranks on. funniestRoundVotes is a top-level field
+  // so the board can order by it; 0 when nobody marked one.
+  const funniest = funniestRound(ballotsSnap.docs.map((d) => d.data()));
+  const funniestFields = {
+    funniestRound: funniest ? funniest.round : null,
+    funniestRoundVotes: funniest ? funniest.votes : 0,
   };
   // Per-player TOTAL round-weight, kept for the margin/share displays
   // (autoRender's voteMargin, watchFeed's verdict). Used only as a ratio, so
@@ -204,6 +213,7 @@ async function finalizeMatch(matchId, {force = false} = {}) {
       voteFinalized: true,
       winnerId,
       roundsWon,
+      ...funniestFields,
       voteConfidence: voteConfidence(
           judgeWeight, match.settings?.fullConfidenceVotes),
       player1FinalWeight: player1Weight,
@@ -352,6 +362,7 @@ async function finalizeMatch(matchId, {force = false} = {}) {
       voteFinalized: true,
       winnerId,
       roundsWon,
+      ...funniestFields,
       player1FinalWeight: player1Weight,
       player2FinalWeight: player2Weight,
       // Recorded so a thin result is explicable after the fact - "why did

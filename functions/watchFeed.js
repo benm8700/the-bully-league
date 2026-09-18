@@ -266,6 +266,7 @@ module.exports = {
   orderFeed,
   openSortKey,
   verdictFor,
+  clipUrl,
   URGENCY_BAND_MS,
   CLIP_URL_TTL_MS,
 };
