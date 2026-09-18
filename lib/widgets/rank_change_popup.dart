@@ -85,9 +85,9 @@ class _RankChangeDialog extends StatelessWidget {
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 26, 24, 20),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topCenter,
@@ -136,10 +136,13 @@ class _RankChangeDialog extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
-            // The signature: the earned crest pops in over its own glow. Made
-            // the HERO of the popup (developer's call, 2026-09-18) - a small
-            // crest read as boring, so it now dominates the card.
+            const SizedBox(height: 10),
+            // The signature: the earned crest pops in over its own glow. It
+            // is the HERO of the popup (developer's call) and was enlarged
+            // again (2026-09-18) - the box was tightened around it so the
+            // shield dominates. FittedBox(scaleDown) keeps the big size on a
+            // normal phone while guaranteeing it can never overflow the box
+            // on a narrow screen.
             TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: 1),
               duration: const Duration(milliseconds: 700),
@@ -148,22 +151,25 @@ class _RankChangeDialog extends StatelessWidget {
                 opacity: t.clamp(0.0, 1.0),
                 child: Transform.scale(scale: 0.6 + 0.4 * t, child: child),
               ),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      glow.withValues(alpha: up ? 0.5 : 0.2),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.2, 1.0],
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        glow.withValues(alpha: up ? 0.5 : 0.2),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.2, 1.0],
+                    ),
                   ),
+                  child: RankBadge(title: rankTitle, size: 300),
                 ),
-                child: RankBadge(title: rankTitle, size: 240),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
               title,
               textAlign: TextAlign.center,
@@ -172,7 +178,7 @@ class _RankChangeDialog extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Text(
               message,
               textAlign: TextAlign.center,
@@ -181,7 +187,7 @@ class _RankChangeDialog extends StatelessWidget {
                 height: 1.35,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
             SizedBox(
               width: double.infinity,
               child: FilledButton(

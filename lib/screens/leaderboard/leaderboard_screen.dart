@@ -81,8 +81,11 @@ class LeaderboardScreen extends StatelessWidget {
             indicatorColor: Colors.white,
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white.withValues(alpha: 0.55),
+            // Tighter than before: 3 equal-width tabs, and the longest label
+            // ("FUNNIEST") was clipped at letterSpacing 2 / size 15.
             labelStyle: const TextStyle(
-                fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 15),
+                fontWeight: FontWeight.w900, letterSpacing: 0.5, fontSize: 13),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 4),
             tabs: const [
               Tab(text: 'RANKS'),
               Tab(text: 'FAME'),
