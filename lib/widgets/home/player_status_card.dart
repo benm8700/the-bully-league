@@ -111,7 +111,8 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
     // The top two tiers get a GOLD title (the developer's call) so the most
     // prestigious ranks read as prestige; every other tier stays white.
     const prestigeTitles = {'Legend', 'GOAT'};
-    final titleColor = prestigeTitles.contains(title) ? gold : Colors.white;
+    final prestige = prestigeTitles.contains(title);
+    final titleColor = prestige ? gold : Colors.white;
 
     // Rank title + XP bar + XP number.
     final rankColumn = Column(
@@ -208,12 +209,18 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
             child: Align(
               alignment: const Alignment(-0.9, 0.05),
               child: Container(
-                width: 138,
-                height: 138,
+                // The two top tiers get a warmer, wider gold halo so the crest
+                // itself reads as prestige (gold stays the data accent - the
+                // frame remains purple identity).
+                width: prestige ? 156 : 138,
+                height: prestige ? 156 : 138,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
-                    colors: [gold.withValues(alpha: 0.22), Colors.transparent],
+                    colors: [
+                      gold.withValues(alpha: prestige ? 0.36 : 0.22),
+                      Colors.transparent,
+                    ],
                     stops: const [0.0, 1.0],
                   ),
                 ),
