@@ -50,6 +50,10 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
   /// whoever won the most rounds.
   final Map<int, String> _picks = {};
 
+  /// Optional funniest-round nomination - the Funniest Rounds board signal,
+  /// separate from who won each round and never required to submit.
+  int? _funniestRound;
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +83,8 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
           .call<Map<String, dynamic>>({
         'matchId': widget.matchId,
         'picks': _picks.map((k, v) => MapEntry(k.toString(), v)),
+        // ignore: use_null_aware_elements
+        if (_funniestRound != null) 'funniestRound': _funniestRound,
       });
       if (mounted) {
         setState(() {
@@ -185,7 +191,8 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
         _roundRow(context, r),
         const SizedBox(height: 8),
       ],
-      const SizedBox(height: 2),
+      _funniestRow(context, roundCount),
+      const SizedBox(height: 10),
       SizedBox(
         width: double.infinity,
         child: FilledButton(
@@ -246,6 +253,49 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
           fontWeight: sel ? FontWeight.bold : FontWeight.normal,
         ),
       ),
+    );
+  }
+
+  /// Optional "which round was funniest" nomination - the Funniest Rounds
+  /// board signal. One tap, distinct from picking each round's winner, and
+  /// never required to submit (tapping again clears it).
+  Widget _funniestRow(BuildContext context, int roundCount) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(Icons.local_fire_department, color: scheme.primary, size: 18),
+        const SizedBox(width: 6),
+        Text('Funniest round?', style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(width: 10),
+        for (int r = 0; r < roundCount; r++)
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: GestureDetector(
+              onTap: _busy
+                  ? null
+                  : () => setState(
+                      () => _funniestRound = _funniestRound == r ? null : r),
+              child: Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _funniestRound == r
+                      ? scheme.primary
+                      : scheme.onSurface.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('${r + 1}',
+                    style: TextStyle(
+                      color: _funniestRound == r
+                          ? scheme.onPrimary
+                          : scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.bold,
+                    )),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

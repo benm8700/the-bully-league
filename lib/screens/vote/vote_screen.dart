@@ -56,6 +56,11 @@ class _VoteScreenState extends State<VoteScreen> {
   /// Per-round winner picks (round index -> playerId). The match goes to
   /// whoever won the most rounds.
   final Map<int, String> _picks = {};
+
+  /// Optional: which round the judge found funniest - the signal behind the
+  /// Funniest Rounds board, separate from who won each round and never
+  /// required to submit.
+  int? _funniestRound;
   String? _turnstileToken;
   bool _submitting = false;
   String? _errorMessage;
@@ -77,6 +82,8 @@ class _VoteScreenState extends State<VoteScreen> {
         'matchId': widget.matchId,
         // Per-round winners keyed by round index (strings for the wire).
         'picks': _picks.map((k, v) => MapEntry(k.toString(), v)),
+        // ignore: use_null_aware_elements
+        if (_funniestRound != null) 'funniestRound': _funniestRound,
         'turnstileToken': _turnstileToken,
       });
       if (!mounted) return;
@@ -87,6 +94,47 @@ class _VoteScreenState extends State<VoteScreen> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  /// Optional "which round was funniest" selector - the signal behind the
+  /// Funniest Rounds board. One tap, distinct from picking each round's
+  /// winner, and never required to submit (tapping again clears it).
+  Widget _funniestRow(BuildContext context, int roundCount) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(Icons.local_fire_department, color: scheme.primary, size: 18),
+        const SizedBox(width: 6),
+        Text('Funniest round?', style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(width: 10),
+        for (int r = 0; r < roundCount; r++)
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: GestureDetector(
+              onTap: () => setState(
+                  () => _funniestRound = _funniestRound == r ? null : r),
+              child: Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _funniestRound == r
+                      ? scheme.primary
+                      : scheme.onSurface.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('${r + 1}',
+                    style: TextStyle(
+                      color: _funniestRound == r
+                          ? scheme.onPrimary
+                          : scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.bold,
+                    )),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   @override
@@ -206,7 +254,9 @@ class _VoteScreenState extends State<VoteScreen> {
                   ),
                   const SizedBox(height: 10),
                 ],
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
+                _funniestRow(context, roundCount),
+                const SizedBox(height: 10),
                 TurnstileChallenge(
                     onToken: (token) => setState(() => _turnstileToken = token)),
                 const SizedBox(height: 16),
