@@ -143,15 +143,26 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
         const SizedBox(height: 8),
         _XpBar(fill: fill),
         const SizedBox(height: 4),
-        Text(
-          nextXp != null
-              ? '${_comma(xp)} / ${_comma(nextXp)} XP'
-              : '${_comma(xp)} XP',
-          style: text.bodySmall?.copyWith(
-            fontSize: 13,
-            color: const Color(0xFFC2C2C2), // light gray
-            fontWeight: FontWeight.w600,
-            fontFeatures: const [FontFeature.tabularFigures()],
+        // Scale-to-fit rather than wrap: on a narrower phone the rank column
+        // is tight and "920 / 1,200 XP" was wrapping "XP" onto its own line.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              nextXp != null
+                  ? '${_comma(xp)} / ${_comma(nextXp)} XP'
+                  : '${_comma(xp)} XP',
+              maxLines: 1,
+              softWrap: false,
+              style: text.bodySmall?.copyWith(
+                fontSize: 13,
+                color: const Color(0xFFC2C2C2), // light gray
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
           ),
         ),
       ],

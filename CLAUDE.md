@@ -741,12 +741,22 @@ Raised by the developer: what protects someone who is unhappy that their match f
   (advisor pass). Never make XP-per-match or rank thresholds depend on
   subscription - that turns the STATUS ladder pay-to-win, which every
   monetization decision protects against.
-- **EARNABLE BADGES / ACHIEVEMENTS — NEW IDEA (2026-09-14, developer).** Give
+- **EARNABLE BADGES / ACHIEVEMENTS — BUILT (doc caught up 2026-09-18).** Give
   players badges they can earn for doing different things - milestones and
   one-off accomplishments (e.g. first win, a win streak, judging a lot of
   battles, playing during Sixes and Sevens, winning a tournament, a comeback
   after being down, etc.). A collectible layer of recognition on top of the
-  daily quests, shown on the profile.
+  daily quests, shown on the profile. **Now built and live**: `kBadges` in
+  `lib/core/badges/badges.dart` (families: wins, battles-played, judging, plus
+  one-offs like First Blood / Loyal Juror), rendered on the Profile as a badge
+  case with a featured badge, earned off the same metrics the quests/points
+  ledger already track. Device-verified showing real progress (e.g. "Contender
+  14/50"). **Naming rule learned the hard way (2026-09-18 bug scan): a badge
+  title must not reuse a RANK TIER name** - the battles-played level-1 badge
+  was titled "Regular" and sat directly under the "Regular" rank on the
+  profile, reading as a duplicate; renamed to "Road Dog" (id `battles_regular`
+  kept stable so earned badges are not orphaned). Any new badge title must
+  avoid the ten tier names (Average Joe ... GOAT).
   - **THE GUARDRAIL, because of the one-status-ladder rule (see the memory /
     the ONE STATUS LADDER note): rank is the single STATUS ladder, and badges
     must not become a second one.** Badges are ACHIEVEMENTS (many small

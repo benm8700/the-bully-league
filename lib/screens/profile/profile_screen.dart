@@ -15,8 +15,6 @@ import '../../core/services/visual_moderation_service.dart';
 import '../../widgets/badges/badge_case.dart';
 import '../../widgets/badges/featured_badge.dart';
 import '../account/delete_account_screen.dart';
-import '../settings/appearance_screen.dart';
-import '../settings/blocked_players_screen.dart';
 import 'form_card.dart';
 import 'intro_video_card.dart';
 
@@ -462,29 +460,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         'stop appearing in search entirely.',
                       ),
                     ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.palette_outlined),
-                      title: const Text('Appearance'),
-                      subtitle:
-                          const Text('Your skin - Card, and prestige unlocks.'),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const AppearanceScreen(),
-                        ),
-                      ),
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.block),
-                      title: const Text('Blocked players'),
-                      subtitle: const Text('See and undo who you have blocked.'),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const BlockedPlayersScreen(),
-                        ),
-                      ),
-                    ),
+                    // Appearance and Blocked players deliberately live only in
+                    // the Account hub (the Home avatar), not here - they were
+                    // duplicated in both places. The profile keeps the controls
+                    // that are properties of the profile itself.
                     const SizedBox(height: 24),
                     const Divider(),
                     const SizedBox(height: 12),

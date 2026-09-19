@@ -266,6 +266,26 @@ class _FeedPageState extends State<FeedPage> {
                       style: TextStyle(color: Colors.white70))
                   : const CircularProgressIndicator(),
             ),
+          // A subtle top scrim: the feed runs full-bleed under the system
+          // status bar, so its icons and the header chip need a dark wash to
+          // stay legible over a bright clip.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: Container(
+                height: MediaQuery.of(context).padding.top + 56,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x99000000), Color(0x00000000)],
+                  ),
+                ),
+              ),
+            ),
+          ),
           // Paused/ended cue, unless the result box is already covering it.
           if (paused && !_resultShown)
             IgnorePointer(

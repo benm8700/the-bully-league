@@ -47,9 +47,20 @@ class NotificationSettingsScreen extends StatelessWidget {
       description: 'Bracket starts, your next round, and results.',
     ),
     _Category(
+      key: 'followed_performer',
+      title: 'Comedians you follow',
+      description: 'When someone you follow is up in the gauntlet, or drops '
+          'a new clip.',
+    ),
+    _Category(
       key: 'rank_change',
       title: 'Rank changes',
       description: 'When you move up or down a rank.',
+    ),
+    _Category(
+      key: 'weekly_recap',
+      title: 'Weekly recap',
+      description: 'A Sunday summary of what you did this week.',
     ),
   ];
 

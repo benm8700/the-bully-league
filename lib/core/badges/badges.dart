@@ -108,8 +108,11 @@ const List<BadgeDef> kBadges = [
   ),
   // Battles-played family (tiered).
   BadgeDef(
+    // id kept stable (earned badges store it); title renamed off "Regular"
+    // so it no longer collides with the Regular RANK tier shown right above
+    // it on the profile.
     id: 'battles_regular',
-    title: 'Regular',
+    title: 'Road Dog',
     earnedDesc: 'Played 25 battles',
     lockedHint: 'Play 25 battles',
     metric: BadgeMetric.battlesPlayed,
