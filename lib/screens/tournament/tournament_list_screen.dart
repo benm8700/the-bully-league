@@ -343,13 +343,30 @@ int? _aliveCount(Map<String, dynamic> t) {
   return _playersInRound(rounds.last);
 }
 
+/// Whether a tournament is really live RIGHT NOW.
+///
+/// A climb/gauntlet keeps status "in_progress" from creation - which is hours
+/// before its window opens - so status alone would read "LIVE" all afternoon
+/// and disagree with the Home countdown. Liveness is judged on the window
+/// bounds instead (matching the Home banner); formats without a window fall
+/// back to status.
+bool _windowLive(Map<String, dynamic> t) {
+  final start = (t['windowStartMs'] as num?)?.toInt();
+  final end = (t['windowEndMs'] as num?)?.toInt();
+  if (start != null && end != null) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return t['status'] == 'in_progress' && now >= start && now < end;
+  }
+  return t['status'] == 'in_progress';
+}
+
 /// The current-stage label shown in pink, from real state.
 String _stageLabel(Map<String, dynamic> t) {
   final status = t['status'] as String? ?? 'open';
   if (status == 'completed') return 'FINISHED';
   if (status == 'cancelled') return 'CANCELLED';
   if (t['format'] == 'climb') {
-    return status == 'in_progress' ? 'LIVE' : 'GAUNTLET';
+    return _windowLive(t) ? 'LIVE' : 'GAUNTLET';
   }
   final rounds = _rounds(t);
   if (rounds.isEmpty || status != 'in_progress') return 'OPEN';
@@ -379,7 +396,7 @@ String _formatLabel(Map<String, dynamic> t) {
 String? _nextBattleLabel(Map<String, dynamic> t) {
   final status = t['status'] as String? ?? 'open';
   if (status == 'completed' || status == 'cancelled') return null;
-  if (status == 'in_progress') return 'Live now';
+  if (_windowLive(t)) return 'Live now';
   final startsAt = (t['startsAtMs'] as num?)?.toInt() ??
       (t['windowStartMs'] as num?)?.toInt();
   if (startsAt == null) return null;

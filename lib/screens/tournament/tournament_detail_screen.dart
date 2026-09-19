@@ -170,6 +170,24 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     return uid.length > 8 ? uid.substring(0, 8) : uid;
   }
 
+  /// A friendly, window-aware status line - never the raw enum. A climb reads
+  /// "Live now" only inside its window; before it opens, a countdown, so this
+  /// agrees with the Home banner rather than saying "in_progress" all day.
+  String _statusLine(String status, bool liveNow, bool preWindow, int? wStart) {
+    if (status == 'completed') return 'Finished';
+    if (status == 'cancelled') return 'Cancelled';
+    if (liveNow) return 'Live now';
+    if (preWindow && wStart != null) {
+      final d = wStart - DateTime.now().millisecondsSinceEpoch;
+      if (d <= 0) return 'Starting now';
+      final h = d ~/ 3600000;
+      final m = (d ~/ 60000) % 60;
+      return h > 0 ? 'Starts in ${h}h ${m}m' : 'Starts in ${m}m';
+    }
+    if (status == 'open') return 'Open for entries';
+    return 'Under way';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -229,7 +247,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           final name = tournament['name'] as String? ?? 'Unnamed tournament';
           final description = tournament['description'] as String? ?? '';
           final status = tournament['status'] as String? ?? 'open';
-          final prizeType = tournament['prizeType'] as String? ?? 'points';
+          final prizeValue = tournament['prizeValue'] as num? ?? 0;
           final minEntrants = tournament['minEntrants'] as num? ?? 4;
           final winnerId = tournament['winnerId'] as String?;
           final bracket = tournament['bracket'] as Map<String, dynamic>?;
@@ -250,6 +268,22 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
               // a live "most wins" event. One entry into GauntletScreen, which
               // owns signup/roster/battling; bracket UI below is skipped.
               final isSwiss = tournament['format'] == 'swiss';
+              // Window-aware liveness (see tournament_list_screen): a climb
+              // keeps status "in_progress" from creation, so it is only really
+              // live inside its window - matching the Home countdown. Before
+              // the window it reads "Starts in ..." and offers no entry (the
+              // server refuses a join before the window opens anyway).
+              final wStart = (tournament['windowStartMs'] as num?)?.toInt();
+              final wEnd = (tournament['windowEndMs'] as num?)?.toInt();
+              final nowMs = DateTime.now().millisecondsSinceEpoch;
+              final liveNow = (wStart != null && wEnd != null)
+                  ? (status == 'in_progress' &&
+                      nowMs >= wStart &&
+                      nowMs < wEnd)
+                  : status == 'in_progress';
+              final preWindow = wStart != null &&
+                  status == 'in_progress' &&
+                  nowMs < wStart;
               // Whether the signed-in player is already in tonight's bracket,
               // read from their own entrant document (one listener, not two).
               Map<String, dynamic>? myEntrant;
@@ -275,13 +309,18 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                     Text(description),
                     const SizedBox(height: 8),
                   ],
-                  Text('Status: $status'),
-                  Text('Prize: $prizeType'),
+                  Text(
+                    _statusLine(status, liveNow, preWindow, wStart),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  if (prizeValue > 0) Text('Prize: $prizeValue points'),
                   // Climb: one clear entry into the rolling ladder. Everything
                   // bracket-specific below is guarded off for this format.
                   if (isClimb) ...[
                     const SizedBox(height: 16),
-                    if (status == 'open' || status == 'in_progress')
+                    if (status == 'completed' || status == 'cancelled')
+                      const Text('This gauntlet has finished.')
+                    else if (liveNow || status == 'open')
                       FilledButton.icon(
                         onPressed: () async {
                           // Recording-consent acknowledgement before joining,
@@ -305,6 +344,10 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                         icon: const Icon(Icons.trending_up),
                         label: const Text('Enter the gauntlet'),
                       )
+                    else if (preWindow)
+                      const Text(
+                          'Not live yet - come back when the Daily Gauntlet '
+                          'starts.')
                     else
                       const Text('This gauntlet has finished.'),
                   ],
