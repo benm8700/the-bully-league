@@ -62,7 +62,6 @@ const JOBS = [
     note: "renders cost money and time; limited below"},
   {name: "releaseUnansweredChallenges", mod: "../releaseChallenges",
     fn: "releaseUnansweredChallenges"},
-  {name: "rebuildHallOfFame", mod: "../hallOfFame", fn: "rebuildHallOfFame"},
   {name: "purgeExpiredRecordings", mod: "../recordingRetention",
     fn: "purgeExpiredRecordings"},
   {name: "advanceLiveTournaments", mod: "../liveTournament",

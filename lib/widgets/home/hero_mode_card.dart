@@ -279,60 +279,6 @@ class HeroInfoChip extends StatelessWidget {
   }
 }
 
-/// A tight vertical stack of small gold banner words, laid over the
-/// tournament art's side banners (BE FUNNY / WIN VOTES / TAKE THE CROWN on
-/// the left, PRIZES / STATUS / FAME on the right). Deliberately narrow and
-/// heavily shadowed so it stays legible over the busy gold art.
-class HeroBannerText extends StatelessWidget {
-  const HeroBannerText(this.lines, {super.key});
-
-  final List<String> lines;
-
-  @override
-  Widget build(BuildContext context) {
-    // Narrow to fit INSIDE the physical banner near the edge (the banners are
-    // only ~11% of the card wide), with margin to the gold border. Each phrase
-    // is one line - the caller passes the exact lines, e.g. TAKE THE and CROWN
-    // as two separate entries since the narrow banner cannot hold the full
-    // phrase on one line.
-    return SizedBox(
-      width: 44,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final line in lines)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1.2),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  // Uppercase environmental signage on the arena banners.
-                  line.toUpperCase(),
-                  maxLines: 1,
-                  softWrap: false,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    // Warm white / light gold, fitting the black-and-gold arena.
-                    color: Color(0xFFF7E9C6),
-                    fontSize: 8,
-                    height: 1.05,
-                    // Bold; tight spacing reads as condensed signage. (A true
-                    // condensed face would need a bundled font - not worth a
-                    // new dependency for six words of arena signage.)
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
-                    // Very subtle dark shadow, only for legibility over the art.
-                    shadows: [Shadow(color: Colors.black87, blurRadius: 4)],
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Roast a Stranger - the secondary hero. Illustrated red/blue opponents +
 /// VS artwork behind, with the title, subtitle and FIND A MATCH CTA as Flutter
 /// overlays. Pink/red identity, distinct from the gold tournament hero.
