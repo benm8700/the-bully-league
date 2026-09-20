@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Getting the shareable version of one of your own battles.
@@ -184,6 +188,70 @@ class _GetClipSheetState extends State<GetClipSheet> {
     }
   }
 
+  /// Downloads the clip to a temp file and opens the OS share sheet, so it can
+  /// go straight into Instagram / TikTok / Reels / Facebook with the video
+  /// attached. Sharing the FILE (not a link) is what lands the clip in the
+  /// composer, and the watermark is already burned in, so every share carries
+  /// attribution. Gated by owning the clip - the same objection-window check
+  /// the download path runs, since it calls the same endpoint.
+  Future<void> _share() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('getClipDownload')
+          .call<Map<String, dynamic>>({'matchId': widget.matchId});
+      final urls = (result.data['urls'] as Map?)?.cast<String, dynamic>();
+      // Vertical is what people post; landscape is a letterboxed strip.
+      final url = urls?['vertical'] ?? urls?['landscape'];
+      if (url == null) throw Exception('no url');
+      final file = await _downloadToTemp(url as String);
+      if (!mounted) return;
+      // Deliberately does NOT set _done: the share sheet is the feedback, and
+      // keeping the buttons lets them share to another app or save as well.
+      setState(() => _busy = false);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'video/mp4')],
+        text: 'My roast on The Bully League',
+      );
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e.message ?? 'Your clip is not ready yet.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = "Couldn't prepare the clip to share.";
+      });
+    }
+  }
+
+  /// Fetches the clip bytes to a temp file. Uses dart:io directly to avoid
+  /// adding an HTTP dependency; the same file name per match so re-sharing
+  /// overwrites rather than piling up cache files.
+  Future<File> _downloadToTemp(String url) async {
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/bully_league_${widget.matchId}.mp4');
+    final client = HttpClient();
+    try {
+      final req = await client.getUrl(Uri.parse(url));
+      final resp = await req.close();
+      if (resp.statusCode != 200) {
+        throw Exception('download failed (${resp.statusCode})');
+      }
+      final sink = file.openWrite();
+      await resp.pipe(sink);
+      return file;
+    } finally {
+      client.close();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
@@ -231,10 +299,26 @@ class _GetClipSheetState extends State<GetClipSheet> {
                     const SizedBox(height: 12),
                   ],
                   FilledButton.icon(
+                    onPressed: _busy ? null : _share,
+                    icon: const Icon(Icons.ios_share),
+                    label: const Text('Share to social'),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
                     onPressed: _busy ? null : _download,
                     icon: const Icon(Icons.download_outlined),
-                    label: const Text('Download'),
+                    label: const Text('Save to device'),
                   ),
+                  if (_busy) ...[
+                    const SizedBox(height: 12),
+                    const Center(
+                      child: SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ],
                 ] else ...[
                   if (_error != null) ...[
                     _Notice(icon: Icons.error_outline, text: _error!),
