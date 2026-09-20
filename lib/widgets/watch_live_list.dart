@@ -158,29 +158,35 @@ class _WatchLiveListState extends State<WatchLiveList> {
     );
   }
 
-  /// A performer's name with their follower count. The count is shown only
-  /// when there is one - "❤ 0" is noise, and the same honesty rule the live
-  /// online count follows.
+  /// A performer's name over their follower count. Stacked rather than inline
+  /// so the name keeps the full half-width - inline, two counts plus "vs"
+  /// squeeze the names down to an initial. The count is shown only when there
+  /// is one - "❤ 0" is noise, the same honesty rule the live online count
+  /// follows.
   Widget _performer(BuildContext context, String name, int followers) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Flexible(
-          child: Text(name,
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-        ),
-        if (followers > 0) ...[
-          const SizedBox(width: 6),
-          const Icon(Icons.favorite, size: 12, color: kFollowPink),
-          const SizedBox(width: 2),
-          Text(
-            formatFollowerCount(followers),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontWeight: FontWeight.w600,
+        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        if (followers > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.favorite, size: 11, color: kFollowPink),
+                const SizedBox(width: 3),
+                Text(
+                  formatFollowerCount(followers),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
+              ],
+            ),
           ),
-        ],
       ],
     );
   }
