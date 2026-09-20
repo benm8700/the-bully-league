@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../core/services/follows_service.dart';
 import '../screens/tournament/live_viewer_screen.dart';
 import '../theme/app_theme.dart';
+import 'follow_button.dart';
 
 /// What is on right now in a running live tournament.
 ///
@@ -107,9 +109,31 @@ class _WatchLiveListState extends State<WatchLiveList> {
                 // signals.
                 color: live ? context.palette.live : null,
               ),
-              title: Text(
-                '${m['player1Name'] ?? 'Player 1'} vs '
-                '${m['player2Name'] ?? 'Player 2'}',
+              // Follower count next to each name - fame is public, and the
+              // lineup is exactly where a draw is worth seeing.
+              title: Row(
+                children: [
+                  Flexible(
+                    child: _performer(
+                      context,
+                      m['player1Name'] as String? ?? 'Player 1',
+                      (m['player1Followers'] as num?)?.toInt() ?? 0,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Text('vs',
+                        style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.5))),
+                  ),
+                  Flexible(
+                    child: _performer(
+                      context,
+                      m['player2Name'] as String? ?? 'Player 2',
+                      (m['player2Followers'] as num?)?.toInt() ?? 0,
+                    ),
+                  ),
+                ],
               ),
               // Says which of the two states this is, because "waiting for
               // players" and "battle in progress" look identical from a
@@ -130,6 +154,33 @@ class _WatchLiveListState extends State<WatchLiveList> {
             ),
           );
         }),
+      ],
+    );
+  }
+
+  /// A performer's name with their follower count. The count is shown only
+  /// when there is one - "❤ 0" is noise, and the same honesty rule the live
+  /// online count follows.
+  Widget _performer(BuildContext context, String name, int followers) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Text(name,
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+        if (followers > 0) ...[
+          const SizedBox(width: 6),
+          const Icon(Icons.favorite, size: 12, color: kFollowPink),
+          const SizedBox(width: 2),
+          Text(
+            formatFollowerCount(followers),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ],
       ],
     );
   }

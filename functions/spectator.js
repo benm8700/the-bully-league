@@ -193,16 +193,20 @@ async function liveMatchesFor(auth, data) {
   if (!round?.matchups) return {matches: []};
 
   const {tournamentMatchId} = require("./tournamentPlay");
-  // Names resolved here rather than by the client, which would otherwise
-  // do two document reads per matchup just to draw a list.
-  const names = new Map();
-  const nameOf = async (uid) => {
-    if (!uid) return null;
-    if (names.has(uid)) return names.get(uid);
+  // Name and follower count resolved here rather than by the client, which
+  // would otherwise do two document reads per matchup just to draw a list -
+  // and the follower count rides the SAME read, so it costs nothing extra.
+  const meta = new Map();
+  const metaOf = async (uid) => {
+    if (!uid) return {name: null, followers: 0};
+    if (meta.has(uid)) return meta.get(uid);
     const snap = await db.collection("users").doc(uid).get();
-    const name = snap.data()?.username ?? "Unknown";
-    names.set(uid, name);
-    return name;
+    const m = {
+      name: snap.data()?.username ?? "Unknown",
+      followers: Number(snap.data()?.followerCount) || 0,
+    };
+    meta.set(uid, m);
+    return m;
   };
   const out = [];
   for (const [i, m] of round.matchups.entries()) {
@@ -213,12 +217,18 @@ async function liveMatchesFor(auth, data) {
     if (!snap.exists) continue;
     const match = snap.data();
     if (match.status !== "pending" && match.status !== "in_progress") continue;
+    const [p1, p2] = await Promise.all([
+      metaOf(match.player1Id),
+      metaOf(match.player2Id),
+    ]);
     out.push({
       matchId: id,
       player1Id: match.player1Id,
       player2Id: match.player2Id,
-      player1Name: await nameOf(match.player1Id),
-      player2Name: await nameOf(match.player2Id),
+      player1Name: p1.name,
+      player2Name: p2.name,
+      player1Followers: p1.followers,
+      player2Followers: p2.followers,
       roundNumber: round.roundNumber,
       // Both players present means it is actually under way rather than
       // waiting for someone to arrive.

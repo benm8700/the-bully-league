@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/follow_button.dart';
 import '../../widgets/player_avatar.dart';
 import '../battles/get_clip_sheet.dart';
+import '../profile/performer_profile_screen.dart';
 import '../settings/blocked_players_screen.dart';
 import '../moderation/clip_takedown_sheet.dart';
 
@@ -772,6 +774,18 @@ class _BattleCard extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (oppId.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: Text(oppName),
+                subtitle: const Text('View their fame page'),
+                trailing: FollowButton(uid: oppId, compact: true),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  PerformerProfileScreen.open(context, oppId,
+                      username: oppName);
+                },
+              ),
             if (mode != 'exhibition' && status == 'completed')
               ListTile(
                 leading: const Icon(Icons.movie_outlined),

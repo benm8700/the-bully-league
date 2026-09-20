@@ -9,7 +9,9 @@ import '../../widgets/home_action_button.dart';
 
 import '../../core/services/agora_spectator_service.dart';
 import '../../core/services/spectator_service.dart';
+import '../../widgets/follow_button.dart';
 import '../../widgets/live_vote_panel.dart';
+import '../profile/performer_profile_screen.dart';
 
 /// Watching a live tournament battle.
 ///
@@ -219,9 +221,13 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
                                 // assigned server-side at pairing, so the
                                 // layout never has to negotiate who is
                                 // who.
-                                Expanded(child: _tile(1, present)),
+                                Expanded(
+                                    child: _tile(1, present, _player1Id,
+                                        _player1Name)),
                                 const SizedBox(height: 2),
-                                Expanded(child: _tile(2, present)),
+                                Expanded(
+                                    child: _tile(2, present, _player2Id,
+                                        _player2Name)),
                               ],
                             ),
                           );
@@ -243,20 +249,80 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
     );
   }
 
-  Widget _tile(int playerUid, Set<int> present) {
-    final view = _spectator.playerVideo(playerUid);
-    if (view != null) return view;
-    // A player whose stream has not arrived gets an honest placeholder
-    // rather than a black rectangle that reads as a broken app.
-    return ColoredBox(
-      color: const Color(0xFF111111),
-      child: Center(
-        child: Text(
-          present.isEmpty ? 'Waiting for the battle to start...'
-              : 'Waiting for player $playerUid...',
-          style: const TextStyle(color: Colors.white38),
+  Widget _tile(
+      int playerUid, Set<int> present, String? playerId, String playerName) {
+    final view = _spectator.playerVideo(playerUid) ??
+        ColoredBox(
+          color: const Color(0xFF111111),
+          child: Center(
+            child: Text(
+              // A player whose stream has not arrived gets an honest
+              // placeholder rather than a black rectangle that reads as a
+              // broken app.
+              present.isEmpty
+                  ? 'Waiting for the battle to start...'
+                  : 'Waiting for player $playerUid...',
+              style: const TextStyle(color: Colors.white38),
+            ),
+          ),
+        );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        view,
+        // Name + Follow, so the crowd can back a performer they like right
+        // from the live battle - the moment a follow is most earned. The
+        // tag names who they are watching; the button hides itself for your
+        // own battle.
+        Positioned(
+          top: 8,
+          left: 8,
+          child: _PerformerTag(uid: playerId, name: playerName),
         ),
-      ),
+      ],
+    );
+  }
+}
+
+/// A small overlay over a live performer's tile: their name (tap for their
+/// fame page) plus a compact Follow button.
+class _PerformerTag extends StatelessWidget {
+  const _PerformerTag({required this.uid, required this.name});
+
+  final String? uid;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: Colors.black.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(20),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: uid == null
+                ? null
+                : () => PerformerProfileScreen.open(context, uid!,
+                    username: name),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Text(
+                name,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13),
+              ),
+            ),
+          ),
+        ),
+        if (uid != null) ...[
+          const SizedBox(width: 6),
+          FollowButton(uid: uid!, compact: true),
+        ],
+      ],
     );
   }
 }

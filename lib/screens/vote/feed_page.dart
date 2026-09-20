@@ -3,7 +3,9 @@ import 'package:video_player/video_player.dart';
 
 import '../../core/services/watch_feed_service.dart';
 import '../../widgets/clip_reactions.dart';
+import '../../widgets/follow_button.dart';
 import '../moderation/report_screen.dart';
+import '../profile/performer_profile_screen.dart';
 import '../../widgets/live_tally.dart';
 
 /// One battle, full screen. You watch the clip, then pick a winner for EACH
@@ -298,6 +300,7 @@ class _FeedPageState extends State<FeedPage> {
               ),
             ),
           if (controller != null) _playPauseButton(context, paused),
+          _followButton(context),
           if (_canAct && _chosenPlayerId == null && _revealed)
             _pickerPanel(context),
           if (_resultShown) _resultBox(context),
@@ -581,6 +584,64 @@ class _FeedPageState extends State<FeedPage> {
           icon: const Icon(Icons.flag_outlined, color: Colors.white, size: 20),
           tooltip: 'Report',
           onPressed: () => _openReport(context),
+        ),
+      ),
+    );
+  }
+
+  /// Follow one of the two roasters, right from the feed - the app's primary
+  /// content surface, so the place a fan is most likely to discover someone.
+  /// A small circular button on the right rail, tucked under play/pause.
+  Widget _followButton(BuildContext context) {
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 112,
+      right: 8,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.5),
+          shape: BoxShape.circle,
+        ),
+        child: IconButton(
+          icon: const Icon(Icons.person_add_alt_1,
+              color: Colors.white, size: 20),
+          tooltip: 'Follow',
+          onPressed: () => _openFollow(context),
+        ),
+      ),
+    );
+  }
+
+  /// A battle has two people in it, so following asks which - each row opens
+  /// their fame page, and follows inline via the Follow pill.
+  Future<void> _openFollow(BuildContext context) async {
+    final m = widget.match;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+              child: Text(
+                'Follow a roaster',
+                style: Theme.of(sheetContext).textTheme.titleMedium,
+              ),
+            ),
+            for (final p in [
+              (id: m.player1Id, name: m.player1Username),
+              (id: m.player2Id, name: m.player2Username),
+            ])
+              ListTile(
+                title: Text(p.name),
+                trailing: FollowButton(uid: p.id, compact: true),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  PerformerProfileScreen.open(context, p.id, username: p.name);
+                },
+              ),
+          ],
         ),
       ),
     );

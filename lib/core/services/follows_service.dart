@@ -55,3 +55,14 @@ class FollowsService {
 /// Reads a follower count off a user document defensively.
 int followerCountOf(Map<String, dynamic>? user) =>
     ((user?['followerCount'] as num?) ?? 0).toInt();
+
+/// Compact follower count for inline display: 999, 1.2K, 3M.
+String formatFollowerCount(int n) {
+  if (n < 1000) return '$n';
+  if (n < 1000000) {
+    final k = n / 1000;
+    return '${k.toStringAsFixed(k >= 10 ? 0 : 1)}K';
+  }
+  final m = n / 1000000;
+  return '${m.toStringAsFixed(m >= 10 ? 0 : 1)}M';
+}

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/follows_service.dart';
+import '../../widgets/follow_button.dart';
 import '../../widgets/home/rank_badges.dart';
 import '../../widgets/match_clip_player.dart';
 
@@ -103,7 +104,7 @@ class PerformerProfileScreen extends StatelessWidget {
               const SizedBox(height: 22),
               _FollowerCount(count: followers),
               const SizedBox(height: 18),
-              if (!isMe) _FollowButton(uid: uid) else const _ThisIsYou(),
+              if (!isMe) FollowButton(uid: uid) else const _ThisIsYou(),
               const SizedBox(height: 30),
               _ClipsSection(uid: uid),
             ],
@@ -155,74 +156,6 @@ class _FollowerCount extends StatelessWidget {
         ),
       ],
     );
-  }
-}
-
-/// A Follow / Following toggle button, driven live by the follow membership.
-class _FollowButton extends StatefulWidget {
-  const _FollowButton({required this.uid});
-
-  final String uid;
-
-  @override
-  State<_FollowButton> createState() => _FollowButtonState();
-}
-
-class _FollowButtonState extends State<_FollowButton> {
-  final _service = FollowsService();
-  bool _busy = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<bool>(
-      stream: _service.isFollowing(widget.uid),
-      builder: (context, snap) {
-        final following = snap.data ?? false;
-        return SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: following
-              ? OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _toggle(false),
-                  icon: const Icon(Icons.check, size: 18),
-                  label: const Text('Following'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.4)),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                )
-              : FilledButton.icon(
-                  onPressed: _busy ? null : () => _toggle(true),
-                  icon: const Icon(Icons.person_add_alt_1, size: 18),
-                  label: const Text('Follow'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: PerformerProfileScreen._pink,
-                    foregroundColor: Colors.white,
-                    textStyle: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                ),
-        );
-      },
-    );
-  }
-
-  Future<void> _toggle(bool follow) async {
-    setState(() => _busy = true);
-    try {
-      if (follow) {
-        await _service.follow(widget.uid);
-      } else {
-        await _service.unfollow(widget.uid);
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 }
 
