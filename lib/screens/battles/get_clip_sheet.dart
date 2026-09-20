@@ -9,11 +9,11 @@ import 'package:url_launcher/url_launcher.dart';
 /// WHAT IS ACTUALLY BEING BOUGHT, because it is easy to get wrong: every
 /// ranked match already gets a clip - in-app judging needs one, and that
 /// render costs almost nothing. The expensive part is transcription, so
-/// what this buys is the CAPTIONED cut, which is also the version that
-/// works on TikTok and Reels where nearly everyone watches muted. The copy
-/// below says "captions" rather than "your clip" for that reason: claiming
-/// to sell something the app already gives away would read as a con the
-/// first time someone noticed their battle in the feed.
+/// what this buys is the polished, CAPTIONED edit, which is also the version
+/// that works on TikTok and Reels. The copy below sells that finished edit -
+/// keeping your performance - rather than "your clip" outright: claiming to
+/// sell something the app already gives away would read as a con the first
+/// time someone noticed their battle in the feed.
 ///
 /// Three ways to get it, resolved server-side in functions/clipGrants.js -
 /// included with a subscription, bought with points, or purchased outright
@@ -202,8 +202,8 @@ class _GetClipSheetState extends State<GetClipSheet> {
                 Text('Get your clip', style: text.headlineSmall),
                 const SizedBox(height: 8),
                 Text(
-                  'The captioned cut, ready to post. Captions matter more '
-                  'than they sound - most people watch with the sound off.',
+                  'Keep your performance. We cut your battle into a clean, '
+                  'captioned edit - polished and ready to save and share.',
                   style: text.bodyMedium,
                 ),
                 const SizedBox(height: 20),
