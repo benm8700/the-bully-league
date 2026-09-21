@@ -853,6 +853,38 @@ async function getActiveMatch(auth) {
     };
   }
 
+  // A FRIEND match is never in the matchmaking queue (friend isn't a queue
+  // MODE), so the loop above cannot find one the caller backed out of. Look
+  // for a pending friend match they are a participant in, so the same Home
+  // "rejoin" banner can bring them back - previously there was no way back
+  // into an accepted friend battle for either side. Reuses the
+  // (playerId, createdAt) indexes My Battles already declares and filters
+  // mode/status in code, so this needs no new composite index.
+  for (const field of ["player1Id", "player2Id"]) {
+    const recent = await db.collection("matches")
+        .where(field, "==", auth.uid)
+        .orderBy("createdAt", "desc")
+        .limit(10)
+        .get();
+    for (const doc of recent.docs) {
+      const m = doc.data();
+      if (m.mode !== "friend" || m.status !== "pending") continue;
+      return {
+        found: true,
+        matchId: doc.id,
+        channelName: m.channelName,
+        opponentId: m.player1Id === auth.uid ? m.player2Id : m.player1Id,
+        mode: "friend",
+        settings: m.settings ?? null,
+        // Lets the client word the banner for a friend battle rather than a
+        // random opponent ("your friend battle is waiting").
+        origin: "friend",
+        challengerId: null,
+        agoraUid: agoraUidFor(m, auth.uid),
+      };
+    }
+  }
+
   return {found: false};
 }
 

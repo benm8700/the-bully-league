@@ -746,16 +746,22 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
               // as a bug to them; naming what happened reads as the thing
               // they actually asked for.
               Text(
-                _pending?.origin == 'standing'
-                    ? 'Someone took up your challenge'
-                    : 'You have a match waiting',
+                switch (_pending?.origin) {
+                  'standing' => 'Someone took up your challenge',
+                  'friend' => 'Your friend battle is waiting',
+                  _ => 'You have a match waiting',
+                },
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: _rejoin,
                 child: Text(
-                  _pending?.origin == 'standing' ? 'Battle now' : 'Rejoin match',
+                  switch (_pending?.origin) {
+                    'standing' => 'Battle now',
+                    'friend' => 'Rejoin battle',
+                    _ => 'Rejoin match',
+                  },
                 ),
               ),
             ],
