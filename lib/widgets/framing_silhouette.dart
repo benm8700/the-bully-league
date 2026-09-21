@@ -55,13 +55,17 @@ class _FramingPainter extends CustomPainter {
     final head = Rect.fromCenter(center: o(0.50, 0.40), width: w * 0.50, height: h * 0.44);
     final headPath = Path()..addOval(head);
 
-    // Shoulder cue: two soft slopes falling away from under the oval, so
-    // people frame head AND shoulders rather than just a floating face.
+    // Neck + shoulder cue: a short neck dropping from under the oval, then
+    // two slopes sweeping out to the shoulders - connected to the head so it
+    // reads as head-and-shoulders (which the composite crop wants) rather
+    // than two lines floating below a face.
     final shoulders = Path()
-      ..moveTo(w * 0.30, h * 0.68)
-      ..quadraticBezierTo(w * 0.22, h * 0.76, w * 0.13, h * 0.88)
-      ..moveTo(w * 0.70, h * 0.68)
-      ..quadraticBezierTo(w * 0.78, h * 0.76, w * 0.87, h * 0.88);
+      ..moveTo(w * 0.50, h * 0.615)
+      ..lineTo(w * 0.50, h * 0.665)
+      ..moveTo(w * 0.50, h * 0.665)
+      ..quadraticBezierTo(w * 0.34, h * 0.695, w * 0.17, h * 0.85)
+      ..moveTo(w * 0.50, h * 0.665)
+      ..quadraticBezierTo(w * 0.66, h * 0.695, w * 0.83, h * 0.85);
 
     // Angry "game face" - features drawn as light strokes inside the oval.
     // Eyebrows pinch DOWN toward the centre (the classic scowl); the mouth is
