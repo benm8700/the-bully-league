@@ -209,20 +209,36 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
   for (const uid of uids) {
     const videoSegs = segments.filter((s) => s.uid === uid && s.kind === "video");
     if (videoSegs.length === 0) continue;
-    // Video is continuous while a player is publishing (nobody mutes
-    // their camera mid-match), so the first segment's offset positions
-    // the whole track. A second video segment would indicate a
-    // reconnection; renderMatchHighlight logs that case rather than
-    // silently mis-timing it.
-    const first = videoSegs[0];
-    const index = inputIndex++;
-    inputs.push("-i", path.join(localDir, first.path.split("/").pop()));
-    const pad = (first.offsetMs / 1000).toFixed(3);
-    filters.push(
-        `[${index}:v]scale=${tile.width}:${tile.height}:force_original_aspect_ratio=increase,` +
-      `crop=${tile.width}:${tile.height},setsar=1,fps=${OUTPUT_FPS},` +
-      `tpad=start_duration=${pad}:color=black[v${uid}]`,
-    );
+    // Agora chunks each player's CONTINUOUS video into several ~30-40s .ts
+    // segments (ordinary HLS segmentation), so any match longer than one
+    // chunk has multiple video segments even with no reconnect. They are
+    // contiguous - each starts exactly when the previous ends, and only the
+    // AUDIO playlist carries DISCONTINUITY markers (for the muted turns) -
+    // so they are concatenated in chronological order. Rendering only the
+    // first segment (the old behaviour) dropped every player's footage after
+    // ~30s. `segments` is already sorted by offset, so videoSegs is in order.
+    //
+    // Each segment is scaled/cropped/fps'd to the tile BEFORE concat so the
+    // concat inputs are uniform; tpad then positions the whole track at the
+    // first segment's offset, which aligns with the audio (both measured
+    // from the same t0).
+    const scaled = [];
+    for (const seg of videoSegs) {
+      const index = inputIndex++;
+      inputs.push("-i", path.join(localDir, seg.path.split("/").pop()));
+      filters.push(
+          `[${index}:v]scale=${tile.width}:${tile.height}:force_original_aspect_ratio=increase,` +
+        `crop=${tile.width}:${tile.height},setsar=1,fps=${OUTPUT_FPS}[vp${uid}_${index}]`,
+      );
+      scaled.push(`[vp${uid}_${index}]`);
+    }
+    const pad = (videoSegs[0].offsetMs / 1000).toFixed(3);
+    if (scaled.length === 1) {
+      filters.push(`${scaled[0]}tpad=start_duration=${pad}:color=black[v${uid}]`);
+    } else {
+      filters.push(`${scaled.join("")}concat=n=${scaled.length}:v=1:a=0[vc${uid}]`);
+      filters.push(`[vc${uid}]tpad=start_duration=${pad}:color=black[v${uid}]`);
+    }
     videoLabels.push(`[v${uid}]`);
   }
 
@@ -362,10 +378,6 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
   }
   for (const uid of timeline.uids) {
     const videoCount = timeline.segments.filter((s) => s.uid === uid && s.kind === "video").length;
-    if (videoCount > 1) {
-      warnings.push(`player ${uid} has ${videoCount} video segments - likely a reconnect; ` +
-        `only the first is rendered, so later footage is missing`);
-    }
     if (videoCount === 0) warnings.push(`player ${uid} published no video`);
   }
 

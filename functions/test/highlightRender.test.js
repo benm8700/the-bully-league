@@ -154,6 +154,35 @@ test("filter input indices count inputs, not argv entries", () => {
   }
 });
 
+test("all of a player's video segments are concatenated, not just the first", () => {
+  // Agora chunks continuous video into several contiguous ~30-40s .ts
+  // segments (ordinary HLS segmentation), so a match longer than one chunk
+  // has multiple video segments with no reconnect. Rendering only the first
+  // (the old behaviour) dropped every player's footage after ~30s.
+  const args = argsFor([
+    seg("1", "video", "20260813234113000"),
+    seg("1", "video", "20260813234143000"),
+    seg("1", "video", "20260813234213000"),
+    seg("1", "audio", "20260813234113000"),
+  ]);
+  const graph = args[args.indexOf("-filter_complex") + 1];
+  const inputCount = args.filter((a) => a === "-i").length;
+  assert.strictEqual(inputCount, 4, "every video segment must be its own input");
+  assert.ok(/concat=n=3:v=1:a=0/.test(graph),
+      "the three video segments must be concatenated in order");
+});
+
+test("a single video segment renders without a concat filter", () => {
+  // The common short-match path stays exactly as it was: one segment is
+  // tpad'd straight to its offset, no concat stage.
+  const args = argsFor([
+    seg("1", "video", "20260813234113000"),
+    seg("1", "audio", "20260813234113000"),
+  ]);
+  const graph = args[args.indexOf("-filter_complex") + 1];
+  assert.ok(!/concat=/.test(graph), "a single segment needs no concat filter");
+});
+
 test("truncated segments are dropped when sizes are supplied", () => {
   // A few-millisecond trailing fragment can be undecodable and abort the
   // entire render; one unusable scrap must not cost the whole clip.
