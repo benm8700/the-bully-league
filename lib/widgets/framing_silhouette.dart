@@ -1,41 +1,42 @@
 import 'package:flutter/material.dart';
 
-/// A framing guide shaped like a person flipping the bird, shared by the
-/// pre-match check and the tutorial so the framing you practise is exactly
-/// the framing you see before every battle.
+/// The pre-match framing guide, shared by the camera check and the tutorial so
+/// the framing you practise is the framing you see before every battle.
 ///
-/// The head-and-shoulders bust is still the functional part - it tells you
-/// where to sit so the camera catches you well (propped phone, seated at
-/// table distance, a steady shot mattering more than anything). The raised
-/// arm and the extended middle finger are attitude: this is a roast app, the
-/// guide is only ever seen in-app by signed-in adults during the camera
-/// check, and a defiant little ghost sets the tone better than a polite
-/// oval did.
+/// It is a transparent HEAD OVAL you line your face up in, a light shoulder
+/// cue below it (so head AND shoulders land in frame - which is what the
+/// stacked highlight composite needs), and a faint ANGRY "game face" inside
+/// the oval. The old full-body silhouette locked people into one pose and
+/// body shape, so most real people never fit it; an oval only cares about
+/// your face, which is all the framing actually needs. The scowl is the
+/// on-brand bit - this is a roast app, seen only in-app by signed-in adults
+/// during the camera check, so "bring your game face" beats a polite oval.
 ///
-/// Built as ONE unioned path so the translucent fill never double-blends at
-/// the seams, then given a dark under-stroke beneath a white line so it
-/// stays legible against both a bright and a dark camera feed.
+/// Drawn with a dark under-stroke beneath a white line so it stays legible
+/// over both a bright and a dark camera feed.
 class FramingSilhouette extends StatelessWidget {
   const FramingSilhouette({super.key});
 
   @override
   Widget build(BuildContext context) {
     return const CustomPaint(
-      painter: _SilhouettePainter(),
+      painter: _FramingPainter(),
       child: SizedBox.expand(),
     );
   }
 }
 
-class _SilhouettePainter extends CustomPainter {
-  const _SilhouettePainter();
+class _FramingPainter extends CustomPainter {
+  const _FramingPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
-    final figure = _figurePath(size);
+    final w = size.width;
+    final h = size.height;
+    Offset o(double fx, double fy) => Offset(w * fx, h * fy);
 
     final fill = Paint()
-      ..color = Colors.white.withValues(alpha: 0.12)
+      ..color = Colors.white.withValues(alpha: 0.10)
       ..style = PaintingStyle.fill;
     final under = Paint()
       ..color = Colors.black.withValues(alpha: 0.35)
@@ -50,121 +51,55 @@ class _SilhouettePainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    canvas.drawPath(figure, fill);
-    canvas.drawPath(figure, under);
-    canvas.drawPath(figure, line);
-  }
+    // Head oval - the thing you line your face up with.
+    final head = Rect.fromCenter(center: o(0.50, 0.40), width: w * 0.50, height: h * 0.44);
+    final headPath = Path()..addOval(head);
 
-  /// The whole figure as a single filled outline: head, neck, torso, the arm
-  /// resting at the left, and the right arm raised into a fist with the
-  /// middle finger up.
-  Path _figurePath(Size size) {
-    final w = size.width;
-    final h = size.height;
-    Offset o(double fx, double fy) => Offset(w * fx, h * fy);
+    // Shoulder cue: two soft slopes falling away from under the oval, so
+    // people frame head AND shoulders rather than just a floating face.
+    final shoulders = Path()
+      ..moveTo(w * 0.30, h * 0.68)
+      ..quadraticBezierTo(w * 0.22, h * 0.76, w * 0.13, h * 0.88)
+      ..moveTo(w * 0.70, h * 0.68)
+      ..quadraticBezierTo(w * 0.78, h * 0.76, w * 0.87, h * 0.88);
 
-    // Head - the centred anchor you line your face up with. Sized about a
-    // third of the shoulder width, which is roughly the real ratio and reads
-    // more like a person than the earlier oversized head.
-    Path figure = Path()
-      ..addOval(Rect.fromCenter(
-        center: o(0.50, 0.215),
-        width: w * 0.215,
-        height: h * 0.165,
-      ));
+    // Angry "game face" - features drawn as light strokes inside the oval.
+    // Eyebrows pinch DOWN toward the centre (the classic scowl); the mouth is
+    // a downturned frown. Kept faint so you can still line your own face up.
+    final brows = Path()
+      // left brow: outer-high to inner-low
+      ..moveTo(w * 0.36, h * 0.345)
+      ..lineTo(w * 0.465, h * 0.40)
+      // right brow: outer-high to inner-low (mirror)
+      ..moveTo(w * 0.64, h * 0.345)
+      ..lineTo(w * 0.535, h * 0.40);
 
-    Path union(Path a, Path b) => Path.combine(PathOperation.union, a, b);
+    final mouth = Path()
+      ..moveTo(w * 0.40, h * 0.605)
+      ..quadraticBezierTo(w * 0.50, h * 0.545, w * 0.60, h * 0.605);
 
-    // Neck - tapered, reaching down far enough to bridge cleanly into the
-    // torso so there is no gap at the centre of the chest.
-    figure = union(figure, _capsule(o(0.50, 0.275), o(0.50, 0.47), w * 0.044));
+    // Eyes - small filled dots under the pinched brows.
+    final eyeR = w * 0.020;
+    final leftEye = o(0.42, 0.455);
+    final rightEye = o(0.58, 0.455);
 
-    // SLOPED SHOULDERS. Real shoulders fall away from the neck rather than
-    // sitting flat, so each is a thick capsule running from the neck base
-    // DOWN and out to a rounded deltoid - that slope is most of what makes a
-    // silhouette read as a body instead of a bell.
-    final neckBaseL = o(0.455, 0.42);
-    final neckBaseR = o(0.545, 0.42);
-    final deltoidL = o(0.255, 0.50);
-    final deltoidR = o(0.70, 0.49);
-    figure = union(figure, _capsule(neckBaseL, deltoidL, w * 0.058));
-    figure = union(figure, _capsule(neckBaseR, deltoidR, w * 0.058));
+    // Head first (faint fill + outline).
+    canvas.drawPath(headPath, fill);
+    canvas.drawPath(headPath, under);
+    canvas.drawPath(headPath, line);
 
-    // Torso - a clean upper body with a STRAIGHT top edge (no concave rim),
-    // tapering from the shoulders down to a narrower chest/waist so it reads
-    // as a person cut off at the chest rather than a wide gown. The resting
-    // left arm is folded into this shape; only the right arm is drawn
-    // separately, raised.
-    final torso = Path()
-      ..moveTo(w * 0.25, h * 0.47)
-      ..quadraticBezierTo(w * 0.30, h * 0.70, w * 0.35, h * 0.93)
-      ..lineTo(w * 0.65, h * 0.93)
-      ..quadraticBezierTo(w * 0.70, h * 0.70, w * 0.74, h * 0.47)
-      ..close();
-    figure = union(figure, torso);
-
-    // Upper-chest filler: a solid trapezoid tucked under the neck and over
-    // the shoulder/torso seam. Purely interior - it closes the little gaps
-    // that would otherwise leave stroked holes where the neck, the two
-    // sloped shoulders and the torso top all meet.
-    final chest = Path()
-      ..moveTo(w * 0.36, h * 0.44)
-      ..lineTo(w * 0.64, h * 0.44)
-      ..lineTo(w * 0.70, h * 0.55)
-      ..lineTo(w * 0.30, h * 0.55)
-      ..close();
-    figure = union(figure, chest);
-
-    // Right arm raised, bent at the elbow: deltoid -> elbow (out and up) ->
-    // wrist (forearm rising, tucked slightly inward). Tapers from a fuller
-    // upper arm to a slimmer forearm.
-    final elbow = o(0.81, 0.31);
-    final wrist = o(0.725, 0.185);
-    figure = union(figure, _capsule(deltoidR, elbow, w * 0.056));
-    figure = union(figure, _capsule(elbow, wrist, w * 0.046));
-
-    // Fist - a little fuller than the forearm so it reads as a closed hand.
-    figure = union(
-      figure,
-      Path()
-        ..addOval(Rect.fromCenter(
-          center: o(0.72, 0.15),
-          width: w * 0.145,
-          height: h * 0.066,
-        )),
-    );
-
-    // The middle finger, standing up out of the fist - the whole point.
-    figure = union(figure, _capsule(o(0.72, 0.135), o(0.72, 0.055), w * 0.029));
-
-    return figure;
-  }
-
-  /// A rounded "capsule" (a thick line with round ends) as a fillable path,
-  /// built from the connecting quad plus a circle at each end. Used for the
-  /// neck, the two arm segments and the finger so every joint unions into
-  /// the body without a seam.
-  Path _capsule(Offset a, Offset b, double r) {
-    final d = b - a;
-    final len = d.distance;
-    if (len < 1e-3) {
-      return Path()..addOval(Rect.fromCircle(center: a, radius: r));
+    // Then the face + shoulders as strokes.
+    for (final p in [shoulders, brows, mouth]) {
+      canvas.drawPath(p, under);
+      canvas.drawPath(p, line);
     }
-    final ux = d.dx / len;
-    final uy = d.dy / len;
-    final px = -uy * r; // perpendicular offset
-    final py = ux * r;
-    final quad = Path()
-      ..moveTo(a.dx + px, a.dy + py)
-      ..lineTo(b.dx + px, b.dy + py)
-      ..lineTo(b.dx - px, b.dy - py)
-      ..lineTo(a.dx - px, a.dy - py)
-      ..close();
-    Path out = Path.combine(PathOperation.union, quad,
-        Path()..addOval(Rect.fromCircle(center: a, radius: r)));
-    out = Path.combine(PathOperation.union, out,
-        Path()..addOval(Rect.fromCircle(center: b, radius: r)));
-    return out;
+
+    // Eyes: a dark halo under a white dot so they read on any background.
+    canvas.drawCircle(leftEye, eyeR + 1.2, Paint()..color = Colors.black.withValues(alpha: 0.35));
+    canvas.drawCircle(rightEye, eyeR + 1.2, Paint()..color = Colors.black.withValues(alpha: 0.35));
+    final eyePaint = Paint()..color = Colors.white.withValues(alpha: 0.85);
+    canvas.drawCircle(leftEye, eyeR, eyePaint);
+    canvas.drawCircle(rightEye, eyeR, eyePaint);
   }
 
   @override
