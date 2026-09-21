@@ -3,14 +3,13 @@ import 'package:flutter/material.dart';
 /// The pre-match framing guide, shared by the camera check and the tutorial so
 /// the framing you practise is the framing you see before every battle.
 ///
-/// It is a transparent HEAD OVAL you line your face up in, a light shoulder
-/// cue below it (so head AND shoulders land in frame - which is what the
-/// stacked highlight composite needs), and a faint ANGRY "game face" inside
-/// the oval. The old full-body silhouette locked people into one pose and
-/// body shape, so most real people never fit it; an oval only cares about
-/// your face, which is all the framing actually needs. The scowl is the
-/// on-brand bit - this is a roast app, seen only in-app by signed-in adults
-/// during the camera check, so "bring your game face" beats a polite oval.
+/// It is a transparent smiley face - a circle you line your own face up in,
+/// with X eyes and a grin. The X-eyed grin is the on-brand "roasted to death,
+/// still laughing" bit; it is only ever seen in-app by signed-in adults during
+/// the camera check, so a playful KO face beats a plain oval. The old
+/// full-body silhouette locked people into one pose and body shape, so most
+/// real people never fit it; a face circle only cares about your head, which
+/// is all the framing actually needs.
 ///
 /// Drawn with a dark under-stroke beneath a white line so it stays legible
 /// over both a bright and a dark camera feed.
@@ -47,63 +46,49 @@ class _FramingPainter extends CustomPainter {
     final line = Paint()
       ..color = Colors.white.withValues(alpha: 0.85)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
+      ..strokeWidth = 3
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    // Head oval - the thing you line your face up with.
-    final head = Rect.fromCenter(center: o(0.50, 0.40), width: w * 0.50, height: h * 0.44);
-    final headPath = Path()..addOval(head);
+    // Face circle - the thing you line your head up with. Everything else is
+    // sized off its radius so the smiley stays proportioned on any screen.
+    final c = o(0.50, 0.42);
+    final r = w * 0.30;
+    final headPath = Path()..addOval(Rect.fromCircle(center: c, radius: r));
 
-    // Neck + shoulder cue: a short neck dropping from under the oval, then
-    // two slopes sweeping out to the shoulders - connected to the head so it
-    // reads as head-and-shoulders (which the composite crop wants) rather
-    // than two lines floating below a face.
-    final shoulders = Path()
-      ..moveTo(w * 0.50, h * 0.615)
-      ..lineTo(w * 0.50, h * 0.665)
-      ..moveTo(w * 0.50, h * 0.665)
-      ..quadraticBezierTo(w * 0.34, h * 0.695, w * 0.17, h * 0.85)
-      ..moveTo(w * 0.50, h * 0.665)
-      ..quadraticBezierTo(w * 0.66, h * 0.695, w * 0.83, h * 0.85);
+    // X eyes: two short crossing strokes each, up and out from the centre.
+    final eyeDx = r * 0.42;
+    final eyeDy = r * 0.26;
+    final e = r * 0.15; // half-size of each X
+    final leftEye = c + Offset(-eyeDx, -eyeDy);
+    final rightEye = c + Offset(eyeDx, -eyeDy);
+    final eyes = Path();
+    for (final ec in [leftEye, rightEye]) {
+      eyes
+        ..moveTo(ec.dx - e, ec.dy - e)
+        ..lineTo(ec.dx + e, ec.dy + e)
+        ..moveTo(ec.dx - e, ec.dy + e)
+        ..lineTo(ec.dx + e, ec.dy - e);
+    }
 
-    // Angry "game face" - features drawn as light strokes inside the oval.
-    // Eyebrows pinch DOWN toward the centre (the classic scowl); the mouth is
-    // a downturned frown. Kept faint so you can still line your own face up.
-    final brows = Path()
-      // left brow: outer-high to inner-low
-      ..moveTo(w * 0.36, h * 0.345)
-      ..lineTo(w * 0.465, h * 0.40)
-      // right brow: outer-high to inner-low (mirror)
-      ..moveTo(w * 0.64, h * 0.345)
-      ..lineTo(w * 0.535, h * 0.40);
-
+    // Grin: an upturned arc across the lower half of the circle.
+    final smileHalf = r * 0.44;
+    final smileY = c.dy + r * 0.28;
+    final smileDip = r * 0.36;
     final mouth = Path()
-      ..moveTo(w * 0.40, h * 0.605)
-      ..quadraticBezierTo(w * 0.50, h * 0.545, w * 0.60, h * 0.605);
+      ..moveTo(c.dx - smileHalf, smileY)
+      ..quadraticBezierTo(c.dx, smileY + smileDip, c.dx + smileHalf, smileY);
 
-    // Eyes - small filled dots under the pinched brows.
-    final eyeR = w * 0.020;
-    final leftEye = o(0.42, 0.455);
-    final rightEye = o(0.58, 0.455);
-
-    // Head first (faint fill + outline).
+    // Circle first (faint fill + outline).
     canvas.drawPath(headPath, fill);
     canvas.drawPath(headPath, under);
     canvas.drawPath(headPath, line);
 
-    // Then the face + shoulders as strokes.
-    for (final p in [shoulders, brows, mouth]) {
+    // Then the X eyes and the grin as strokes, dark halo under white line.
+    for (final p in [eyes, mouth]) {
       canvas.drawPath(p, under);
       canvas.drawPath(p, line);
     }
-
-    // Eyes: a dark halo under a white dot so they read on any background.
-    canvas.drawCircle(leftEye, eyeR + 1.2, Paint()..color = Colors.black.withValues(alpha: 0.35));
-    canvas.drawCircle(rightEye, eyeR + 1.2, Paint()..color = Colors.black.withValues(alpha: 0.35));
-    final eyePaint = Paint()..color = Colors.white.withValues(alpha: 0.85);
-    canvas.drawCircle(leftEye, eyeR, eyePaint);
-    canvas.drawCircle(rightEye, eyeR, eyePaint);
   }
 
   @override

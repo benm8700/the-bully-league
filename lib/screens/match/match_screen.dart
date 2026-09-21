@@ -82,6 +82,7 @@ class _MatchScreenState extends State<MatchScreen> {
   StreamSubscription<Map<String, dynamic>>? _msgSub;
   StreamSubscription<RawVideoFrame>? _frameSampleSub;
   StreamSubscription<RawVideoFrame>? _localFrameSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _matchDocSub;
   final CaptureQualityMonitor _quality = CaptureQualityMonitor();
   Completer<void>? _earlyEndCompleter;
   bool _processingFrame = false;
@@ -144,6 +145,21 @@ class _MatchScreenState extends State<MatchScreen> {
     if (!mounted) return;
     setState(() => _initialized = true);
     _msgSub = _videoCallService.matchMessages.listen(_onMessage);
+    // SERVER-AUTHORITATIVE BACKSTOP for ending the match. Turn state is
+    // driven peer-to-peer over Agora's data channel, whose messages are not
+    // guaranteed delivery. An intermediate lost message self-heals (the next
+    // absolute state message resyncs us), but the FINAL verdict message has
+    // no "next message" to heal it - so if it drops, the guest hangs forever
+    // on "Waiting for opponent..." while the host has already reached the
+    // verdict and left. Observed live, repeatedly. The match document IS
+    // authoritative for completion (the host's completeMatch marks it
+    // terminal), so listen for that and end cleanly no matter what the data
+    // channel did.
+    _matchDocSub = FirebaseFirestore.instance
+        .collection('matches')
+        .doc(widget.pairing.matchId)
+        .snapshots()
+        .listen(_onMatchDoc);
     // Frame sampling can start right at join now. It previously had to
     // wait for an 'identity' message carrying the opponent's Firebase uid,
     // because _handleContentViolation's report-filing is guarded on having
@@ -403,6 +419,27 @@ class _MatchScreenState extends State<MatchScreen> {
     }
   }
 
+  /// The match document reached a terminal status server-side. If we haven't
+  /// already ended (either the data channel delivered the verdict, or a
+  /// content violation ended us), force the verdict now - this is what
+  /// rescues a guest stranded on a mid-match turn because the host's final
+  /// state message was lost. [_applyState] mutes, leaves the channel and
+  /// calls [_completeMatch] (idempotent server-side), exactly as the normal
+  /// verdict transition does.
+  void _onMatchDoc(DocumentSnapshot<Map<String, dynamic>> snap) {
+    if (!mounted) return;
+    final status = snap.data()?['status'] as String?;
+    const terminal = {'completed', 'abandoned', 'disqualified'};
+    if (status == null || !terminal.contains(status)) return;
+    if (_phase == _Phase.verdict || _violationEnded) return;
+    _applyState(
+      phase: _Phase.verdict,
+      turnIndex: _totalTurns,
+      activeUid: null,
+      duration: 0,
+    );
+  }
+
   /// HOST-ONLY: pair the captured turn spans into per-round clip windows.
   /// A round is two consecutive turns (player 1 then player 2), so round R
   /// runs from turn 2R's start to turn 2R+1's end. Returns null for the
@@ -440,14 +477,26 @@ class _MatchScreenState extends State<MatchScreen> {
     required int duration,
     bool allowEarlyEnd = false,
   }) async {
-    _applyState(phase: phase, turnIndex: turnIndex, activeUid: activeUid, duration: duration);
-    await _videoCallService.sendMatchMessage({
+    final message = {
       'type': 'state',
       'phase': phase.name,
       'turnIndex': turnIndex,
       'activeUid': activeUid,
       'duration': duration,
-    });
+    };
+    // On the VERDICT, _applyState leaves the Agora channel - so broadcast the
+    // final state to the guest BEFORE tearing the channel down, otherwise the
+    // host leaves (racing the unawaited leaveChannel) before the send goes
+    // out and the guest never learns the match ended, hanging forever on
+    // "Waiting for opponent...". For every other phase, apply-then-send keeps
+    // the host a hair ahead of the guest, exactly as before.
+    if (phase == _Phase.verdict) {
+      await _videoCallService.sendMatchMessage(message);
+      _applyState(phase: phase, turnIndex: turnIndex, activeUid: activeUid, duration: duration);
+    } else {
+      _applyState(phase: phase, turnIndex: turnIndex, activeUid: activeUid, duration: duration);
+      await _videoCallService.sendMatchMessage(message);
+    }
 
     if (duration == 0) return;
     // Capture the actual [start,end] of each TURN (offsets into the clip),
@@ -492,6 +541,15 @@ class _MatchScreenState extends State<MatchScreen> {
         // Both mics open - the one beat where the two players talk freely.
         _videoCallService.muteLocalAudio(false);
       case _Phase.turn:
+      case _Phase.countdown:
+        // Pre-warm the upcoming speaker's mic during the "get ready"
+        // countdown so Agora's audio stream is already flowing when the turn
+        // (and its recording window) begins. Unmuting at the exact turn start
+        // left the stream to spin up while the player was already talking,
+        // which clipped the first word off that round's recording. The
+        // countdown carries the SAME activeUid as the turn that follows, so
+        // the opponent stays muted throughout - only the person about to
+        // speak goes live early, during their own "get ready".
         _videoCallService.muteLocalAudio(activeUid != _myUid);
       case _Phase.verdict:
         // The match is over. Mute AND leave the channel so audio does not
@@ -506,7 +564,6 @@ class _MatchScreenState extends State<MatchScreen> {
         // and this way a host that crashes right at the verdict doesn't
         // leave the match stuck "pending" until the hourly sweep.
         unawaited(_completeMatch());
-      case _Phase.countdown:
       case _Phase.waitingForOpponent:
         _videoCallService.muteLocalAudio(true);
     }
@@ -538,6 +595,7 @@ class _MatchScreenState extends State<MatchScreen> {
   void dispose() {
     _ticker?.cancel();
     _msgSub?.cancel();
+    _matchDocSub?.cancel();
     _frameSampleSub?.cancel();
     _localFrameSub?.cancel();
     _videoCallService.localAudioLevel.removeListener(_onLocalAudioLevel);
