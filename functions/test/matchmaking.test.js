@@ -24,6 +24,9 @@ const {
   isOnCooldown,
   utcDayKey,
   TIER_WIDEN_INTERVAL_MS,
+  TIER_WIDEN_MIN_MS,
+  TIER_WIDEN_MAX_MS,
+  clampTierWidenMs,
   REPEAT_OPPONENT_COOLDOWN_MS,
   STALE_ENTRY_MS,
   MAX_SKIPS_PER_DAY,
@@ -87,6 +90,42 @@ test("widening keeps expanding until even the widest gap matches", () => {
       selectOpponent(q, "a", eventually).uid,
       "b",
       "nobody should be able to wait forever",
+  );
+});
+
+test("clampTierWidenMs accepts an in-range value and rounds to ms", () => {
+  assert.strictEqual(clampTierWidenMs(15), 15000);
+  assert.strictEqual(clampTierWidenMs(5), TIER_WIDEN_MIN_MS);
+  assert.strictEqual(clampTierWidenMs(120), TIER_WIDEN_MAX_MS);
+  assert.strictEqual(clampTierWidenMs(12.4), 12000);
+});
+
+test("clampTierWidenMs rejects out-of-range or non-numeric values", () => {
+  // Rejected -> null, so the caller keeps the default rather than pairing on
+  // a nonsense interval a console typo introduced.
+  assert.strictEqual(clampTierWidenMs(0), null);
+  assert.strictEqual(clampTierWidenMs(4), null, "below the 5s floor");
+  assert.strictEqual(clampTierWidenMs(9999), null, "above the 120s ceiling");
+  assert.strictEqual(clampTierWidenMs(-10), null);
+  assert.strictEqual(clampTierWidenMs("15"), null, "a string is not a number");
+  assert.strictEqual(clampTierWidenMs(undefined), null);
+  assert.strictEqual(clampTierWidenMs(NaN), null);
+  assert.strictEqual(clampTierWidenMs(Infinity), null);
+});
+
+test("a custom (shorter) widen interval pairs a cross-tier gap sooner", () => {
+  // The interval is now live-configurable (config/matchSettings.tierWidenSeconds),
+  // threaded through selectOpponent. A 1-tier gap needs band 1: with a 5s
+  // interval that arrives at 5s, where the 15s default would still refuse.
+  const q = queueOf(entry("a", {tierIndex: 4}), entry("b", {tierIndex: 5}));
+  const at5s = NOW + 5000;
+  assert.strictEqual(
+      selectOpponent(q, "a", at5s, 5000).uid, "b",
+      "a 5s interval should pair a 1-tier gap at 5s",
+  );
+  assert.strictEqual(
+      selectOpponent(q, "a", at5s, TIER_WIDEN_INTERVAL_MS), null,
+      "the 15s default should still refuse the same gap at 5s",
   );
 });
 

@@ -66,13 +66,64 @@ const ELITE_RANK_TITLES = ["Featured Talent", "GOAT"];
 
 const MODES = ["exhibition", "ranked", "elite"];
 
-/** Every 30s of waiting widens the acceptable tier gap by one, per
- * CLAUDE.md's matchmaking fallback decision ("gradually widen the tier
+/** Each widen interval of waiting widens the acceptable tier gap by one,
+ * per CLAUDE.md's matchmaking fallback decision ("gradually widen the tier
  * search range further over time... rather than waiting indefinitely or
  * falling back to a truly unrestricted match"). Band 0 = same tier only,
  * band 1 = ±1 tier, and so on - so it starts strict and eventually
- * matches anyone rather than leaving someone queued forever. */
-const TIER_WIDEN_INTERVAL_MS = 30 * 1000;
+ * matches anyone rather than leaving someone queued forever.
+ *
+ * This is the DEFAULT/fallback; the live value comes from
+ * config/matchSettings.tierWidenSeconds via getTierWidenMs(). Lowered from
+ * 30s to 15s: in a thin pool two players one tier apart could not pair for a
+ * full 30s (they must wait for band 1), which reads as "matchmaking is
+ * broken" during a private beta. It is live-tunable so the developer can
+ * trade pairing speed against skill-appropriateness from the console as the
+ * pool grows, without shipping a new app version - same rationale as the
+ * per-match timings. */
+const TIER_WIDEN_INTERVAL_MS = 15 * 1000;
+const TIER_WIDEN_MIN_MS = 5 * 1000;
+const TIER_WIDEN_MAX_MS = 120 * 1000;
+// Cached in-memory per function instance so this costs at most one Firestore
+// read per instance per TTL, NOT one per poll - polling happens every few
+// seconds per waiting client, and reading config on each would scale a cost
+// with exactly the traffic this feature exists to serve (the same reasoning
+// that made the online count a scheduled job rather than a per-poll write).
+const TIER_WIDEN_TTL_MS = 60 * 1000;
+let _tierWidenCache = {ms: null, at: 0};
+
+/** Clamps a configured tierWidenSeconds to a valid interval in ms, or null
+ * if it is not a finite number or is out of bounds - in which case the
+ * caller keeps the default. Pure, so the bounds rule is unit-testable
+ * without Firestore. */
+function clampTierWidenMs(secs) {
+  if (typeof secs !== "number" || !Number.isFinite(secs)) return null;
+  const ms = Math.round(secs) * 1000;
+  if (ms < TIER_WIDEN_MIN_MS || ms > TIER_WIDEN_MAX_MS) return null;
+  return ms;
+}
+
+/** The live tier-widening interval in ms, read from
+ * config/matchSettings.tierWidenSeconds and bounds-checked, cached per
+ * instance. Never throws - an unreadable or out-of-range value falls back to
+ * the default, because failing to read one tuning knob is no reason to stop
+ * pairing people. */
+async function getTierWidenMs() {
+  const now = Date.now();
+  if (_tierWidenCache.ms !== null && now - _tierWidenCache.at < TIER_WIDEN_TTL_MS) {
+    return _tierWidenCache.ms;
+  }
+  let ms = TIER_WIDEN_INTERVAL_MS;
+  try {
+    const snap = await getFirestore().collection("config").doc("matchSettings").get();
+    const clamped = clampTierWidenMs(snap.exists ? snap.data().tierWidenSeconds : undefined);
+    if (clamped !== null) ms = clamped;
+  } catch (e) {
+    console.error("tierWidenSeconds read failed, using default:", e.message);
+  }
+  _tierWidenCache = {ms, at: now};
+  return ms;
+}
 
 /** CLAUDE.md's repeat-opponent cooldown: 1 day ideal, but "if no other
  * opponent is available, they can still be matched again sooner" -
@@ -359,7 +410,7 @@ function isOnCooldown(a, b, now) {
  * Mutates `queue` only by deleting stale entries. Returns the chosen
  * opponent, or null when nobody is currently compatible.
  */
-function selectOpponent(queue, uid, now) {
+function selectOpponent(queue, uid, now, tierWidenMs = TIER_WIDEN_INTERVAL_MS) {
   const me = queue[uid];
   // A standing entry can still be paired FROM as well as against - the
   // player may have reopened the app and started polling again, and there
@@ -407,7 +458,7 @@ function selectOpponent(queue, uid, now) {
   // being overwritten when that user queues again.
   if (!queue[uid]) return null; // our own entry was the stale one
 
-  const band = Math.floor((now - me.joinedAt) / TIER_WIDEN_INTERVAL_MS);
+  const band = Math.floor((now - me.joinedAt) / tierWidenMs);
   const myBlocked = me.blockedUserIds ?? [];
 
   const candidates = Object.values(queue).filter((o) =>
@@ -519,10 +570,10 @@ function applyPairing(queue, uid, opponentId, matchId, channelName) {
  * is fine at private-beta volume and is the documented scaling limit
  * here; sharding by tier band is the natural fix if it ever matters.
  */
-async function attemptPairing(uid, mode, matchId, channelName, now) {
+async function attemptPairing(uid, mode, matchId, channelName, now, tierWidenMs = TIER_WIDEN_INTERVAL_MS) {
   const result = await queueRef(mode).transaction((queue) => {
     if (!queue) return queue;
-    const opponent = selectOpponent(queue, uid, now);
+    const opponent = selectOpponent(queue, uid, now, tierWidenMs);
     if (!opponent) return; // abort: not queued, already paired, or nobody compatible
     return applyPairing(queue, uid, opponent.uid, matchId, channelName);
   });
@@ -648,12 +699,13 @@ async function pollMatchmaking(auth, data) {
   const matchRef = db.collection("matches").doc();
   const channelName = `match_${matchRef.id}`;
 
-  const paired = await attemptPairing(uid, mode, matchRef.id, channelName, now);
+  const tierWidenMs = await getTierWidenMs();
+  const paired = await attemptPairing(uid, mode, matchRef.id, channelName, now, tierWidenMs);
   if (!paired) {
     return {
       status: "searching",
       waitedMs: now - entry.joinedAt,
-      tierBand: Math.floor((now - entry.joinedAt) / TIER_WIDEN_INTERVAL_MS),
+      tierBand: Math.floor((now - entry.joinedAt) / tierWidenMs),
     };
   }
 
@@ -1356,6 +1408,10 @@ module.exports = {
   applyPairing,
   isOnCooldown,
   TIER_WIDEN_INTERVAL_MS,
+  TIER_WIDEN_MIN_MS,
+  TIER_WIDEN_MAX_MS,
+  getTierWidenMs,
+  clampTierWidenMs,
   REPEAT_OPPONENT_COOLDOWN_MS,
   STALE_ENTRY_MS,
   earliestQueuedAt,
