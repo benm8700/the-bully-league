@@ -455,6 +455,22 @@ exports.publishOnlineCount = onSchedule("every 1 minutes", async () => {
 });
 
 /**
+ * Rolls a recent sample of matches into stats/matchStats once a day - round
+ * length, completion rate, votes per match, counts by mode. The data already
+ * lives on match documents (host-recorded roundBoundaries); this makes it
+ * readable without a manual query. See matchStats.js.
+ */
+exports.aggregateMatchStats = onSchedule("every 24 hours", async () => {
+  const {aggregateMatchStats} = require("./matchStats");
+  try {
+    const stats = await aggregateMatchStats();
+    console.log("aggregateMatchStats:", JSON.stringify(stats));
+  } catch (err) {
+    console.error("aggregateMatchStats failed:", err);
+  }
+});
+
+/**
  * The daily window's "it's starting" push, plus a last call before it
  * closes. Polls every 5 minutes rather than firing on a 6pm cron, because
  * the hours live in Firestore and are provisional - see eventWindowPush.js.

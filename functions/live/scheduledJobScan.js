@@ -75,6 +75,7 @@ const JOBS = [
     fn: "sweepExpiredMatches"},
   {name: "sweepClimb", mod: "../climbPlay", fn: "sweepClimb"},
   {name: "sweepGauntlet", mod: "../swissPlay", fn: "sweepGauntlet"},
+  {name: "aggregateMatchStats", mod: "../matchStats", fn: "aggregateMatchStats"},
 ];
 
 /**
