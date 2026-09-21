@@ -100,7 +100,7 @@ class HeroModeCard extends StatelessWidget {
               Image.asset(
                 asset,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => DecoratedBox(
+                errorBuilder: (_, _, _) => DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
