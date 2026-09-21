@@ -494,7 +494,13 @@ class _MatchScreenState extends State<MatchScreen> {
       case _Phase.turn:
         _videoCallService.muteLocalAudio(activeUid != _myUid);
       case _Phase.verdict:
-        _videoCallService.muteLocalAudio(false);
+        // The match is over. Mute AND leave the channel so audio does not
+        // keep relaying between the two phones on the "Match complete!"
+        // screen, and so an idle channel is not billed. The old behaviour
+        // left both mics open (for a verdict reveal that does not exist
+        // yet), which is what caused live cross-talk after the match ended.
+        _videoCallService.muteLocalAudio(true);
+        unawaited(_videoCallService.leaveChannel());
         // BOTH devices settle the match, not just the host - the call is
         // idempotent server-side (the second one returns alreadySettled),
         // and this way a host that crashes right at the verdict doesn't
@@ -543,16 +549,75 @@ class _MatchScreenState extends State<MatchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Match')),
-      body: _error != null
-          ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))
-          : !_initialized
-              ? const Center(child: CircularProgressIndicator())
-              : _violationEnded
-                  ? _buildViolationEndedUi()
-                  : _buildMatchUi(),
+    // Leaving mid-battle can forfeit the match, so guard the back arrow AND
+    // the system back gesture with a confirmation. Once the match is over
+    // (verdict or a violation end) or it never really started (error/
+    // loading), leaving is free and the normal back button applies.
+    final canLeaveFreely = _error != null ||
+        !_initialized ||
+        _violationEnded ||
+        _phase == _Phase.verdict;
+    return PopScope(
+      canPop: canLeaveFreely,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (await _confirmLeave() && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Match'),
+          automaticallyImplyLeading: canLeaveFreely,
+          leading: canLeaveFreely
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Leave match',
+                  onPressed: () async {
+                    if (await _confirmLeave() && context.mounted) {
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+        ),
+        body: _error != null
+            ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))
+            : !_initialized
+                ? const Center(child: CircularProgressIndicator())
+                : _violationEnded
+                    ? _buildViolationEndedUi()
+                    : _buildMatchUi(),
+      ),
     );
+  }
+
+  /// Confirmation before abandoning a live battle. The back arrow and the
+  /// system back gesture both route through this, because leaving mid-match
+  /// can count as a forfeit (see the mid-match disconnect rule) and an
+  /// accidental tap should never silently end the battle.
+  Future<bool> _confirmLeave() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Leave the match?'),
+        content: const Text(
+          'The battle is still going. If you leave now you may forfeit - it '
+          'can count as a loss, and your opponent keeps going without you.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep battling'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   Widget _buildViolationEndedUi() {
