@@ -293,7 +293,11 @@ class RoastHero extends StatelessWidget {
     return HeroModeCard(
       asset: 'assets/home/roast_hero.png',
       glow: accent,
-      aspectRatio: 3 / 2,
+      // More compact than 3/2 - shorter so it reads as the clear second option
+      // under the tournament hero and both cards clear the fold on shorter
+      // screens. Display-only crop; the roaster art stays centred and the file
+      // is untouched.
+      aspectRatio: 5 / 3,
       onTap: onFindMatch,
       centerAlignment: const Alignment(0, -0.5),
       center: Text(
@@ -317,7 +321,7 @@ class RoastHero extends StatelessWidget {
           HeroTitle('ROAST A STRANGER', color: accent),
           const SizedBox(height: 6),
           const HeroSubtitle('RANDOM OPPONENT. REAL ROASTS.'),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(

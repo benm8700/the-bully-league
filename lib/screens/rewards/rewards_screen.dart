@@ -227,9 +227,9 @@ class _RewardsScreenState extends State<RewardsScreen> {
     final affordable = _balance >= _clipPrice;
     return _RewardTile(
       emoji: '🎬',
-      title: 'Captioned clip',
-      subtitle: 'The captioned cut of one of your battles - pick a battle to '
-          'spend it on.',
+      title: 'Highlight Reel',
+      subtitle: 'A studio-style edit of one of your battles — captioned, '
+          'polished, and ready to share. Yours to keep.',
       price: _clipPrice,
       affordable: affordable,
       actionLabel: 'My Battles',

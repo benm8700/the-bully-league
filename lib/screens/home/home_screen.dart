@@ -137,7 +137,7 @@ class HomeScreen extends StatelessWidget {
                     // first. Tapping it goes to the tournament, where
                     // check-in lives.
                     const EventWindowBanner(),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     // Secondary hero: Roast a Stranger (play now). Illustrated
                     // red/blue VS artwork with the title, subtitle and FIND A
                     // MATCH CTA as Flutter overlays - distinct from the gold
@@ -151,7 +151,7 @@ class HomeScreen extends StatelessWidget {
                     // players who can't enter - it is a reward you see
                     // appear when you reach the top.
                     if (uid != null) _EliteLeagueCard(uid: uid),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 14),
                     // Quick Actions row (Home overhaul): Daily Challenges /
                     // Free Rewards / Current Streak. The Daily Challenges card
                     // opens the full quests in a sheet, so the tall inline

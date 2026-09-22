@@ -109,35 +109,68 @@ class _RankChangeDialog extends StatelessWidget {
     final Color accent = up ? _gold : const Color(0xFFB9B2C4);
     final Color glow = up ? _gold : _purple;
 
+    // A metallic gradient FRAME instead of a flat border - richer and more
+    // prestigious. Bright-to-deep gold for a promotion; cool purple for a
+    // demotion. The frame is a gradient-filled box with the dark card padded
+    // 2px inside it.
+    final Gradient frame = up
+        ? const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFCEB9B), _gold, Color(0xFF9A6B10)],
+          )
+        : LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [_purple.withValues(alpha: 0.75), const Color(0xFF3A2F4A)],
+          );
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF241A33), Color(0xFF120D1A)],
-          ),
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: _purple.withValues(alpha: 0.55), width: 1.5),
+          gradient: frame,
+          borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: glow.withValues(alpha: up ? 0.40 : 0.22),
-              blurRadius: 34,
-              spreadRadius: 2,
+              color: glow.withValues(alpha: up ? 0.45 : 0.22),
+              blurRadius: 46,
+              spreadRadius: 3,
             ),
           ],
         ),
-        // Scrolls if the content is taller than the screen allows - the
-        // top-rank messages (Featured Talent especially) are a paragraph.
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.82,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(26),
+            child: Stack(
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      // Richer, glossier purple: a bright lilac-purple top that
+                      // deepens to near-black, so light reads as catching the
+                      // top of a polished surface.
+                      colors: [
+                        Color(0xFF4A3170),
+                        Color(0xFF291940),
+                        Color(0xFF120D1A),
+                      ],
+                      stops: [0.0, 0.42, 1.0],
+                    ),
+                  ),
+                  // Scrolls if the content is taller than the screen allows -
+                  // the top-rank messages (Featured Talent) are a paragraph.
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.82,
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // Eyebrow: what just happened, in one loud little word.
@@ -224,10 +257,104 @@ class _RankChangeDialog extends StatelessWidget {
               ),
             ),
           ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Pristine top gloss - a stronger glass highlight across the
+                // top edge, so the purple reads as polished rather than flat.
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 130,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Color(0x4DFFFFFF),
+                            Color(0x14FFFFFF),
+                            Colors.transparent,
+                          ],
+                          stops: [0.0, 0.45, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // A one-time shine sweep across the card, for the shiny pop.
+                const Positioned.fill(
+                  child: IgnorePointer(child: _ShineSweep()),
+                ),
+              ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A single diagonal light sweep across the card on appear - the "shiny"
+/// touch. One-shot: it plays once and then sits still (a repeating shimmer
+/// would read as a loading state, not a trophy).
+class _ShineSweep extends StatefulWidget {
+  const _ShineSweep();
+
+  @override
+  State<_ShineSweep> createState() => _ShineSweepState();
+}
+
+class _ShineSweepState extends State<_ShineSweep>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1500),
+  )..forward();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final h = constraints.maxHeight;
+        return AnimatedBuilder(
+          animation: _c,
+          builder: (context, _) {
+            final t = Curves.easeInOut.transform(_c.value);
+            return Transform.translate(
+              offset: Offset(-w * 0.7 + t * (w * 1.7), 0),
+              child: Transform.rotate(
+                angle: -0.42,
+                child: Container(
+                  width: w * 0.35,
+                  height: h * 1.8,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Colors.transparent,
+                        Colors.white.withValues(alpha: 0.24),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

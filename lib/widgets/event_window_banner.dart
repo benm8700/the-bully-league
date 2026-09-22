@@ -127,9 +127,14 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // The full baked artwork, uncropped (aspect matches).
+                        // The baked artwork. A wider display ratio (was
+                        // 1608/978) trims the card height ~14% with a small
+                        // top/bottom cover-crop - the image FILE is untouched,
+                        // only how it is displayed. Keeps the card the primary
+                        // hero while giving Roast a Stranger more room and
+                        // reading tighter (targeting shorter iPhone screens).
                         AspectRatio(
-                          aspectRatio: 1608 / 978,
+                          aspectRatio: 1608 / 840,
                           child: Stack(
                             fit: StackFit.expand,
                             children: [

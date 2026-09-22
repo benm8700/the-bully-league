@@ -52,8 +52,12 @@ class _FramingPainter extends CustomPainter {
 
     // Face circle - the thing you line your head up with. Everything else is
     // sized off its radius so the smiley stays proportioned on any screen.
-    final c = o(0.50, 0.42);
-    final r = w * 0.30;
+    final c = o(0.50, 0.30);
+    // Deliberately smaller than face-filling: a smaller circle makes people
+    // sit BACK from the camera (framing head-and-shoulders) rather than
+    // pressing their face right up to the lens. Sat high in the frame so
+    // there is no wasted dead space above the head.
+    final r = w * 0.20;
     final headPath = Path()..addOval(Rect.fromCircle(center: c, radius: r));
 
     // X eyes: two short crossing strokes each, up and out from the centre.
