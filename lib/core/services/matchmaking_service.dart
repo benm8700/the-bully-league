@@ -19,7 +19,7 @@ class MatchSettings {
     this.roundLengthSeconds = 15,
     this.countdownSeconds = 5,
     this.bioRevealSeconds = 60,
-    this.warmupSeconds = 30,
+    this.warmupSeconds = 20,
   });
 
   final int roundCount;

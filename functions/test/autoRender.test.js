@@ -16,6 +16,7 @@ const {
   selectForCaptioning,
   voteMargin,
   MAX_ATTEMPTS,
+  MIN_RENDER_DELAY_MS,
   CAPTION_TOP_N,
   CAPTION_WEEKLY_CAP,
 } = require("../autoRender");
@@ -42,6 +43,20 @@ check("a finished ranked match with footage gets rendered", () => {
 check("a match still in progress is left alone", () => {
   assert.strictEqual(needsFirstRender({...ready, status: "pending"}), false);
   assert.strictEqual(needsFirstRender({...ready, status: "abandoned"}), false);
+});
+
+check("a JUST-completed match waits, so Agora can finish uploading audio", () => {
+  const now = 1_700_000_000_000;
+  // Completed 30s ago -> too soon: rendering now would miss late-uploading
+  // audio segments and produce a silent clip.
+  const justNow = {...ready, completedAt: now - 30 * 1000};
+  assert.strictEqual(needsFirstRender(justNow, now), false);
+  // Completed comfortably past the delay -> render.
+  const settled = {...ready, completedAt: now - MIN_RENDER_DELAY_MS - 1000};
+  assert.strictEqual(needsFirstRender(settled, now), true);
+  // A Firestore Timestamp shape (toMillis) is honoured too.
+  const tsShape = {...ready, completedAt: {toMillis: () => now - 30 * 1000}};
+  assert.strictEqual(needsFirstRender(tsShape, now), false);
 });
 
 check("exhibition matches are never rendered", () => {

@@ -361,6 +361,34 @@ class _MatchScreenState extends State<MatchScreen> {
     }
   }
 
+  /// Coin-flip for who roasts first this match. Derived deterministically
+  /// from the shared matchId (sum of its char codes), so BOTH devices compute
+  /// the same answer with no server round-trip - the host drives the turn
+  /// order and the guest mirrors it, but each side can also tell whether IT
+  /// goes first for the warmup indicator. The chosen player leads EVERY round.
+  ///
+  /// Replaces the old "host (player1) always goes first", which handed
+  /// whoever drew the lower Agora uid a consistent going-first position every
+  /// round of every match. matchId is a random id, so this is an even flip.
+  bool _hostGoesFirst() {
+    final sum = widget.pairing.matchId.codeUnits
+        .fold<int>(0, (a, b) => a + b);
+    return sum.isEven;
+  }
+
+  /// The Agora uid that roasts first, or null before host election has set
+  /// the two uids. The lower uid is the host (player1); the flip decides
+  /// whether the lower or higher uid leads. Identical on both devices.
+  int? _firstUid() {
+    if (_myUid == null || _opponentUid == null) return null;
+    final lower = _myUid! < _opponentUid! ? _myUid! : _opponentUid!;
+    final higher = _myUid! < _opponentUid! ? _opponentUid! : _myUid!;
+    return _hostGoesFirst() ? lower : higher;
+  }
+
+  /// Whether THIS device roasts first this match (for the warmup indicator).
+  bool get _iGoFirst => _firstUid() != null && _firstUid() == _myUid;
+
   Future<void> _runHostSequence() async {
     // The Warmup Round: the first live beat of the battle, both mics OPEN
     // (unlike the turns), for open banter / a staredown before round 1. It
@@ -376,9 +404,13 @@ class _MatchScreenState extends State<MatchScreen> {
         duration: _warmupSeconds,
       );
     }
+    // Coin-flipped leader (see _hostGoesFirst); the chosen player takes the
+    // first turn of every round. On the host, _myUid is the lower uid.
+    final firstUid = _hostGoesFirst() ? _myUid! : _opponentUid!;
+    final secondUid = _hostGoesFirst() ? _opponentUid! : _myUid!;
     for (var i = 0; i < _totalTurns; i++) {
       if (_violationEnded) return;
-      final activeUid = (i.isEven) ? _myUid! : _opponentUid!;
+      final activeUid = (i.isEven) ? firstUid : secondUid;
       await _hostAdvance(phase: _Phase.countdown, turnIndex: i, activeUid: activeUid, duration: _countdownSeconds);
       if (_violationEnded) return;
       await _hostAdvance(
@@ -785,6 +817,23 @@ class _MatchScreenState extends State<MatchScreen> {
                 'Both mics are open - loosen up',
                 style: TextStyle(color: Colors.white70, fontSize: 13),
               ),
+              // Who leads off, surfaced during the warmup so the first roaster
+              // knows to be ready before round 1 starts (coin-flipped, so it
+              // is not always the same player). Only shown once host election
+              // has set the uids.
+              if (_firstUid() != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _iGoFirst ? "You're up first" : 'Opponent goes first',
+                  style: TextStyle(
+                    color: _iGoFirst
+                        ? Colors.amberAccent
+                        : Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ],
           ),
         ),

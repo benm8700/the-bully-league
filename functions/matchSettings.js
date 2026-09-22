@@ -34,10 +34,10 @@ const DEFAULTS = {
   roundLengthSeconds: 15,
   countdownSeconds: 5,
   bioRevealSeconds: 60,
-  // The live "Warmup Round" that opens a battle - both mics open, ~30s of
+  // The live "Warmup Round" that opens a battle - both mics open, ~20s of
   // banter/staredown before round 1 (recorded, spectator-visible). Stamped
   // on the match so both players run the same clock. 0 disables it.
-  warmupSeconds: 30,
+  warmupSeconds: 20,
   /**
    * Vote weight at which a result counts for full rating movement (see
    * voteConfidence in rating.js).

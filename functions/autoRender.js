@@ -45,6 +45,16 @@ const RENDERS_PER_RUN = 3;
  * forever would burn compute on it indefinitely. */
 const MAX_ATTEMPTS = 3;
 
+/** How long after a match completes before it is eligible to render. Agora
+ * uploads each player's audio + video HLS segments ASYNCHRONOUSLY after the
+ * match ends, and rendering before the AUDIO segments finish uploading
+ * produces a SILENT clip - renderMatchHighlight lists Storage at render time,
+ * so segments that have not landed yet are simply absent from the timeline.
+ * This bit every freshly-rendered clip. A short wait is the simple, robust
+ * fix: a clip is not needed instantly (the vote window is 24h), and a silent
+ * clip is useless for judging or posting. */
+const MIN_RENDER_DELAY_MS = 5 * 60 * 1000;
+
 /**
  * How many clips earn captions, as a rolling top-N over the trailing week
  * rather than a fixed vote threshold.
@@ -182,10 +192,19 @@ function selectForCaptioning(candidates, {
  * Pure so the rules can be tested without Firestore or ffmpeg - the same
  * approach that caught the tournament bye bug before it reached a device.
  */
-function needsFirstRender(match) {
+function needsFirstRender(match, nowMs = Date.now()) {
   if (!match) return false;
   if (match.status !== "completed") return false;
   if (!RECORDED_MODES.includes(match.mode)) return false;
+  // Give Agora time to finish uploading ALL of the recording's segments -
+  // especially the audio - before rendering, or the clip comes out silent
+  // (see MIN_RENDER_DELAY_MS). Skipped when completedAt is absent: test
+  // fixtures omit it, and every real completed match has one.
+  const completedMs = match.completedAt?.toMillis?.() ??
+      (typeof match.completedAt === "number" ? match.completedAt : null);
+  if (completedMs !== null && nowMs - completedMs < MIN_RENDER_DELAY_MS) {
+    return false;
+  }
   // Nothing to render until the recorder has actually produced files.
   if (!Array.isArray(match.recording?.files) || match.recording.files.length === 0) {
     return false;
@@ -329,6 +348,7 @@ module.exports = {
   voteMargin,
   RENDERS_PER_RUN,
   MAX_ATTEMPTS,
+  MIN_RENDER_DELAY_MS,
   CAPTION_TOP_N,
   CAPTION_WEEKLY_CAP,
 };
