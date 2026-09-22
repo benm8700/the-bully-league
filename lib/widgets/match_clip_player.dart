@@ -3,6 +3,10 @@ import 'package:video_player/video_player.dart';
 
 import '../core/route_observer.dart';
 
+/// Which player's half of the stacked clip is picked as the winner. The clip
+/// composites player 1 on TOP and player 2 on the BOTTOM.
+enum ClipSelectRegion { none, top, bottom }
+
 /// Plays a match's highlight clip, so someone judging a battle can
 /// actually watch it.
 ///
@@ -23,9 +27,22 @@ class MatchClipPlayer extends StatefulWidget {
     this.watchSecondsRequired = 0,
     this.startMs,
     this.endMs,
+    this.onSelectTop,
+    this.onSelectBottom,
+    this.selectedRegion = ClipSelectRegion.none,
   });
 
   final String? videoUrl;
+
+  /// "Pick a winner" mode. When [onSelectTop]/[onSelectBottom] are provided,
+  /// tapping the TOP half of the stacked clip picks the top player and the
+  /// BOTTOM half picks the bottom player, and [selectedRegion] gets a bright
+  /// green outline. In this mode the tap-to-play/pause is disabled (the clip
+  /// loops on its own); rewinding is still the scrub bar. The selection IS the
+  /// video box, so nothing overlays and blocks the players.
+  final VoidCallback? onSelectTop;
+  final VoidCallback? onSelectBottom;
+  final ClipSelectRegion selectedRegion;
 
   /// Optional clip segment. When BOTH are set (and endMs > startMs) the
   /// player shows ONLY [startMs, endMs] of the clip - it seeks there on
@@ -263,34 +280,113 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
         alignment: Alignment.center,
         children: [
           VideoPlayer(controller),
-          // Tap anywhere to play/pause. No custom chrome: the clip is
-          // vertical and short, and controls overlaying a face is exactly
-          // the wrong place for them.
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              _wantPlaying = !_wantPlaying;
-              _syncPlayback();
-              setState(() {});
-            },
-            child: AnimatedOpacity(
-              opacity: controller.value.isPlaying ? 0 : 1,
-              duration: const Duration(milliseconds: 150),
-              child: Container(
-                color: Colors.black26,
-                child: const Center(
-                  child: Icon(Icons.play_arrow, size: 56, color: Colors.white),
-                ),
-              ),
-            ),
-          ),
+          // In "pick a winner" mode, the two halves of the stacked clip are
+          // the tap targets - tap a player's box to select them, tap the
+          // other to switch. Otherwise, tap anywhere to play/pause.
+          if (_selectionMode) _selectionLayer() else _playPauseLayer(controller),
+          // Playback controls: a restart button plus a clearly visible,
+          // draggable scrubber lifted off the bottom edge. Scrubbing was
+          // always enabled, but a hairline bar flush to the edge read as
+          // "no rewind" - and judges need to go back and re-hear a line.
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: VideoProgressIndicator(controller, allowScrubbing: true),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(4, 12, 12, 10),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black54],
+                ),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.replay, color: Colors.white),
+                    tooltip: 'Restart',
+                    onPressed: () {
+                      controller.seekTo(_segStart);
+                      _wantPlaying = true;
+                      _syncPlayback();
+                      setState(() {});
+                    },
+                  ),
+                  Expanded(
+                    child: VideoProgressIndicator(
+                      controller,
+                      allowScrubbing: true,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      colors: const VideoProgressColors(
+                        playedColor: Colors.white,
+                        bufferedColor: Colors.white38,
+                        backgroundColor: Colors.white24,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  bool get _selectionMode =>
+      widget.onSelectTop != null || widget.onSelectBottom != null;
+
+  Widget _playPauseLayer(VideoPlayerController controller) {
+    // Tap anywhere to play/pause. No custom chrome: the clip is vertical and
+    // short, and controls overlaying a face is exactly the wrong place.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        _wantPlaying = !_wantPlaying;
+        _syncPlayback();
+        setState(() {});
+      },
+      child: AnimatedOpacity(
+        opacity: controller.value.isPlaying ? 0 : 1,
+        duration: const Duration(milliseconds: 150),
+        child: Container(
+          color: Colors.black26,
+          child: const Center(
+            child: Icon(Icons.play_arrow, size: 56, color: Colors.white),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _selectionLayer() {
+    return Positioned.fill(
+      child: Column(
+        children: [
+          Expanded(child: _selectHalf(top: true)),
+          Expanded(child: _selectHalf(top: false)),
+        ],
+      ),
+    );
+  }
+
+  Widget _selectHalf({required bool top}) {
+    final region = top ? ClipSelectRegion.top : ClipSelectRegion.bottom;
+    final selected = widget.selectedRegion == region;
+    const green = Color(0xFF31D67A);
+    // JUST the outline - no fill, glow or badge, so it never covers the faces.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: top ? widget.onSelectTop : widget.onSelectBottom,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: selected ? green : Colors.transparent,
+            width: 5,
+          ),
+        ),
       ),
     );
   }

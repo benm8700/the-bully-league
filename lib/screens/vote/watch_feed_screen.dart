@@ -65,11 +65,31 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
   }
 
   @override
+  void didUpdateWidget(WatchFeedScreen old) {
+    super.didUpdateWidget(old);
+    // Returning to the Judge tab reloads it, so a battle that finished
+    // rendering while the viewer was on another tab shows up without an app
+    // relaunch. The tab is kept mounted in the shell's IndexedStack, so
+    // initState fires only once - this is the only signal that the tab has
+    // come back into view. Quiet, so clips already on screen do not flash a
+    // spinner.
+    if (widget.isActiveTab && !old.isActiveTab) {
+      _load(quiet: true);
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final foreground = state == AppLifecycleState.resumed;
     if (foreground != _appForeground) {
       // Rebuild so the active FeedPage recomputes isActive and pauses/plays.
       setState(() => _appForeground = foreground);
+    }
+    // Coming back from the background also reloads, so clips that rendered
+    // while the app was away are picked up. Only when this tab is on screen -
+    // no point fetching for a hidden one.
+    if (foreground && widget.isActiveTab) {
+      _load(quiet: true);
     }
   }
 
@@ -82,11 +102,21 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _matches = null;
-      _error = null;
-    });
+  /// Loads (or reloads) the feed.
+  ///
+  /// [quiet] keeps whatever is already on screen while the new page is
+  /// fetched, so a background refresh (returning to the tab, or resuming the
+  /// app) never flashes a spinner over clips already in view. A quiet reload
+  /// also resets to the top - which is both the point of the Judge tab
+  /// ("most urgent first") and how a freshly-rendered clip that finished
+  /// AFTER the tab first loaded finally surfaces.
+  Future<void> _load({bool quiet = false}) async {
+    if (!quiet) {
+      setState(() {
+        _matches = null;
+        _error = null;
+      });
+    }
     try {
       final page = await _service.fetch();
       final remaining = await _service.sessionVotesRemaining();
@@ -96,13 +126,21 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
         _votesRemaining = remaining;
         _cursorMs = page.nextCursorMs;
         _exhausted = page.nextCursorMs == null;
+        _index = 0;
+        _error = null;
       });
+      if (quiet && _pageController.hasClients) {
+        _pageController.jumpToPage(0);
+      }
     } catch (e) {
       if (!mounted) return;
-      // Was 'Could not load battles: $e', which rendered a six-frame
-      // Dart stack trace into the middle of the app's main content
-      // surface.
-      setState(() => _error = friendlyError(e, doing: 'loading battles'));
+      // A background refresh that fails must not wipe the clips already on
+      // screen - only a foreground load surfaces the error. Was
+      // 'Could not load battles: $e', which rendered a six-frame Dart stack
+      // trace into the middle of the app's main content surface.
+      if (!quiet) {
+        setState(() => _error = friendlyError(e, doing: 'loading battles'));
+      }
     }
   }
 

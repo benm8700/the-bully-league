@@ -3,7 +3,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../theme/app_theme.dart';
 import '../../widgets/live_tally.dart';
 import '../../widgets/match_clip_player.dart';
 import '../../widgets/turnstile_challenge.dart';
@@ -53,13 +52,18 @@ class _VoteScreenState extends State<VoteScreen> {
 
   bool _watchedEnough = false;
 
-  /// Per-round winner picks (round index -> playerId). The match goes to
-  /// whoever won the most rounds.
-  final Map<int, String> _picks = {};
+  /// The single overall winner the judge picked, by tapping that player's
+  /// half of the stacked clip. The match goes to whoever gets the most
+  /// winner votes. (This replaced per-round voting - the developer's call:
+  /// tapping a player's video box to pick the winner, nothing overlaying and
+  /// blocking the players.)
+  String? _selectedWinner;
 
   /// Optional: which round the judge found funniest - the signal behind the
-  /// Funniest Rounds board, separate from who won each round and never
-  /// required to submit.
+  /// Best Rounds board, entirely SEPARATE from who won the match and never
+  /// required to submit. This is what keeps that board working under
+  /// overall-winner voting: "who won" and "which round was funniest" are two
+  /// different questions.
   int? _funniestRound;
   String? _turnstileToken;
   bool _submitting = false;
@@ -70,7 +74,7 @@ class _VoteScreenState extends State<VoteScreen> {
   bool _justVoted = false;
 
   Future<void> _submitVote(int roundCount) async {
-    if (_picks.length < roundCount || _turnstileToken == null) return;
+    if (_selectedWinner == null || _turnstileToken == null) return;
     setState(() {
       _submitting = true;
       _errorMessage = null;
@@ -80,8 +84,9 @@ class _VoteScreenState extends State<VoteScreen> {
       final callable = FirebaseFunctions.instance.httpsCallable('castVote');
       await callable.call({
         'matchId': widget.matchId,
-        // Per-round winners keyed by round index (strings for the wire).
-        'picks': _picks.map((k, v) => MapEntry(k.toString(), v)),
+        // A single overall winner. castVote normalises this into its
+        // per-round tally server-side, so nothing downstream changes.
+        'votedForPlayerId': _selectedWinner,
         // ignore: use_null_aware_elements
         if (_funniestRound != null) 'funniestRound': _funniestRound,
         'turnstileToken': _turnstileToken,
@@ -217,44 +222,58 @@ class _VoteScreenState extends State<VoteScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // The clip comes first, always. Judging without watching is
-              // not judging, and the vote-confidence weighting assumes a
-              // vote carries information - so the match has to be
-              // watchable before anyone is asked to pick a winner.
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: MatchClipPlayer(
-                  videoUrl: widget.videoUrl,
-                  watchSecondsRequired: kWatchSecondsBeforeVote,
-                  onWatchedEnough: () {
-                    if (mounted) setState(() => _watchedEnough = true);
-                  },
+              // not judging. It's HEIGHT-CAPPED (a 9:16 clip at full width is
+              // taller than the screen, which is what pushed the old vote
+              // buttons off-screen), and in "pick a winner" mode the two
+              // halves of the stacked clip ARE the vote: tap the top player
+              // or the bottom player. The green outline shows your pick and
+              // nothing overlays the faces.
+              Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.55,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: MatchClipPlayer(
+                      videoUrl: widget.videoUrl,
+                      watchSecondsRequired: kWatchSecondsBeforeVote,
+                      onWatchedEnough: () {
+                        if (mounted) setState(() => _watchedEnough = true);
+                      },
+                      onSelectTop: canVote
+                          ? () => setState(() => _selectedWinner = player1Id)
+                          : null,
+                      onSelectBottom: canVote
+                          ? () => setState(() => _selectedWinner = player2Id)
+                          : null,
+                      selectedRegion: _selectedWinner == player1Id
+                          ? ClipSelectRegion.top
+                          : _selectedWinner == player2Id
+                              ? ClipSelectRegion.bottom
+                              : ClipSelectRegion.none,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               if (canVote) ...[
-                Text('Who won each round?',
-                    style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  _selectedWinner == null
+                      ? 'Who won? Tap a roaster.'
+                      : 'Your pick: '
+                          '${_selectedWinner == player1Id ? player1Name : player2Name}',
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 6),
                 Text(
-                  'The match goes to whoever wins the most rounds.',
+                  'Tap the top or bottom video to pick the funnier roaster. '
+                  'Tap the other to switch.',
                   style: Theme.of(context).textTheme.bodySmall,
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                for (int r = 0; r < roundCount; r++) ...[
-                  _RoundPicker(
-                    round: r,
-                    player1Id: player1Id,
-                    player1Name: player1Name,
-                    player2Id: player2Id,
-                    player2Name: player2Name,
-                    gelA: context.palette.gelA,
-                    gelB: context.palette.gelB,
-                    selected: _picks[r],
-                    onPick: (id) => setState(() => _picks[r] = id),
-                  ),
-                  const SizedBox(height: 10),
-                ],
-                const SizedBox(height: 4),
                 _funniestRow(context, roundCount),
                 const SizedBox(height: 10),
                 TurnstileChallenge(
@@ -267,16 +286,16 @@ class _VoteScreenState extends State<VoteScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
-                ] else if (_picks.length < roundCount) ...[
+                ] else if (_selectedWinner == null) ...[
                   Text(
-                    'Pick a winner for every round.',
+                    'Tap a roaster to pick the winner.',
                     style: Theme.of(context).textTheme.bodySmall,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                 ],
                 FilledButton(
-                  onPressed: (_picks.length >= roundCount &&
+                  onPressed: (_selectedWinner != null &&
                           _turnstileToken != null &&
                           _watchedEnough &&
                           !_submitting)
@@ -390,81 +409,3 @@ class _VoteScreenState extends State<VoteScreen> {
   }
 }
 
-/// One round's winner picker: "Round N" and the two players as choices. The
-/// gel colours are the SAME ones the players wear on the scoreboard and in
-/// the burned-in clip captions, so "who is who" reads consistently.
-class _RoundPicker extends StatelessWidget {
-  const _RoundPicker({
-    required this.round,
-    required this.player1Id,
-    required this.player1Name,
-    required this.player2Id,
-    required this.player2Name,
-    required this.gelA,
-    required this.gelB,
-    required this.selected,
-    required this.onPick,
-  });
-
-  final int round;
-  final String player1Id;
-  final String player1Name;
-  final String player2Id;
-  final String player2Name;
-  final Color gelA;
-  final Color gelB;
-  final String? selected;
-  final ValueChanged<String> onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 68,
-          child: Text('Round ${round + 1}',
-              style: Theme.of(context).textTheme.labelMedium),
-        ),
-        Expanded(child: _choice(context, player1Id, player1Name, gelA)),
-        const SizedBox(width: 8),
-        Expanded(child: _choice(context, player2Id, player2Name, gelB)),
-      ],
-    );
-  }
-
-  Widget _choice(BuildContext context, String id, String name, Color color) {
-    final scheme = Theme.of(context).colorScheme;
-    final isSel = selected == id;
-    return OutlinedButton(
-      onPressed: () => onPick(id),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        backgroundColor: isSel ? color.withValues(alpha: 0.18) : null,
-        side: BorderSide(
-          color: isSel ? color : scheme.outlineVariant,
-          width: isSel ? 2 : 1,
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(name,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: scheme.onSurface)),
-          ),
-          if (isSel) ...[
-            const SizedBox(width: 6),
-            Icon(Icons.check_circle, color: color, size: 16),
-          ],
-        ],
-      ),
-    );
-  }
-}

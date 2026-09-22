@@ -8,15 +8,17 @@ import '../moderation/report_screen.dart';
 import '../profile/performer_profile_screen.dart';
 import '../../widgets/live_tally.dart';
 
-/// One battle, full screen. You watch the clip, then pick a winner for EACH
-/// round in a panel and CONFIRM - the match goes to whoever won the most
-/// rounds (developer's call, 2026-09-17), which forces judges to weigh every
-/// round rather than one overall impression.
+/// One battle, full screen. You watch the clip, then pick the overall winner
+/// by TAPPING that roaster's half of the video - the composite is player 1 on
+/// top and player 2 on the bottom, so tapping the top or bottom picks them.
+/// The picked half gets a green outline; tap the other to switch. (Developer's
+/// call, 2026-09-21: one overall winner, chosen on the video box itself,
+/// rather than a per-round panel that covered the faces.)
 ///
-/// The picker unlocks once most of the clip has played, so the final round is
-/// seen before you commit. Nothing is cast until Submit; the button names the
-/// computed winner. The rendered clip is a fixed vertical stack (player 1 on
-/// top), and the round chips are ordered to match (player 1 on the left).
+/// The Submit panel unlocks once most of the clip has played, so the final
+/// round is seen before you commit. Nothing is cast until Submit. A separate
+/// optional "best round" tap feeds the Best Rounds board - "who won" and
+/// "which round was funniest" are different questions.
 ///
 /// Playback is manual: it does NOT loop. A small corner button pauses/resumes
 /// and replays.
@@ -67,38 +69,18 @@ class _FeedPageState extends State<FeedPage> {
   /// button offers a replay.
   bool _ended = false;
 
-  /// Per-round winner picks (round index -> playerId), before submitting.
-  /// The match winner is whoever won the most rounds.
-  final Map<int, String> _picks = {};
-
-  /// Optional: which round the judge found funniest - the signal behind the
-  /// Funniest Rounds board. Separate from who won the round.
-  int? _funniestRound;
+  /// The single overall winner the judge picked, by tapping that player's
+  /// half of the clip. Replaces per-round voting (developer's call): tap the
+  /// top or bottom roaster's video to pick the match winner; tap the other to
+  /// switch.
+  String? _selectedWinner;
 
   /// Set once the vote (or settled-battle call) has actually been submitted -
-  /// the computed winner (most rounds won), used by the result box.
+  /// the chosen winner, used by the result box.
   String? _chosenPlayerId;
   bool _submitting = false;
 
   int get _roundCount => widget.match.roundCount.clamp(1, 12);
-  bool get _allPicked => _picks.length >= _roundCount;
-
-  /// Winner by most rounds won, or null on a tie (possible only with an even
-  /// round count).
-  String? get _computedWinner {
-    var p1 = 0;
-    var p2 = 0;
-    for (final id in _picks.values) {
-      if (id == widget.match.player1Id) {
-        p1++;
-      } else if (id == widget.match.player2Id) {
-        p2++;
-      }
-    }
-    if (p1 > p2) return widget.match.player1Id;
-    if (p2 > p1) return widget.match.player2Id;
-    return null;
-  }
 
   /// Can this viewer act on this battle - cast a real vote, or make a private
   /// "call" on a settled battle with a decisive result? If not (already voted,
@@ -112,6 +94,12 @@ class _FeedPageState extends State<FeedPage> {
 
   bool get _resultShown =>
       _chosenPlayerId != null || (!_canAct && _revealed);
+
+  /// Whether the "Vote for X" pill is currently on screen (a half is picked
+  /// and the vote is not yet cast). Used to clear the reactions off the very
+  /// bottom edge so the pill can dock there without colliding with them.
+  bool get _voteBoxShowing =>
+      _selectedWinner != null && _canAct && _chosenPlayerId == null;
 
   @override
   void initState() {
@@ -157,6 +145,19 @@ class _FeedPageState extends State<FeedPage> {
         c.play();
       }
     });
+  }
+
+  /// Jumps back ten seconds so a judge can re-hear a line without hunting.
+  /// Resumes playing if the clip had already ended.
+  void _rewind() {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    final target = c.value.position - const Duration(seconds: 10);
+    c.seekTo(target < Duration.zero ? Duration.zero : target);
+    if (_ended || !c.value.isPlaying) {
+      c.play();
+      setState(() => _ended = false);
+    }
   }
 
   Future<void> _load() async {
@@ -206,18 +207,16 @@ class _FeedPageState extends State<FeedPage> {
     super.dispose();
   }
 
-  /// Pick a winner for one round (green highlight, no vote cast yet).
-  void _pickRound(int round, String playerId) {
+  /// Pick the overall winner by tapping their half of the clip. No vote is
+  /// cast until Submit; tapping the other player switches the pick.
+  void _pickWinner(String playerId) {
     if (!_canAct || _chosenPlayerId != null) return;
-    setState(() => _picks[round] = playerId);
+    setState(() => _selectedWinner = playerId);
   }
 
-  /// Confirm all rounds - THIS is where a vote is actually cast. The winner
-  /// is whoever won the most rounds.
   void _submit() {
-    if (!_allPicked || _submitting) return;
-    final winner = _computedWinner;
-    if (winner == null) return; // a tie - nothing decisive to submit
+    final winner = _selectedWinner;
+    if (winner == null || _submitting) return;
     _choose(winner);
   }
 
@@ -228,11 +227,13 @@ class _FeedPageState extends State<FeedPage> {
       _chosenPlayerId = winnerId;
     });
     if (widget.match.canVote) {
-      final ok =
-          await widget.onVote(Map<int, String>.from(_picks), _funniestRound);
+      // A single overall winner, sent as the backend's per-round tally ("won
+      // every round"). castVote also accepts a bare votedForPlayerId, so
+      // either shape is fine; this keeps the onVote signature unchanged.
+      final picks = {for (int r = 0; r < _roundCount; r++) r: winnerId};
+      final ok = await widget.onVote(picks, null);
       if (!mounted) return;
-      // A failed ballot must not look like a cast one, or the viewer
-      // believes they judged a battle they didn't. Keep the picks so they
+      // A failed ballot must not look like a cast one. Keep the pick so they
       // can just hit Submit again.
       if (!ok) setState(() => _chosenPlayerId = null);
     } else if (widget.match.verdict?.outcome == 'decided') {
@@ -288,191 +289,122 @@ class _FeedPageState extends State<FeedPage> {
               ),
             ),
           ),
-          // Paused/ended cue, unless the result box is already covering it.
-          if (paused && !_resultShown)
-            IgnorePointer(
-              child: Center(
-                child: Icon(
-                  _ended ? Icons.replay_rounded : Icons.play_arrow_rounded,
-                  size: 64,
-                  color: Colors.white.withValues(alpha: 0.6),
-                ),
-              ),
-            ),
+          // Tap a roaster's HALF of the clip to pick the overall winner - the
+          // selection IS the video box, so nothing covers the faces. Sits
+          // under the buttons below (they win their own taps).
+          if (_canAct && _chosenPlayerId == null) _winnerSelectLayer(context),
+          // (Removed the big center play/replay overlay: it flashed on every
+          // rewind seek - the seek briefly pauses the clip - and duplicated the
+          // corner play/pause control. The corner buttons and tap-to-pick are
+          // the interactions now.)
           if (controller != null) _playPauseButton(context, paused),
+          if (controller != null) _rewindButton(context),
           _followButton(context),
-          if (_canAct && _chosenPlayerId == null && _revealed)
-            _pickerPanel(context),
+          // The compact "Vote for X" pill, docked to the bottom of the
+          // selected half - only shown once a half is picked.
+          _voteBox(context),
           if (_resultShown) _resultBox(context),
           _header(context),
           _reportButton(context),
-          // Sits low and out of the way of both faces, always available.
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: MediaQuery.of(context).padding.bottom + 16,
-            child: ClipReactions(
-              matchId: widget.match.matchId,
-              counts: widget.match.reactionCounts,
+          // Sits low and out of the way of both faces. Hidden while a winner
+          // is picked so the "Vote for X" pill can dock at the very bottom
+          // edge without colliding with the reactions row.
+          if (!_voteBoxShowing)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: MediaQuery.of(context).padding.bottom + 16,
+              child: ClipReactions(
+                matchId: widget.match.matchId,
+                counts: widget.match.reactionCounts,
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 
-  /// The per-round picker: a winner for each round, then Submit. The match
-  /// goes to whoever won the most rounds (shown on the Submit button). The
-  /// top player in the stacked clip is player 1 - the chips are ordered to
-  /// match (player 1 on the left).
-  Widget _pickerPanel(BuildContext context) {
+  /// The tap-to-pick overlay: two full-height halves over the clip. Tapping
+  /// the TOP half picks player 1, the BOTTOM half player 2 (the composite is
+  /// player 1 on top). The picked half gets a bright green outline + a "Your
+  /// pick" badge; nothing covers the faces. It sits UNDER the corner buttons
+  /// and the reactions in the Stack, so those still win their own taps.
+  Widget _winnerSelectLayer(BuildContext context) {
     final m = widget.match;
-    final winner = _computedWinner;
-    final winnerName = winner == m.player1Id
-        ? m.player1Username
-        : winner == m.player2Id
-            ? m.player2Username
-            : null;
-    final label = !_allPicked
-        ? 'Pick a winner for every round'
-        : winnerName == null
-            ? "It's a tie - break it on the last round"
-            : m.canVote
-                ? 'Submit: $winnerName won'
-                : 'Call it: $winnerName';
-    return Positioned(
-      left: 12,
-      right: 12,
-      bottom: MediaQuery.of(context).padding.bottom + 64,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.72),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Who won each round?',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            for (int r = 0; r < _roundCount; r++) _roundRow(context, r),
-            const SizedBox(height: 8),
-            _funniestRow(context),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 48),
-                  backgroundColor: (_allPicked && winner != null)
-                      ? _pickGreen
-                      : null,
-                  foregroundColor: (_allPicked && winner != null)
-                      ? Colors.black
-                      : null,
-                ),
-                onPressed: (!_allPicked || winner == null || _submitting)
-                    ? null
-                    : _submit,
-                child: _submitting
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(label,
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Optional "which round was funniest" - the Funniest Rounds board signal.
-  /// One tap, separate from picking the round winner.
-  Widget _funniestRow(BuildContext context) {
-    const flame = Color(0xFFEA4C6D);
-    return Row(
-      children: [
-        const Icon(Icons.local_fire_department, color: flame, size: 16),
-        const SizedBox(width: 4),
-        const Text('Best?',
-            style: TextStyle(color: Colors.white70, fontSize: 12)),
-        const SizedBox(width: 8),
-        for (int r = 0; r < _roundCount; r++)
-          GestureDetector(
-            onTap: () => setState(
-                () => _funniestRound = _funniestRound == r ? null : r),
-            child: Container(
-              margin: const EdgeInsets.only(right: 6),
-              width: 30,
-              height: 30,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: _funniestRound == r
-                    ? flame
-                    : Colors.white.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text('${r + 1}',
-                  style: TextStyle(
-                    color: _funniestRound == r ? Colors.white : Colors.white70,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  )),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _roundRow(BuildContext context, int round) {
-    final m = widget.match;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
+    return Positioned.fill(
+      child: Column(
         children: [
-          SizedBox(
-            width: 62,
-            child: Text('Round ${round + 1}',
-                style: const TextStyle(color: Colors.white70, fontSize: 12)),
-          ),
-          Expanded(child: _playerChip(round, m.player1Id, m.player1Username)),
-          const SizedBox(width: 6),
-          Expanded(child: _playerChip(round, m.player2Id, m.player2Username)),
+          Expanded(child: _selectHalf(top: true, playerId: m.player1Id)),
+          Expanded(child: _selectHalf(top: false, playerId: m.player2Id)),
         ],
       ),
     );
   }
 
-  Widget _playerChip(int round, String playerId, String name) {
-    final selected = _picks[round] == playerId;
+  Widget _selectHalf({required bool top, required String playerId}) {
+    final selected = _selectedWinner == playerId;
+    // JUST the outline - no fill, no glow, no badge (developer's call): the
+    // green box must not cover the faces. The selected player's name is
+    // confirmed in the Submit panel below.
     return GestureDetector(
-      onTap: () => _pickRound(round, playerId),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
-        alignment: Alignment.center,
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _pickWinner(playerId),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
         decoration: BoxDecoration(
-          color: selected ? _pickGreen : Colors.white.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected ? _pickGreen : Colors.white24,
+            color: selected ? _pickGreen : Colors.transparent,
+            width: 5,
           ),
         ),
-        child: Text(
-          name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: selected ? Colors.black : Colors.white,
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-            fontSize: 13,
+      ),
+    );
+  }
+
+  /// The compact vote box - appears ONLY once a half is selected, docked to
+  /// the bottom edge of THAT half: a top pick sits at the midline seam (the
+  /// bottom of the top square), a bottom pick sits at the very bottom (the
+  /// bottom of the bottom square). Just a "Vote for X" pill, so it never
+  /// blocks the faces or the action.
+  Widget _voteBox(BuildContext context) {
+    final winner = _selectedWinner;
+    if (winner == null || !_canAct || _chosenPlayerId != null) {
+      return const SizedBox.shrink();
+    }
+    final m = widget.match;
+    final name = winner == m.player1Id ? m.player1Username : m.player2Username;
+    final topSelected = winner == m.player1Id;
+    final h = MediaQuery.of(context).size.height;
+    final label = m.canVote ? 'Vote for $name' : 'Call it: $name';
+    return Positioned(
+      left: 0,
+      right: 0,
+      // Lower on each half: a top pick sits right at the midline seam (the
+      // very bottom of the top square), a bottom pick sits just above the
+      // reactions at the very bottom.
+      bottom: topSelected
+          ? h * 0.5 - 30
+          : MediaQuery.of(context).padding.bottom + 8,
+      child: Center(
+        child: FilledButton(
+          style: FilledButton.styleFrom(
+            // Transparent enough to never hide the clip behind it - the pill
+            // sits right at the bottom edge over the video.
+            backgroundColor: _pickGreen.withValues(alpha: 0.48),
+            foregroundColor: Colors.black,
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+            textStyle:
+                const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
+          onPressed: _submitting ? null : _submit,
+          child: _submitting
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.black),
+                )
+              : Text(label),
         ),
       ),
     );
@@ -501,6 +433,28 @@ class _FeedPageState extends State<FeedPage> {
           ),
           tooltip: paused ? 'Play' : 'Pause',
           onPressed: _togglePlay,
+        ),
+      ),
+    );
+  }
+
+  /// A small rewind-10s control, directly under the play/pause button so the
+  /// corner stays a single tidy column - a way to go back without a scrubber
+  /// cluttering the clip. Sits BELOW play/pause (top+60) and ABOVE the Follow
+  /// button (moved to top+164) so the three corner controls never overlap.
+  Widget _rewindButton(BuildContext context) {
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 112,
+      right: 8,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.5),
+          shape: BoxShape.circle,
+        ),
+        child: IconButton(
+          icon: const Icon(Icons.replay_10_rounded, color: Colors.white, size: 22),
+          tooltip: 'Rewind 10 seconds',
+          onPressed: _rewind,
         ),
       ),
     );
@@ -594,7 +548,9 @@ class _FeedPageState extends State<FeedPage> {
   /// A small circular button on the right rail, tucked under play/pause.
   Widget _followButton(BuildContext context) {
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 112,
+      // Moved down (was top+112) to make room for the rewind button, so the
+      // corner column is report / play-pause / rewind / follow with no overlap.
+      top: MediaQuery.of(context).padding.top + 164,
       right: 8,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -650,6 +606,18 @@ class _FeedPageState extends State<FeedPage> {
   /// A battle has two people in it, so reporting has to ask which.
   Future<void> _openReport(BuildContext context) async {
     final m = widget.match;
+    // Pause the clip for the whole report interaction. A battle playing with
+    // audio behind a "who are you reporting?" sheet and a report form is
+    // jarring and distracting - reporting is a serious action, not a moment to
+    // keep the show running. Restored on return if it had been playing.
+    final c = _controller;
+    final wasPlaying =
+        c != null && c.value.isInitialized && c.value.isPlaying;
+    if (wasPlaying) {
+      await c.pause();
+      if (mounted) setState(() {}); // repaint the corner icon to "play"
+    }
+    if (!context.mounted) return;
     final choice = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -680,7 +648,15 @@ class _FeedPageState extends State<FeedPage> {
         ),
       ),
     );
-    if (choice == null || !context.mounted) return;
+    if (choice == null || !context.mounted) {
+      // Sheet dismissed without choosing - resume if it had been playing and
+      // this clip is still the one on screen.
+      if (wasPlaying && widget.isActive) {
+        _controller?.play();
+        if (mounted) setState(() {});
+      }
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ReportScreen(
@@ -689,12 +665,19 @@ class _FeedPageState extends State<FeedPage> {
         ),
       ),
     );
+    // Back from the report screen - restore playback to how they left it.
+    if (wasPlaying &&
+        widget.isActive &&
+        (_controller?.value.isInitialized ?? false)) {
+      _controller?.play();
+      if (mounted) setState(() {});
+    }
   }
 
   Widget _header(BuildContext context) {
     final m = widget.match;
     final label = m.canVote
-        ? 'Judge each round'
+        ? 'Tap the winner'
         : m.isParticipant
             ? 'Your battle'
             : '${m.voteCount} ${m.voteCount == 1 ? "vote" : "votes"}';
