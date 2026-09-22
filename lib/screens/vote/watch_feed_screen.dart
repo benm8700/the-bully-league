@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/friendly_error.dart';
 import '../../widgets/empty_state.dart';
 
+import '../../core/services/clip_cache.dart';
 import '../../core/services/watch_feed_service.dart';
 import '../../widgets/turnstile_challenge.dart';
 import 'feed_page.dart';
@@ -132,6 +133,7 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
       if (quiet && _pageController.hasClients) {
         _pageController.jumpToPage(0);
       }
+      _prefetchAhead(0);
     } catch (e) {
       if (!mounted) return;
       // A background refresh that fails must not wipe the clips already on
@@ -140,6 +142,20 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
       // trace into the middle of the app's main content surface.
       if (!quiet) {
         setState(() => _error = friendlyError(e, doing: 'loading battles'));
+      }
+    }
+  }
+
+  /// Warms the clip cache for the next couple of clips so they are already
+  /// local - and therefore instant to rewind and scrub - by the time the
+  /// viewer swipes to them.
+  void _prefetchAhead(int index) {
+    final matches = _matches;
+    if (matches == null) return;
+    for (var j = index + 1; j <= index + 2 && j < matches.length; j++) {
+      final url = matches[j].videoUrl;
+      if (url != null && url.isNotEmpty) {
+        ClipCacheService.instance.prefetch(url);
       }
     }
   }
@@ -384,6 +400,7 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
       onPageChanged: (i) {
         setState(() => _index = i);
         if (i >= _matches!.length - _prefetchWithin) _loadMore();
+        _prefetchAhead(i);
       },
       itemBuilder: (context, i) {
         final match = _matches![i];

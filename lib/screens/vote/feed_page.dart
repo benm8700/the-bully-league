@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/services/clip_cache.dart';
 import '../../core/services/watch_feed_service.dart';
 import '../../widgets/clip_reactions.dart';
 import '../../widgets/follow_button.dart';
@@ -166,20 +169,47 @@ class _FeedPageState extends State<FeedPage> {
       setState(() => _failed = true);
       return;
     }
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    // Play from a local file when we can, so rewind and scrubbing are instant
+    // (a streamed clip re-buffers on every backward seek - ExoPlayer keeps no
+    // back-buffer). The feed prefetches ahead, so most clips are already local
+    // by the time you reach them. Falls back to streaming if the download OR
+    // the file fails to play - a clip must never break because of the cache.
+    File? file;
+    try {
+      file = await ClipCacheService.instance.getFile(url);
+    } catch (_) {
+      file = null;
+    }
+    if (!mounted) return;
+    if (file != null &&
+        await _tryController(VideoPlayerController.file(file))) {
+      return;
+    }
+    if (!mounted) return;
+    if (await _tryController(VideoPlayerController.networkUrl(Uri.parse(url)))) {
+      return;
+    }
+    if (mounted) setState(() => _failed = true);
+  }
+
+  /// Initializes [controller], wires it up and shows it. Returns true on
+  /// success; on failure disposes it and returns false so [_load] can fall
+  /// back to the next source (cached file -> network stream).
+  Future<bool> _tryController(VideoPlayerController controller) async {
     try {
       await controller.initialize();
       await controller.setLooping(false);
       controller.addListener(_onTick);
       if (!mounted) {
         await controller.dispose();
-        return;
+        return true;
       }
       setState(() => _controller = controller);
       if (widget.isActive) await controller.play();
+      return true;
     } catch (_) {
       await controller.dispose();
-      if (mounted) setState(() => _failed = true);
+      return false;
     }
   }
 
