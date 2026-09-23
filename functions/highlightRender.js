@@ -70,6 +70,26 @@ const CANVAS = RENDITIONS.vertical.canvas;
 const TILE = RENDITIONS.vertical.tile;
 const OUTPUT_FPS = 30;
 
+/**
+ * The burned-in brand watermark: the home-page logo (the wordmark), overlaid
+ * small in the BOTTOM-LEFT of every clip.
+ *
+ * An image OVERLAY of the real logo rather than the old ASS "THE BULLY LEAGUE"
+ * text, which read as clunky. `overlay` is a core ffmpeg filter and needs no
+ * font, so it carries none of the drawtext font-availability worry.
+ *
+ * Bottom-LEFT because TikTok/Reels/Shorts stack their own UI on the bottom-
+ * RIGHT, and the vertical centre is where captions sit on a stacked composite.
+ * Sized as a fraction of canvas WIDTH so it stays proportionate in both the
+ * 1080-wide vertical cut and the 1920-wide landscape one. Slightly transparent
+ * so it reads as a mark, not an obstruction. Bundled with the function so it
+ * ships to the Cloud Functions runtime.
+ */
+const WATERMARK_LOGO_PATH = path.join(__dirname, "assets", "watermark.png");
+const WATERMARK_LOGO_WIDTH_RATIO = 0.17;
+const WATERMARK_LOGO_MARGIN_RATIO = 0.03;
+const WATERMARK_LOGO_ALPHA = 0.9;
+
 /** Where rendered clips live. Deliberately a different prefix from the raw
  * `match_recordings/` footage, because the two have different lifetimes:
  * raw footage is purged after 7 days, a published highlight is kept. */
@@ -265,9 +285,13 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
   // The cues handed in are ALREADY remapped onto the trimmed timeline
   // by the caller - see remapCues - so the burn-in lands correctly on
   // the shortened video.
+  // The brand-logo overlay is the LAST video stage, so the rest of the chain
+  // ends at [vbeforelogo] and the overlay produces the final [vout].
+  const applyLogo = !!options.logoPath;
+  const vLast = applyLogo ? "[vbeforelogo]" : "[vout]";
   const trim = options.trimFilters ?? null;
   const stacked = trim ? "[vstacked]" :
-    options.subtitlePath ? "[vpainted]" : "[vout]";
+    options.subtitlePath ? "[vpainted]" : vLast;
   if (videoLabels.length === 1) {
     filters.push(`${videoLabels[0]}scale=${canvas.width}:${canvas.height}:` +
       `force_original_aspect_ratio=increase,crop=${canvas.width}:${canvas.height}${stacked}`);
@@ -283,7 +307,7 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
   // whose stages run backwards is one nobody can check by eye.
   if (trim) {
     filters.push(`[vstacked]${trim.video}` +
-      `${options.subtitlePath ? "[vpainted]" : "[vout]"}`);
+      `${options.subtitlePath ? "[vpainted]" : vLast}`);
   }
 
   if (options.subtitlePath) {
@@ -295,7 +319,20 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
         .replace(/\\/g, "/")
         .replace(/:/g, "\\:")
         .replace(/'/g, "\\'");
-    filters.push(`[vpainted]subtitles='${escaped}'[vout]`);
+    filters.push(`[vpainted]subtitles='${escaped}'${vLast}`);
+  }
+
+  // Brand watermark: the home-page logo, small and slightly transparent, in
+  // the bottom-left of every clip. Overlaid LAST so it sits above captions.
+  if (applyLogo) {
+    const logoIndex = inputIndex++;
+    inputs.push("-i", options.logoPath);
+    const logoW = Math.round(canvas.width * WATERMARK_LOGO_WIDTH_RATIO);
+    const margin = Math.round(canvas.width * WATERMARK_LOGO_MARGIN_RATIO);
+    // x = margin from the left; y = frame height - logo height - margin.
+    filters.push(`[${logoIndex}:v]scale=${logoW}:-1,format=rgba,` +
+      `colorchannelmixer=aa=${WATERMARK_LOGO_ALPHA}[wm]`);
+    filters.push(`[vbeforelogo][wm]overlay=${margin}:H-h-${margin}[vout]`);
   }
 
   // normalize=0 because the segments do not overlap - normalising would
@@ -488,7 +525,7 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
 
       const outputPath = path.join(workDir, rendition.fileName);
       await runFfmpeg(ffmpegPath, buildFfmpegArgs(timeline, workDir, outputPath, {
-        subtitlePath, rendition, trimFilters,
+        subtitlePath, rendition, trimFilters, logoPath: WATERMARK_LOGO_PATH,
       }));
 
       const destination = `${HIGHLIGHT_PREFIX}/${matchId}/${rendition.fileName}`;

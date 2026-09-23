@@ -395,4 +395,37 @@ test("an unreadable playlist measures zero rather than guessing", () => {
   }
 });
 
+// --- brand watermark overlay --------------------------------------------
+
+test("the brand logo is overlaid, scaled small, in the bottom-left", () => {
+  // The watermark is now an image overlay of the home-page logo, not ASS
+  // text. Bottom-left (x=margin, y=H-h-margin) keeps it clear of the
+  // bottom-right platform UI; scaled so it reads as a mark, not a banner.
+  const args = trimArgs({logoPath: "/tmp/wm.png"});
+  assert.ok(args.includes("/tmp/wm.png"), "logo is not an ffmpeg input");
+  const {graph} = labelsOf(args);
+  assert.ok(/overlay=\d+:H-h-\d+/.test(graph),
+      `logo not overlaid bottom-left: ${graph}`);
+  assert.ok(graph.includes("scale=") && graph.includes("[wm]"),
+      "logo is not scaled to a small mark");
+});
+
+test("the watermarked graph is still fully connected", () => {
+  // Same class of bug as the trim wiring: a mis-wired overlay label yields a
+  // graph ffmpeg rejects, and the only symptom is a render that fails after
+  // deploy.
+  const {produced, consumed} = labelsOf(trimArgs({logoPath: "/tmp/wm.png"}));
+  assert.ok(produced.has("vout"), "nothing produces [vout]");
+  for (const label of consumed) {
+    if (/^\d+:[av]$/.test(label)) continue; // a real input stream
+    assert.ok(produced.has(label),
+        `[${label}] is consumed but never produced`);
+  }
+});
+
+test("no logoPath means no overlay, so other callers are unaffected", () => {
+  const {graph} = labelsOf(trimArgs());
+  assert.ok(!graph.includes("overlay="), graph);
+});
+
 console.log(`highlightRender: ${passed} checks passed`);
