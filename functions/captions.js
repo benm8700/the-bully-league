@@ -26,6 +26,13 @@ const {spawn} = require("child_process");
  * higher sample rates cost bandwidth without improving transcription. */
 const STT_SAMPLE_RATE = 16000;
 
+/** Speech-to-Text v2 + Chirp 2: Google's most accurate transcription model,
+ * and cheaper per minute than v1's enhanced latest_long. Chirp 2 lives behind
+ * a REGIONAL endpoint (the `global` location does not serve it) and supports
+ * word-level timestamps, which captions require. */
+const STT_LOCATION = "us-central1";
+const STT_MODEL = "chirp_2";
+
 /**
  * Caption styling, tuned for short-form vertical video rather than
  * broadcast subtitling.
@@ -212,7 +219,17 @@ function buildAssFile(cues, canvas, style = STYLE) {
  */
 async function transcribeSegments(segments, localDir, ffmpegPath, workDir) {
   const speech = require("@google-cloud/speech");
-  const client = new speech.SpeechClient();
+  // v2 client, pointed at the REGIONAL endpoint Chirp 2 is served from - the
+  // default (global) endpoint does not host chirp_2.
+  const client = new speech.v2.SpeechClient({
+    apiEndpoint: `${STT_LOCATION}-speech.googleapis.com`,
+  });
+  // The `_` recognizer lets us pass config inline, with no recognizer resource
+  // to pre-create. Project comes from the runtime credentials (ADC in
+  // production, the provided key locally).
+  const projectId = await client.getProjectId();
+  const recognizer =
+    `projects/${projectId}/locations/${STT_LOCATION}/recognizers/_`;
   const words = [];
   const failures = [];
 
@@ -223,21 +240,29 @@ async function transcribeSegments(segments, localDir, ffmpegPath, workDir) {
       await toRecognizerAudio(ffmpegPath, inputPath, wavPath);
       const content = await fs.readFile(wavPath);
       const [response] = await client.recognize({
+        recognizer,
         config: {
-          encoding: "LINEAR16",
-          sampleRateHertz: STT_SAMPLE_RATE,
-          languageCode: "en-US",
-          // Word timings are the whole point - without them captions
-          // can only be placed per-utterance, which drifts badly.
-          enableWordTimeOffsets: true,
-          // CLAUDE.md's content policy is explicitly permissive, and
-          // these are comedy clips: masking profanity would mangle the
-          // captions of the actual jokes.
-          profanityFilter: false,
-          model: "latest_long",
-          useEnhanced: true,
+          model: STT_MODEL,
+          languageCodes: ["en-US"],
+          features: {
+            // Word timings are the whole point - without them captions can
+            // only be placed per-utterance, which drifts badly.
+            enableWordTimeOffsets: true,
+            // Reads as sentences rather than a bare word stream.
+            enableAutomaticPunctuation: true,
+          },
+          // The audio is decoded to mono 16kHz LINEAR16 PCM above, and a raw
+          // PCM stream carries no header, so the decoding is stated explicitly.
+          // (No profanity filter: CLAUDE.md's content policy is permissive and
+          // masking would mangle the captions of the actual jokes; v2 leaves
+          // it off by default.)
+          explicitDecodingConfig: {
+            encoding: "LINEAR16",
+            sampleRateHertz: STT_SAMPLE_RATE,
+            audioChannelCount: 1,
+          },
         },
-        audio: {content},
+        content,
       });
 
       for (const result of response.results ?? []) {
@@ -245,10 +270,10 @@ async function transcribeSegments(segments, localDir, ffmpegPath, workDir) {
           words.push({
             uid: seg.uid,
             text: w.word,
-            // Recogniser timings are relative to this segment; shift them
-            // into the clip's timeline.
-            start: seg.offsetMs / 1000 + durationToSeconds(w.startTime),
-            end: seg.offsetMs / 1000 + durationToSeconds(w.endTime),
+            // v2 returns startOffset/endOffset (Duration), relative to this
+            // segment; shift them into the clip's timeline.
+            start: seg.offsetMs / 1000 + durationToSeconds(w.startOffset),
+            end: seg.offsetMs / 1000 + durationToSeconds(w.endOffset),
           });
         }
       }
