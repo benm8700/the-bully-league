@@ -175,6 +175,23 @@ Made concrete so it's tickable:
       shows a control that doesn't work.
 - [ ] A report submitted from the Judge feed lands in `reports`.
 - [ ] Someone can delete their account and it actually goes.
+- [ ] **A match survives real-world interruptions (NOT device-tested yet,
+      developer flagged 2026-09-23).** Mid-match: exit the app, let the phone
+      lock/sleep, or take an incoming call/text. The disconnect rules should
+      apply — no-contest if you leave before your first roasting turn, a loss
+      if you leave after roasting but before your opponent does (CLAUDE.md's
+      Mid-match disconnect/forfeit) — and NEITHER player should end up
+      stranded on a dead channel. The peer-to-peer turn state machine
+      (host-driven over Agora data streams) is the fragile part here: there is
+      no server-authoritative match clock, so a host that vanishes mid-turn is
+      exactly the case to watch.
+- [ ] **The match-ready recovery works after an interruption.** This IS built:
+      queue, then background/kill the app or sit on Home — the match-found
+      PUSH fires to the opponent (`notifyMatchFound`) and the Home "Rejoin
+      match" banner (`getActiveMatch` + `_ActiveMatchBanner`) surfaces the
+      waiting match on return, since a matched queue entry is exempt from
+      stale-entry pruning. Verified once via force-stop + relaunch; re-check
+      with a real call/text interruption and a genuinely killed process.
 
 > **A path with no live check is a path nobody is checking.** `castVote`
 > was found throwing on every call — voting was dead in production —
