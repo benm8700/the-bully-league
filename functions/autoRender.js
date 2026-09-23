@@ -262,38 +262,26 @@ async function sweepRenders({limit = RENDERS_PER_RUN} = {}) {
       .limit(60)
       .get();
 
-  const now = Date.now();
   const first = [];
   const forced = [];
-  const rankable = [];
-  let captionedThisWeek = 0;
 
   for (const doc of snap.docs) {
     const match = doc.data();
-    const finalizedAtMs = match.completedAt?.toMillis?.() ?? 0;
-    if (match.highlight?.captioned === true && now - finalizedAtMs <= WEEK_MS) {
-      captionedThisWeek += 1;
-    }
     if (needsFirstRender(match)) {
       first.push(doc.id);
     } else if (captionsForced(match)) {
       forced.push(doc.id);
-    } else if (canBeCaptioned(match)) {
-      rankable.push({
-        id: doc.id,
-        voteCount: match.voteCount,
-        voteFinalized: match.voteFinalized,
-        player1FinalWeight: match.player1FinalWeight,
-        player2FinalWeight: match.player2FinalWeight,
-        finalizedAtMs,
-      });
     }
   }
 
-  const caption = [
-    ...forced,
-    ...selectForCaptioning(rankable, {now, captionedThisWeek}).map((c) => c.id),
-  ];
+  // Captions are POSTING-ONLY (developer's call, 2026-09-22): only clips
+  // explicitly requested for posting or a paid download (captionRequested)
+  // get captions. The old weekly top-N auto-captioning was removed because
+  // those clips are served in the in-app Watch/judge feed, where the sound
+  // is on and imperfect Speech-to-Text captions are pure downside. The
+  // ranking (selectForCaptioning) is kept for now in case it is revisited,
+  // but nothing calls it.
+  const caption = [...forced];
 
   const results = {rendered: [], captioned: [], failed: []};
 
