@@ -1,6 +1,7 @@
 const os = require("os");
 const path = require("path");
 const fs = require("fs/promises");
+const fssync = require("fs");
 const {spawn} = require("child_process");
 const {getStorage} = require("firebase-admin/storage");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
@@ -89,6 +90,11 @@ const WATERMARK_LOGO_PATH = path.join(__dirname, "assets", "watermark.png");
 const WATERMARK_LOGO_WIDTH_RATIO = 0.17;
 const WATERMARK_LOGO_MARGIN_RATIO = 0.03;
 const WATERMARK_LOGO_ALPHA = 0.9;
+// Resolved once at load. If the asset ever fails to deploy, this is null and
+// renders proceed WITHOUT a watermark rather than failing outright - a missing
+// ffmpeg `-i` input would otherwise break every single render.
+const WATERMARK_LOGO = fssync.existsSync(WATERMARK_LOGO_PATH) ?
+  WATERMARK_LOGO_PATH : null;
 
 /** Where rendered clips live. Deliberately a different prefix from the raw
  * `match_recordings/` footage, because the two have different lifetimes:
@@ -525,7 +531,7 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
 
       const outputPath = path.join(workDir, rendition.fileName);
       await runFfmpeg(ffmpegPath, buildFfmpegArgs(timeline, workDir, outputPath, {
-        subtitlePath, rendition, trimFilters, logoPath: WATERMARK_LOGO_PATH,
+        subtitlePath, rendition, trimFilters, logoPath: WATERMARK_LOGO,
       }));
 
       const destination = `${HIGHLIGHT_PREFIX}/${matchId}/${rendition.fileName}`;
