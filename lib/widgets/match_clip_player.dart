@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../core/route_observer.dart';
+import '../core/services/clip_cache.dart';
 
 /// Which player's half of the stacked clip is picked as the winner. The clip
 /// composites player 1 on TOP and player 2 on the BOTTOM.
@@ -203,34 +206,61 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
       _initialising = true;
       _error = null;
     });
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    // Prefer a cached local FILE so the scrubber and restart are instant - a
+    // streamed clip re-buffers on every seek. This screen shows one clip at a
+    // time with no prefetch, so it downloads-then-plays (getFile) rather than
+    // the feed's stream-if-not-cached approach. Falls back to streaming if the
+    // download or file playback fails, so a clip never breaks on the cache.
+    File? file;
+    try {
+      file = await ClipCacheService.instance.getFile(url);
+    } catch (_) {
+      file = null;
+    }
+    if (!mounted) return;
+    if (file != null &&
+        await _setUpController(VideoPlayerController.file(file))) {
+      return;
+    }
+    if (!mounted) return;
+    if (await _setUpController(VideoPlayerController.networkUrl(Uri.parse(url)))) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _initialising = false;
+      _error = 'Could not load this clip.';
+    });
+    // A clip that will not load must not block judging - the same fail-open
+    // rule as having no clip at all.
+    _satisfy();
+  }
+
+  /// Initializes and wires up [controller]. Returns true on success (or if the
+  /// widget was disposed mid-load); false on failure so [_load] can fall back
+  /// to the next source (cached file -> network stream).
+  Future<bool> _setUpController(VideoPlayerController controller) async {
     try {
       await controller.initialize();
-      // Full-clip looping only when NOT segmented. In segment mode the
-      // native loop is off and _onTick loops within [startMs, endMs]
-      // instead, and we seek to the round's start so the first frame - and
-      // the poster while paused - is the round rather than the clip's open.
+      // Full-clip looping only when NOT segmented. In segment mode the native
+      // loop is off and _onTick loops within [startMs, endMs] instead, and we
+      // seek to the round's start so the first frame - and the poster while
+      // paused - is the round rather than the clip's open.
       await controller.setLooping(!_segmented);
       if (_segmented) await controller.seekTo(_segStart);
       if (!mounted) {
         await controller.dispose();
-        return;
+        return true;
       }
       controller.addListener(_onTick);
       setState(() {
         _controller = controller;
         _initialising = false;
       });
-    } catch (e) {
+      return true;
+    } catch (_) {
       await controller.dispose();
-      if (!mounted) return;
-      setState(() {
-        _initialising = false;
-        _error = 'Could not load this clip.';
-      });
-      // A clip that will not load must not block judging - the same
-      // fail-open rule as having no clip at all.
-      _satisfy();
+      return false;
     }
   }
 

@@ -169,14 +169,16 @@ class _FeedPageState extends State<FeedPage> {
       setState(() => _failed = true);
       return;
     }
-    // Play from a local file when we can, so rewind and scrubbing are instant
-    // (a streamed clip re-buffers on every backward seek - ExoPlayer keeps no
-    // back-buffer). The feed prefetches ahead, so most clips are already local
-    // by the time you reach them. Falls back to streaming if the download OR
-    // the file fails to play - a clip must never break because of the cache.
+    // Play from a local file if this clip is ALREADY cached - then rewind and
+    // scrubbing are instant (a streamed clip re-buffers on every backward seek,
+    // since ExoPlayer keeps no back-buffer). If it is not cached yet, stream it
+    // now for an instant start rather than waiting on a download; the feed
+    // prefetches ahead, so the clips you swipe to next are already local. Falls
+    // back to streaming if file playback fails - a clip never breaks on the
+    // cache.
     File? file;
     try {
-      file = await ClipCacheService.instance.getFile(url);
+      file = await ClipCacheService.instance.readyFile(url);
     } catch (_) {
       file = null;
     }

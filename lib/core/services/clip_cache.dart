@@ -64,6 +64,20 @@ class ClipCacheService {
     return future;
   }
 
+  /// The cached file for [url] if it is ALREADY fully downloaded, else null.
+  /// Never starts a download or blocks on one - it lets a caller decide, at
+  /// play time, whether to play locally (instant seeks) or stream now and
+  /// leave the cache to prefetch. Used by the feed, which streams the current
+  /// clip for an instant start and relies on prefetch to have the next ones
+  /// local.
+  Future<File?> readyFile(String url) async {
+    final dirFuture = _dirFuture;
+    if (dirFuture == null) return null; // nothing cached this session yet
+    final dir = await dirFuture;
+    final file = File('${dir.path}/${_nameFor(url)}');
+    return await _hasData(file) ? file : null;
+  }
+
   /// Warms the cache for a clip the viewer is about to reach. Best-effort -
   /// never throws.
   void prefetch(String url) {
