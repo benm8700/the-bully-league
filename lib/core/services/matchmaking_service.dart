@@ -184,11 +184,38 @@ class MatchmakingService {
       final judgePriorityMs =
           (entered['judgePriorityMs'] as num?)?.toInt() ?? 0;
 
+      // A transient poll failure must NOT tear down the search. The server
+      // may already have paired us (the opponent's poll can create the match
+      // and mark BOTH entries matched), so giving up here would run the
+      // finally below, drop the matched entry, and strand the pairing - which
+      // is exactly the "one phone found the match, the other kept searching
+      // forever" symptom on a flaky connection. So a blip is retried on the
+      // next interval; only a sustained run of failures surfaces an error.
+      var consecutiveErrors = 0;
+      const maxConsecutiveErrors = 8;
+
       while (!cancelled) {
-        final result = await _functions
-            .httpsCallable('pollMatchmaking')
-            .call<Map<String, dynamic>>({'mode': mode});
-        final data = result.data;
+        Map<String, dynamic> data;
+        try {
+          final result = await _functions
+              .httpsCallable('pollMatchmaking')
+              .call<Map<String, dynamic>>({'mode': mode});
+          data = result.data;
+          consecutiveErrors = 0;
+        } catch (e) {
+          consecutiveErrors++;
+          if (consecutiveErrors >= maxConsecutiveErrors) rethrow;
+          debugPrint('poll failed ($consecutiveErrors), retrying: $e');
+          // Wait out the interval (interruptible) and try again, keeping
+          // our queue entry - which may already be matched - in place.
+          await Future.any([
+            Future<void>.delayed(pollInterval),
+            cancel,
+            // ignore: use_null_aware_elements
+            if (standDown != null) standDown,
+          ]);
+          continue;
+        }
 
         switch (data['status'] as String?) {
           case 'matched':

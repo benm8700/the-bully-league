@@ -10,7 +10,6 @@ const {moderateImage, moderateImageContent, moderateVideo} =
   require("./visualModeration");
 const {generateToken, AGORA_APP_ID} = require("./agoraToken");
 const {onVoteCast} = require("./voteCount");
-const {onReactionWritten} = require("./reactions");
 const {
   enterQueue,
   leaveQueue,
@@ -139,7 +138,7 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   // PER-ROUND VOTING: `picks` is a {roundIndex: winnerUid} map. A bare
   // `votedForPlayerId` is the legacy single-vote shape from older clients,
   // read below as that player winning every round.
-  const {matchId, votedForPlayerId, picks, funniestRound, turnstileToken} =
+  const {matchId, votedForPlayerId, picks, emojiRatings, turnstileToken} =
       request.data || {};
 
   if (!matchId || (!picks && !votedForPlayerId)) {
@@ -239,13 +238,20 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     throw new HttpsError("invalid-argument", "Pick a winner for at least one round.");
   }
 
-  // Optional "which round was funniest" mark - the signal behind the
-  // Funniest Rounds board. Must be a real round index; anything else is
-  // simply dropped rather than rejected, since it is a bonus, not the vote.
-  let funniestRoundIdx = null;
-  if (funniestRound !== null && funniestRound !== undefined) {
-    const fr = Math.trunc(Number(funniestRound));
-    if (Number.isFinite(fr) && fr >= 0 && fr < roundCount) funniestRoundIdx = fr;
+  // PER-PLAYER EMOJI RATING - the audience-feedback ecosystem that replaced
+  // the funniest-round mark (developer's call, 2026-09-23). Every judge rates
+  // BOTH players with one emoji, and it is REQUIRED: the whole point is that
+  // these accumulate into a player's identity, so a ballot without them would
+  // be a hole in the data. `emojiRatings` maps each participant id -> a rating
+  // key; both must be present and valid.
+  const {isRating} = require("./emojiRatings");
+  const ratingP1 = emojiRatings && emojiRatings[match.player1Id];
+  const ratingP2 = emojiRatings && emojiRatings[match.player2Id];
+  if (!isRating(ratingP1) || !isRating(ratingP2)) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Rate both players with an emoji before submitting.",
+    );
   }
 
   if (Date.now() > voteWindowEndMs(match)) {
@@ -278,14 +284,28 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   const accountAgeMs = now - new Date(voterRecord.metadata.creationTime).getTime();
   const weight = accountAgeMs >= ACCOUNT_AGE_FULL_WEIGHT_MS ? 1 : REDUCED_VOTE_WEIGHT;
 
-  await voterRef.set({lastVoteAtMs: now}, {merge: true});
-  await ballotRef.set({
+  // One atomic batch: the ballot, the voter's rate-limit stamp, and the two
+  // per-player emoji tallies. Incrementing the counts HERE (not at finalize)
+  // makes the feedback land live as judges vote, and the one-ballot-per-voter
+  // guard above means each judge contributes exactly one increment per player.
+  // `emojiCounts` is server-only in firestore.rules, and this path is the
+  // Admin SDK, so a client can never inflate its own counts.
+  const batch = db.batch();
+  batch.set(voterRef, {lastVoteAtMs: now}, {merge: true});
+  batch.set(ballotRef, {
     picks: normalizedPicks,
     weight,
-    // Only stored when a real round was marked; absent otherwise.
-    ...(funniestRoundIdx !== null ? {funniestRound: funniestRoundIdx} : {}),
+    emojiRatings: {
+      [match.player1Id]: ratingP1,
+      [match.player2Id]: ratingP2,
+    },
     timestamp: FieldValue.serverTimestamp(),
   });
+  batch.set(db.collection("users").doc(match.player1Id),
+      {emojiCounts: {[ratingP1]: FieldValue.increment(1)}}, {merge: true});
+  batch.set(db.collection("users").doc(match.player2Id),
+      {emojiCounts: {[ratingP2]: FieldValue.increment(1)}}, {merge: true});
+  await batch.commit();
 
   // Paying for judgement is the point of the whole currency: votes are the
   // scarce resource this app runs on, and the people whose votes matter
@@ -1181,11 +1201,6 @@ exports.getWatchFeed = onCall((request) => {
   return getWatchFeed(request.auth, request.data);
 });
 
-exports.getFunniestRounds = onCall((request) => {
-  const {getFunniestRounds} = require("./funniestRounds");
-  return getFunniestRounds(request.auth, request.data);
-});
-
 exports.getMatchesNeedingVotes = onCall((request) => {
   const {getMatchesNeedingVotes} = require("./voteQueue");
   return getMatchesNeedingVotes(request.auth, request.data);
@@ -1398,4 +1413,3 @@ exports.runSeasonReset = onCall(async (request) => {
 });
 
 exports.onVoteCast = onVoteCast;
-exports.onReactionWritten = onReactionWritten;

@@ -54,6 +54,11 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
   int _skipsEarned = 0;
   bool _iAmReady = false;
   bool _bothReady = false;
+
+  /// True once the opponent has tapped Ready, so we can tell the player
+  /// "they're ready, waiting on you" rather than leaving them guessing
+  /// whether anyone is on the other end.
+  bool _opponentReady = false;
   bool _busy = false;
   bool _navigated = false;
   String? _endedReason;
@@ -167,6 +172,9 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
       final seen = data['lastSeenAt'] as Map<String, dynamic>?;
       final theirLastSeen = (seen?[widget.pairing.opponentId] as num?)?.toInt();
       final opponentReady = ready.contains(widget.pairing.opponentId);
+      if (opponentReady != _opponentReady) {
+        setState(() => _opponentReady = opponentReady);
+      }
       final referenceMs = theirLastSeen ??
           (data['createdAt'] as Timestamp?)?.millisecondsSinceEpoch;
       final gone = !opponentReady &&
@@ -494,8 +502,14 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
           child: Text(
             _iAmReady && !_bothReady
                 ? 'Waiting for your opponent... ${_secondsLeft}s'
-                : 'Match starts in ${_secondsLeft}s',
-            style: Theme.of(context).textTheme.bodySmall,
+                : _opponentReady && !_iAmReady
+                    ? 'Your opponent is ready - tap when you are'
+                    : 'Match starts in ${_secondsLeft}s',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: _opponentReady && !_iAmReady
+                      ? FontWeight.bold
+                      : null,
+                ),
           ),
         ),
       ],

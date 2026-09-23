@@ -61,6 +61,11 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
     final picker = ImagePicker();
     final picked = await picker.pickVideo(
       source: ImageSource.camera,
+      // Open the front (selfie) camera by default - the intro is you talking
+      // to camera, same as a battle. Without this the OS opens the rear
+      // camera and everyone starts by flipping it round. A best-effort hint:
+      // some OEM camera apps ignore it, but it costs nothing where honoured.
+      preferredCameraDevice: CameraDevice.front,
       maxDuration: const Duration(seconds: 60),
     );
     if (picked == null || !mounted) return;

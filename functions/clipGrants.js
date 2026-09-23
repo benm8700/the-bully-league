@@ -496,10 +496,15 @@ async function getClipDownload(auth, data) {
   const bucket = getStorage().bucket();
   const expires = Date.now() + DOWNLOAD_URL_TTL_MS;
   const urls = {};
+  let previewUrl = null;
   for (const [name, rendition] of Object.entries(match.highlight?.renditions ?? {})) {
-    if (!rendition?.path) continue;
+    // The CAPTIONED file is what people post, and delivery is gated on
+    // `captioned === true` above, so captionedPath is present here. Fall
+    // back to the plain path only defensively.
+    const clipPath = rendition?.captionedPath ?? rendition?.path;
+    if (!clipPath) continue;
     try {
-      const [url] = await bucket.file(rendition.path).getSignedUrl({
+      const [url] = await bucket.file(clipPath).getSignedUrl({
         action: "read",
         expires,
         // Makes the browser and the OS save it rather than stream it -
@@ -507,17 +512,33 @@ async function getClipDownload(auth, data) {
         promptSaveAs: `bully-league-${matchId}-${name}.mp4`,
       });
       urls[name] = url;
+      // A second signed URL WITHOUT the attachment disposition, for the
+      // in-app "watch your clip" preview: content-disposition: attachment
+      // makes a video element save rather than stream. Vertical only - the
+      // shape people watch on a phone.
+      if (name === "vertical") {
+        const [stream] = await bucket.file(clipPath).getSignedUrl({
+          action: "read", expires,
+        });
+        previewUrl = stream;
+      }
     } catch (e) {
       // One unavailable shape must not deny the other. Vertical is the
       // one people actually post.
-      console.error(`could not sign ${rendition.path}:`, e.message);
+      console.error(`could not sign ${clipPath}:`, e.message);
     }
   }
 
   if (Object.keys(urls).length === 0) {
     throw new HttpsError("internal", "Couldn't prepare your download.");
   }
-  return {urls, expiresAtMs: expires, captioned: match.highlight?.captioned === true};
+  // Fall back to the landscape download URL for preview if vertical failed
+  // to sign, so "watch here" is never dead when a download is available.
+  if (!previewUrl) previewUrl = urls.vertical ?? urls.landscape ?? null;
+  return {
+    urls, previewUrl, expiresAtMs: expires,
+    captioned: match.highlight?.captioned === true,
+  };
 }
 
 /** When the objection window closes, for client messaging only. */

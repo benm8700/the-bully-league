@@ -43,10 +43,12 @@ function downloadUrl(bucketName, objectPath, token) {
     `/o/${encodeURIComponent(objectPath)}?alt=media&token=${token}`;
 }
 
-/** Rendition name from a stored path, e.g. ".../vertical.mp4" -> "vertical". */
+/** Rendition name from a stored path, e.g. ".../vertical.mp4" -> "vertical",
+ * ".../vertical_captioned.mp4" -> "vertical". The captioned cut and the plain
+ * cut are the same rendition, so they map to one public key. */
 function renditionNameFromPath(objectPath) {
   const file = objectPath.split("/").pop() ?? "";
-  return file.replace(/\.mp4$/, "");
+  return file.replace(/(_captioned)?\.mp4$/, "");
 }
 
 /**
@@ -99,15 +101,28 @@ async function publishHighlight(matchId) {
     );
   }
 
-  const publicUrls = {};
+  // A PUBLISHED clip is the public/posted version, where captions matter
+  // most (muted autoplay on TikTok/Reels), so prefer the captioned cut for
+  // each rendition: `vertical_captioned.mp4` wins over `vertical.mp4`, both
+  // mapping to the single public key `vertical`.
+  const chosen = {};
   for (const object of videos) {
+    const base = renditionNameFromPath(object.name);
+    const captioned = /_captioned\.mp4$/.test(object.name);
+    const current = chosen[base];
+    if (!current || (captioned && !current.captioned)) {
+      chosen[base] = {object, captioned};
+    }
+  }
+
+  const publicUrls = {};
+  for (const [base, {object}] of Object.entries(chosen)) {
     const token = newToken();
     await object.setMetadata({
       contentType: "video/mp4",
       metadata: {firebaseStorageDownloadTokens: token},
     });
-    publicUrls[renditionNameFromPath(object.name)] =
-      downloadUrl(bucket.name, object.name, token);
+    publicUrls[base] = downloadUrl(bucket.name, object.name, token);
   }
 
   await matchRef.set({

@@ -335,6 +335,105 @@ already handles honestly ("someone else got better").
   seam between awardPoints, finalize and syncGoatTier wants a real coreLoop
   run before it is trusted.
 
+## Audience Emoji Ratings — the emoji ecosystem — BUILT (2026-09-23)
+
+**The one-line version: after a battle, every judge rates BOTH roasters with one
+emoji (🔥 Fire / 🧠 Clever / 🥱 Boring / 💩 Trash); those pile up per player and
+become a second identity axis — profile flair, an auto-nickname, a "Hottest"
+board, and (later) badges.** This REPLACES three things at once: the Best-Round
+feature, the freeform per-clip reactions, and the never-built throw-tomatoes /
+heckle-purchase economy. The developer's explicit call: "too many emoji-related
+things that are better hooks than that."
+
+**THE FOUR EMOJIS AND THEIR MEANINGS (developer-fixed).** 🔥 Fire = overall
+great performance; 🧠 Clever = smart/original material; 🥱 Boring = didn't
+entertain me; 💩 Trash = overall bad performance. Two to CHASE (fire, clever),
+two to AVOID (boring, trash). Defined once in `functions/emojiRatings.js` and
+mirrored in `lib/core/emoji_ratings.dart` — the two MUST stay in step (the
+server validates the ballot and is the authority; the client mirrors the set,
+the nickname logic and its thresholds).
+
+**COLLECTION — "Option 1 refined" (developer's call after weighing two designs).**
+The two options were: (1) rate DURING the battle on persistent per-player bars,
+or (2) rate at the END bundled with the vote. Option 1 won because it is ONE
+system that also serves future live tournaments (tap an emoji on a player's
+video, TikTok-live style) rather than needing a second live-reaction mechanism.
+As built in the Judge feed (`feed_page.dart`): a small emoji bar sits on each
+half of the stacked clip (top = player 1, bottom = player 2); you rate a roaster
+any time while watching and can CHANGE it until you submit; the end-of-clip step
+is just the winner pick, and Submit is gated on both players being rated. The
+rating is still ONE per judge per player and is sent WITH the ballot, so the
+server (`castVote`) did NOT change shape between the two designs — Option 1 was
+purely a client relocation of the picker from an end-panel to on-video bars.
+- **The load-bearing cap: one changeable rating per judge, not unlimited spam.**
+  If judges could tap unlimited emojis (raw TikTok-live), the counts would become
+  a VOLUME metric — one hyped viewer inflating a player, and the nicknames /
+  badges / Hottest board built on those counts turning into gameable noise. So
+  the count that feeds identity is one-per-judge-per-player. A future live-hype
+  layer can still splash unlimited tap animations for the crowd feel, but only
+  the final per-viewer emoji counts toward identity — hype and rating stay
+  separate WITHOUT being two data systems.
+- The vote-queue screen (`vote_screen.dart`) and the live-tournament panel
+  (`live_vote_panel.dart`) also require the emoji, but via inline "rate both"
+  rows (`EmojiRateRow`) rather than on-video bars — their layouts are a page and
+  a below-video panel, not a full-screen video overlay. Functionally identical;
+  the on-video bars are the feed's treatment.
+
+**SERVER (`functions/index.js` castVote + `functions/emojiRatings.js`).**
+`castVote` now REQUIRES `emojiRatings: {player1Id: key, player2Id: key}` with
+both valid, and TALLIES them live: in one atomic batch it writes the ballot
+(carrying `emojiRatings`), the voter's rate-limit stamp, and a
+`FieldValue.increment(1)` onto each rated player's `users/{uid}.emojiCounts.<key>`.
+Incrementing at vote time (not at finalize) makes the feedback land as judges
+vote; the one-ballot-per-voter guard means each judge contributes exactly one
+increment per player. `emojiCounts` is server-only in `firestore.rules` (create
+denylist + update immutability guard), so a client can never crown itself —
+these are a player's public identity.
+
+**SURFACES (all reading the same `emojiCounts`):**
+- **Home rank card** (`player_status_card.dart`): a percentage pill under the XP
+  bar — "🔥 61% · 🧠 24% · 🥱 9% · 💩 6%", TAP to flip to raw counts
+  ("🔥 61k · …"). Hidden entirely until the player has been rated (a row of 0%
+  is noise). This deliberately continues the softening of the hidden-criteria
+  rule (numbers shown, developer's call).
+- **Profiles** (own `profile_screen.dart` + others `performer_profile_screen.dart`):
+  a "Crowd read" card (`EmojiStatsCard`) with the four counts, their percentages,
+  and the **auto-nickname**.
+- **Nicknames** (`emojiNicknameOf`, mirrors server `nicknameFor`): a fun derived
+  title from a player's emoji mix, e.g. fire+clever → *The Headliner*,
+  clever+boring → *Too Smart for the Room*, fire+trash → *Love / Hate*, mostly 💩
+  → *The Stinker*. Null until enough signal (12 ratings) so it means something.
+- **Ranks → HOTTEST board** (`leaderboard_screen.dart`): a third tab (replaced
+  BEST ROUNDS) ranking players by 🔥 received, mirroring the Fame board's pattern
+  (single-field `where('emojiCounts.fire', >0).orderBy(...)`, no composite index).
+
+**GUARDRAILS KNOWINGLY OVERRIDDEN — the developer's explicit call, recorded so
+it is not "corrected" later.** This is a SECOND status axis beside the skill
+rank (one-status-ladder) AND it makes the NEGATIVE counts (💩/🥱) public
+(no-public-negatives welfare rule). Both guardrails were flagged; the developer
+chose to override them for the emoji system. Do not silently re-impose them.
+The positive emojis remain the primary chase; the negatives are played for
+self-aware comedy (see the biggest-shit-bag backlog idea).
+
+**DEFERRED / NOT BUILT:**
+- **Visual emoji BADGES need art.** The badge case renders a per-badge PNG
+  (`assets/badges/<id>.png`) that does not exist for emoji tiers, so the badges
+  are NOT surfaced yet. The tiers ARE scaffolded server-side
+  (`BADGE_TIERS`/`earnedEmojiBadges` in `emojiRatings.js`: 🔥/🧠 at 10/50/150,
+  positives only — you do not earn a badge for being trash). Waiting on art from
+  the developer, like the rank crests.
+- **Superlative leader titles** (most 💩 → "biggest shit bag", etc.) — a backlog
+  item; see "Problems To Solve Later".
+- **Live-tournament on-video bars + a hype-splash layer** — the same gesture is
+  designed to extend there; not built.
+
+**TESTS:** `functions/test/emojiRatings.test.js` (8 pure checks: the set, count
+tolerance, nicknames incl. polarizing, badge tiers). The Best-Round removal kept
+`perRoundVoting`'s winner logic and dropped only `funniestRound` (11 checks
+still pass). Not yet re-verified live: a real emoji ballot through the deployed
+`castVote` incrementing `emojiCounts` (the local suites + a real device rating
+are the current evidence).
+
 ## Ranking System
 - **Rating — DECIDED**: Chess-style Elo-like numerical rating system, used as the underlying math (not shown directly to users — see Laugh Meter below). Everyone starts at a flat **1200**. No hard ceiling (unbounded). Soft floor at ~100 (prevents demoralizing bottomless losing spirals).
 - **K-factor — DECIDED (variable, not flat)**: use a VARIABLE K-factor rather than one flat rate for all players — modeled on how real chess federations (USCF/FIDE) handle this. Lower/newer-tier players (roughly ranks 1-4) get a HIGH K-factor — bigger rating swings per match, faster early climbing, quick gratification, forgiving of an early loss or two. Higher-tier players (roughly Headliner and up, especially near the GOAT top-5 cutoff) get a LOW K-factor — smaller swings, rating only moves with sustained real performance, every win at the top genuinely has to be earned. Chosen over a hard "different system above X rank" split specifically because a single continuously-scaling K-factor achieves the same early-gratification-then-real-competition FEEL without a jarring rule-change moment a player could hit and feel blindsided by. Exact K-factor values per tier band not yet set — needs real tuning once analytics data exists (see Firebase Analytics decision).
@@ -641,6 +740,22 @@ Raised by the developer: what protects someone who is unhappy that their match f
     - **Verified by running the real sweep against real Firestore**: an open round is announced to both players and marked on the bracket, a second sweep says nothing, near the deadline only the absentee is warned, nobody is chased once both have checked in, and closed or decided rounds send nothing. **7 live checks plus 15 local tests.**
 
 ## Problems To Solve Later (Backlog — flagged during planning, not yet designed)
+- **EMOJI-ECOSYSTEM SUPERLATIVE TITLES — NEW IDEA (2026-09-23, developer).**
+  The per-player emoji ratings (🔥 Fire / 🧠 Clever / 🥱 Boring / 💩 Trash,
+  built this session — see the vote flow, users.emojiCounts, the Hottest
+  board, badges and auto-nicknames) should eventually grow LEADER/superlative
+  titles: crown whoever leads each emoji platform-wide, in the app's own
+  irreverent voice. The developer's example: the player with the most 💩 gets
+  "Congratulations, you are the biggest shit bag." So: a title/award per emoji
+  (most 🔥, most 🧠, most 🥱, most 💩), including the NEGATIVE ones played for
+  self-aware comedy rather than shame. This is a more intricate design pass on
+  the emoji system - not yet designed. Open questions: whether these are live
+  "#1 in X" crowns (like GOAT's top-five) or earned-and-kept, how the negative
+  ones stay funny rather than cruel (the developer is knowingly overriding the
+  no-public-negatives welfare guardrail for the emoji system generally), and
+  how they sit beside rank/fame without becoming yet another status ladder to
+  keep up with. Capture for now; design later. Note it also depends on the
+  same per-emoji leaderboard indexes the Hottest board introduced.
 - **ELITE TOP-TIER LEAGUE (rank 9 + GOAT only) — BUILT (2026-09-18).** A
   rank-gated showcase mode only Featured Talent and GOAT may enter, mimicking
   ranked (recorded, clippable, moves the hidden Elo, finalizes normally) but

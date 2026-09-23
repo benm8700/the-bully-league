@@ -23,7 +23,7 @@ import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import '../elite/elite_league_screen.dart';
-import '../onboarding/tutorial_screen.dart';
+import '../profile/profile_screen.dart';
 import '../friends/challenge_screen.dart';
 import '../practice/solo_practice_screen.dart';
 import '../settings/account_screen.dart';
@@ -106,12 +106,18 @@ class HomeScreen extends StatelessWidget {
           // 156px overflow on a 320x640 device), and it will keep growing.
           // Centred only when there's room to spare, so it still looks
           // deliberate on a large phone rather than pinned to the top.
+          // The system gesture/nav bar inset at the bottom. Without adding it
+          // to the scroll padding, when the content height is close to the
+          // viewport height (seen on the S22) the centred Column sits its
+          // bottom items - the Find a Match CTA - flush against the nav bar
+          // with no room to scroll clear of it.
+          final bottomInset = MediaQuery.of(context).viewPadding.bottom;
           return LayoutBuilder(
             builder: (context, constraints) => SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: EdgeInsets.only(top: 16, bottom: 16 + bottomInset),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight - 32,
+                  minHeight: constraints.maxHeight - 32 - bottomInset,
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -249,11 +255,14 @@ Future<void> _startMatch(BuildContext context, String mode) async {
     return;
   }
 
-  // The tutorial is a mandatory one-time gate before a first match
-  // (CLAUDE.md's Onboarding tutorial decision). Checked here rather than
-  // on Home so it fires at the moment it's relevant - someone browsing
-  // the leaderboard shouldn't be made to sit through it.
-  if (!await _ensureTutorialCompleted(context)) return;
+  // The forced practice round is GONE (developer's call, 2026-09-22): it
+  // made capable people feel talked down to. The tutorial still exists as a
+  // replayable practice round, reachable from Rules. What a player genuinely
+  // must do before a ranked/tournament battle is record an intro video (the
+  // ammo the opponent studies, and the enterQueue gate) - so if it's
+  // missing, route them straight to their profile to record it and fill in a
+  // few details, rather than letting them walk to the queue and be refused.
+  if (!await _ensureIntroReady(context, mode)) return;
   if (!context.mounted) return;
 
   final consented = await Navigator.of(context).push<bool>(
@@ -408,14 +417,23 @@ Future<void> _showBlockedSheet(
   );
 }
 
-/// Shows the onboarding tutorial if this player hasn't done it, and
-/// reports whether it's safe to continue into a match.
+/// Makes sure the player is battle-ready before a ranked or tournament match:
+/// an approved intro video AND the four required profile fields filled in.
 ///
-/// Fails OPEN: if the flag can't be read, the match proceeds. Being unable
-/// to reach Firestore for a moment shouldn't stop someone playing, and the
-/// cost of occasionally skipping the tutorial is far lower than the cost
-/// of blocking matches on a transient read.
-Future<bool> _ensureTutorialCompleted(BuildContext context) async {
+/// This replaced the forced practice round. Two things must exist before a
+/// real battle: the intro video (the ammo the opponent studies, and the
+/// enterQueue gate) and a filled-in profile (the developer's call after
+/// players entered ranked with blank profiles - the opponent gets nothing to
+/// work with). When either is missing we send the player to their profile to
+/// complete it rather than letting them reach the queue and hit a late
+/// refusal. Practice (exhibition) is exempt: it's the warm-up, and a
+/// first-timer should be able to practise before they've recorded anything.
+///
+/// Fails OPEN: if the doc can't be read, the match proceeds and the server's
+/// own enterQueue gate has the final say - a transient read shouldn't block
+/// someone who is actually ready.
+Future<bool> _ensureIntroReady(BuildContext context, String mode) async {
+  if (mode == 'exhibition') return true;
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return true;
   try {
@@ -423,16 +441,27 @@ Future<bool> _ensureTutorialCompleted(BuildContext context) async {
         .collection('users')
         .doc(uid)
         .get();
-    if (snap.data()?['tutorialCompleted'] == true) return true;
+    final profile = snap.data()?['profile'] as Map<String, dynamic>?;
+    final introUrl = profile?['introVideoUrl'] as String?;
+    final hasIntro = introUrl != null && introUrl.isNotEmpty;
+    // The four fields ProfileScreen marks "Required" - the opponent's ammo.
+    bool filled(String key) =>
+        (profile?[key] as String?)?.trim().isNotEmpty ?? false;
+    final hasProfile = filled('profession') &&
+        filled('education') &&
+        filled('hometown') &&
+        filled('interests');
+    if (hasIntro && hasProfile) return true;
   } catch (_) {
     return true;
   }
   if (!context.mounted) return false;
-  // Only continue into the match if they actually finished it.
-  final completed = await Navigator.of(
-    context,
-  ).push<bool>(MaterialPageRoute(builder: (_) => const TutorialScreen()));
-  return completed == true;
+  // Take them straight to where they record the intro and fill the fields,
+  // with a banner explaining why. They'll tap battle again once ready.
+  await Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => const ProfileScreen(promptIntro: true)),
+  );
+  return false;
 }
 
 /// Shows the Laugh Meter (rank title + XP climb) and the win/loss record.

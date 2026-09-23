@@ -243,8 +243,6 @@ async function getWatchFeed(auth, data) {
       verdict: verdictFor(c.match),
       videoUrl: await clipUrl(c.match),
       captioned: c.match.highlight?.captioned === true,
-      reactionCounts: c.match.reactionCounts ?? {},
-      reactionTotal: c.match.reactionTotal ?? 0,
       // So the judge can pick a winner per round. Standard 3 by default.
       roundCount: c.match.settings?.roundCount ?? 3,
     });

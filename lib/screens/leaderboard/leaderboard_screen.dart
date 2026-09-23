@@ -2,14 +2,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/emoji_ratings.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/funniest_rounds_tab.dart';
 import '../profile/performer_profile_screen.dart';
 
 /// The Fame board's accent - the brand PINK (follow/social), so Fame reads as
 /// its own axis, distinct from the skill Ranks board.
 const Color _fameAccent = Color(0xFFFF3B6B);
+
+/// The Hottest board's accent - a fiery orange, matching the 🔥 it ranks on.
+const Color _hotAccent = Color(0xFFFF7A18);
 
 /// The skill ladder - the in-app equivalent of the website homepage's
 /// "top 5 roasters" concept (CLAUDE.md's Website — Account & Tournament
@@ -63,6 +66,15 @@ class LeaderboardScreen extends StatelessWidget {
         .orderBy('followerCount', descending: true)
         .limit(kBoardSize);
 
+    // THE HOTTEST BOARD - ranks by 🔥 ratings received, the flagship positive
+    // emoji. This is the "most of each emoji shows the hottest users" board
+    // (developer's call, 2026-09-23). Only players with at least one 🔥 appear.
+    final hotQuery = FirebaseFirestore.instance
+        .collection('users')
+        .where('emojiCounts.fire', isGreaterThan: 0)
+        .orderBy('emojiCounts.fire', descending: true)
+        .limit(kBoardSize);
+
     return DefaultTabController(
       length: 3,
       child: Scaffold(
@@ -89,7 +101,7 @@ class LeaderboardScreen extends StatelessWidget {
             tabs: const [
               Tab(text: 'RANKS'),
               Tab(text: 'FAME'),
-              Tab(text: 'BEST ROUNDS'),
+              Tab(text: 'HOTTEST'),
             ],
           ),
         ),
@@ -122,7 +134,7 @@ class LeaderboardScreen extends StatelessWidget {
                 children: [
                   _buildPlayers(context, skillQuery, fame: false),
                   _buildPlayers(context, fameQuery, fame: true),
-                  const FunniestRoundsTab(),
+                  _buildPlayers(context, hotQuery, fame: false, hot: true),
                 ],
               ),
             ),
@@ -136,6 +148,7 @@ class LeaderboardScreen extends StatelessWidget {
     BuildContext context,
     Query<Map<String, dynamic>> query, {
     required bool fame,
+    bool hot = false,
   }) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: query.snapshots(),
@@ -151,22 +164,33 @@ class LeaderboardScreen extends StatelessWidget {
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) {
           return EmptyState(
-            icon: fame ? Icons.favorite_border : Icons.leaderboard_outlined,
-            title: fame ? 'No fans yet' : 'No one on the board yet',
-            message: fame
-                ? 'Get funny in front of a crowd and people will follow '
-                    'you. The most-followed comedians show up here.'
-                : 'Play a battle and you could be the first name '
-                    'on the board.',
+            icon: hot
+                ? Icons.local_fire_department_outlined
+                : fame
+                    ? Icons.favorite_border
+                    : Icons.leaderboard_outlined,
+            title: hot
+                ? 'No fire yet'
+                : fame
+                    ? 'No fans yet'
+                    : 'No one on the board yet',
+            message: hot
+                ? 'Judges hand out \u{1F525} to the funniest performances. '
+                    'Rack them up and you top this board.'
+                : fame
+                    ? 'Get funny in front of a crowd and people will follow '
+                        'you. The most-followed comedians show up here.'
+                    : 'Play a battle and you could be the first name '
+                        'on the board.',
           );
         }
         final me = FirebaseAuth.instance.currentUser?.uid;
         final onBoard = me != null && docs.any((d) => d.id == me);
-        // The self-row is appended only on the skill board - fame position by
-        // follower count is far less meaningful, and a fan-less new account
-        // isn't on the fame board at all (the query excludes zero-follower
-        // users), so there is nothing honest to append.
-        final appendSelf = !fame && !onBoard && me != null;
+        // The self-row is appended only on the skill board - fame and hottest
+        // are secondary axes where an off-board position is far less
+        // meaningful, and a new account isn't on either (both queries exclude
+        // zero), so there is nothing honest to append.
+        final appendSelf = !fame && !hot && !onBoard && me != null;
 
         return ListView.separated(
           // Clears the transparent app bar AND the tab bar above the list.
@@ -190,9 +214,14 @@ class LeaderboardScreen extends StatelessWidget {
               wins: data['wins'] as num? ?? 0,
               losses: data['losses'] as num? ?? 0,
               isMe: docs[index].id == me,
-              isGoat: !fame && data['rankTitle'] == 'GOAT',
+              isGoat: !fame && !hot && data['rankTitle'] == 'GOAT',
               fameCount: fame
                   ? ((data['followerCount'] as num?) ?? 0).toInt()
+                  : null,
+              hotCount: hot
+                  ? emojiCountOf(
+                      (data['emojiCounts'] as Map?)?.cast<String, dynamic>(),
+                      'fire')
                   : null,
             );
           },
@@ -220,6 +249,7 @@ class _Row extends StatelessWidget {
     this.isGoat = false,
     this.uid,
     this.fameCount,
+    this.hotCount,
   });
 
   final int position;
@@ -240,12 +270,30 @@ class _Row extends StatelessWidget {
   /// (in pink) instead of the win-loss record.
   final int? fameCount;
 
+  /// When non-null this is a HOTTEST row: the trailing shows this 🔥 count.
+  final int? hotCount;
+
   VoidCallback? _tap(BuildContext context) => uid == null
       ? null
       : () => PerformerProfileScreen.open(context, uid!, username: username);
 
-  /// Trailing content: a follower count on the fame board, else the record.
+  /// Trailing content: a follower count on Fame, a 🔥 count on Hottest, else
+  /// the win-loss record.
   Widget _trailing(TextTheme text, {required Color recordColor}) {
+    if (hotCount != null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('\u{1F525}', style: TextStyle(fontSize: 13)),
+          const SizedBox(width: 4),
+          Text(
+            '$hotCount',
+            style: text.bodyMedium
+                ?.copyWith(color: _hotAccent, fontWeight: FontWeight.w800),
+          ),
+        ],
+      );
+    }
     if (fameCount != null) {
       return Row(
         mainAxisSize: MainAxisSize.min,

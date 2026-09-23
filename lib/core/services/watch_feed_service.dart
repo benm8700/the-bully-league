@@ -15,7 +15,6 @@ class FeedMatch {
     required this.windowOpen,
     required this.videoUrl,
     required this.verdict,
-    required this.reactionCounts,
     required this.roundCount,
   });
 
@@ -47,13 +46,29 @@ class FeedMatch {
   /// video spoils it.
   final FeedVerdict? verdict;
 
-  /// Per-emoji tallies as of page load. Not live - a listener per clip in
-  /// a scrolling feed is a lot of sockets for a number nobody watches move.
-  final Map<String, int> reactionCounts;
-
   /// How many rounds this match had, so the judge picks a winner per round.
   /// Defaults to the standard 3 when the feed doesn't carry it.
   final int roundCount;
+
+  /// A copy marked as judged by this viewer: no longer votable, and flagged
+  /// alreadyVoted so a rebuilt feed page shows the tally instead of the green
+  /// pick controls. Used right after a successful vote so scrolling away and
+  /// back doesn't re-offer voting on a match the server will now reject.
+  FeedMatch markVoted() => FeedMatch(
+        matchId: matchId,
+        player1Id: player1Id,
+        player2Id: player2Id,
+        player1Username: player1Username,
+        player2Username: player2Username,
+        voteCount: voteCount,
+        canVote: false,
+        isParticipant: isParticipant,
+        alreadyVoted: true,
+        windowOpen: windowOpen,
+        videoUrl: videoUrl,
+        verdict: verdict,
+        roundCount: roundCount,
+      );
 
   static FeedMatch fromMap(Map<String, dynamic> m) => FeedMatch(
         matchId: m['matchId'] as String,
@@ -68,8 +83,6 @@ class FeedMatch {
         windowOpen: m['windowOpen'] == true,
         videoUrl: m['videoUrl'] as String?,
         verdict: FeedVerdict.fromMap(m['verdict']),
-        reactionCounts: ((m['reactionCounts'] as Map?) ?? const {})
-            .map((k, v) => MapEntry(k as String, (v as num).toInt())),
         roundCount: (m['roundCount'] as num?)?.toInt() ?? 3,
       );
 }
@@ -182,7 +195,7 @@ class WatchFeedService {
   Future<VoteReward> castVote({
     required String matchId,
     required Map<int, String> picks,
-    int? funniestRound,
+    required Map<String, String> emojiRatings,
     String? turnstileToken,
   }) async {
     final result = await FirebaseFunctions.instance
@@ -191,8 +204,9 @@ class WatchFeedService {
       'matchId': matchId,
       // Per-round winners keyed by round index (as strings for the wire).
       'picks': picks.map((k, v) => MapEntry(k.toString(), v)),
-      // ignore: use_null_aware_elements
-      if (funniestRound != null) 'funniestRound': funniestRound,
+      // Required: {playerId: emojiKey} for BOTH players - the server rejects
+      // a ballot missing either.
+      'emojiRatings': emojiRatings,
       // ignore: use_null_aware_elements
       if (turnstileToken != null) 'turnstileToken': turnstileToken,
     });

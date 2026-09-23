@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../widgets/match_clip_player.dart';
+
 /// Getting the shareable version of one of your own battles.
 ///
 /// WHAT IS ACTUALLY BEING BOUGHT, because it is easy to get wrong: every
@@ -188,6 +190,43 @@ class _GetClipSheetState extends State<GetClipSheet> {
     }
   }
 
+  /// Plays the finished captioned clip IN-APP, so you can watch the edit
+  /// before you download or post it - the same file the download/share
+  /// buttons hand over, but streamed rather than saved. Uses the streamable
+  /// `previewUrl` (no attachment disposition). Gated by the same
+  /// objection-window check, since it calls the same endpoint.
+  Future<void> _watch() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('getClipDownload')
+          .call<Map<String, dynamic>>({'matchId': widget.matchId});
+      final url = result.data['previewUrl'] as String?;
+      if (url == null) throw Exception('no url');
+      if (!mounted) return;
+      setState(() => _busy = false);
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => _ClipPreviewScreen(url: url),
+        fullscreenDialog: true,
+      ));
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e.message ?? 'Your clip is not ready yet.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = "Couldn't load your clip.";
+      });
+    }
+  }
+
   /// Downloads the clip to a temp file and opens the OS share sheet, so it can
   /// go straight into Instagram / TikTok / Reels / Facebook with the video
   /// attached. Sharing the FILE (not a link) is what lands the clip in the
@@ -298,7 +337,15 @@ class _GetClipSheetState extends State<GetClipSheet> {
                     _Notice(icon: Icons.error_outline, text: _error!),
                     const SizedBox(height: 12),
                   ],
+                  // Watch-first: this is the finished captioned edit, so let
+                  // people see it in-app before downloading or posting.
                   FilledButton.icon(
+                    onPressed: _busy ? null : _watch,
+                    icon: const Icon(Icons.play_circle_outline),
+                    label: const Text('Watch your clip'),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
                     onPressed: _busy ? null : _share,
                     icon: const Icon(Icons.ios_share),
                     label: const Text('Share to social'),
@@ -398,6 +445,32 @@ class _Notice extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
       ],
+    );
+  }
+}
+
+/// Full-screen in-app playback of the finished captioned clip. Reuses the
+/// same looping [MatchClipPlayer] the judge feed uses, so there is one
+/// player to maintain.
+class _ClipPreviewScreen extends StatelessWidget {
+  const _ClipPreviewScreen({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: const Text('Your clip'),
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          child: MatchClipPlayer(videoUrl: url),
+        ),
+      ),
     );
   }
 }

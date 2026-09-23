@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/emoji_rate_row.dart';
 import '../../widgets/live_tally.dart';
 import '../../widgets/match_clip_player.dart';
 import '../../widgets/turnstile_challenge.dart';
@@ -59,12 +60,10 @@ class _VoteScreenState extends State<VoteScreen> {
   /// blocking the players.)
   String? _selectedWinner;
 
-  /// Optional: which round the judge found funniest - the signal behind the
-  /// Best Rounds board, entirely SEPARATE from who won the match and never
-  /// required to submit. This is what keeps that board working under
-  /// overall-winner voting: "who won" and "which round was funniest" are two
-  /// different questions.
-  int? _funniestRound;
+  /// The emoji rating the judge gives each player (required to submit) - the
+  /// audience-feedback ecosystem that replaced the funniest-round mark.
+  String? _emojiP1;
+  String? _emojiP2;
   String? _turnstileToken;
   bool _submitting = false;
   String? _errorMessage;
@@ -73,8 +72,13 @@ class _VoteScreenState extends State<VoteScreen> {
   /// immediately rather than waiting on the ballot document to round-trip.
   bool _justVoted = false;
 
-  Future<void> _submitVote(int roundCount) async {
-    if (_selectedWinner == null || _turnstileToken == null) return;
+  Future<void> _submitVote(String player1Id, String player2Id) async {
+    if (_selectedWinner == null ||
+        _turnstileToken == null ||
+        _emojiP1 == null ||
+        _emojiP2 == null) {
+      return;
+    }
     setState(() {
       _submitting = true;
       _errorMessage = null;
@@ -87,8 +91,8 @@ class _VoteScreenState extends State<VoteScreen> {
         // A single overall winner. castVote normalises this into its
         // per-round tally server-side, so nothing downstream changes.
         'votedForPlayerId': _selectedWinner,
-        // ignore: use_null_aware_elements
-        if (_funniestRound != null) 'funniestRound': _funniestRound,
+        // Required per-player emoji ratings.
+        'emojiRatings': {player1Id: _emojiP1, player2Id: _emojiP2},
         'turnstileToken': _turnstileToken,
       });
       if (!mounted) return;
@@ -101,46 +105,6 @@ class _VoteScreenState extends State<VoteScreen> {
     }
   }
 
-  /// Optional "which round was funniest" selector - the signal behind the
-  /// Funniest Rounds board. One tap, distinct from picking each round's
-  /// winner, and never required to submit (tapping again clears it).
-  Widget _funniestRow(BuildContext context, int roundCount) {
-    final scheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Icon(Icons.local_fire_department, color: scheme.primary, size: 18),
-        const SizedBox(width: 6),
-        Text('Best round?', style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(width: 10),
-        for (int r = 0; r < roundCount; r++)
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: GestureDetector(
-              onTap: () => setState(
-                  () => _funniestRound = _funniestRound == r ? null : r),
-              child: Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: _funniestRound == r
-                      ? scheme.primary
-                      : scheme.onSurface.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text('${r + 1}',
-                    style: TextStyle(
-                      color: _funniestRound == r
-                          ? scheme.onPrimary
-                          : scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.bold,
-                    )),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -274,8 +238,25 @@ class _VoteScreenState extends State<VoteScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                _funniestRow(context, roundCount),
-                const SizedBox(height: 10),
+                if (_selectedWinner != null) ...[
+                  Text('Now rate both:',
+                      style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 8),
+                  EmojiRateRow(
+                    name: player1Name,
+                    selected: _emojiP1,
+                    dark: false,
+                    onSelect: (k) => setState(() => _emojiP1 = k),
+                  ),
+                  const SizedBox(height: 8),
+                  EmojiRateRow(
+                    name: player2Name,
+                    selected: _emojiP2,
+                    dark: false,
+                    onSelect: (k) => setState(() => _emojiP2 = k),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 TurnstileChallenge(
                     onToken: (token) => setState(() => _turnstileToken = token)),
                 const SizedBox(height: 16),
@@ -298,8 +279,10 @@ class _VoteScreenState extends State<VoteScreen> {
                   onPressed: (_selectedWinner != null &&
                           _turnstileToken != null &&
                           _watchedEnough &&
+                          _emojiP1 != null &&
+                          _emojiP2 != null &&
                           !_submitting)
-                      ? () => _submitVote(roundCount)
+                      ? () => _submitVote(player1Id, player2Id)
                       : null,
                   child: _submitting
                       ? const SizedBox(

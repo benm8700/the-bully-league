@@ -79,16 +79,29 @@ const OUTPUT_FPS = 30;
  * text, which read as clunky. `overlay` is a core ffmpeg filter and needs no
  * font, so it carries none of the drawtext font-availability worry.
  *
- * Bottom-LEFT because TikTok/Reels/Shorts stack their own UI on the bottom-
- * RIGHT, and the vertical centre is where captions sit on a stacked composite.
+ * BOTTOM-RIGHT (developer's call, 2026-09-22 - "looks better there"). The
+ * in-app reaction strip sits full-width along the bottom-left/centre, so the
+ * bottom-right is the clearest corner for the mark in the judge feed.
  * Sized as a fraction of canvas WIDTH so it stays proportionate in both the
  * 1080-wide vertical cut and the 1920-wide landscape one. Slightly transparent
  * so it reads as a mark, not an obstruction. Bundled with the function so it
  * ships to the Cloud Functions runtime.
+ *
+ * THE RIGHT MARGIN IS LARGE ON PURPOSE. The in-app clip player cover-fits the
+ * 9:16 clip to a taller phone screen, which crops roughly 9-12% off EACH side
+ * - enough to slice the edge off a 3%-inset watermark (the "you can't see the
+ * T" report). So the X inset clears that crop band, while the Y inset stays
+ * small so it hugs the bottom rather than riding up into frame.
  */
 const WATERMARK_LOGO_PATH = path.join(__dirname, "assets", "watermark.png");
 const WATERMARK_LOGO_WIDTH_RATIO = 0.17;
-const WATERMARK_LOGO_MARGIN_RATIO = 0.03;
+// Tightened toward the corner (developer's call, 2026-09-23 - "more neatly
+// lined up in the corner"). Still a small inset rather than flush to the edge:
+// the posted/downloaded clip - the watermark's real job - reads as a clean
+// corner mark, and the ~7% keeps most of the wordmark inside the in-app feed's
+// side-crop too (the logo PNG carries its own right-edge padding on top).
+const WATERMARK_LOGO_MARGIN_X_RATIO = 0.07;
+const WATERMARK_LOGO_MARGIN_Y_RATIO = 0.03;
 const WATERMARK_LOGO_ALPHA = 0.9;
 // Resolved once at load. If the asset ever fails to deploy, this is null and
 // renders proceed WITHOUT a watermark rather than failing outright - a missing
@@ -334,11 +347,14 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
     const logoIndex = inputIndex++;
     inputs.push("-i", options.logoPath);
     const logoW = Math.round(canvas.width * WATERMARK_LOGO_WIDTH_RATIO);
-    const margin = Math.round(canvas.width * WATERMARK_LOGO_MARGIN_RATIO);
-    // x = margin from the left; y = frame height - logo height - margin.
+    const marginX = Math.round(canvas.width * WATERMARK_LOGO_MARGIN_X_RATIO);
+    const marginY = Math.round(canvas.width * WATERMARK_LOGO_MARGIN_Y_RATIO);
+    // BOTTOM-RIGHT: x = frame width - logo width - marginX (marginX clears the
+    // in-app side-crop); y = frame height - logo height - marginY (hugs the
+    // bottom). `W`/`H` are the main frame, `w`/`h` the scaled logo.
     filters.push(`[${logoIndex}:v]scale=${logoW}:-1,format=rgba,` +
       `colorchannelmixer=aa=${WATERMARK_LOGO_ALPHA}[wm]`);
-    filters.push(`[vbeforelogo][wm]overlay=${margin}:H-h-${margin}[vout]`);
+    filters.push(`[vbeforelogo][wm]overlay=W-w-${marginX}:H-h-${marginY}[vout]`);
   }
 
   // normalize=0 because the segments do not overlap - normalising would
@@ -529,12 +545,22 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
       const subtitlePath = path.join(workDir, `captions-${name}.ass`);
       await fs.writeFile(subtitlePath, buildAssFile(cues, rendition.canvas), "utf8");
 
-      const outputPath = path.join(workDir, rendition.fileName);
+      // A captioned render is written to a SEPARATE file rather than
+      // overwriting the uncaptioned stage-1 output. Captions are
+      // posting-only (CLAUDE.md, 2026-09-22): the judge/Watch feed plays
+      // `renditions[name].path`, so burning captions into that same path
+      // would leak them into in-app judging. Keeping the captioned cut
+      // beside it also means the untrimmed full clip stays available for
+      // judging while the posted/download cut is the trimmed, captioned one.
+      const outFileName = captions ?
+        rendition.fileName.replace(/\.mp4$/, "_captioned.mp4") :
+        rendition.fileName;
+      const outputPath = path.join(workDir, outFileName);
       await runFfmpeg(ffmpegPath, buildFfmpegArgs(timeline, workDir, outputPath, {
         subtitlePath, rendition, trimFilters, logoPath: WATERMARK_LOGO,
       }));
 
-      const destination = `${HIGHLIGHT_PREFIX}/${matchId}/${rendition.fileName}`;
+      const destination = `${HIGHLIGHT_PREFIX}/${matchId}/${outFileName}`;
       await bucket.upload(outputPath, {destination, metadata: {contentType: "video/mp4"}});
       outputs[name] = {
         path: destination,
@@ -544,25 +570,50 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
       };
     }
 
-    await matchRef.set({
-      highlight: {
-        // Keyed by rendition so the website and the social pipeline each
-        // pick the shape they need from the same match document.
-        renditions: outputs,
-        renderedAt: FieldValue.serverTimestamp(),
-        captioned: cues.length > 0,
-        cueCount: cues.length,
-        // Recorded so a short clip is explicable after the fact, and so
-        // the thresholds can be tuned against what they actually did
-        // rather than against a guess.
-        trimmedSeconds: Math.round(trimmedSeconds * 10) / 10,
-        // Same human gate as the raw recording: rendering something
-        // watchable is not the same as approving it for an audience.
-        reviewStatus: "pending",
-        published: false,
-        ...(warnings.length > 0 ? {warnings} : {}),
-      },
-    }, {merge: true});
+    if (captions) {
+      // Record the captioned files ALONGSIDE the uncaptioned renditions,
+      // not in place of them. `renditions[name].captionedPath` is deep-
+      // merged into each existing rendition, so `.path` (what the judge
+      // feed serves) is preserved. reviewStatus/published are deliberately
+      // left untouched, so re-captioning never un-publishes an approved clip.
+      const renditionMerge = {};
+      for (const [name, out] of Object.entries(outputs)) {
+        renditionMerge[name] = {
+          captionedPath: out.path,
+          captionedSizeBytes: out.sizeBytes,
+        };
+      }
+      await matchRef.set({
+        highlight: {
+          renditions: renditionMerge,
+          captioned: cues.length > 0,
+          cueCount: cues.length,
+          trimmedSeconds: Math.round(trimmedSeconds * 10) / 10,
+          captionedRenderedAt: FieldValue.serverTimestamp(),
+          ...(warnings.length > 0 ? {captionWarnings: warnings} : {}),
+        },
+      }, {merge: true});
+    } else {
+      await matchRef.set({
+        highlight: {
+          // Keyed by rendition so the website and the social pipeline each
+          // pick the shape they need from the same match document.
+          renditions: outputs,
+          renderedAt: FieldValue.serverTimestamp(),
+          captioned: cues.length > 0,
+          cueCount: cues.length,
+          // Recorded so a short clip is explicable after the fact, and so
+          // the thresholds can be tuned against what they actually did
+          // rather than against a guess.
+          trimmedSeconds: Math.round(trimmedSeconds * 10) / 10,
+          // Same human gate as the raw recording: rendering something
+          // watchable is not the same as approving it for an audience.
+          reviewStatus: "pending",
+          published: false,
+          ...(warnings.length > 0 ? {warnings} : {}),
+        },
+      }, {merge: true});
+    }
 
     return {rendered: true, renditions: outputs, cueCount: cues.length, warnings};
   } finally {

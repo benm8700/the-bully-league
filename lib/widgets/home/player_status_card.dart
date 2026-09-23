@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/emoji_ratings.dart';
 import '../../screens/leaderboard/leaderboard_screen.dart';
 import 'rank_badges.dart';
 
@@ -51,6 +52,10 @@ class PlayerStatusCard extends StatefulWidget {
 class _PlayerStatusCardState extends State<PlayerStatusCard> {
   Map<String, dynamic>? _meter;
   int? _rank;
+  Map<String, dynamic>? _emojiCounts;
+
+  /// The emoji pill toggles between percentages and raw counts on tap.
+  bool _showEmojiCounts = false;
 
   @override
   void initState() {
@@ -74,6 +79,9 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
     try {
       final db = FirebaseFirestore.instance;
       final doc = await db.collection('users').doc(widget.uid).get();
+      final emoji =
+          (doc.data()?['emojiCounts'] as Map?)?.cast<String, dynamic>();
+      if (mounted && emoji != null) setState(() => _emojiCounts = emoji);
       final rating = doc.data()?['rating'] as num?;
       if (rating == null) return; // Never placed - no position to show.
       final ahead = await db
@@ -88,6 +96,46 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
   }
 
   static const _gold = Color(0xFFF4C838);
+
+  /// The emoji ratings row under the XP bar: "🔥 61% · 🧠 24% · 🥱 9% · 💩 6%",
+  /// tappable to flip to raw counts ("🔥 61k · 🧠 24k · …"). Hidden entirely
+  /// until the player has actually been rated - a row of 0% is noise.
+  Widget _emojiPill(BuildContext context) {
+    final counts = _emojiCounts;
+    if (emojiTotalOf(counts) == 0) return const SizedBox.shrink();
+    final percents = emojiPercentsOf(counts);
+    final parts = <String>[];
+    for (final r in kEmojiRatings) {
+      final value = _showEmojiCounts
+          ? _abbrev(emojiCountOf(counts, r.key))
+          : '${percents[r.key]}%';
+      parts.add('${r.emoji} $value');
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: GestureDetector(
+        onTap: () => setState(() => _showEmojiCounts = !_showEmojiCounts),
+        behavior: HitTestBehavior.opaque,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              parts.join('  ·  '),
+              maxLines: 1,
+              softWrap: false,
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: Color(0xFFD7D7D7),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -165,6 +213,7 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
             ),
           ),
         ),
+        _emojiPill(context),
       ],
     );
 
@@ -423,6 +472,24 @@ class _XpBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Compact counts for the emoji pill: 99 -> "99", 3000 -> "3k", 61000 ->
+/// "61k", 1500 -> "1.5k", 2_000_000 -> "2m".
+String _abbrev(int n) {
+  if (n < 1000) return '$n';
+  if (n < 1000000) {
+    final k = n / 1000;
+    final s = k >= 10 || k == k.roundToDouble()
+        ? k.round().toString()
+        : k.toStringAsFixed(1);
+    return '${s}k';
+  }
+  final m = n / 1000000;
+  final s = m >= 10 || m == m.roundToDouble()
+      ? m.round().toString()
+      : m.toStringAsFixed(1);
+  return '${s}m';
 }
 
 /// Thousands separators, so "1200" reads "1,200" like the reference.

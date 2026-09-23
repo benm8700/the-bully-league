@@ -223,8 +223,8 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
   /// The challenge is raised BEFORE the vote rather than after a rejection,
   /// so the interruption lands once at the start of a judging run instead
   /// of arriving as an error mid-scroll.
-  Future<bool> _vote(
-      String matchId, Map<int, String> picks, int? funniestRound) async {
+  Future<bool> _vote(String matchId, Map<int, String> picks,
+      Map<String, String> emojiRatings) async {
     try {
       if (_votesRemaining <= 0) {
         final token = await _requestChallenge();
@@ -236,10 +236,21 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
       final reward = await _service.castVote(
         matchId: matchId,
         picks: picks,
-        funniestRound: funniestRound,
+        emojiRatings: emojiRatings,
       );
       if (mounted) {
-        setState(() => _votesRemaining -= 1);
+        setState(() {
+          _votesRemaining -= 1;
+          // Mark this match judged in the source list so a feed page that
+          // rebuilds (scrolled away and back) sees canVote:false and shows
+          // the tally rather than re-offering the green pick controls on a
+          // match the server will now reject as already voted.
+          final list = _matches;
+          if (list != null) {
+            final i = list.indexWhere((m) => m.matchId == matchId);
+            if (i != -1) list[i] = list[i].markVoted();
+          }
+        });
         // Show the reward landing. The window bonus has been paid since it
         // was built and nothing ever mentioned it - a bonus nobody
         // notices motivates nobody.
@@ -411,7 +422,8 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
           // AND the app is foreground - otherwise its audio would keep looping
           // off-tab or in the background.
           isActive: i == _index && widget.isActiveTab && _appForeground,
-          onVote: (picks, funniest) => _vote(match.matchId, picks, funniest),
+          onVote: (picks, emojiRatings) =>
+              _vote(match.matchId, picks, emojiRatings),
           onCall: _recordCall,
         );
       },

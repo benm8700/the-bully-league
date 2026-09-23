@@ -50,6 +50,7 @@ service cloud.firestore {
           'careerRankedMatches', 'skipsUsedToday', 'skipsResetDate',
           'takedowns', 'lastNotifiedRankTitle', 'lastSeenRankTitle',
           'dailyReward', 'followerCount', 'lastSeenFameMilestone',
+          'emojiCounts',
         ]);
 
       // Uses .get(field, default) rather than direct field access - a
@@ -171,6 +172,12 @@ service cloud.firestore {
         // liked, which is the exact behaviour the gap exists to price up.
         request.resource.data.get('lastVoteAtMs', null) ==
           resource.data.get('lastVoteAtMs', null) &&
+        // Per-player emoji ratings (🔥/🧠/🥱/💩), tallied only by castVote via
+        // the Admin SDK as ballots come in. These are a player's public
+        // identity - profile flair, badges, the Hottest board, their
+        // nickname - so a client able to write them could crown itself.
+        request.resource.data.get('emojiCounts', null) ==
+          resource.data.get('emojiCounts', null) &&
         request.resource.data.get('clipCredits', null) ==
           resource.data.get('clipCredits', null) &&
         // The username, and its lowercased search copy. Written only by
@@ -341,37 +348,10 @@ service cloud.firestore {
       //
       // Written only by the onVoteCast trigger via the Admin SDK.
 
-      // Emoji reactions on a clip - what stands in for comments, which are
-      // ruled out entirely so they can't affect the roasters' mental state.
-      //
-      // AN ALLOWLIST, ENFORCED HERE rather than only in the trigger,
-      // because this is the write path a modified client would use. The
-      // allowlist is the point: a field accepting arbitrary characters is a
-      // comment box, someone would type a slur into it within a week, and
-      // avoiding exactly that is why comments are ruled out. It also keeps
-      // the per-emoji tally bounded rather than growing a key for every
-      // character anyone invents.
-      //
-      // The set deliberately includes NEGATIVE reactions. Feedback that can
-      // only agree measures how many people watched rather than how good
-      // anything was, and the crowd already votes that someone lost - a far
-      // heavier judgement than an emoji. What stays out is contempt aimed
-      // at the human rather than at the material.
-      //
-      // You may only write your own, and only one - changing it moves the
-      // tally rather than adding a second, which keeps the count a measure
-      // of how many people felt something.
-      match /reactions/{userId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.uid == userId &&
-          (request.resource == null ||
-           request.resource.data.emoji in [
-             'fire', 'skull', 'coffin', 'cold_blooded', 'bullseye',
-             'mindblown', 'cry', 'laugh', 'clap', 'salute',
-             'shocked', 'hide', 'oof',
-             'ice', 'crickets', 'yawn', 'meh', 'thumbsdown',
-           ]);
-      }
+      // The freeform per-clip emoji "reactions" were retired (developer's
+      // call, 2026-09-23) in favour of the per-player emoji RATING cast with
+      // each ballot (see castVote and users.emojiCounts). Clients no longer
+      // write here, so no rule is needed.
 
       match /tally/{document} {
         allow read: if request.auth != null && (

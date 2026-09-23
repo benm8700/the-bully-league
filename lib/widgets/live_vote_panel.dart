@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'emoji_rate_row.dart';
 import 'live_tally.dart';
 
 /// The crowd's ballot, during the short window after a live battle ends.
@@ -50,9 +51,10 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
   /// whoever won the most rounds.
   final Map<int, String> _picks = {};
 
-  /// Optional funniest-round nomination - the Funniest Rounds board signal,
-  /// separate from who won each round and never required to submit.
-  int? _funniestRound;
+  /// The emoji rating for each player, required to submit - the audience
+  /// feedback that replaced the funniest-round nomination.
+  String? _emojiP1;
+  String? _emojiP2;
 
   @override
   void initState() {
@@ -72,7 +74,12 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
   }
 
   Future<void> _submit(int roundCount) async {
-    if (_picks.length < roundCount || _busy) return;
+    if (_picks.length < roundCount ||
+        _emojiP1 == null ||
+        _emojiP2 == null ||
+        _busy) {
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -83,8 +90,10 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
           .call<Map<String, dynamic>>({
         'matchId': widget.matchId,
         'picks': _picks.map((k, v) => MapEntry(k.toString(), v)),
-        // ignore: use_null_aware_elements
-        if (_funniestRound != null) 'funniestRound': _funniestRound,
+        'emojiRatings': {
+          widget.player1Id: _emojiP1,
+          widget.player2Id: _emojiP2,
+        },
       });
       if (mounted) {
         setState(() {
@@ -191,19 +200,40 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
         _roundRow(context, r),
         const SizedBox(height: 8),
       ],
-      _funniestRow(context, roundCount),
-      const SizedBox(height: 10),
+      const SizedBox(height: 4),
+      Text('Rate both:', style: text.bodySmall),
+      const SizedBox(height: 8),
+      EmojiRateRow(
+        name: widget.player1Name,
+        selected: _emojiP1,
+        dark: false,
+        onSelect: (k) => setState(() => _emojiP1 = k),
+      ),
+      const SizedBox(height: 8),
+      EmojiRateRow(
+        name: widget.player2Name,
+        selected: _emojiP2,
+        dark: false,
+        onSelect: (k) => setState(() => _emojiP2 = k),
+      ),
+      const SizedBox(height: 12),
       SizedBox(
         width: double.infinity,
         child: FilledButton(
-          onPressed: (!allPicked || _busy) ? null : () => _submit(roundCount),
+          onPressed: (!allPicked || !_bothRated || _busy)
+              ? null
+              : () => _submit(roundCount),
           child: _busy
               ? const SizedBox(
                   height: 18,
                   width: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : Text(allPicked ? 'Submit' : 'Pick every round'),
+              : Text(!allPicked
+                  ? 'Pick every round'
+                  : !_bothRated
+                      ? 'Rate both players'
+                      : 'Submit'),
         ),
       ),
       if (_error != null) ...[
@@ -256,48 +286,7 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
     );
   }
 
-  /// Optional "which round was funniest" nomination - the Funniest Rounds
-  /// board signal. One tap, distinct from picking each round's winner, and
-  /// never required to submit (tapping again clears it).
-  Widget _funniestRow(BuildContext context, int roundCount) {
-    final scheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Icon(Icons.local_fire_department, color: scheme.primary, size: 18),
-        const SizedBox(width: 6),
-        Text('Best round?', style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(width: 10),
-        for (int r = 0; r < roundCount; r++)
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: GestureDetector(
-              onTap: _busy
-                  ? null
-                  : () => setState(
-                      () => _funniestRound = _funniestRound == r ? null : r),
-              child: Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: _funniestRound == r
-                      ? scheme.primary
-                      : scheme.onSurface.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text('${r + 1}',
-                    style: TextStyle(
-                      color: _funniestRound == r
-                          ? scheme.onPrimary
-                          : scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.bold,
-                    )),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
+  bool get _bothRated => _emojiP1 != null && _emojiP2 != null;
 
   /// Voting has closed but the result has not landed yet. Says so, rather
   /// than showing a dead ballot or an empty space - the settle is

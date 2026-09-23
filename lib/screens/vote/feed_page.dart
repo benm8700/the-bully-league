@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/emoji_ratings.dart';
 import '../../core/services/clip_cache.dart';
 import '../../core/services/watch_feed_service.dart';
-import '../../widgets/clip_reactions.dart';
 import '../../widgets/follow_button.dart';
 import '../moderation/report_screen.dart';
 import '../profile/performer_profile_screen.dart';
@@ -42,10 +42,10 @@ class FeedPage extends StatefulWidget {
   final bool isActive;
 
   /// Casts a real ballot - a per-round map {roundIndex: winnerId}, plus the
-  /// optional funniest-round index. False result means it failed; the page
-  /// keeps the picks so it can be retried.
-  final Future<bool> Function(Map<int, String> picks, int? funniestRound)
-      onVote;
+  /// required per-player emoji ratings {playerId: emojiKey}. False result means
+  /// it failed; the page keeps the picks so it can be retried.
+  final Future<bool> Function(
+      Map<int, String> picks, Map<String, String> emojiRatings) onVote;
 
   /// Records a call on a SETTLED battle - a private guess against a result
   /// already decided. Never a ballot, and it never touches anyone's rating.
@@ -83,6 +83,14 @@ class _FeedPageState extends State<FeedPage> {
   String? _chosenPlayerId;
   bool _submitting = false;
 
+  /// The emoji rating the judge picks for each player after choosing the
+  /// winner (required for a real ballot). Keyed by nothing here - just the two
+  /// slots, filled from the emoji panel.
+  String? _emojiP1;
+  String? _emojiP2;
+
+  bool get _bothRated => _emojiP1 != null && _emojiP2 != null;
+
   int get _roundCount => widget.match.roundCount.clamp(1, 12);
 
   /// Can this viewer act on this battle - cast a real vote, or make a private
@@ -97,12 +105,6 @@ class _FeedPageState extends State<FeedPage> {
 
   bool get _resultShown =>
       _chosenPlayerId != null || (!_canAct && _revealed);
-
-  /// Whether the "Vote for X" pill is currently on screen (a half is picked
-  /// and the vote is not yet cast). Used to clear the reactions off the very
-  /// bottom edge so the pill can dock there without colliding with them.
-  bool get _voteBoxShowing =>
-      _selectedWinner != null && _canAct && _chosenPlayerId == null;
 
   @override
   void initState() {
@@ -249,6 +251,8 @@ class _FeedPageState extends State<FeedPage> {
   void _submit() {
     final winner = _selectedWinner;
     if (winner == null || _submitting) return;
+    // A real ballot now also requires an emoji rating for BOTH players.
+    if (widget.match.canVote && !_bothRated) return;
     _choose(winner);
   }
 
@@ -260,17 +264,20 @@ class _FeedPageState extends State<FeedPage> {
     });
     if (widget.match.canVote) {
       // A single overall winner, sent as the backend's per-round tally ("won
-      // every round"). castVote also accepts a bare votedForPlayerId, so
-      // either shape is fine; this keeps the onVote signature unchanged.
+      // every round"), plus the required per-player emoji ratings.
       final picks = {for (int r = 0; r < _roundCount; r++) r: winnerId};
-      final ok = await widget.onVote(picks, null);
+      final emojiRatings = {
+        widget.match.player1Id: _emojiP1!,
+        widget.match.player2Id: _emojiP2!,
+      };
+      final ok = await widget.onVote(picks, emojiRatings);
       if (!mounted) return;
       // A failed ballot must not look like a cast one. Keep the pick so they
       // can just hit Submit again.
       if (!ok) setState(() => _chosenPlayerId = null);
     } else if (widget.match.verdict?.outcome == 'decided') {
       // A call on a settled battle. Only worth recording where there was a
-      // right answer - a tie has none.
+      // right answer - a tie has none. No emoji rating on a settled call.
       widget.onCall(widget.match.matchId, winnerId);
     }
     if (mounted) setState(() => _submitting = false);
@@ -325,6 +332,13 @@ class _FeedPageState extends State<FeedPage> {
           // selection IS the video box, so nothing covers the faces. Sits
           // under the buttons below (they win their own taps).
           if (_canAct && _chosenPlayerId == null) _winnerSelectLayer(context),
+          // Persistent per-player emoji bars (Option 1, developer's call
+          // 2026-09-23): rate each roaster ANY time while watching - the bar
+          // sits on their half of the stacked clip (top = P1, bottom = P2),
+          // and the pick is changeable until you submit. Only the winner-vote
+          // is left for the end, and it requires both are rated.
+          if (widget.match.canVote && _chosenPlayerId == null)
+            _emojiBars(context),
           // (Removed the big center play/replay overlay: it flashed on every
           // rewind seek - the seek briefly pauses the clip - and duplicated the
           // corner play/pause control. The corner buttons and tap-to-pick are
@@ -332,25 +346,11 @@ class _FeedPageState extends State<FeedPage> {
           if (controller != null) _playPauseButton(context, paused),
           if (controller != null) _rewindButton(context),
           _followButton(context),
-          // The compact "Vote for X" pill, docked to the bottom of the
-          // selected half - only shown once a half is picked.
+          // The compact winner-confirm + Submit pill, once a half is picked.
           _voteBox(context),
           if (_resultShown) _resultBox(context),
           _header(context),
           _reportButton(context),
-          // Sits low and out of the way of both faces. Hidden while a winner
-          // is picked so the "Vote for X" pill can dock at the very bottom
-          // edge without colliding with the reactions row.
-          if (!_voteBoxShowing)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: MediaQuery.of(context).padding.bottom + 16,
-              child: ClipReactions(
-                matchId: widget.match.matchId,
-                counts: widget.match.reactionCounts,
-              ),
-            ),
         ],
       ),
     );
@@ -404,31 +404,50 @@ class _FeedPageState extends State<FeedPage> {
       return const SizedBox.shrink();
     }
     final m = widget.match;
-    final name = winner == m.player1Id ? m.player1Username : m.player2Username;
-    final topSelected = winner == m.player1Id;
-    final h = MediaQuery.of(context).size.height;
-    final label = m.canVote ? 'Vote for $name' : 'Call it: $name';
+
+    // Settled battle: a private "call" on a decided result, no emoji rating.
+    if (!m.canVote) {
+      final name = winner == m.player1Id ? m.player1Username : m.player2Username;
+      return Positioned(
+        left: 0,
+        right: 0,
+        bottom: MediaQuery.of(context).padding.bottom + 12,
+        child: Center(
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: _pickGreen.withValues(alpha: 0.48),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+              textStyle:
+                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            onPressed: _submitting ? null : _submit,
+            child: Text('Call it: $name'),
+          ),
+        ),
+      );
+    }
+
+    // Real ballot: the winner is picked; the emoji ratings were set on the
+    // per-player bars while watching. The only thing left is to submit -
+    // gated on both players being rated (a nudge otherwise, since the bars
+    // are already on screen).
     return Positioned(
       left: 0,
       right: 0,
-      // Lower on each half: a top pick sits right at the midline seam (the
-      // very bottom of the top square), a bottom pick sits just above the
-      // reactions at the very bottom.
-      bottom: topSelected
-          ? h * 0.5 - 30
-          : MediaQuery.of(context).padding.bottom + 8,
+      bottom: MediaQuery.of(context).padding.bottom + 12,
       child: Center(
         child: FilledButton(
           style: FilledButton.styleFrom(
-            // Transparent enough to never hide the clip behind it - the pill
-            // sits right at the bottom edge over the video.
-            backgroundColor: _pickGreen.withValues(alpha: 0.48),
-            foregroundColor: Colors.black,
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+            backgroundColor: _bothRated
+                ? _pickGreen.withValues(alpha: 0.85)
+                : Colors.black.withValues(alpha: 0.6),
+            foregroundColor: _bothRated ? Colors.black : Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
             textStyle:
                 const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
-          onPressed: _submitting ? null : _submit,
+          onPressed: (_submitting || !_bothRated) ? null : _submit,
           child: _submitting
               ? const SizedBox(
                   height: 20,
@@ -436,7 +455,97 @@ class _FeedPageState extends State<FeedPage> {
                   child: CircularProgressIndicator(
                       strokeWidth: 2, color: Colors.black),
                 )
-              : Text(label),
+              : Text(_bothRated ? 'Submit vote' : 'Rate both players first'),
+        ),
+      ),
+    );
+  }
+
+  /// The two persistent per-player emoji bars, one on each half of the stacked
+  /// clip: rate a roaster any time while watching, changeable until you submit.
+  Widget _emojiBars(BuildContext context) {
+    final m = widget.match;
+    final h = MediaQuery.of(context).size.height;
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          // Player 1 is the TOP half - bar sits just above the centre seam,
+          // below their face.
+          Positioned(
+            left: 8,
+            right: 8,
+            top: h * 0.5 - 50,
+            child: _emojiBar(m.player1Username, _emojiP1,
+                (k) => setState(() => _emojiP1 = k)),
+          ),
+          // Player 2 is the BOTTOM half - bar just below the seam, above the
+          // Submit pill at the very bottom.
+          Positioned(
+            left: 8,
+            right: 8,
+            top: h * 0.5 + 8,
+            child: _emojiBar(m.player2Username, _emojiP2,
+                (k) => setState(() => _emojiP2 = k)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One player's floating emoji bar: their name + the four choices, the
+  /// picked one lit. Wrapped so a tap on the bar never falls through to the
+  /// winner-select layer beneath it.
+  Widget _emojiBar(
+      String name, String? selected, ValueChanged<String> onSelect) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.42),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            const Text('Rate ',
+                style: TextStyle(color: Colors.white70, fontSize: 11)),
+            SizedBox(
+              width: 56,
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600),
+              ),
+            ),
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  for (final r in kEmojiRatings)
+                    GestureDetector(
+                      onTap: () => onSelect(r.key),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: selected == r.key
+                              ? _pickGreen.withValues(alpha: 0.9)
+                              : Colors.white.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child:
+                            Text(r.emoji, style: const TextStyle(fontSize: 20)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

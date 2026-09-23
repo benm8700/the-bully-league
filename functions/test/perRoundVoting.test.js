@@ -1,5 +1,5 @@
 const assert = require("assert");
-const {roundOutcome, matchResultFromRounds, tallyBallots, funniestRound} =
+const {roundOutcome, matchResultFromRounds, tallyBallots} =
     require("../perRoundVoting");
 
 let passed = 0;
@@ -93,32 +93,6 @@ check("a bad weight counts as zero rather than NaN", () => {
   const t = tallyBallots([{weight: "oops", picks: {0: "A"}}], "A", "B", 1);
   assert.strictEqual(t.totalWeight, 0);
   assert.deepStrictEqual(t.rounds, [{p1: 0, p2: 0}]);
-});
-
-// ---- funniestRound (the Funniest Rounds board signal) --------------------
-check("funniestRound picks the most-marked round (weighted)", () => {
-  const r = funniestRound([
-    {funniestRound: 1, weight: 1},
-    {funniestRound: 1, weight: 1},
-    {funniestRound: 2, weight: 1},
-    {funniestRound: 0, weight: 0.5},
-  ]);
-  assert.deepStrictEqual(r, {round: 1, votes: 2});
-});
-
-check("funniestRound is null when nobody marked one", () => {
-  assert.strictEqual(funniestRound([{picks: {0: "A"}}, {}]), null);
-  assert.strictEqual(funniestRound([]), null);
-  assert.strictEqual(funniestRound(null), null);
-});
-
-check("funniestRound ignores junk indices", () => {
-  const r = funniestRound([
-    {funniestRound: -1, weight: 1},
-    {funniestRound: "x", weight: 1},
-    {funniestRound: 2, weight: 1},
-  ]);
-  assert.deepStrictEqual(r, {round: 2, votes: 1});
 });
 
 console.log(`\n${passed} checks passed.`);

@@ -14,6 +14,7 @@ import '../../core/services/push_notification_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../widgets/badges/badge_case.dart';
 import '../../widgets/badges/featured_badge.dart';
+import '../../widgets/emoji_stats_card.dart';
 import '../account/delete_account_screen.dart';
 import 'form_card.dart';
 import 'intro_video_card.dart';
@@ -29,10 +30,15 @@ const int kRequiredPhotoCount = 5;
 /// section). Manual profile approval (approvalStatus) is a separate V1
 /// admin workflow via the Firebase console, not enforced by this screen.
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key, this.embedded = false});
+  const ProfileScreen({super.key, this.embedded = false, this.promptIntro = false});
 
   /// True when shown as a bottom-nav tab.
   final bool embedded;
+
+  /// True when a player was routed here from tapping battle without an intro
+  /// video yet - shows a short "record this to battle" banner at the top so
+  /// the requirement is obvious rather than something they have to hunt for.
+  final bool promptIntro;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -335,6 +341,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (widget.promptIntro) ...[
+                      Card(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Before you unleash your trauma on a '
+                                'complete stranger, please…',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(
+                                      // A bright, vivid pink so the headline
+                                      // actually invites reading - the muted
+                                      // container colours were too flat.
+                                      color: const Color(0xFFFF4D8D),
+                                      fontWeight: FontWeight.bold,
+                                      height: 1.15,
+                                    ),
+                              ),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'Tell us what’s interesting about you. '
+                                'Please be honest — it makes the show '
+                                'more fun to watch.',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      // Hoisted to the very top for onboarding: this is the
+                      // thing they came here to do, so it should not be below
+                      // the identity header and badge case where it has to be
+                      // scrolled to.
+                      const IntroVideoCard(),
+                      const SizedBox(height: 24),
+                    ],
                     // The player's actual username as a heading, read-only
                     // (developer's call, 2026-09-14): the top of a profile is
                     // your identity, not a prompt to rename yourself. The
@@ -348,19 +400,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       featured: featuredBadge(_userData),
                     ),
                     const SizedBox(height: 24),
-                    BadgeCase(
-                      stats: BadgeStats.fromUser(_userData),
-                      earnedIds: resolveEarnedIds(_userData),
-                      featuredId: storedFeaturedId(_userData),
-                      onFeature: _setFeaturedBadge,
-                    ),
-                    const SizedBox(height: 28),
-                    // The mandatory intro video sits above photos because it
-                    // is the one profile item a player CANNOT battle without
-                    // (enforced in enterQueue), and it is the ammo the
-                    // opponent actually studies pre-match.
-                    const IntroVideoCard(),
-                    const SizedBox(height: 24),
+                    // Badges and the (normal-position) intro card only when NOT
+                    // onboarding - in promptIntro mode the intro card is hoisted
+                    // to the top and a brand-new player has no badges to show.
+                    if (!widget.promptIntro) ...[
+                      BadgeCase(
+                        stats: BadgeStats.fromUser(_userData),
+                        earnedIds: resolveEarnedIds(_userData),
+                        featuredId: storedFeaturedId(_userData),
+                        onFeature: _setFeaturedBadge,
+                      ),
+                      const SizedBox(height: 20),
+                      EmojiStatsCard(
+                        counts: (_userData?['emojiCounts'] as Map?)
+                            ?.cast<String, dynamic>(),
+                      ),
+                      const SizedBox(height: 28),
+                      // The mandatory intro video sits above photos because it
+                      // is the one profile item a player CANNOT battle without
+                      // (enforced in enterQueue), and it is the ammo the
+                      // opponent actually studies pre-match.
+                      const IntroVideoCard(),
+                      const SizedBox(height: 24),
+                    ],
                     // States what is TRUE today rather than the eventual
                     // rule. Photos and manual approval are deliberately
                     // unenforced for the private beta, so a header reading
