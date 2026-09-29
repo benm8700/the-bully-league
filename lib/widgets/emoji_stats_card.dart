@@ -27,31 +27,13 @@ class EmojiStatsCard extends StatelessWidget {
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Text('Crowd read', style: text.titleMedium),
-              if (nickname != null) ...[
-                const Spacer(),
-                Flexible(
-                  child: Text(
-                    '“$nickname”',
-                    textAlign: TextAlign.right,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFFFF4D8D),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 14),
+          // The "Crowd read" label is gone (developer's call, 2026-09-29); the
+          // emoji row leads and the auto-nickname sits centred UNDERNEATH it.
           if (total == 0)
             Text(
-              'No ratings yet. Win a crowd over and your \u{1F525} start '
+              'No ratings yet. Win a crowd over and your \u{1F525} starts '
               'stacking up here.',
               style: text.bodySmall,
             )
@@ -81,6 +63,17 @@ class EmojiStatsCard extends StatelessWidget {
                   ),
               ],
             ),
+          if (nickname != null) ...[
+            const SizedBox(height: 14),
+            Text(
+              '“$nickname”',
+              textAlign: TextAlign.center,
+              style: text.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFFFF4D8D),
+              ),
+            ),
+          ],
         ],
       ),
     );
