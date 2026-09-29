@@ -52,7 +52,7 @@ class BadgeCase extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           onFeature != null && earnedCount > 0
-              ? 'Tap an earned award to feature it on your profile.'
+              ? 'Tap an earned award to feature it — your opponent sees it before a battle.'
               : 'Milestones you earn as you play and judge.',
           style: text.bodySmall?.copyWith(color: const Color(0xFF9A96A2)),
         ),

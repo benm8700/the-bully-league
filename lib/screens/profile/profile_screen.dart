@@ -13,7 +13,6 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../widgets/badges/badge_case.dart';
-import '../../widgets/badges/featured_badge.dart';
 import '../../widgets/emoji_badges.dart';
 import '../../widgets/emoji_stats_card.dart';
 import '../account/delete_account_screen.dart';
@@ -404,7 +403,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       username: _username,
                       rankTitle: _rankTitle,
                       photoUrl: _photoUrls.isNotEmpty ? _photoUrls.first : null,
-                      featured: featuredBadge(_userData),
                     ),
                     // Career record strip - the "homebase" numbers that live
                     // nowhere else (Home shows XP + rank, not W-L). Hidden for a
@@ -623,12 +621,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 /// rank title. The username is deliberately not editable here.
 class _IdentityHeader extends StatelessWidget {
   const _IdentityHeader(
-      {this.username, this.rankTitle, this.photoUrl, this.featured});
+      {this.username, this.rankTitle, this.photoUrl});
 
   final String? username;
   final String? rankTitle;
   final String? photoUrl;
-  final BadgeDef? featured;
 
   @override
   Widget build(BuildContext context) {
@@ -667,10 +664,11 @@ class _IdentityHeader extends StatelessWidget {
             ),
           ),
         ],
-        if (featured != null) ...[
-          const SizedBox(height: 10),
-          FeaturedBadge(def: featured),
-        ],
+        // The featured award used to sit here, but it duplicated the Awards
+        // case listed just below (developer's call, 2026-09-29). Featuring
+        // still matters - the featured award is shown to your OPPONENT in the
+        // pre-match bio reveal - so the mechanism stays; only this redundant
+        // top-of-own-profile copy is removed.
       ],
     );
   }
