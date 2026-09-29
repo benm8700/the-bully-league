@@ -93,14 +93,18 @@ const matches = [`vgm1-${stamp}`, `vgm2-${stamp}`];
       expiresAt: Timestamp.fromMillis(Date.now() + 20 * 60 * 1000),
     });
 
+    // castVote requires an emoji rating for BOTH players (added 2026-09-23);
+    // a vote without them is refused, so every call here carries them.
+    const emoji = {[P1]: "fire", [P2]: "clever"};
+
     console.log("\nthe floor on voting speed");
     let r = await call(V, "castVote",
-        {matchId: matches[0], votedForPlayerId: P1});
+        {matchId: matches[0], votedForPlayerId: P1, emojiRatings: emoji});
     check("the first vote is accepted", r.status === 200,
         JSON.stringify(r.raw).slice(0, 160));
 
     r = await call(V, "castVote",
-        {matchId: matches[1], votedForPlayerId: P1});
+        {matchId: matches[1], votedForPlayerId: P1, emojiRatings: emoji});
     check("A SECOND VOTE IMMEDIATELY AFTER IS REFUSED",
         r.status !== 200 && JSON.stringify(r.raw).includes("Slow down"),
         JSON.stringify(r.raw).slice(0, 160));
@@ -113,13 +117,29 @@ const matches = [`vgm1-${stamp}`, `vgm2-${stamp}`];
     console.log("\nbut it does not ration honest judging");
     await sleep(5000);
     r = await call(V, "castVote",
-        {matchId: matches[1], votedForPlayerId: P2});
+        {matchId: matches[1], votedForPlayerId: P2, emojiRatings: emoji});
     check("after a few seconds the same vote goes through",
         r.status === 200, JSON.stringify(r.raw).slice(0, 160));
 
     const voter = await db.collection("users").doc(V).get();
     check("the last-vote stamp is recorded",
         Number.isFinite(Number(voter.data().lastVoteAtMs)));
+    // votesCast is the lifetime "battles judged" total shown on the profile,
+    // incremented once per successful vote (the refused middle vote wrote no
+    // ballot, so it does not count). Two votes landed above -> exactly 2.
+    check("votesCast counts each battle judged (once per match), not the refused one",
+        Number(voter.data().votesCast) === 2,
+        `votesCast=${voter.data().votesCast}`);
+
+    // The emoji ratings the votes carried are tallied onto each rated player
+    // (castVote increments users/{id}.emojiCounts.<key> live). Both winning
+    // votes rated P1 fire and P2 clever, so each stands at 2. This is the
+    // live emojiCounts path CLAUDE.md flagged as not-yet-verified.
+    const p1 = (await db.collection("users").doc(P1).get()).data() || {};
+    const p2 = (await db.collection("users").doc(P2).get()).data() || {};
+    check("emoji ratings are tallied onto each rated player",
+        (p1.emojiCounts || {}).fire === 2 && (p2.emojiCounts || {}).clever === 2,
+        `p1.fire=${(p1.emojiCounts || {}).fire} p2.clever=${(p2.emojiCounts || {}).clever}`);
   } finally {
     for (const id of matches) {
       const b = await db.collection("votes").doc(id)
@@ -130,6 +150,10 @@ const matches = [`vgm1-${stamp}`, `vgm2-${stamp}`];
     await db.collection("voteSessions").doc(V).delete().catch(() => {});
     await db.recursiveDelete(db.collection("users").doc(V)).catch(() => {});
     await auth.deleteUser(V).catch(() => {});
+    // castVote created these two docs via the emojiCounts merge - remove them
+    // so a fixed check never leaves orphan accounts the scheduled jobs act on.
+    await db.recursiveDelete(db.collection("users").doc(P1)).catch(() => {});
+    await db.recursiveDelete(db.collection("users").doc(P2)).catch(() => {});
     console.log(`\n${passed} passed, ${failed} failed`);
     process.exit(failed ? 1 : 0);
   }

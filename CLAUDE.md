@@ -468,9 +468,13 @@ shows progress ("72 / 150"); top tier reads "Top tier".
 **TESTS:** `functions/test/emojiRatings.test.js` (8 pure checks: the set, count
 tolerance, nicknames incl. polarizing, badge tiers). The Best-Round removal kept
 `perRoundVoting`'s winner logic and dropped only `funniestRound` (11 checks
-still pass). Not yet re-verified live: a real emoji ballot through the deployed
-`castVote` incrementing `emojiCounts` (the local suites + a real device rating
-are the current evidence).
+still pass). **NOW re-verified live (2026-09-28)**: `functions/live/voteGateChecks.js`
+casts real emoji ballots through the deployed `castVote` and asserts each rated
+player's `emojiCounts.<key>` incremented (fire=2 / clever=2 after two votes) -
+which also **fixed a stale check**: voteGateChecks had been failing since the
+2026-09-23 emoji requirement because it called `castVote` without the now-
+mandatory `emojiRatings`. It also now cleans up the two participant docs
+`castVote` creates via the emojiCounts merge, so the check leaves no orphans.
 
 ## Profile career-record strip — BUILT (2026-09-28)
 
