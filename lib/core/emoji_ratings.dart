@@ -104,3 +104,89 @@ String? emojiNicknameOf(Map<String, dynamic>? counts) {
   return nicks[t1]?[t2] ??
       kEmojiRatings.firstWhere((r) => r.key == t1).label;
 }
+
+/// One tier of an emoji "badge of honour". MIRRORS BADGE_TIERS in
+/// functions/emojiRatings.js - ids, thresholds and titles must match.
+class EmojiBadgeTier {
+  const EmojiBadgeTier(this.id, this.at, this.title);
+
+  /// Stable id (matches the server), e.g. 'fire_2'.
+  final String id;
+
+  /// The emoji count at which this tier is earned.
+  final int at;
+  final String title;
+}
+
+/// Badge tiers for the two POSITIVE emojis only - you chase 🔥 and 🧠, there
+/// are no badges for being boring or trash. PLACEHOLDER thresholds, tuned
+/// server-side; keep in step with BADGE_TIERS in functions/emojiRatings.js.
+const Map<String, List<EmojiBadgeTier>> kEmojiBadgeTiers = {
+  'fire': [
+    EmojiBadgeTier('fire_1', 10, 'Spark'),
+    EmojiBadgeTier('fire_2', 50, 'Blaze'),
+    EmojiBadgeTier('fire_3', 150, 'Inferno'),
+  ],
+  'clever': [
+    EmojiBadgeTier('clever_1', 10, 'Bright'),
+    EmojiBadgeTier('clever_2', 50, 'Brainiac'),
+    EmojiBadgeTier('clever_3', 150, 'Mastermind'),
+  ],
+};
+
+/// The display state of one emoji's badge track: the highest tier earned (or
+/// null), the next tier still to earn (or null when maxed), and the live count.
+class EmojiBadgeSlot {
+  const EmojiBadgeSlot({
+    required this.emojiKey,
+    required this.emoji,
+    required this.count,
+    required this.earnedTier,
+    required this.nextTier,
+  });
+
+  /// 'fire' or 'clever'.
+  final String emojiKey;
+  final String emoji;
+  final int count;
+
+  /// Highest earned tier, or null if none earned yet.
+  final EmojiBadgeTier? earnedTier;
+
+  /// Next tier still to earn, or null once every tier is earned.
+  final EmojiBadgeTier? nextTier;
+
+  bool get earned => earnedTier != null;
+  bool get isMaxed => nextTier == null;
+
+  /// The tier to display: the highest earned, else the first (locked) tier.
+  EmojiBadgeTier get displayTier =>
+      earnedTier ?? kEmojiBadgeTiers[emojiKey]!.first;
+}
+
+/// One slot per positive emoji, in display order (fire, then clever).
+List<EmojiBadgeSlot> emojiBadgeSlots(Map<String, dynamic>? counts) {
+  final slots = <EmojiBadgeSlot>[];
+  for (final entry in kEmojiBadgeTiers.entries) {
+    final key = entry.key;
+    final tiers = entry.value;
+    final count = emojiCountOf(counts, key);
+    EmojiBadgeTier? earned;
+    EmojiBadgeTier? next;
+    for (final tier in tiers) {
+      if (count >= tier.at) {
+        earned = tier;
+      } else {
+        next ??= tier;
+      }
+    }
+    slots.add(EmojiBadgeSlot(
+      emojiKey: key,
+      emoji: emojiCharFor(key),
+      count: count,
+      earnedTier: earned,
+      nextTier: next,
+    ));
+  }
+  return slots;
+}

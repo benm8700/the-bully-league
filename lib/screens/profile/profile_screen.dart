@@ -14,6 +14,7 @@ import '../../core/services/push_notification_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../widgets/badges/badge_case.dart';
 import '../../widgets/badges/featured_badge.dart';
+import '../../widgets/emoji_badges.dart';
 import '../../widgets/emoji_stats_card.dart';
 import '../account/delete_account_screen.dart';
 import 'form_card.dart';
@@ -412,6 +413,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 20),
                       EmojiStatsCard(
+                        counts: (_userData?['emojiCounts'] as Map?)
+                            ?.cast<String, dynamic>(),
+                      ),
+                      const SizedBox(height: 20),
+                      EmojiBadges(
                         counts: (_userData?['emojiCounts'] as Map?)
                             ?.cast<String, dynamic>(),
                       ),

@@ -415,13 +415,24 @@ chose to override them for the emoji system. Do not silently re-impose them.
 The positive emojis remain the primary chase; the negatives are played for
 self-aware comedy (see the biggest-shit-bag backlog idea).
 
-**DEFERRED / NOT BUILT:**
-- **Visual emoji BADGES need art.** The badge case renders a per-badge PNG
-  (`assets/badges/<id>.png`) that does not exist for emoji tiers, so the badges
-  are NOT surfaced yet. The tiers ARE scaffolded server-side
-  (`BADGE_TIERS`/`earnedEmojiBadges` in `emojiRatings.js`: 🔥/🧠 at 10/50/150,
-  positives only — you do not earn a badge for being trash). Waiting on art from
-  the developer, like the rank crests.
+**EMOJI BADGES OF HONOUR — BUILT (2026-09-28), as GLYPH MEDALS (no art
+dependency).** The developer's call: ship the badges now rendered from the
+emoji glyph itself rather than waiting on illustrated crests. `EmojiBadges`
+(`lib/widgets/emoji_badges.dart`) shows one medal per POSITIVE emoji track
+(🔥 Fire, 🧠 Clever) — the glyph in the same gold medallion `badge_art.dart`
+draws, so glyph badges and the illustrated achievement badges read as one
+system. Earned = gold rim + glow; locked = dimmed with the threshold to chase
+("Earn at 10"); earned-not-maxed shows progress ("72 / 150"); top tier reads
+"Top tier". Client tiers live in `kEmojiBadgeTiers` + `emojiBadgeSlots`
+(`lib/core/emoji_ratings.dart`), a **mirror of the server `BADGE_TIERS`**
+(🔥/🧠 at 10/50/150, positives only — no badge for boring/trash), pinned by
+`test/emoji_badges_test.dart` (8 checks incl. the mirror guard). Mounted on the
+profile under the "Crowd read" card: the own profile shows all tracks (locked
+ones to chase); the performer/public profile shows **earned honours only** and
+hides the section when none are earned. **Client-only change — the server
+tiers already existed, nothing deployed.** Analyze-clean + tested; **not yet
+device-verified** (no device was connected; real PNG art can later replace the
+glyph with no logic change, since the medal is a drop-in).
 - **Superlative leader titles** (most 💩 → "biggest shit bag", etc.) — a backlog
   item; see "Problems To Solve Later".
 - **Live-tournament on-video bars + a hype-splash layer** — the same gesture is
