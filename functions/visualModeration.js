@@ -57,6 +57,34 @@ function verdictFromSafeSearch(safeSearch, {
 }
 
 /**
+ * The LIVE in-match frame policy, named so it is testable in one place and
+ * cannot silently drift. Rejects ONLY blatant nudity (adult == VERY_LIKELY),
+ * drops racy/violence entirely, and FAILS OPEN on a missing/unreadable frame.
+ * This is the fix (developer's call, 2026-09-14) for the false-fire that
+ * auto-ended a real battle on an ordinary lit face / dark room - so a test
+ * pins it, because a future re-tightening would reintroduce that exact bug.
+ */
+function liveFrameVerdict(safeSearch) {
+  return verdictFromSafeSearch(safeSearch, {
+    failureReason: "Could not analyze this frame.",
+    rejectLevels: LIVE_FRAME_REJECT_LEVELS,
+    categories: LIVE_FRAME_CATEGORIES,
+    approveOnMissing: true,
+  });
+}
+
+/**
+ * The PRE-PUBLICATION policy (profile photos + intro videos): the strict,
+ * store-critical nudity gate. Rejects adult/racy/violence at LIKELY or above,
+ * and FAILS CLOSED on a missing/unreadable image so an un-analysable file can
+ * never slip through. Named alongside liveFrameVerdict so the two strictness
+ * levels sit side by side and are pinned together.
+ */
+function prepublishVerdict(safeSearch, failureReason) {
+  return verdictFromSafeSearch(safeSearch, {failureReason});
+}
+
+/**
  * Runs Google Cloud Vision SafeSearch on an already-uploaded Storage
  * object and returns an approve/reject verdict. Used for profile photos
  * (Build Order step 9a).
@@ -66,9 +94,8 @@ async function moderateImage(storagePath) {
   const gcsUri = `gs://${bucket.name}/${storagePath}`;
 
   const [result] = await client.safeSearchDetection(gcsUri);
-  return verdictFromSafeSearch(result.safeSearchAnnotation, {
-    failureReason: "Could not analyze this image - try a different photo.",
-  });
+  return prepublishVerdict(result.safeSearchAnnotation,
+      "Could not analyze this image - try a different photo.");
 }
 
 /**
@@ -84,13 +111,8 @@ async function moderateImageContent(base64Content) {
     image: {content: Buffer.from(base64Content, "base64")},
   });
   // Live in-match frames use the loosened rule: blatant nudity only
-  // (adult == VERY_LIKELY), no racy/violence. See the note above REJECT_LEVELS.
-  return verdictFromSafeSearch(result.safeSearchAnnotation, {
-    failureReason: "Could not analyze this frame.",
-    rejectLevels: LIVE_FRAME_REJECT_LEVELS,
-    categories: LIVE_FRAME_CATEGORIES,
-    approveOnMissing: true,
-  });
+  // (adult == VERY_LIKELY), no racy/violence. See liveFrameVerdict.
+  return liveFrameVerdict(result.safeSearchAnnotation);
 }
 
 /**
@@ -146,9 +168,8 @@ async function moderateVideo(storagePath) {
     for (const f of frames) {
       const content = fs.readFileSync(path.join(workDir, f));
       const [result] = await client.safeSearchDetection({image: {content}});
-      const verdict = verdictFromSafeSearch(result.safeSearchAnnotation, {
-        failureReason: "Could not analyze this video.",
-      });
+      const verdict = prepublishVerdict(result.safeSearchAnnotation,
+          "Could not analyze this video.");
       if (!verdict.approved) return verdict;
     }
     return {approved: true};
@@ -161,4 +182,8 @@ async function moderateVideo(storagePath) {
   }
 }
 
-module.exports = {moderateImage, moderateImageContent, moderateVideo};
+module.exports = {
+  moderateImage, moderateImageContent, moderateVideo,
+  // Exported for the pure regression test (functions/test/visualModeration.test.js).
+  verdictFromSafeSearch, liveFrameVerdict, prepublishVerdict,
+};

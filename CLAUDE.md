@@ -1034,28 +1034,34 @@ Raised by the developer: what protects someone who is unhappy that their match f
     any are secret/rare, whether a few are cosmetic-unlock or purely earned
     (this project rules out cosmetic PURCHASES but earned recognition is fine),
     and exactly where they surface. Capture for now; design later.
-- **BUG TO INVESTIGATE — a match was auto-reported/ended after the developer
-  said "cunt" on camera (2026-09-14, seen in a live video test).** The
-  developer saw a screen saying they "had been reported by the other person."
-  This should NOT happen on SPEECH: the content policy is explicitly
-  free-speech (slurs/offensive language ALLOWED) with NO real-time speech
-  moderation, so a spoken word must never trigger a report or an auto-end.
-  **Leading hypothesis: it was the VISUAL moderation false-firing, not the
-  word.** In-match frames are sampled to Cloud Vision SafeSearch, and on an
-  adult/racy/violent hit `_handleContentViolation` auto-ENDS the match and
-  auto-files a report into the `reports` queue (functions/visualModeration.js
-  + match_screen.dart). A false positive there (SafeSearch flagging a face /
-  gesture / lighting as "racy") would end the match and file a report exactly
-  as described - the timing near the swear word is likely coincidence.
-  **Two things to check when this is picked up:** (1) whether the SafeSearch
-  bands/thresholds are too sensitive (reuses the profile-photo thresholds);
-  and (2) the END-SCREEN COPY - the other participant's notice apparently
-  reads as "you were reported by the other person," which misattributes an
-  AUTOMATED moderation end to the opponent. Even once the sensitivity is
-  fixed, the copy should say the system flagged the video, not that the
-  opponent reported you. Also confirm there is genuinely no speech/transcript
-  path that could report (captioning runs only on RECORDED clips after the
-  match, not live, so it should be clear - verify). Not yet triaged.
+- **VISUAL-MODERATION FALSE-FIRE (2026-09-14) — TRIAGED AND CLOSED, verified
+  2026-09-29.** The bug: the developer said "cunt" on camera and the match
+  auto-ended with a screen reading "reported by the other person." It was NOT
+  the word - the content policy is free-speech with NO real-time speech
+  moderation - it was the VISUAL detector (Cloud Vision SafeSearch on sampled
+  frames) false-firing on an ordinary lit face / dark room. All three concerns
+  are resolved in code:
+  1. **Sensitivity - FIXED the same day.** `functions/visualModeration.js`
+     splits into two named policies: `liveFrameVerdict` (live in-match frames)
+     rejects ONLY blatant nudity (`adult == VERY_LIKELY`), drops racy/violence
+     entirely, and FAILS OPEN on an unreadable frame; `prepublishVerdict`
+     (photos/intro) keeps the strict LIKELY-or-above gate across all three
+     categories and FAILS CLOSED. Dropping racy/violence live removes the whole
+     false-positive class (a lit face, a lunge, a dim room).
+  2. **End-screen copy - FIXED.** `match_screen.dart`'s `_buildViolationEndedUi`
+     tells the other participant "The automated visual check flagged something
+     on camera... This was NOT your opponent reporting you... never about
+     anything said - only video." No misattribution to the opponent.
+  3. **No live speech path - CONFIRMED.** `moderateMatchFrame` calls only
+     `moderateImageContent` (visual); captioning/Speech-to-Text runs only in
+     the post-match render pipeline and never files a report. Nothing spoken
+     can trigger a live report or auto-end.
+  **The one gap that remained was a test** - the loosened live rule was
+  unprotected, so a future re-tightening would silently reintroduce the exact
+  false-fire. Now pinned by `functions/test/visualModeration.test.js` (12
+  pure checks): a LIKELY-adult / VERY_LIKELY-racy / VERY_LIKELY-violence frame
+  is APPROVED live, only VERY_LIKELY-adult is rejected live, a missing frame
+  fails OPEN live and CLOSED pre-publish, and the two policies provably differ.
 - **FOLLOW YOUR FAVOURITE COMEDIANS — NEW IDEA (2026-09-12, developer).** Let a
   user FOLLOW comedians/roasters from inside the app. A followed comedian's
   profile surfaces (a) LINKS to their stuff (socials, tickets, YouTube/TikTok,
