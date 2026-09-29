@@ -430,9 +430,21 @@ system. Earned = gold rim + glow; locked = dimmed with the threshold to chase
 profile under the "Crowd read" card: the own profile shows all tracks (locked
 ones to chase); the performer/public profile shows **earned honours only** and
 hides the section when none are earned. **Client-only change — the server
-tiers already existed, nothing deployed.** Analyze-clean + tested; **not yet
-device-verified** (no device was connected; real PNG art can later replace the
-glyph with no logic change, since the medal is a drop-in).
+tiers already existed, nothing deployed.** **DEVICE-VERIFIED (2026-09-28) on
+the Pixel_9 emulator**: the locked state (fresh account → Spark/Bright "Earn
+at 10") and, after priming `emojiCounts` via the Admin SDK, the EARNED state
+(Blaze 🔥 60/150 + Bright 🧠 30/50 as lit gold medallions with progress) both
+render correctly, alongside the Crowd-read counts, the "The Headliner"
+nickname, and the Home rank-card percentage pill. Real PNG art can later
+replace the glyph with no logic change, since the medal is a drop-in.
+- **EMULATOR NOTE (worth keeping): the "emulator can't reach Firebase" wall
+  from prior sessions is a broken-DNS issue, not a dead end.** The Pixel_9 AVD
+  boots with Android Private DNS in automatic (DoT) mode, which fails in this
+  host/emulator combo and breaks ALL hostname resolution (raw-IP pings work,
+  `firestore.googleapis.com` does not). Fix once per boot:
+  `adb -s emulator-5554 shell settings put global private_dns_mode off` — after
+  that, Auth, Firestore and callables all work. Don't conclude the emulator is
+  unusable; disable Private DNS first.
 - **Superlative leader titles** (most 💩 → "biggest shit bag", etc.) — a backlog
   item; see "Problems To Solve Later".
 - **Live-tournament on-video bars + a hype-splash layer** — the same gesture is
@@ -751,6 +763,15 @@ Raised by the developer: what protects someone who is unhappy that their match f
     - **Verified by running the real sweep against real Firestore**: an open round is announced to both players and marked on the bracket, a second sweep says nothing, near the deadline only the absentee is warned, nobody is chased once both have checked in, and closed or decided rounds send nothing. **7 live checks plus 15 local tests.**
 
 ## Problems To Solve Later (Backlog — flagged during planning, not yet designed)
+- **APP LAUNCHER ICON — NOT DESIGNED (2026-09-28, developer).** The actual
+  app icon (the `com.bullyleague.app` launcher/exe icon on the home screen and
+  in the store listing) is still the Flutter default. Needs a real designed
+  icon — on brand (Comedy Night: charcoal + hot-pink, the wordmark/mask motif)
+  and in the full Android adaptive-icon set (foreground/background layers +
+  legacy density variants), wired via `flutter_launcher_icons` or the manifest
+  `mipmap` set. It is a Play-listing requirement, so it must land before the
+  internal-testing upload. Capture now; design later with the other brand art
+  (rank crests, emoji badge art, the intro/outro card).
 - **EMOJI-ECOSYSTEM SUPERLATIVE TITLES — NEW IDEA (2026-09-23, developer).**
   The per-player emoji ratings (🔥 Fire / 🧠 Clever / 🥱 Boring / 💩 Trash,
   built this session — see the vote flow, users.emojiCounts, the Hottest
