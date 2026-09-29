@@ -410,13 +410,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // onboarding - in promptIntro mode the intro card is hoisted
                     // to the top and a brand-new player has no badges to show.
                     if (!widget.promptIntro) ...[
-                      BadgeCase(
-                        stats: BadgeStats.fromUser(_userData),
-                        earnedIds: resolveEarnedIds(_userData),
-                        featuredId: storedFeaturedId(_userData),
-                        onFeature: _setFeaturedBadge,
-                      ),
-                      const SizedBox(height: 20),
+                      // The crowd/emoji cards (Crowd read + Crowd badges) sit
+                      // ABOVE the Awards achievements - the developer's call, so
+                      // "Crowd badges" reads above "Awards" while the emoji pair
+                      // stays together.
                       EmojiStatsCard(
                         counts: (_userData?['emojiCounts'] as Map?)
                             ?.cast<String, dynamic>(),
@@ -425,6 +422,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       EmojiBadges(
                         counts: (_userData?['emojiCounts'] as Map?)
                             ?.cast<String, dynamic>(),
+                      ),
+                      const SizedBox(height: 20),
+                      BadgeCase(
+                        stats: BadgeStats.fromUser(_userData),
+                        earnedIds: resolveEarnedIds(_userData),
+                        featuredId: storedFeaturedId(_userData),
+                        onFeature: _setFeaturedBadge,
                       ),
                       const SizedBox(height: 28),
                       // The mandatory intro video sits above photos because it

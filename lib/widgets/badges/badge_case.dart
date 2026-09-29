@@ -38,7 +38,7 @@ class BadgeCase extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text('Badges', style: text.titleMedium),
+            Text('Awards', style: text.titleMedium),
             const SizedBox(width: 8),
             Text(
               '$earnedCount / ${slots.length}',
@@ -52,7 +52,7 @@ class BadgeCase extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           onFeature != null && earnedCount > 0
-              ? 'Tap an earned badge to feature it on your profile.'
+              ? 'Tap an earned award to feature it on your profile.'
               : 'Milestones you earn as you play and judge.',
           style: text.bodySmall?.copyWith(color: const Color(0xFF9A96A2)),
         ),

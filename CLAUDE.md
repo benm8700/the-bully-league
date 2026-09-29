@@ -440,7 +440,10 @@ shows progress ("72 / 150"); top tier reads "Top tier".
   incl. the mirror guard and the polarity split). Mounted on the profile
   under the "Crowd read" card: the own profile shows all four tracks (locked
   ones to chase); the performer/public profile shows **earned honours only**
-  and hides the section when none are earned.
+  and hides the section when none are earned. **Profile order (2026-09-28,
+  developer's call): the crowd/emoji pair (Crowd read + Crowd badges) sits
+  ABOVE the achievements card, which was renamed from "Badges" to "Awards"**
+  (`badge_case.dart` title + subtitle; `BadgeCase` is profile-only).
 - **The server `BADGE_TIERS`/`earnedEmojiBadges` is a PURE module referenced
   only by itself and its test — no deployed callable consumes it yet** (the
   client computes badge display straight from `emojiCounts`), so this stays a
