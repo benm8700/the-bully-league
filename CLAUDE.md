@@ -519,6 +519,35 @@ career totals, and deliberately does NOT re-show XP or rank.
   "24–11 / 69% / 137" under MedalMoto, above the badges, with the rest of the
   profile intact.
 
+### Full live-check suite run (2026-09-28)
+
+Ran every `functions/live/*Checks.js` suite plus the permanent scans, to catch
+checks that had drifted stale under schema changes (the way coreLoop once did).
+**Everything passes; TWO stale checks were found and fixed**, both the same
+class - a probe setup that no longer satisfies a gate added later:
+- **`voteGateChecks.js`** called `castVote` without the `emojiRatings` required
+  since 2026-09-23, so 4/5 failed. Fixed (see the emoji TESTS note above); now
+  also live-verifies `votesCast` + `emojiCounts` and cleans up participant docs.
+- **`judgeRewardChecks.js`** created queueing probes without an approved
+  `profile.introVideoUrl`, so `enterQueue`'s intro-video gate (2026-08-31)
+  refused them - 6/16 failed. Fixed by adding the same placeholder intro URL
+  coreLoop uses. Now 16/16.
+- **The general lesson, paid for a third time** (after coreLoop's intro gate
+  and voteGate's emoji requirement): **any new gate on `enterQueue` /
+  `castVote` / `completeMatch` silently breaks the live checks whose probe
+  setup predates it.** When adding such a gate, grep `functions/live/` for
+  every check that exercises that callable and update its probe setup in the
+  same change.
+- **Green tally**: captureQuality 11, climb 16, climbForfeit 7, climbTie 11,
+  dayPass 20, deletedPlayer 11, directoryChallenge 8, friendBattle 29,
+  judgeReward 16, laughMeter 9, liveAdvance 8, liveSettle 9, liveTournament 14,
+  rankPosition 5, seasonReset 8, spectator 12, swiss 22, username 27, voteGate
+  7 - plus coreLoop 22, rulesAudit 11, callableHealth 62, scheduledJob 16.
+- **No orphan accounts left behind** (purgeTestData dry run shows ACCOUNTS
+  empty). It does list 3 moderation reports to mark reviewed - left for the
+  developer, since clearing the Apple-1.2 report queue is a moderation call,
+  not a cleanup.
+
 ## Ranking System
 - **Rating — DECIDED**: Chess-style Elo-like numerical rating system, used as the underlying math (not shown directly to users — see Laugh Meter below). Everyone starts at a flat **1200**. No hard ceiling (unbounded). Soft floor at ~100 (prevents demoralizing bottomless losing spirals).
 - **K-factor — DECIDED (variable, not flat)**: use a VARIABLE K-factor rather than one flat rate for all players — modeled on how real chess federations (USCF/FIDE) handle this. Lower/newer-tier players (roughly ranks 1-4) get a HIGH K-factor — bigger rating swings per match, faster early climbing, quick gratification, forgiving of an early loss or two. Higher-tier players (roughly Headliner and up, especially near the GOAT top-5 cutoff) get a LOW K-factor — smaller swings, rating only moves with sustained real performance, every win at the top genuinely has to be earned. Chosen over a hard "different system above X rank" split specifically because a single continuously-scaling K-factor achieves the same early-gratification-then-real-competition FEEL without a jarring rule-change moment a player could hit and feel blindsided by. Exact K-factor values per tier band not yet set — needs real tuning once analytics data exists (see Firebase Analytics decision).

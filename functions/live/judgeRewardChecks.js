@@ -87,6 +87,10 @@ async function makeUser(uid) {
     username: `Jr${uid.slice(-6)}`, usernameLower: `jr${uid.slice(-6)}`,
     rating: 1200, rankTitle: "Average Joe", rankedMatchesPlayed: 0,
     wins: 0, losses: 0, accountStatus: "active", isAdmin: false,
+    // enterQueue refuses any account without an approved intro video (gate
+    // added 2026-08-31), so a queueing probe needs one - same placeholder
+    // coreLoop uses.
+    profile: {introVideoUrl: "https://example.com/probe-intro.mp4"},
     createdAt: Timestamp.now(),
   });
 }
