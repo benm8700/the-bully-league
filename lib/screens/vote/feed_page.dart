@@ -666,6 +666,12 @@ class _FeedPageState extends State<FeedPage> {
   /// this feed is the app's primary content surface, so a reviewer must be
   /// able to report from here. Deliberately quiet: a small icon, since harsh
   /// roasting is expected and not itself reportable.
+  /// A neutral overflow (⋮) menu rather than a standalone flag button
+  /// (developer's call, 2026-09-29). Apple 1.2 requires a flagging mechanism
+  /// to EXIST and be findable, but a prominent flag icon reads as an
+  /// invitation to report and makes people trigger-happy when they dislike a
+  /// roaster. Tucking "Report" behind a ⋮ keeps it reachable and compliant
+  /// while making it a deliberate two-tap action, not the first thing you see.
   Widget _reportButton(BuildContext context) {
     return Positioned(
       top: MediaQuery.of(context).padding.top + 8,
@@ -675,10 +681,18 @@ class _FeedPageState extends State<FeedPage> {
           color: Colors.black.withValues(alpha: 0.5),
           shape: BoxShape.circle,
         ),
-        child: IconButton(
-          icon: const Icon(Icons.flag_outlined, color: Colors.white, size: 20),
-          tooltip: 'Report',
-          onPressed: () => _openReport(context),
+        child: PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+          tooltip: 'More',
+          onSelected: (v) {
+            if (v == 'report') _openReport(context);
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: 'report',
+              child: Text('Report this clip'),
+            ),
+          ],
         ),
       ),
     );

@@ -328,39 +328,31 @@ class _VoteScreenState extends State<VoteScreen> {
                   closesAtMs: closesAtMs,
                 ),
               ],
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 8),
-              // Reporting stays available even for match participants
-              // (unlike voting) - CLAUDE.md's report categories are about
-              // things outside the roast format itself, which a participant
-              // is in the best position to have witnessed.
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ReportScreen(
-                            reportedUserId: player1Id, matchId: widget.matchId),
-                      ),
+              const SizedBox(height: 16),
+              // Reporting stays available even for match participants (unlike
+              // voting) - the report categories are about things outside the
+              // roast format itself. But it is deliberately QUIET: a small ⋮
+              // menu rather than two prominent "Report" buttons, so people are
+              // not trigger-happy when they simply dislike a roaster
+              // (developer's call, 2026-09-29). Apple 1.2 needs it findable,
+              // not front-and-centre.
+              Align(
+                alignment: Alignment.centerRight,
+                child: PopupMenuButton<int>(
+                  icon: const Icon(Icons.more_vert, size: 20),
+                  tooltip: 'More',
+                  onSelected: (p) => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ReportScreen(
+                          reportedUserId: p == 1 ? player1Id : player2Id,
+                          matchId: widget.matchId),
                     ),
-                    icon: const Icon(Icons.flag_outlined, size: 18),
-                    label: Text('Report $player1Name',
-                        overflow: TextOverflow.ellipsis),
                   ),
-                  TextButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ReportScreen(
-                            reportedUserId: player2Id, matchId: widget.matchId),
-                      ),
-                    ),
-                    icon: const Icon(Icons.flag_outlined, size: 18),
-                    label: Text('Report $player2Name',
-                        overflow: TextOverflow.ellipsis),
-                  ),
-                ],
+                  itemBuilder: (_) => [
+                    PopupMenuItem(value: 1, child: Text('Report $player1Name')),
+                    PopupMenuItem(value: 2, child: Text('Report $player2Name')),
+                  ],
+                ),
               ),
             ],
           ),
