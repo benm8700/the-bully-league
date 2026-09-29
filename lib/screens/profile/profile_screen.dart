@@ -400,6 +400,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       photoUrl: _photoUrls.isNotEmpty ? _photoUrls.first : null,
                       featured: featuredBadge(_userData),
                     ),
+                    // Career record strip - the "homebase" numbers that live
+                    // nowhere else (Home shows XP + rank, not W-L). Hidden for a
+                    // brand-new player with no history so a fresh profile stays
+                    // clean.
+                    if (!widget.promptIntro) _CareerStats(user: _userData),
                     const SizedBox(height: 24),
                     // Badges and the (normal-position) intro card only when NOT
                     // onboarding - in promptIntro mode the intro card is hoisted
@@ -657,6 +662,89 @@ class _IdentityHeader extends StatelessWidget {
           FeaturedBadge(def: featured),
         ],
       ],
+    );
+  }
+}
+
+/// The career-record strip under the identity header: Record (W-L), Win rate,
+/// and Battles judged. Deliberately the numbers NOT already headlined on Home
+/// (which shows XP + rank) or in the badges (which show milestones, not a clean
+/// total), so it complements rather than repeats. Free/ungated - W-L is already
+/// public on the Ranks board. Renders nothing until the player has a history.
+class _CareerStats extends StatelessWidget {
+  const _CareerStats({required this.user});
+
+  final Map<String, dynamic>? user;
+
+  int _int(String key) => (user?[key] as num?)?.toInt() ?? 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final wins = _int('wins');
+    final losses = _int('losses');
+    final judged = _int('votesCast');
+    // Nothing to show for a brand-new account - a row of zeros is noise.
+    if (wins == 0 && losses == 0 && judged == 0) {
+      return const SizedBox.shrink();
+    }
+    final decided = wins + losses;
+    final winRate = decided > 0 ? '${(wins * 100 / decided).round()}%' : '—';
+
+    // IntrinsicHeight bounds the Row's vertical extent to its children so the
+    // full-height dividers work. WITHOUT it, CrossAxisAlignment.stretch inside
+    // the profile's vertical SingleChildScrollView gets an UNBOUNDED height
+    // constraint and the whole subtree fails to lay out SILENTLY (no red error)
+    // - the exact "blanked the screen, no visible error" trap CLAUDE.md records
+    // for the Home screen.
+    return Padding(
+      padding: const EdgeInsets.only(top: 20),
+      child: IntrinsicHeight(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _cell(context, '$wins–$losses', 'Record'),
+            _divider(context),
+            _cell(context, winRate, 'Win rate',
+                accent: const Color(0xFFF4C838)),
+            _divider(context),
+            _cell(context, '$judged', 'Judged'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _divider(BuildContext context) => Container(
+        width: 1,
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
+      );
+
+  Widget _cell(BuildContext context, String value, String label,
+      {Color? accent}) {
+    final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: text.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: accent ?? scheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label.toUpperCase(),
+            style: text.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              letterSpacing: 0.6,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

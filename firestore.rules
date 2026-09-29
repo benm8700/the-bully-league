@@ -50,7 +50,7 @@ service cloud.firestore {
           'careerRankedMatches', 'skipsUsedToday', 'skipsResetDate',
           'takedowns', 'lastNotifiedRankTitle', 'lastSeenRankTitle',
           'dailyReward', 'followerCount', 'lastSeenFameMilestone',
-          'emojiCounts',
+          'emojiCounts', 'votesCast',
         ]);
 
       // Uses .get(field, default) rather than direct field access - a
@@ -172,6 +172,12 @@ service cloud.firestore {
         // liked, which is the exact behaviour the gap exists to price up.
         request.resource.data.get('lastVoteAtMs', null) ==
           resource.data.get('lastVoteAtMs', null) &&
+        // The voter's lifetime "battles judged" total, incremented once per
+        // match by castVote (Admin SDK) and shown on their profile. A client
+        // able to write it could inflate its own judged count - harmless to
+        // others, but it is a public identity number, so it stays server-only.
+        request.resource.data.get('votesCast', null) ==
+          resource.data.get('votesCast', null) &&
         // Per-player emoji ratings (🔥/🧠/🥱/💩), tallied only by castVote via
         // the Admin SDK as ballots come in. These are a player's public
         // identity - profile flair, badges, the Hottest board, their

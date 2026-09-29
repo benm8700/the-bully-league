@@ -291,7 +291,13 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   // `emojiCounts` is server-only in firestore.rules, and this path is the
   // Admin SDK, so a client can never inflate its own counts.
   const batch = db.batch();
-  batch.set(voterRef, {lastVoteAtMs: now}, {merge: true});
+  // votesCast is the voter's lifetime "battles judged" total, shown on their
+  // profile. The one-ballot-per-voter guard above means this batch runs exactly
+  // once per (voter, match), so this increments once per battle judged. Written
+  // on the same voter doc as lastVoteAtMs, in the same atomic batch, so it costs
+  // no extra write. Protected in firestore.rules (server-only).
+  batch.set(voterRef, {lastVoteAtMs: now, votesCast: FieldValue.increment(1)},
+      {merge: true});
   batch.set(ballotRef, {
     picks: normalizedPicks,
     weight,

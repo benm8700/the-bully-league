@@ -472,6 +472,49 @@ still pass). Not yet re-verified live: a real emoji ballot through the deployed
 `castVote` incrementing `emojiCounts` (the local suites + a real device rating
 are the current evidence).
 
+## Profile career-record strip — BUILT (2026-09-28)
+
+A compact "homebase" stat row under the Profile identity header
+(`_CareerStats` in `profile_screen.dart`): **Record (W–L) · Win rate (gold) ·
+Judged**. The developer asked whether adding wins/losses to the Profile would
+be too repetitive; the answer was NO, because these are the numbers that live
+**nowhere else** — Home's Player Status card shows XP + rank (deliberately not
+W–L), the badges show milestones (not a clean total), and W–L was only a tiny
+Ranks-row suffix. So the strip complements rather than repeats: it shows the
+career totals, and deliberately does NOT re-show XP or rank.
+- **Free / ungated** — W–L is already public on the Ranks board, so there is
+  no competitive-intel reason to hide it (unlike the subscriber-gated FormCard
+  form analytics). It is a record, not a second status ladder, so it does not
+  touch the one-status-ladder rule.
+- **Hidden for a brand-new account** (all-zero renders nothing), like the
+  emoji badges, so a fresh profile stays clean.
+- **`votesCast` — a NEW lifetime "battles judged" counter.** There was no
+  lifetime votes-cast field (the judging badge only tracks streak DAYS), so
+  `castVote` now increments `users/{voter}.votesCast` inside its existing
+  atomic batch (piggybacked on the `lastVoteAtMs` write — zero extra writes),
+  once per (voter, match) thanks to the one-ballot-per-voter guard. **Protected
+  in `firestore.rules`** (create-denylist + update-immutability, server-only)
+  like the other public identity numbers. It is **forward-counting**: existing
+  accounts start at 0 and count up from this deploy (honest degradation, same
+  as any late-added counter). Deployed; coreLoop 22/22 green after the castVote
+  change.
+- **A REAL BLANK-SCREEN BUG, fixed — the documented unbounded-constraint trap
+  again.** The first version put `crossAxisAlignment: CrossAxisAlignment.stretch`
+  on the strip's `Row` (for full-height dividers) inside the profile's vertical
+  `SingleChildScrollView`. That hands the Row an **unbounded vertical
+  constraint**, so the whole ProfileScreen subtree failed to lay out
+  **SILENTLY — no red error widget, no Dart exception in logcat, just a black
+  screen** (both the Profile tab and the pushed route). This is the exact class
+  CLAUDE.md's "House Lights Down" section records for the Home screen
+  (`Size.fromHeight` → infinite minWidth). **Wrapping the Row in
+  `IntrinsicHeight` bounds it** and the profile renders. The lesson, paid for
+  twice now: a silently-blank screen with NO exception is almost always an
+  unbounded-constraint layout failure — reach for IntrinsicHeight / a bounded
+  size, don't hunt for a thrown error.
+- **Device-verified on the Moto**: after the fix the strip shows
+  "24–11 / 69% / 137" under MedalMoto, above the badges, with the rest of the
+  profile intact.
+
 ## Ranking System
 - **Rating — DECIDED**: Chess-style Elo-like numerical rating system, used as the underlying math (not shown directly to users — see Laugh Meter below). Everyone starts at a flat **1200**. No hard ceiling (unbounded). Soft floor at ~100 (prevents demoralizing bottomless losing spirals).
 - **K-factor — DECIDED (variable, not flat)**: use a VARIABLE K-factor rather than one flat rate for all players — modeled on how real chess federations (USCF/FIDE) handle this. Lower/newer-tier players (roughly ranks 1-4) get a HIGH K-factor — bigger rating swings per match, faster early climbing, quick gratification, forgiving of an early loss or two. Higher-tier players (roughly Headliner and up, especially near the GOAT top-5 cutoff) get a LOW K-factor — smaller swings, rating only moves with sustained real performance, every win at the top genuinely has to be earned. Chosen over a hard "different system above X rank" split specifically because a single continuously-scaling K-factor achieves the same early-gratification-then-real-competition FEEL without a jarring rule-change moment a player could hit and feel blindsided by. Exact K-factor values per tier band not yet set — needs real tuning once analytics data exists (see Firebase Analytics decision).
