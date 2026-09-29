@@ -118,9 +118,11 @@ class EmojiBadgeTier {
   final String title;
 }
 
-/// Badge tiers for the two POSITIVE emojis only - you chase 🔥 and 🧠, there
-/// are no badges for being boring or trash. PLACEHOLDER thresholds, tuned
-/// server-side; keep in step with BADGE_TIERS in functions/emojiRatings.js.
+/// Badge tiers for ALL FOUR emojis (developer's call, 2026-09-28: "all the
+/// badges, not just the good ones"). Chase the positives, dodge the negatives;
+/// negative badges render tarnished (see emojiIsPositive). PLACEHOLDER
+/// thresholds, tuned server-side; keep in step with BADGE_TIERS in
+/// functions/emojiRatings.js.
 const Map<String, List<EmojiBadgeTier>> kEmojiBadgeTiers = {
   'fire': [
     EmojiBadgeTier('fire_1', 10, 'Spark'),
@@ -132,7 +134,26 @@ const Map<String, List<EmojiBadgeTier>> kEmojiBadgeTiers = {
     EmojiBadgeTier('clever_2', 50, 'Brainiac'),
     EmojiBadgeTier('clever_3', 150, 'Mastermind'),
   ],
+  'boring': [
+    EmojiBadgeTier('boring_1', 10, 'Snoozer'),
+    EmojiBadgeTier('boring_2', 50, 'Sleeper'),
+    EmojiBadgeTier('boring_3', 150, 'Comatose'),
+  ],
+  'trash': [
+    EmojiBadgeTier('trash_1', 10, 'Rotten'),
+    EmojiBadgeTier('trash_2', 50, 'Dumpster'),
+    EmojiBadgeTier('trash_3', 150, 'Biohazard'),
+  ],
 };
+
+/// Whether an emoji rating key is one of the two to CHASE (positive). The two
+/// negatives (boring, trash) are dodged, and their badges render tarnished.
+bool emojiIsPositive(String key) {
+  for (final r in kEmojiRatings) {
+    if (r.key == key) return r.positive;
+  }
+  return true;
+}
 
 /// The display state of one emoji's badge track: the highest tier earned (or
 /// null), the next tier still to earn (or null when maxed), and the live count.

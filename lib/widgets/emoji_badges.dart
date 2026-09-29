@@ -60,8 +60,9 @@ class EmojiBadges extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           ownProfile
-              ? 'Earn these off the \u{1F525} and \u{1F9E0} the crowd throws you.'
-              : 'Honours earned from the crowd.',
+              ? 'Every mark the crowd throws you — chase \u{1F525}\u{1F9E0}, '
+                  'dodge \u{1F971}\u{1F4A9}.'
+              : 'Marks the crowd has put on them.',
           style: text.bodySmall?.copyWith(color: const Color(0xFF9A96A2)),
         ),
         const SizedBox(height: 14),
@@ -84,6 +85,12 @@ class _EmojiMedalTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final tier = slot.displayTier;
+    // Positives are gold honours; the two negatives are tarnished marks worn
+    // for comedy, so their earned medallion + "Top tier" line read grey, not
+    // gold.
+    final positive = emojiIsPositive(slot.emojiKey);
+    final accent =
+        positive ? EmojiBadges._gold : const Color(0xFF9198A3);
 
     // Sub-line: earned + more to come = progress to the next tier; earned +
     // maxed = top tier; locked = the count to reach the first tier.
@@ -101,7 +108,8 @@ class _EmojiMedalTile extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _EmojiMedal(emoji: slot.emoji, earned: slot.earned, size: 62),
+          _EmojiMedal(
+              emoji: slot.emoji, earned: slot.earned, accent: accent, size: 62),
           const SizedBox(height: 6),
           Text(
             tier.title,
@@ -122,7 +130,7 @@ class _EmojiMedalTile extends StatelessWidget {
             style: text.bodySmall?.copyWith(
               fontSize: 11,
               color: slot.isMaxed && slot.earned
-                  ? EmojiBadges._gold
+                  ? accent
                   : slot.earned
                       ? const Color(0xFFB8B4C0)
                       : const Color(0xFF6E6A78),
@@ -137,39 +145,50 @@ class _EmojiMedalTile extends StatelessWidget {
   }
 }
 
-/// The medallion: the emoji glyph in a gold-rimmed disc when earned, dimmed and
-/// grey-rimmed when not. Mirrors the drawn medallion in badge_art.dart so glyph
-/// badges and illustrated badges read as one system.
+/// The medallion: the emoji glyph in an [accent]-rimmed disc when earned, dimmed
+/// and grey-rimmed when not. Positives use the gold accent (a warm disc); the
+/// negatives use a grey accent (a neutral disc) so a 💩 never reads as a gold
+/// honour. Mirrors the drawn medallion in badge_art.dart so glyph badges and
+/// illustrated badges read as one system.
 class _EmojiMedal extends StatelessWidget {
   const _EmojiMedal({
     required this.emoji,
     required this.earned,
+    required this.accent,
     this.size = 62,
   });
 
   final String emoji;
   final bool earned;
+  final Color accent;
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    const gold = EmojiBadges._gold;
+    final gold = accent == EmojiBadges._gold;
+    // Warm gold-brown disc for honours, neutral dark disc for the tarnished
+    // negatives.
+    final discColors = gold
+        ? const [Color(0xFF3A2F14), Color(0xFF1A1508)]
+        : const [Color(0xFF2C2C33), Color(0xFF151519)];
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const RadialGradient(
-          center: Alignment(-0.3, -0.4),
+        gradient: RadialGradient(
+          center: const Alignment(-0.3, -0.4),
           radius: 0.95,
-          colors: [Color(0xFF3A2F14), Color(0xFF1A1508)],
+          colors: discColors,
         ),
         border: Border.all(
-          color: earned ? gold.withValues(alpha: 0.85) : Colors.white.withValues(alpha: 0.14),
+          color: earned
+              ? accent.withValues(alpha: 0.85)
+              : Colors.white.withValues(alpha: 0.14),
           width: 2,
         ),
         boxShadow: earned
-            ? [BoxShadow(color: gold.withValues(alpha: 0.30), blurRadius: 10)]
+            ? [BoxShadow(color: accent.withValues(alpha: 0.30), blurRadius: 10)]
             : null,
       ),
       child: Center(

@@ -62,14 +62,17 @@ test("clever-then-boring is 'too smart for the room'", () => {
   assert.strictEqual(n, "Too Smart for the Room");
 });
 
-test("badges are earned for positives only, at their thresholds", () => {
+test("badges are earned for ALL FOUR emojis at their thresholds", () => {
   assert.deepStrictEqual(earnedEmojiBadges({emojiCounts: {fire: 9}}), []);
   assert.deepStrictEqual(earnedEmojiBadges({emojiCounts: {fire: 10}}), ["fire_1"]);
   assert.deepStrictEqual(
       earnedEmojiBadges({emojiCounts: {fire: 150, clever: 55}}),
       ["fire_1", "fire_2", "fire_3", "clever_1", "clever_2"]);
-  // Being trash/boring earns nothing, however high.
-  assert.deepStrictEqual(earnedEmojiBadges({emojiCounts: {trash: 999, boring: 999}}), []);
+  // The negatives now earn (tarnished) badges too - the developer wants all
+  // the badges, not just the good ones.
+  assert.deepStrictEqual(
+      earnedEmojiBadges({emojiCounts: {trash: 999, boring: 12}}),
+      ["boring_1", "trash_1", "trash_2", "trash_3"]);
 });
 
 if (process.exitCode) {

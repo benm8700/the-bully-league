@@ -6,27 +6,29 @@ void main() {
     // These MUST match BADGE_TIERS in functions/emojiRatings.js. If the server
     // changes a threshold, id or title, this test should be updated in lockstep
     // with the client constant - that is the whole point of pinning it.
-    test('fire and clever tracks, thresholds 10/50/150', () {
-      expect(kEmojiBadgeTiers.keys.toList(), ['fire', 'clever']);
-      expect(kEmojiBadgeTiers['fire']!.map((t) => t.at).toList(), [10, 50, 150]);
-      expect(kEmojiBadgeTiers['clever']!.map((t) => t.at).toList(),
-          [10, 50, 150]);
-      expect(kEmojiBadgeTiers['fire']!.map((t) => t.id).toList(),
-          ['fire_1', 'fire_2', 'fire_3']);
-      expect(kEmojiBadgeTiers['clever']!.map((t) => t.id).toList(),
-          ['clever_1', 'clever_2', 'clever_3']);
+    test('all four tracks, thresholds 10/50/150', () {
+      expect(kEmojiBadgeTiers.keys.toList(), ['fire', 'clever', 'boring', 'trash']);
+      for (final key in kEmojiBadgeTiers.keys) {
+        expect(kEmojiBadgeTiers[key]!.map((t) => t.at).toList(), [10, 50, 150],
+            reason: key);
+        expect(kEmojiBadgeTiers[key]!.map((t) => t.id).toList(),
+            ['${key}_1', '${key}_2', '${key}_3'],
+            reason: key);
+      }
     });
 
-    test('only the two POSITIVE emojis have badges', () {
-      expect(kEmojiBadgeTiers.containsKey('boring'), isFalse);
-      expect(kEmojiBadgeTiers.containsKey('trash'), isFalse);
+    test('positives are gold, negatives are tarnished', () {
+      expect(emojiIsPositive('fire'), isTrue);
+      expect(emojiIsPositive('clever'), isTrue);
+      expect(emojiIsPositive('boring'), isFalse);
+      expect(emojiIsPositive('trash'), isFalse);
     });
   });
 
   group('emojiBadgeSlots', () {
-    test('no ratings: both tracks locked at the first tier', () {
+    test('no ratings: all four tracks locked at the first tier', () {
       final slots = emojiBadgeSlots(null);
-      expect(slots.length, 2);
+      expect(slots.length, 4);
       for (final s in slots) {
         expect(s.earned, isFalse);
         expect(s.count, 0);
@@ -65,11 +67,15 @@ void main() {
       expect(clever.earned, isFalse);
     });
 
-    test('negative emojis never produce a badge slot', () {
-      final keys = emojiBadgeSlots({'trash': 999, 'boring': 999})
-          .map((s) => s.emojiKey)
-          .toList();
-      expect(keys, ['fire', 'clever']);
+    test('negative emojis now produce (tarnished) badge slots', () {
+      final slots = emojiBadgeSlots({'trash': 999, 'boring': 12});
+      expect(slots.map((s) => s.emojiKey).toList(),
+          ['fire', 'clever', 'boring', 'trash']);
+      final trash = slots.firstWhere((s) => s.emojiKey == 'trash');
+      expect(trash.earnedTier!.id, 'trash_3'); // 999 → top tier
+      expect(trash.isMaxed, isTrue);
+      final boring = slots.firstWhere((s) => s.emojiKey == 'boring');
+      expect(boring.earnedTier!.id, 'boring_1'); // 12 → first tier
     });
   });
 }

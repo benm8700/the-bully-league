@@ -3,12 +3,14 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/emoji_ratings.dart';
-import '../../screens/leaderboard/leaderboard_screen.dart';
+import '../../screens/profile/profile_screen.dart';
 import 'rank_badges.dart';
 
 /// The Home Player Status card: one horizontal HUD panel carrying the
 /// player's tier + rank badge + XP progress on the left, and their GLOBAL
-/// RANK position on the right. Tappable (chevron) through to the Ranks board.
+/// RANK position on the right. Tapping the card opens your Profile - it is
+/// your identity card, so it goes to where you SEE who you are (the Ranks
+/// board is the Ranks tab). The developer's call, 2026-09-28.
 ///
 /// Visual target is the developer's approved reference (2026-09-14): a
 /// crisp, dark, expensive-feeling card - near-black navy with a thin gold
@@ -358,7 +360,7 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+            MaterialPageRoute(builder: (_) => const ProfileScreen()),
           ),
           // A thin PURPLE/MAGENTA frame with a restrained purple glow halo.
           // Replaces the gold border so the Player Status card reads as player

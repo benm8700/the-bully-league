@@ -418,25 +418,40 @@ self-aware comedy (see the biggest-shit-bag backlog idea).
 **EMOJI BADGES OF HONOUR — BUILT (2026-09-28), as GLYPH MEDALS (no art
 dependency).** The developer's call: ship the badges now rendered from the
 emoji glyph itself rather than waiting on illustrated crests. `EmojiBadges`
-(`lib/widgets/emoji_badges.dart`) shows one medal per POSITIVE emoji track
-(🔥 Fire, 🧠 Clever) — the glyph in the same gold medallion `badge_art.dart`
-draws, so glyph badges and the illustrated achievement badges read as one
-system. Earned = gold rim + glow; locked = dimmed with the threshold to chase
-("Earn at 10"); earned-not-maxed shows progress ("72 / 150"); top tier reads
-"Top tier". Client tiers live in `kEmojiBadgeTiers` + `emojiBadgeSlots`
-(`lib/core/emoji_ratings.dart`), a **mirror of the server `BADGE_TIERS`**
-(🔥/🧠 at 10/50/150, positives only — no badge for boring/trash), pinned by
-`test/emoji_badges_test.dart` (8 checks incl. the mirror guard). Mounted on the
-profile under the "Crowd read" card: the own profile shows all tracks (locked
-ones to chase); the performer/public profile shows **earned honours only** and
-hides the section when none are earned. **Client-only change — the server
-tiers already existed, nothing deployed.** **DEVICE-VERIFIED (2026-09-28) on
-the Pixel_9 emulator**: the locked state (fresh account → Spark/Bright "Earn
-at 10") and, after priming `emojiCounts` via the Admin SDK, the EARNED state
-(Blaze 🔥 60/150 + Bright 🧠 30/50 as lit gold medallions with progress) both
-render correctly, alongside the Crowd-read counts, the "The Headliner"
-nickname, and the Home rank-card percentage pill. Real PNG art can later
-replace the glyph with no logic change, since the medal is a drop-in.
+(`lib/widgets/emoji_badges.dart`) shows one medal per emoji track — the glyph
+in the same medallion `badge_art.dart` draws, so glyph badges and the
+illustrated achievement badges read as one system. Earned = accent rim + glow;
+locked = dimmed with the threshold to chase ("Earn at 10"); earned-not-maxed
+shows progress ("72 / 150"); top tier reads "Top tier".
+- **ALL FOUR emojis now earn badges, not just the good ones** (developer's
+  call, 2026-09-28: "I want all the badges in the profile not just the good
+  ones"). You CHASE 🔥/🧠 and DODGE 🥱/💩. The two positives render in the
+  GOLD medallion (a warm gold-brown disc); the two negatives render TARNISHED
+  (a neutral grey disc, grey rim/glow, grey "Top tier" line) so a 💩 medal
+  never reads as a gold honour — they are marks worn for self-aware comedy,
+  consistent with the emoji system's deliberate override of the
+  no-public-negatives guardrail. Positive titles are Spark/Blaze/Inferno and
+  Bright/Brainiac/Mastermind; negatives are Snoozer/Sleeper/Comatose and
+  Rotten/Dumpster/Biohazard. `emojiIsPositive(key)` in `emoji_ratings.dart`
+  drives the gold-vs-tarnished split.
+- Client tiers live in `kEmojiBadgeTiers` + `emojiBadgeSlots`
+  (`lib/core/emoji_ratings.dart`), a **mirror of the server `BADGE_TIERS`**
+  (all four at 10/50/150), pinned by `test/emoji_badges_test.dart` (8 checks
+  incl. the mirror guard and the polarity split). Mounted on the profile
+  under the "Crowd read" card: the own profile shows all four tracks (locked
+  ones to chase); the performer/public profile shows **earned honours only**
+  and hides the section when none are earned.
+- **The server `BADGE_TIERS`/`earnedEmojiBadges` is a PURE module referenced
+  only by itself and its test — no deployed callable consumes it yet** (the
+  client computes badge display straight from `emojiCounts`), so this stays a
+  no-deploy change; the server tiers gained boring/trash purely to keep the
+  mirror honest for whenever a function does read them.
+- **DEVICE-VERIFIED (2026-09-28, positives) on the Pixel_9 emulator and the
+  Moto**: the locked state (fresh account → "Earn at 10") and, after priming
+  `emojiCounts` via the Admin SDK, the earned state render correctly, alongside
+  the Crowd-read counts, the "The Headliner" nickname, and the Home rank-card
+  percentage pill. Real PNG art can later replace the glyph with no logic
+  change, since the medal is a drop-in.
 - **EMULATOR NOTE (worth keeping): the "emulator can't reach Firebase" wall
   from prior sessions is a broken-DNS issue, not a dead end.** The Pixel_9 AVD
   boots with Android Private DNS in automatic (DoT) mode, which fails in this
@@ -788,6 +803,23 @@ Raised by the developer: what protects someone who is unhappy that their match f
   how they sit beside rank/fame without becoming yet another status ladder to
   keep up with. Capture for now; design later. Note it also depends on the
   same per-emoji leaderboard indexes the Hottest board introduced.
+- **SPEND POINTS TO REMOVE BAD EMOJIS — NEW IDEA (2026-09-28, developer),
+  capture only.** Let a player spend points to shave down (or clear some of)
+  their NEGATIVE emoji counts (🥱 Boring / 💩 Trash) — a points sink that also
+  softens the sting of the public negative counts the emoji system deliberately
+  exposes. Fits the open "points need a real sink" thread and the newly-earnable
+  negative badges (a way to walk back a 💩 Dumpster medal you'd rather not
+  wear). NOT designed, and it carries real tension worth flagging before it is
+  built: (1) `emojiCounts` is server-only in `firestore.rules` and would need a
+  dedicated Cloud Function (points-spend through the existing `pointsBalance` +
+  idempotent ledger path, like the day pass/clip grant) — never a client write;
+  (2) it makes the Crowd-read percentages and the Hottest/superlative surfaces
+  buyable rather than earned, so the counts stop being an honest audience
+  signal — decide whether removals are capped, decay-only, or visibly marked;
+  (3) it partly undoes the whole point of showing negatives (self-aware comedy),
+  so it may cheapen the 💩-as-a-badge-of-honour framing the developer otherwise
+  leans into. Price/mechanics all provisional and part of the advisor economy
+  review. Capture for now; design later.
 - **ELITE TOP-TIER LEAGUE (rank 9 + GOAT only) — BUILT (2026-09-18).** A
   rank-gated showcase mode only Featured Talent and GOAT may enter, mimicking
   ranked (recorded, clippable, moves the hidden Elo, finalizes normally) but
@@ -3479,6 +3511,11 @@ title (e.g. DOOR GUY) + an XP progress bar + "870 / 1,200 XP"; on the right
   fallback title; a failed rank query just hides the rank column. The old
   username greeting line above the card was removed as redundant (the header
   carries the brand, the card carries the identity).
+- **Tapping the card opens your PROFILE, not the Ranks board (2026-09-28,
+  developer's call).** It is your identity card, so it goes to where you SEE
+  who you are; the Ranks board is one tap away on its own tab. (Was pushing
+  `LeaderboardScreen`; now pushes `ProfileScreen`. Device-verified on the
+  Moto.) The top-right avatar still opens Account & settings, unchanged.
 
 **A firebase deploy discovery-timeout bit again**: the first
 `firebase deploy --only functions:getLaughMeter` failed with "Cannot

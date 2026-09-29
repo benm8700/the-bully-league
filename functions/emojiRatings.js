@@ -90,10 +90,12 @@ function nicknameFor(user) {
 }
 
 /**
- * Badge tiers for the two POSITIVE emojis only - you chase 🔥 and 🧠, you do
- * not earn a badge for being boring or trash (those show as raw counts). Tiers
- * are thresholds of that emoji's count; PLACEHOLDER numbers, to tune against
- * real earning rates like every other economy figure.
+ * Badge tiers for ALL FOUR emojis (developer's call, 2026-09-28: "I want all
+ * the badges in the profile, not just the good ones"). You CHASE 🔥/🧠 and you
+ * DODGE 🥱/💩 - the negatives are marks worn for self-aware comedy, not honours,
+ * so the client renders them in a tarnished (non-gold) medallion. Tiers are
+ * thresholds of that emoji's count; PLACEHOLDER numbers, to tune against real
+ * earning rates like every other economy figure.
  */
 const BADGE_TIERS = {
   fire: [
@@ -105,6 +107,16 @@ const BADGE_TIERS = {
     {at: 10, id: "clever_1", title: "Bright"},
     {at: 50, id: "clever_2", title: "Brainiac"},
     {at: 150, id: "clever_3", title: "Mastermind"},
+  ],
+  boring: [
+    {at: 10, id: "boring_1", title: "Snoozer"},
+    {at: 50, id: "boring_2", title: "Sleeper"},
+    {at: 150, id: "boring_3", title: "Comatose"},
+  ],
+  trash: [
+    {at: 10, id: "trash_1", title: "Rotten"},
+    {at: 50, id: "trash_2", title: "Dumpster"},
+    {at: 150, id: "trash_3", title: "Biohazard"},
   ],
 };
 
