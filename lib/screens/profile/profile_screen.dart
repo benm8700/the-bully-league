@@ -331,9 +331,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ? const Center(child: CircularProgressIndicator())
               : SafeArea(
                   child: SingleChildScrollView(
+                    // Content starts higher up (developer's call, 2026-09-29):
+                    // the old kToolbarHeight+8 top pad pushed the identity/stats
+                    // about 1/6 down the screen. The app bar is transparent and
+                    // its "Your Profile" title is left-aligned, while the
+                    // identity content is centred, so a small top pad lifts
+                    // everything without the avatar colliding with the title.
                     padding: EdgeInsets.fromLTRB(
                       24,
-                      kToolbarHeight + 8,
+                      12,
                       24,
                       24 + MediaQuery.of(context).padding.bottom,
                     ),
