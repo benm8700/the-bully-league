@@ -512,6 +512,23 @@ exports.sendEventWindowPush = onSchedule("every 5 minutes", async () => {
 });
 
 /**
+ * The daily-reward "last call" reminder: once a Pacific day, in the evening,
+ * to people who have not claimed today's Free Rewards login reward. Polls (the
+ * evening hour is a code constant, but polling keeps it a single once-a-day
+ * fire with a marker rather than a fragile exact cron) - see
+ * dailyRewardReminder.js.
+ */
+exports.dailyRewardReminder = onSchedule("every 30 minutes", async () => {
+  const {sendDailyRewardReminder} = require("./dailyRewardReminder");
+  try {
+    const result = await sendDailyRewardReminder();
+    if (!result.skipped) console.log("dailyRewardReminder:", JSON.stringify(result));
+  } catch (err) {
+    console.error("dailyRewardReminder failed:", err);
+  }
+});
+
+/**
  * Turns finished matches into watchable clips without anyone clicking:
  * composite first (cheap), captions only for clips that earn them
  * (expensive). See functions/autoRender.js for why this is a sweep rather

@@ -3756,8 +3756,25 @@ day - the vote-streak habit loop applied to simply showing up.
   "Claimed today", and the card's dot cleared. Both fresh callables returned
   the app-level JSON auth error (not a Cloud Run 401), so no manual IAM fix was
   needed.
-- **NOT built:** a day-7 clip-token/day-pass climax (kept points-only for V1),
-  and any push/reminder that a reward is waiting (the Home dot is the only cue).
+- **REMINDER PUSH — BUILT (2026-09-29)** (`functions/dailyRewardReminder.js`,
+  scheduled `dailyRewardReminder` every 30 min). Fires ONCE per Pacific day, in
+  the EVENING (>= 8pm Pacific, tunable `TARGET_HOUR_PACIFIC`), to token-holders
+  who have NOT claimed today's reward - "Grab it before midnight, the day is
+  about to reset." The evening slot is deliberate: the reward resets at Pacific
+  midnight so the urgency is real, it sits AFTER the 6-7pm event push so the two
+  do not cluster, and anyone who came for the window already claimed and is
+  filtered out - so it only reaches people who did not engage all day, which is
+  who it is for. New mutable `daily_reward` notification category (absent =
+  opted in), toggle in `NotificationSettingsScreen`. Idempotent per Pacific day
+  via a `stats/dailyRewardReminder` marker claimed BEFORE sending, capped at 200
+  recipients. **The "claimed today?" filter runs in CODE, not a Firestore
+  query**, because `dailyReward.lastClaimDay` is absent for never-claimed
+  accounts and a `!=` query would exclude exactly the people to remind (the
+  missing-field trap). 6 pure tests (`test/dailyRewardReminder.test.js`) +
+  verified against real Firestore read-only (module seam loads, 18 token-holders
+  queried and filtered, no-op before the target hour) + added to
+  `scheduledJobScan.js`'s coverage. Deployed.
+- **NOT built:** a day-7 clip-token/day-pass climax (kept points-only for V1).
 
 ## Fame (Follow comedians) — V1 BUILT (2026-09-16)
 

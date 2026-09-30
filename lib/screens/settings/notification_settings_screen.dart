@@ -62,6 +62,12 @@ class NotificationSettingsScreen extends StatelessWidget {
       title: 'Weekly recap',
       description: 'A Sunday summary of what you did this week.',
     ),
+    _Category(
+      key: 'daily_reward',
+      title: 'Daily reward',
+      description: 'An evening nudge if you have not claimed your free daily '
+          'reward before the day resets.',
+    ),
   ];
 
   @override
