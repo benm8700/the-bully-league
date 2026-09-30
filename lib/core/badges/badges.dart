@@ -204,39 +204,6 @@ Set<String> resolveEarnedIds(Map<String, dynamic>? user) {
   return stored..addAll(qualifyingBadgeIds(BadgeStats.fromUser(user)));
 }
 
-/// The stored featured badge id, or null.
-String? storedFeaturedId(Map<String, dynamic>? user) {
-  final badges = user?['badges'];
-  if (badges is Map) {
-    final f = badges['featured'];
-    if (f is String && f.isNotEmpty) return f;
-  }
-  return null;
-}
-
-/// The default "featured" badge: the highest-prestige EARNED badge, or null.
-BadgeDef? bestEarnedBadge(Set<String> earnedIds) {
-  BadgeDef? best;
-  for (final b in kBadges) {
-    if (earnedIds.contains(b.id) &&
-        (best == null || b.prestige > best.prestige)) {
-      best = b;
-    }
-  }
-  return best;
-}
-
-/// The badge to feature: the stored pin if it is (still) earned, else the best.
-BadgeDef? featuredBadge(Map<String, dynamic>? user) {
-  final earned = resolveEarnedIds(user);
-  final pinned = storedFeaturedId(user);
-  if (pinned != null && earned.contains(pinned)) {
-    final def = badgeById(pinned);
-    if (def != null) return def;
-  }
-  return bestEarnedBadge(earned);
-}
-
 /// A display slot in the badge case: one per standalone badge, and one per
 /// tiered family (showing the highest earned tier, or tier 1 when locked,
 /// with progress toward the next tier).

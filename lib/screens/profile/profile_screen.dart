@@ -115,23 +115,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  /// Pins a badge as the featured one. A plain client write - badges are pure
-  /// recognition with no reward, so nothing needs a server guard (same as the
-  /// equipped skin). Updates the local copy so the header/case react at once.
-  Future<void> _setFeaturedBadge(String badgeId) async {
-    final data = Map<String, dynamic>.from(_userData ?? {});
-    final badges = Map<String, dynamic>.from(
-        (data['badges'] as Map?)?.cast<String, dynamic>() ?? {});
-    badges['featured'] = badgeId;
-    data['badges'] = badges;
-    setState(() => _userData = data);
-    try {
-      await _userRef.set({'badges': {'featured': badgeId}}, SetOptions(merge: true));
-    } catch (_) {
-      // Cosmetic-only; a failed pin isn't worth interrupting the profile.
-    }
-  }
-
   /// Written immediately rather than waiting for Save. Someone switching
   /// this off wants to stop being findable now, not after they remember
   /// to press a button at the bottom of the screen.
@@ -425,8 +408,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       BadgeCase(
                         stats: BadgeStats.fromUser(_userData),
                         earnedIds: resolveEarnedIds(_userData),
-                        featuredId: storedFeaturedId(_userData),
-                        onFeature: _setFeaturedBadge,
                       ),
                       const SizedBox(height: 28),
                       // The mandatory intro video sits above photos because it
