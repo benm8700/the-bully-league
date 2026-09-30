@@ -1006,10 +1006,14 @@ Raised by the developer: what protects someone who is unhappy that their match f
   after being down, etc.). A collectible layer of recognition on top of the
   daily quests, shown on the profile. **Now built and live**: `kBadges` in
   `lib/core/badges/badges.dart` (families: wins, battles-played, judging, plus
-  one-offs like First Blood / Loyal Juror), rendered on the Profile as a badge
-  case with a featured badge, earned off the same metrics the quests/points
-  ledger already track. Device-verified showing real progress (e.g. "Contender
-  14/50"). **Naming rule learned the hard way (2026-09-18 bug scan): a badge
+  one-offs like First Blood / Loyal Juror), rendered on the Profile as an
+  "Awards" case, earned off the same metrics the quests/points ledger already
+  track. Device-verified showing real progress (e.g. "Contender 14/50").
+  **NO feature/pin mechanism (removed 2026-09-29, developer's call)** - badges
+  are just displayed; the old tap-to-feature pin, the featured-badge pill at
+  the profile top, and the opponent's featured badge in the bio reveal are all
+  gone (`storedFeaturedId`/`bestEarnedBadge`/`featuredBadge` and the
+  `FeaturedBadge` widget were deleted). **Naming rule learned the hard way (2026-09-18 bug scan): a badge
   title must not reuse a RANK TIER name** - the battles-played level-1 badge
   was titled "Regular" and sat directly under the "Regular" rank on the
   profile, reading as a duplicate; renamed to "Road Dog" (id `battles_regular`
