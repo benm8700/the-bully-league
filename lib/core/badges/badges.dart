@@ -17,8 +17,19 @@
 /// state (like the equipped skin); nothing needs a server guard.
 library;
 
-/// Which already-tracked stat a badge keys off.
-enum BadgeMetric { wins, battlesPlayed, voteStreakDays }
+/// Which already-tracked stat a badge keys off. The `top*` metrics are the
+/// permanent "ever been #1 in an emoji" awards: they read 1/0 from the
+/// server-set `emojiTopAwards` flags (see functions/emojiTopAwards.js) rather
+/// than a counter, so threshold 1 means "flag is set".
+enum BadgeMetric {
+  wins,
+  battlesPlayed,
+  voteStreakDays,
+  topFire,
+  topClever,
+  topBoring,
+  topTrash,
+}
 
 /// One badge definition. Tiered badges share a [family] and differ by [level]
 /// and [threshold]; standalone badges have a null family and level 1.
@@ -33,6 +44,7 @@ class BadgeDef {
     required this.prestige,
     this.family,
     this.level = 1,
+    this.emoji,
   });
 
   /// Unique id; also the art file base name: `assets/badges/<id>.png`.
@@ -58,8 +70,22 @@ class BadgeDef {
   /// 1-based tier within the family (1 for standalone).
   final int level;
 
+  /// For the emoji superlative awards: the glyph to render in the medallion
+  /// (there is no PNG for these). Null for ordinary PNG/icon badges.
+  final String? emoji;
+
   bool earnedBy(BadgeStats stats) => stats.value(metric) >= threshold;
 }
+
+/// The four emoji superlative award ids. They are earned ONLY from the
+/// server-set `emojiTopAwards` flag - never from the client-writable
+/// `badges.earned` set - so a client cannot inject them to fake being #1.
+const Set<String> kEmojiAwardIds = {
+  'emoji_top_fire',
+  'emoji_top_clever',
+  'emoji_top_boring',
+  'emoji_top_trash',
+};
 
 /// The V1 badge catalogue, in a stable display order.
 const List<BadgeDef> kBadges = [
@@ -141,6 +167,49 @@ const List<BadgeDef> kBadges = [
     threshold: 7,
     prestige: 40,
   ),
+  // Emoji superlative awards - permanent "ever been #1 in the whole league for
+  // this emoji". Earned-and-kept via the server-set emojiTopAwards flag. Two to
+  // chase (🔥/🧠), two worn for self-aware comedy (🥱/💩).
+  BadgeDef(
+    id: 'emoji_top_fire',
+    title: 'The Inferno',
+    earnedDesc: 'Held the most 🔥 in the league',
+    lockedHint: 'Be #1 for 🔥 in the league',
+    metric: BadgeMetric.topFire,
+    threshold: 1,
+    prestige: 90,
+    emoji: '🔥',
+  ),
+  BadgeDef(
+    id: 'emoji_top_clever',
+    title: 'The Mastermind',
+    earnedDesc: 'Held the most 🧠 in the league',
+    lockedHint: 'Be #1 for 🧠 in the league',
+    metric: BadgeMetric.topClever,
+    threshold: 1,
+    prestige: 90,
+    emoji: '🧠',
+  ),
+  BadgeDef(
+    id: 'emoji_top_boring',
+    title: 'The Snooze',
+    earnedDesc: 'Held the most 🥱 in the league',
+    lockedHint: 'Be #1 for 🥱 in the league',
+    metric: BadgeMetric.topBoring,
+    threshold: 1,
+    prestige: 15,
+    emoji: '🥱',
+  ),
+  BadgeDef(
+    id: 'emoji_top_trash',
+    title: 'Biggest Shit Bag',
+    earnedDesc: 'Held the most 💩 in the league',
+    lockedHint: 'Be #1 for 💩 in the league',
+    metric: BadgeMetric.topTrash,
+    threshold: 1,
+    prestige: 15,
+    emoji: '💩',
+  ),
 ];
 
 BadgeDef? badgeById(String id) {
@@ -156,11 +225,22 @@ class BadgeStats {
     required this.wins,
     required this.battlesPlayed,
     required this.voteStreakDays,
+    this.topFire = false,
+    this.topClever = false,
+    this.topBoring = false,
+    this.topTrash = false,
   });
 
   final int wins;
   final int battlesPlayed;
   final int voteStreakDays;
+
+  /// The permanent "ever been #1 in this emoji" award flags, from the
+  /// server-set `emojiTopAwards` map.
+  final bool topFire;
+  final bool topClever;
+  final bool topBoring;
+  final bool topTrash;
 
   /// careerRankedMatches never resets (season reset zeroes rankedMatchesPlayed
   /// but keeps career), so it is the honest "battles played" for a lifetime
@@ -169,12 +249,18 @@ class BadgeStats {
     final u = user ?? const {};
     final streak = u['voteStreak'];
     final streakDays = streak is Map ? (streak['days'] as num?)?.toInt() ?? 0 : 0;
+    final awards = u['emojiTopAwards'];
+    bool flag(String k) => awards is Map && awards[k] == true;
     return BadgeStats(
       wins: (u['wins'] as num?)?.toInt() ?? 0,
       battlesPlayed: (u['careerRankedMatches'] as num?)?.toInt() ??
           (u['rankedMatchesPlayed'] as num?)?.toInt() ??
           0,
       voteStreakDays: streakDays,
+      topFire: flag('fire'),
+      topClever: flag('clever'),
+      topBoring: flag('boring'),
+      topTrash: flag('trash'),
     );
   }
 
@@ -182,6 +268,10 @@ class BadgeStats {
         BadgeMetric.wins => wins,
         BadgeMetric.battlesPlayed => battlesPlayed,
         BadgeMetric.voteStreakDays => voteStreakDays,
+        BadgeMetric.topFire => topFire ? 1 : 0,
+        BadgeMetric.topClever => topClever ? 1 : 0,
+        BadgeMetric.topBoring => topBoring ? 1 : 0,
+        BadgeMetric.topTrash => topTrash ? 1 : 0,
       };
 }
 
@@ -201,6 +291,11 @@ Set<String> resolveEarnedIds(Map<String, dynamic>? user) {
     final e = badges['earned'];
     if (e is List) stored.addAll(e.whereType<String>());
   }
+  // `badges.earned` is client-writable, so the emoji superlative awards must
+  // NOT be grantable through it - they come solely from the server-set
+  // emojiTopAwards flag (via qualifyingBadgeIds below). Strip any a client
+  // tried to inject.
+  stored.removeAll(kEmojiAwardIds);
   return stored..addAll(qualifyingBadgeIds(BadgeStats.fromUser(user)));
 }
 

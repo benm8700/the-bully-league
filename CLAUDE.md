@@ -403,9 +403,28 @@ these are a player's public identity.
   title from a player's emoji mix, e.g. fire+clever → *The Headliner*,
   clever+boring → *Too Smart for the Room*, fire+trash → *Love / Hate*, mostly 💩
   → *The Stinker*. Null until enough signal (12 ratings) so it means something.
-- **Ranks → HOTTEST board** (`leaderboard_screen.dart`): a third tab (replaced
-  BEST ROUNDS) ranking players by 🔥 received, mirroring the Fame board's pattern
-  (single-field `where('emojiCounts.fire', >0).orderBy(...)`, no composite index).
+- **Ranks → APPLAUSE board** (`leaderboard_screen.dart`): the third tab (replaced
+  BEST ROUNDS) ranking players by emoji received, mirroring the Fame board's
+  pattern (single-field `where('emojiCounts.<key>', >0).orderBy(...)`, no
+  composite index). **Now a 🔥/🧠 TOGGLE, not fire-only (2026-10-01).** A
+  segmented control ("🔥 On Fire" / "🧠 Clever", `_EmojiBoard`/`_EmojiToggle`/
+  `_EmojiList`) swaps the ranked emoji live - 🔥 Fire (orange accent) or 🧠
+  Clever (cyan accent), each its own single-field query. The negatives (🥱/💩)
+  deliberately stay OFF a public board (a "most boring" leaderboard is a bigger
+  call than the own-profile badges; that is the separate "biggest shit bag"
+  superlative backlog idea). **Tab label "APPLAUSE" is a provisional working
+  name** (developer's pick, 2026-10-01, over the earlier "HOTTEST"/"CROWD"); it
+  is neutral so it covers both emojis, and swapping it is a one-string change.
+  - **Also this session (2026-10-01): the Ranks tabs layout was tightened.** The
+    title-less AppBar toolbar was collapsed (embedded `toolbarHeight: 18`, a
+    small gap below the status bar rather than the empty 56px band), and the list
+    top padding was cut to a small gap - `extendBodyBehindAppBar` already makes
+    the Scaffold inject the app-bar height into the body padding, so the SafeArea
+    ALREADY clears the tabs; the old `kToolbarHeight + kTextTabBarHeight`
+    padding was double-counting it and left a dead ~one-row band. First row now
+    sits directly under the tabs (~15 rows fit, was 11). The general trap worth
+    remembering: with `extendBodyBehindAppBar`, do NOT also pad the body by the
+    app-bar height - the injected SafeArea inset covers it.
 
 **GUARDRAILS KNOWINGLY OVERRIDDEN — the developer's explicit call, recorded so
 it is not "corrected" later.** This is a SECOND status axis beside the skill
@@ -857,6 +876,24 @@ Raised by the developer: what protects someone who is unhappy that their match f
     - **Verified by running the real sweep against real Firestore**: an open round is announced to both players and marked on the bracket, a second sweep says nothing, near the deadline only the absentee is warned, nobody is chased once both have checked in, and closed or decided rounds send nothing. **7 live checks plus 15 local tests.**
 
 ## Problems To Solve Later (Backlog — flagged during planning, not yet designed)
+- **PLAYER STATUS CARD — REVISIT / POSSIBLE OVERHAUL (2026-09-29, developer).**
+  The developer wants to revisit the Home rank card (`PlayerStatusCard`,
+  `lib/widgets/home/player_status_card.dart`) design later - either a full
+  overhaul or tweaks. **The specific open question that prompted this: the four
+  emoji percentages (🔥/🧠/🥱/💩) now appear BOTH on the Home card AND on the
+  Profile "Crowd read" card (`EmojiStatsCard`), which is mildly redundant.** It
+  is only a PARTIAL duplication - the Profile card also carries the auto-nickname
+  and the emoji medals/badges, which Home does not, so today it reads as
+  summary (Home) vs full-breakdown (Profile). The proposed clean de-dup (NOT yet
+  applied, developer deferred it): make each surface show a DIFFERENT cut - Home
+  keeps the percentages (the glance), Profile drops the percentages and leads
+  with nickname + raw counts + medals - so they complement rather than echo.
+  Two other options were on the table: keep both fully as-is, or pull the pill
+  off Home entirely. Capture for now; decide alongside any card redesign.
+  Context: the emoji pill was just enlarged (2026-09-29) - moved to its own
+  full-width row below the HUD at fontSize 18 - because it was being shrunk to
+  ~6px inside the narrow rank column; whatever the redesign does, keep it
+  legible at that size.
 - **APP LAUNCHER ICON — NOT DESIGNED (2026-09-28, developer).** The actual
   app icon (the `com.bullyleague.app` launcher/exe icon on the home screen and
   in the store listing) is still the Flutter default. Needs a real designed
@@ -866,22 +903,49 @@ Raised by the developer: what protects someone who is unhappy that their match f
   `mipmap` set. It is a Play-listing requirement, so it must land before the
   internal-testing upload. Capture now; design later with the other brand art
   (rank crests, emoji badge art, the intro/outro card).
-- **EMOJI-ECOSYSTEM SUPERLATIVE TITLES — NEW IDEA (2026-09-23, developer).**
-  The per-player emoji ratings (🔥 Fire / 🧠 Clever / 🥱 Boring / 💩 Trash,
-  built this session — see the vote flow, users.emojiCounts, the Hottest
-  board, badges and auto-nicknames) should eventually grow LEADER/superlative
-  titles: crown whoever leads each emoji platform-wide, in the app's own
-  irreverent voice. The developer's example: the player with the most 💩 gets
-  "Congratulations, you are the biggest shit bag." So: a title/award per emoji
-  (most 🔥, most 🧠, most 🥱, most 💩), including the NEGATIVE ones played for
-  self-aware comedy rather than shame. This is a more intricate design pass on
-  the emoji system - not yet designed. Open questions: whether these are live
-  "#1 in X" crowns (like GOAT's top-five) or earned-and-kept, how the negative
-  ones stay funny rather than cruel (the developer is knowingly overriding the
-  no-public-negatives welfare guardrail for the emoji system generally), and
-  how they sit beside rank/fame without becoming yet another status ladder to
-  keep up with. Capture for now; design later. Note it also depends on the
-  same per-emoji leaderboard indexes the Hottest board introduced.
+- **EMOJI SUPERLATIVE AWARDS — BUILT (2026-10-01).** The per-player emoji
+  ratings (🔥 Fire / 🧠 Clever / 🥱 Boring / 💩 Trash) now grow four
+  platform-wide superlative AWARDS: The Inferno (most 🔥), The Mastermind
+  (most 🧠), The Snooze (most 🥱), Biggest Shit Bag (most 💩) - the developer's
+  "biggest shit bag" idea. **The two open questions were resolved by the
+  developer: EARNED-AND-KEPT (not a live crown), and they live in the AWARDS
+  section** (the profile BadgeCase), not as a separate strip.
+  - **Why earned-and-kept, not a live "#1 right now" crown**: the developer's
+    own objection - a single live title per emoji is only ever held by 4 people
+    at once, so in a 5,000-user app it "doesn't go around." A PERMANENT award
+    (you were #1 at some point → it is yours forever) accumulates holders as the
+    lead changes hands, which scales. It is #1-ONLY for now (the developer's
+    pick over "top 5"); easy to widen later.
+  - **Server** (`functions/emojiTopAwards.js`, scheduled `awardEmojiTopAwards`
+    every 6 hours): finds the current #1 holder of each emoji (the same
+    single-field `where('emojiCounts.<key>','>',0).orderBy(desc).limit(1)` the
+    APPLAUSE board uses - no composite index) and permanently stamps
+    `emojiTopAwards.<key> = true`. Idempotent (skips an account that already
+    holds it). `emojiTopAwards` is SERVER-ONLY in firestore.rules (create
+    denylist + update immutability), because it is derived from the server-only
+    emojiCounts - a client must not crown itself.
+  - **Client** (`lib/core/badges/badges.dart` + `badge_art.dart`): four new
+    standalone badges in `kBadges` (ids `emoji_top_fire`/`_clever`/`_boring`/
+    `_trash`), keyed off the flag via new `BadgeMetric.top*` (value 1/0,
+    threshold 1). They render as GLYPH medallions (no PNG art needed) - gold
+    disc for the chase emojis 🔥/🧠, tarnished grey for 🥱/💩 so a 💩 trophy
+    never reads as a gold honour (same polarity split as the emoji medals).
+    `resolveEarnedIds` grants them ONLY from the flag (strips them from the
+    client-writable `badges.earned` via `kEmojiAwardIds`), so they cannot be
+    self-injected. **Shown on the OWN profile Awards case ONLY - the developer
+    decided (2026-10-01) these should NOT appear on public/performer profiles**
+    (the performer profile deliberately renders no BadgeCase). Do not "fix"
+    this later as a missing follow-up; it is a decision.
+  - **Verified**: 5 pure tests (`functions/test/emojiTopAwards.test.js`); the
+    real sweep run against live Firestore (stamped the current #1, idempotent
+    on a second run); rules + function deployed; and device-verified on the
+    Moto - all four awards render correctly (Inferno/Mastermind gold-earned,
+    Snooze/Shit Bag tarnished-earned) after priming a test account.
+  - **Still open / knowingly overridden**: this makes the NEGATIVE awards
+    public (no-public-negatives welfare rule), consistent with the emoji
+    system's existing deliberate override. Widening from #1-only to top-N is an
+    easy follow-up if wanted. (Public-profile display was considered and
+    DECLINED - these stay own-profile-only, see above.)
 - **SPEND POINTS TO REMOVE BAD EMOJIS — NEW IDEA (2026-09-28, developer),
   capture only.** Let a player spend points to shave down (or clear some of)
   their NEGATIVE emoji counts (🥱 Boring / 💩 Trash) — a points sink that also

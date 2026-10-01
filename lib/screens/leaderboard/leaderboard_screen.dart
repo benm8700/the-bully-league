@@ -11,8 +11,13 @@ import '../profile/performer_profile_screen.dart';
 /// its own axis, distinct from the skill Ranks board.
 const Color _fameAccent = Color(0xFFFF3B6B);
 
-/// The Hottest board's accent - a fiery orange, matching the 🔥 it ranks on.
+/// The board's fire accent - a fiery orange, matching the 🔥 it ranks on.
 const Color _hotAccent = Color(0xFFFF7A18);
+
+/// The board's clever accent - a cool cyan for 🧠, deliberately distinct from
+/// the fire orange, the fame pink and the self-row gold so the toggle's two
+/// halves never read as the same signal.
+const Color _cleverAccent = Color(0xFF2FD4C6);
 
 /// The skill ladder - the in-app equivalent of the website homepage's
 /// "top 5 roasters" concept (CLAUDE.md's Website — Account & Tournament
@@ -66,14 +71,21 @@ class LeaderboardScreen extends StatelessWidget {
         .orderBy('followerCount', descending: true)
         .limit(kBoardSize);
 
-    // THE HOTTEST BOARD - ranks by 🔥 ratings received, the flagship positive
-    // emoji. This is the "most of each emoji shows the hottest users" board
-    // (developer's call, 2026-09-23). Only players with at least one 🔥 appear.
-    final hotQuery = FirebaseFirestore.instance
-        .collection('users')
-        .where('emojiCounts.fire', isGreaterThan: 0)
-        .orderBy('emojiCounts.fire', descending: true)
-        .limit(kBoardSize);
+    // THE EMOJI BOARD - a toggle between the two POSITIVE (chase) emojis:
+    // 🔥 Fire (killed it overall) and 🧠 Clever (smart / original). Each is a
+    // single-field query, so no composite index is needed (mirrors the Fame
+    // board). Built inside _EmojiBoard so the toggle can swap the emoji live.
+    // The negatives (🥱/💩) deliberately stay OFF a public board - a "most
+    // boring" leaderboard is a bigger call than the badges on your own
+    // profile, and is really the separate "biggest shit bag" backlog idea.
+
+    // Just a small breathing gap below the tabs. With extendBodyBehindAppBar
+    // the Scaffold already injects the app-bar height into the body's padding,
+    // so the SafeArea below ALREADY clears the tabs - adding the tab-bar height
+    // here again was double-counting it and left a whole dead row between the
+    // tabs and the first entry. Collapsing the empty toolbar (below) is what
+    // removes the other wasted band.
+    const topPad = 8.0;
 
     return DefaultTabController(
       length: 3,
@@ -86,6 +98,12 @@ class LeaderboardScreen extends StatelessWidget {
           backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
+          // No title lives in the toolbar, so keep it SHORT when embedded - a
+          // small band so the tabs sit a touch below the status bar rather than
+          // jammed against the top edge (the full 56px band pushed the whole
+          // list too far down). The SafeArea below clears whatever height this
+          // is, so the list stays snug under the tabs either way.
+          toolbarHeight: embedded ? 18 : kToolbarHeight,
           automaticallyImplyLeading: !embedded,
           bottom: TabBar(
             // Ranks keeps the neutral accent; Fame the pink so the selected
@@ -101,7 +119,9 @@ class LeaderboardScreen extends StatelessWidget {
             tabs: const [
               Tab(text: 'RANKS'),
               Tab(text: 'FAME'),
-              Tab(text: 'HOTTEST'),
+              // Working label (developer's pick, 2026-10-01) - still provisional
+              // but preferred over "CROWD". Neutral so it covers both 🔥 and 🧠.
+              Tab(text: 'APPLAUSE'),
             ],
           ),
         ),
@@ -132,9 +152,9 @@ class LeaderboardScreen extends StatelessWidget {
             SafeArea(
               child: TabBarView(
                 children: [
-                  _buildPlayers(context, skillQuery, fame: false),
-                  _buildPlayers(context, fameQuery, fame: true),
-                  _buildPlayers(context, hotQuery, fame: false, hot: true),
+                  _buildPlayers(context, skillQuery, fame: false, topPad: topPad),
+                  _buildPlayers(context, fameQuery, fame: true, topPad: topPad),
+                  _EmojiBoard(topPad: topPad),
                 ],
               ),
             ),
@@ -148,7 +168,7 @@ class LeaderboardScreen extends StatelessWidget {
     BuildContext context,
     Query<Map<String, dynamic>> query, {
     required bool fame,
-    bool hot = false,
+    required double topPad,
   }) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: query.snapshots(),
@@ -164,38 +184,26 @@ class LeaderboardScreen extends StatelessWidget {
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) {
           return EmptyState(
-            icon: hot
-                ? Icons.local_fire_department_outlined
-                : fame
-                    ? Icons.favorite_border
-                    : Icons.leaderboard_outlined,
-            title: hot
-                ? 'No fire yet'
-                : fame
-                    ? 'No fans yet'
-                    : 'No one on the board yet',
-            message: hot
-                ? 'Judges hand out \u{1F525} to the funniest performances. '
-                    'Rack them up and you top this board.'
-                : fame
-                    ? 'Get funny in front of a crowd and people will follow '
-                        'you. The most-followed comedians show up here.'
-                    : 'Play a battle and you could be the first name '
-                        'on the board.',
+            icon: fame ? Icons.favorite_border : Icons.leaderboard_outlined,
+            title: fame ? 'No fans yet' : 'No one on the board yet',
+            message: fame
+                ? 'Get funny in front of a crowd and people will follow '
+                    'you. The most-followed comedians show up here.'
+                : 'Play a battle and you could be the first name '
+                    'on the board.',
           );
         }
         final me = FirebaseAuth.instance.currentUser?.uid;
         final onBoard = me != null && docs.any((d) => d.id == me);
-        // The self-row is appended only on the skill board - fame and hottest
-        // are secondary axes where an off-board position is far less
-        // meaningful, and a new account isn't on either (both queries exclude
-        // zero), so there is nothing honest to append.
-        final appendSelf = !fame && !hot && !onBoard && me != null;
+        // The self-row is appended only on the skill board - fame is a
+        // secondary axis where an off-board position is far less meaningful,
+        // and a new account isn't on it (the query excludes zero), so there
+        // is nothing honest to append.
+        final appendSelf = !fame && !onBoard && me != null;
 
         return ListView.separated(
-          // Clears the transparent app bar AND the tab bar above the list.
-          padding: const EdgeInsets.fromLTRB(
-              0, kToolbarHeight + kTextTabBarHeight + 8, 0, 16),
+          // Clears the tab bar above the list (and the toolbar when pushed).
+          padding: EdgeInsets.fromLTRB(0, topPad, 0, 16),
           itemCount: docs.length + (appendSelf ? 1 : 0),
           separatorBuilder: (_, _) => Divider(
             height: 1,
@@ -214,15 +222,200 @@ class LeaderboardScreen extends StatelessWidget {
               wins: data['wins'] as num? ?? 0,
               losses: data['losses'] as num? ?? 0,
               isMe: docs[index].id == me,
-              isGoat: !fame && !hot && data['rankTitle'] == 'GOAT',
+              isGoat: !fame && data['rankTitle'] == 'GOAT',
               fameCount: fame
                   ? ((data['followerCount'] as num?) ?? 0).toInt()
                   : null,
-              hotCount: hot
-                  ? emojiCountOf(
-                      (data['emojiCounts'] as Map?)?.cast<String, dynamic>(),
-                      'fire')
-                  : null,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// The CROWD board: a toggle between the two positive emojis, 🔥 Fire and
+/// 🧠 Clever. Stateful so tapping the toggle swaps the ranked emoji live.
+class _EmojiBoard extends StatefulWidget {
+  const _EmojiBoard({required this.topPad});
+
+  /// Top inset that puts the toggle directly under the tabs.
+  final double topPad;
+
+  @override
+  State<_EmojiBoard> createState() => _EmojiBoardState();
+}
+
+class _EmojiBoardState extends State<_EmojiBoard> {
+  String _key = 'fire';
+
+  @override
+  Widget build(BuildContext context) {
+    final isFire = _key == 'fire';
+    final accent = isFire ? _hotAccent : _cleverAccent;
+    final glyph = isFire ? '\u{1F525}' : '\u{1F9E0}';
+    final query = FirebaseFirestore.instance
+        .collection('users')
+        .where('emojiCounts.$_key', isGreaterThan: 0)
+        .orderBy('emojiCounts.$_key', descending: true)
+        .limit(kBoardSize);
+
+    return Column(
+      children: [
+        // The toggle takes the top-padding role the list has on the other
+        // tabs (clearing the tab bar above).
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, widget.topPad, 16, 8),
+          child: _EmojiToggle(
+            selected: _key,
+            onChanged: (k) => setState(() => _key = k),
+          ),
+        ),
+        Expanded(
+          child: _EmojiList(
+            key: ValueKey(_key),
+            query: query,
+            emojiKey: _key,
+            glyph: glyph,
+            accent: accent,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The 🔥 / 🧠 segmented toggle above the CROWD board.
+class _EmojiToggle extends StatelessWidget {
+  const _EmojiToggle({required this.selected, required this.onChanged});
+
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+            child: _seg('fire', '\u{1F525}', 'On Fire', _hotAccent)),
+        const SizedBox(width: 8),
+        Expanded(
+            child: _seg('clever', '\u{1F9E0}', 'Clever', _cleverAccent)),
+      ],
+    );
+  }
+
+  Widget _seg(String key, String glyph, String label, Color accent) {
+    final on = selected == key;
+    return GestureDetector(
+      onTap: () => onChanged(key),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          color: on
+              ? accent.withValues(alpha: 0.22)
+              : Colors.black.withValues(alpha: 0.35),
+          border: Border.all(
+            color: on ? accent : Colors.white.withValues(alpha: 0.15),
+            width: on ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(glyph, style: const TextStyle(fontSize: 15)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color:
+                    on ? Colors.white : Colors.white.withValues(alpha: 0.6),
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The ranked list for whichever emoji the toggle has selected. Like the
+/// skill/fame lists but with no self-append (a new account has zero of an
+/// emoji, so there is nothing honest to append) and a per-emoji empty state.
+class _EmojiList extends StatelessWidget {
+  const _EmojiList({
+    super.key,
+    required this.query,
+    required this.emojiKey,
+    required this.glyph,
+    required this.accent,
+  });
+
+  final Query<Map<String, dynamic>> query;
+  final String emojiKey;
+  final String glyph;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final isFire = emojiKey == 'fire';
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: query.snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Failed to load leaderboard: ${snapshot.error}'),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) {
+          return EmptyState(
+            icon: isFire
+                ? Icons.local_fire_department_outlined
+                : Icons.psychology_outlined,
+            title: isFire ? 'No fire yet' : 'No clever picks yet',
+            message: isFire
+                ? 'Judges hand out \u{1F525} to the funniest performances. '
+                    'Rack them up and you top this board.'
+                : 'Judges hand out \u{1F9E0} for the smartest, most original '
+                    'material. Earn them and you top this board.',
+          );
+        }
+        final me = FirebaseAuth.instance.currentUser?.uid;
+        return ListView.separated(
+          // The toggle above already clears the app bar / tab bar, so this
+          // list only needs a small top inset.
+          padding: const EdgeInsets.fromLTRB(0, 4, 0, 16),
+          itemCount: docs.length,
+          separatorBuilder: (_, _) => Divider(
+            height: 1,
+            thickness: 0.5,
+            indent: 16,
+            endIndent: 16,
+            color: Colors.white.withValues(alpha: 0.08),
+          ),
+          itemBuilder: (context, index) {
+            final data = docs[index].data();
+            return _Row(
+              uid: docs[index].id,
+              position: index + 1,
+              username: data['username'] as String? ?? 'Roaster',
+              wins: data['wins'] as num? ?? 0,
+              losses: data['losses'] as num? ?? 0,
+              isMe: docs[index].id == me,
+              emojiCount: emojiCountOf(
+                (data['emojiCounts'] as Map?)?.cast<String, dynamic>(),
+                emojiKey,
+              ),
+              emojiGlyph: glyph,
+              emojiColor: accent,
             );
           },
         );
@@ -249,7 +442,9 @@ class _Row extends StatelessWidget {
     this.isGoat = false,
     this.uid,
     this.fameCount,
-    this.hotCount,
+    this.emojiCount,
+    this.emojiGlyph,
+    this.emojiColor,
   });
 
   final int position;
@@ -270,26 +465,31 @@ class _Row extends StatelessWidget {
   /// (in pink) instead of the win-loss record.
   final int? fameCount;
 
-  /// When non-null this is a HOTTEST row: the trailing shows this 🔥 count.
-  final int? hotCount;
+  /// When non-null this is a CROWD (emoji) row: the trailing shows this emoji
+  /// count, using [emojiGlyph] and [emojiColor] (fire orange or clever cyan).
+  final int? emojiCount;
+  final String? emojiGlyph;
+  final Color? emojiColor;
 
   VoidCallback? _tap(BuildContext context) => uid == null
       ? null
       : () => PerformerProfileScreen.open(context, uid!, username: username);
 
-  /// Trailing content: a follower count on Fame, a 🔥 count on Hottest, else
+  /// Trailing content: a follower count on Fame, an emoji count on CROWD, else
   /// the win-loss record.
   Widget _trailing(TextTheme text, {required Color recordColor}) {
-    if (hotCount != null) {
+    if (emojiCount != null) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('\u{1F525}', style: TextStyle(fontSize: 13)),
+          Text(emojiGlyph ?? '\u{1F525}',
+              style: const TextStyle(fontSize: 13)),
           const SizedBox(width: 4),
           Text(
-            '$hotCount',
-            style: text.bodyMedium
-                ?.copyWith(color: _hotAccent, fontWeight: FontWeight.w800),
+            '$emojiCount',
+            style: text.bodyMedium?.copyWith(
+                color: emojiColor ?? _hotAccent,
+                fontWeight: FontWeight.w800),
           ),
         ],
       );

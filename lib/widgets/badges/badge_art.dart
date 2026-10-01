@@ -33,10 +33,28 @@ class BadgeArt extends StatelessWidget {
         BadgeMetric.wins => Icons.local_fire_department,
         BadgeMetric.battlesPlayed => Icons.sports_mma,
         BadgeMetric.voteStreakDays => Icons.gavel,
+        // Never reached for the emoji awards (they render the glyph medallion),
+        // but the switch must be exhaustive.
+        BadgeMetric.topFire ||
+        BadgeMetric.topClever ||
+        BadgeMetric.topBoring ||
+        BadgeMetric.topTrash =>
+          Icons.emoji_events,
       };
 
   @override
   Widget build(BuildContext context) {
+    // Emoji superlative awards have no PNG - they render the glyph in a
+    // medallion (gold for the chase emojis, tarnished grey for the negatives).
+    if (def.emoji != null) {
+      final medal = _emojiMedallion();
+      if (earned) return medal;
+      return Opacity(
+        opacity: 0.4,
+        child: ColorFiltered(colorFilter: _grey, child: medal),
+      );
+    }
+
     final art = Image.asset(
       'assets/badges/${def.id}.png',
       width: size,
@@ -49,6 +67,40 @@ class BadgeArt extends StatelessWidget {
     return Opacity(
       opacity: 0.4,
       child: ColorFiltered(colorFilter: _grey, child: art),
+    );
+  }
+
+  /// A medallion with the award's emoji glyph. Positives (🔥/🧠) get the gold
+  /// disc; negatives (🥱/💩) get a tarnished grey disc so a 💩 trophy never
+  /// reads as a gold honour - matching the emoji-badge medals elsewhere.
+  Widget _emojiMedallion() {
+    final positive = def.emoji == '🔥' || def.emoji == '🧠';
+    final accent =
+        positive ? const Color(0xFFF4C838) : const Color(0xFF9198A3);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: positive
+            ? const RadialGradient(
+                center: Alignment(-0.3, -0.4),
+                radius: 0.95,
+                colors: [Color(0xFF3A2F14), Color(0xFF1A1508)],
+              )
+            : const RadialGradient(
+                center: Alignment(-0.3, -0.4),
+                radius: 0.95,
+                colors: [Color(0xFF2A2C30), Color(0xFF131416)],
+              ),
+        border: Border.all(color: accent.withValues(alpha: 0.85), width: 2),
+        boxShadow: earned
+            ? [BoxShadow(color: accent.withValues(alpha: 0.30), blurRadius: 10)]
+            : null,
+      ),
+      child: Center(
+        child: Text(def.emoji!, style: TextStyle(fontSize: size * 0.42)),
+      ),
     );
   }
 

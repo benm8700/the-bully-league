@@ -496,6 +496,20 @@ exports.aggregateMatchStats = onSchedule("every 24 hours", async () => {
   }
 });
 
+// Stamps the permanent "ever been #1 in an emoji" awards on each emoji's
+// current top holder (see emojiTopAwards.js). Every 6 hours rather than daily
+// so brief lead changes are still caught - the award is earned-and-kept, so
+// catching more leaders means more players collect it over time.
+exports.awardEmojiTopAwards = onSchedule("every 6 hours", async () => {
+  const {awardEmojiTopTitles} = require("./emojiTopAwards");
+  try {
+    const result = await awardEmojiTopTitles();
+    console.log("awardEmojiTopAwards:", JSON.stringify(result));
+  } catch (err) {
+    console.error("awardEmojiTopAwards failed:", err);
+  }
+});
+
 /**
  * The daily window's "it's starting" push, plus a last call before it
  * closes. Polls every 5 minutes rather than firing on a 6pm cron, because

@@ -76,6 +76,8 @@ const JOBS = [
   {name: "sweepClimb", mod: "../climbPlay", fn: "sweepClimb"},
   {name: "sweepGauntlet", mod: "../swissPlay", fn: "sweepGauntlet"},
   {name: "aggregateMatchStats", mod: "../matchStats", fn: "aggregateMatchStats"},
+  {name: "awardEmojiTopAwards", mod: "../emojiTopAwards",
+    fn: "awardEmojiTopTitles"},
   {name: "dailyRewardReminder", mod: "../dailyRewardReminder",
     fn: "sendDailyRewardReminder"},
 ];

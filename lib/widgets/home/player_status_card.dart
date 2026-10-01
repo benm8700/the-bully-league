@@ -128,7 +128,10 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
               maxLines: 1,
               softWrap: false,
               style: const TextStyle(
-                fontSize: 12.5,
+                // Larger now that the pill spans the FULL card width (its own
+                // row below the HUD) rather than the narrow rank column. The
+                // FittedBox still scales it down on very narrow phones.
+                fontSize: 18,
                 color: Color(0xFFD7D7D7),
                 fontWeight: FontWeight.w600,
               ),
@@ -215,7 +218,9 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
             ),
           ),
         ),
-        _emojiPill(context),
+        // The emoji pill was HERE, in the narrow rank column - it now sits on
+        // its own full-width row below the whole HUD (see build), so the four
+        // emojis render far larger.
       ],
     );
 
@@ -294,7 +299,10 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
           // Tight vertical padding keeps this a compact HUD (~15% shorter than
           // before) even with the larger badge; the badge is the height driver.
           padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-          child: IntrinsicHeight(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -347,6 +355,9 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
                 ],
               ],
             ),
+              ),
+              _emojiPill(context),
+            ],
           ),
         ),
       ],

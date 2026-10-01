@@ -50,7 +50,7 @@ service cloud.firestore {
           'careerRankedMatches', 'skipsUsedToday', 'skipsResetDate',
           'takedowns', 'lastNotifiedRankTitle', 'lastSeenRankTitle',
           'dailyReward', 'followerCount', 'lastSeenFameMilestone',
-          'emojiCounts', 'votesCast',
+          'emojiCounts', 'votesCast', 'emojiTopAwards',
         ]);
 
       // Uses .get(field, default) rather than direct field access - a
@@ -184,6 +184,12 @@ service cloud.firestore {
         // nickname - so a client able to write them could crown itself.
         request.resource.data.get('emojiCounts', null) ==
           resource.data.get('emojiCounts', null) &&
+        // The permanent "ever been #1 in an emoji" awards, stamped only by the
+        // awardEmojiTopAwards sweep (Admin SDK). Derived from emojiCounts, so
+        // a client able to write them could crown itself The Inferno / Biggest
+        // Shit Bag without ever topping the board.
+        request.resource.data.get('emojiTopAwards', null) ==
+          resource.data.get('emojiTopAwards', null) &&
         request.resource.data.get('clipCredits', null) ==
           resource.data.get('clipCredits', null) &&
         // The username, and its lowercased search copy. Written only by
