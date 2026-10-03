@@ -9,12 +9,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/badges/badges.dart';
+import '../../core/emoji_ratings.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../widgets/badges/badge_case.dart';
 import '../../widgets/emoji_stats_card.dart';
 import '../account/delete_account_screen.dart';
+import 'emoji_scrub_sheet.dart';
 import 'form_card.dart';
 import 'intro_video_card.dart';
 
@@ -113,6 +115,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _loading = false;
       });
     }
+  }
+
+  /// Whether this player has any negative emoji ratings (🥱/💩) to clean up -
+  /// gates the "Clean up bad ratings" action. Derived from the removable set,
+  /// so a future negative emoji is covered automatically.
+  bool get _hasNegativeRatings {
+    final counts =
+        (_userData?['emojiCounts'] as Map?)?.cast<String, dynamic>();
+    for (final r in kRemovableEmojiRatings) {
+      if (emojiCountOf(counts, r.key) > 0) return true;
+    }
+    return false;
   }
 
   /// Written immediately rather than waiting for Save. Someone switching
@@ -404,6 +418,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         counts: (_userData?['emojiCounts'] as Map?)
                             ?.cast<String, dynamic>(),
                       ),
+                      // Spend points to shave down your negative ratings
+                      // (🥱/💩). Shown only when there is something to clean up,
+                      // on your OWN profile only (the sheet writes via a Cloud
+                      // Function). A quiet secondary action, not a pitch.
+                      if (_hasNegativeRatings) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: () async {
+                              await EmojiScrubSheet.show(context);
+                              await _loadProfile();
+                            },
+                            icon: const Icon(Icons.cleaning_services, size: 16),
+                            label: const Text('Clean up bad ratings'),
+                            style: TextButton.styleFrom(
+                              foregroundColor:
+                                  Colors.white.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 20),
                       BadgeCase(
                         stats: BadgeStats.fromUser(_userData),

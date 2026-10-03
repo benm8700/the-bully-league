@@ -876,24 +876,33 @@ Raised by the developer: what protects someone who is unhappy that their match f
     - **Verified by running the real sweep against real Firestore**: an open round is announced to both players and marked on the bracket, a second sweep says nothing, near the deadline only the absentee is warned, nobody is chased once both have checked in, and closed or decided rounds send nothing. **7 live checks plus 15 local tests.**
 
 ## Problems To Solve Later (Backlog — flagged during planning, not yet designed)
-- **PLAYER STATUS CARD — REVISIT / POSSIBLE OVERHAUL (2026-09-29, developer).**
-  The developer wants to revisit the Home rank card (`PlayerStatusCard`,
-  `lib/widgets/home/player_status_card.dart`) design later - either a full
-  overhaul or tweaks. **The specific open question that prompted this: the four
-  emoji percentages (🔥/🧠/🥱/💩) now appear BOTH on the Home card AND on the
-  Profile "Crowd read" card (`EmojiStatsCard`), which is mildly redundant.** It
-  is only a PARTIAL duplication - the Profile card also carries the auto-nickname
-  and the emoji medals/badges, which Home does not, so today it reads as
-  summary (Home) vs full-breakdown (Profile). The proposed clean de-dup (NOT yet
-  applied, developer deferred it): make each surface show a DIFFERENT cut - Home
-  keeps the percentages (the glance), Profile drops the percentages and leads
-  with nickname + raw counts + medals - so they complement rather than echo.
-  Two other options were on the table: keep both fully as-is, or pull the pill
-  off Home entirely. Capture for now; decide alongside any card redesign.
-  Context: the emoji pill was just enlarged (2026-09-29) - moved to its own
-  full-width row below the HUD at fontSize 18 - because it was being shrunk to
-  ~6px inside the narrow rank column; whatever the redesign does, keep it
-  legible at that size.
+- **EMOJI STUFF IS NOW PROFILE-ONLY; HOME SIMPLIFIED (2026-10-03, developer's
+  call, superseding the earlier Option-1 de-dup).** The developer decided the
+  emoji ratings make Home "clunky", so **the emoji pill was REMOVED from the
+  Home `PlayerStatusCard` entirely** - Home is now just the rank crest + title
+  + XP bar + global rank. All emoji identity lives ONLY on the Profile "Crowd
+  read" card (`EmojiStatsCard`), on both the own and performer profiles.
+  - **The Profile card gained the TAP-TO-TOGGLE the Home pill used to have.**
+    `EmojiStatsCard` is now stateful: the per-emoji primary number flips
+    between each emoji's SHARE (%) and the raw TOTAL received on a tap of the
+    card, defaulting to the share (same default Home had). No "tap to..." hint
+    text (developer removed it 2026-10-03 as too obvious); the toggle is just
+    discoverable by tapping. The medals + earned-tier names + auto-nickname are
+    unchanged. Totals abbreviate (`_abbrevCount`:
+    142 -> "142", 61000 -> "61k") so a big number never overflows the narrow
+    column.
+  - Files: `lib/widgets/home/player_status_card.dart` (dropped `_emojiPill`,
+    `_emojiCounts`, `_showEmojiCounts`, the emoji read in `_loadRank`, the
+    `emoji_ratings.dart` import and the now-unused `_abbrev`); and
+    `lib/widgets/emoji_stats_card.dart` (StatelessWidget -> StatefulWidget with
+    the toggle). Analyzer clean.
+  - **Device-verified on the Moto (MedalMoto)**: Home shows no emoji row (just
+    rank/XP/#5); Profile shows the medals with 55%/34%/7%/4% + "The Headliner"
+    + "Tap to show totals", and tapping flips to 142/88/17/9 + "Tap to show
+    share %".
+  - **STILL OPEN**: the developer wanted to revisit the whole Home rank-card
+    design later (a full overhaul or further tweaks); that larger pass is
+    unchanged by this.
 - **APP LAUNCHER ICON — NOT DESIGNED (2026-09-28, developer).** The actual
   app icon (the `com.bullyleague.app` launcher/exe icon on the home screen and
   in the store listing) is still the Flutter default. Needs a real designed
@@ -946,23 +955,53 @@ Raised by the developer: what protects someone who is unhappy that their match f
     system's existing deliberate override. Widening from #1-only to top-N is an
     easy follow-up if wanted. (Public-profile display was considered and
     DECLINED - these stay own-profile-only, see above.)
-- **SPEND POINTS TO REMOVE BAD EMOJIS — NEW IDEA (2026-09-28, developer),
-  capture only.** Let a player spend points to shave down (or clear some of)
-  their NEGATIVE emoji counts (🥱 Boring / 💩 Trash) — a points sink that also
-  softens the sting of the public negative counts the emoji system deliberately
-  exposes. Fits the open "points need a real sink" thread and the newly-earnable
-  negative badges (a way to walk back a 💩 Dumpster medal you'd rather not
-  wear). NOT designed, and it carries real tension worth flagging before it is
-  built: (1) `emojiCounts` is server-only in `firestore.rules` and would need a
-  dedicated Cloud Function (points-spend through the existing `pointsBalance` +
-  idempotent ledger path, like the day pass/clip grant) — never a client write;
-  (2) it makes the Crowd-read percentages and the Hottest/superlative surfaces
-  buyable rather than earned, so the counts stop being an honest audience
-  signal — decide whether removals are capped, decay-only, or visibly marked;
-  (3) it partly undoes the whole point of showing negatives (self-aware comedy),
-  so it may cheapen the 💩-as-a-badge-of-honour framing the developer otherwise
-  leans into. Price/mechanics all provisional and part of the advisor economy
-  review. Capture for now; design later.
+- **SPEND POINTS TO REMOVE BAD EMOJIS — BUILT (2026-10-03).** Players can spend
+  points to shave down their NEGATIVE emoji counts (🥱 Boring / 💩 Trash) - a
+  points sink that softens the sting of the public negatives the emoji system
+  deliberately exposes.
+  - **Server** (`functions/emojiScrub.js`, callables `scrubEmojiRating` +
+    `getEmojiScrubState`): `emojiCounts` is server-only in `firestore.rules`, so
+    this is the ONLY write path. A transaction reads the user, clamps the
+    removal four ways (requested / current count / daily cap / what the balance
+    affords), decrements `emojiCounts.<key>` (merge, so only that key changes)
+    and `pointsBalance`, bumps a daily counter `emojiScrub:{day,count}`, and
+    writes an idempotent `pointsLedger/emojiScrub_<requestId>` entry (a
+    client-supplied nonce makes a network retry a no-op). The pure `scrubPlan`
+    clamp is unit-tested (9 checks, `functions/test/emojiScrub.test.js`).
+  - **EXTENSIBLE, per the developer's explicit ask**: "which emojis are
+    removable" is DERIVED from the shared `RATINGS` - any rating whose `positive`
+    flag is false (`removableEmojiKeys()` server, `kRemovableEmojiRatings`
+    client). Add a new negative emoji to `emojiRatings.js` + its client mirror
+    and it becomes removable everywhere automatically, no change to the scrub
+    code or the UI.
+  - **The honesty guardrail is a DAILY CAP + a per-emoji PRICE**, both live
+    config in `config/pointsSettings` (`emojiScrubPrice` default **50 per
+    single removal** - the client removes ONE at a time so each is a deliberate,
+    costly choice; `emojiScrubMaxPerDay` default 25, `emojiScrubEnabled` kill
+    switch) and bounds-checked like the rest - PLACEHOLDER numbers for the
+    advisor economy review. The price is UNIFORM across every removable emoji
+    (one setting), so both 🥱 and 💩 (and any future negative) cost the same.
+    This is the chosen answer to the flagged "capped / decay / marked"
+    question: capped by price, not buyable-to-zero-instantly (at 50 each, ~a
+    quarter of a day's earnings per removal, the daily cap is now just a
+    backstop). Already-earned superlative
+    awards are earned-and-kept, so scrubbing never removes an award you hold; it
+    only lowers your live count (which can let you dodge NEWLY earning Biggest
+    Shit Bag before the sweep - acceptable).
+  - **`emojiScrub` is protected in `firestore.rules`** (create denylist + update
+    immutability) - a client that could reset the daily counter would bypass the
+    cap.
+  - **Client**: a quiet "Clean up bad ratings" TextButton on the OWN profile
+    under the Crowd-read card (shown only when a negative count > 0), opening
+    `EmojiScrubSheet` - one row per negative emoji with its count and a
+    "Remove N · M pts" button that re-clamps live. `EmojiScrubService` wraps the
+    callables. Not on the performer/public profile (own-profile action only).
+  - **Device-verified on the Moto (MedalMoto)**: both negative rows read
+    "Remove 1 · 50 pts"; an earlier run at the interim 10-for-5 pricing removed
+    5 Trash (balance 500→450, Trash 9→4) and the Crowd-read card reflected it
+    (💩 4%→2%) on sheet close. **Not run: coreLoop** - the
+    `points.js` change is additive config only (new DEFAULTS/LIMITS keys +
+    `emojiScrubEnabled` handling), `awardPoints` itself untouched.
 - **ELITE TOP-TIER LEAGUE (rank 9 + GOAT only) — BUILT (2026-09-18).** A
   rank-gated showcase mode only Featured Talent and GOAT may enter, mimicking
   ranked (recorded, clippable, moves the hidden Elo, finalizes normally) but
@@ -3627,7 +3666,14 @@ Roast = pink glow; dark breathing room between them, no "OR" divider. The
 card aspect ratios match the art (tournament 1:1, roast 3:2) so the side
 banners/faces are not cropped. The Roast "VS" sits above the title via
 `centerAlignment: Alignment(0, -0.5)` (it overlapped the title at dead
-centre).
+centre). **BOTH hero pills now carry a top-right "?" help explainer
+(2026-10-03, developer's call for continuity).** The tournament one
+(`_showTournamentInfo` in event_window_banner.dart) was there already; the
+Roast a Stranger one (`_showRoastInfo` in hero_mode_card.dart, wired via
+`HeroModeCard`'s existing `topRight` slot) was added to match - same
+`Icons.help_outline` at iconSize 28 on a black-0.42 disc, opening an
+`AlertDialog` with pink section headings (How it works / How you win / Keep
+it funny) explaining the ranked random 1-on-1. Device-verified on the Moto.
 
 **HEADER — wordmark + tagline + bell + profile avatar.** The AppBar is now
 two lines ("The Bully League" over "REAL PEOPLE. REAL ROASTS.",

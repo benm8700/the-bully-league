@@ -28,6 +28,13 @@ const List<EmojiRating> kEmojiRatings = [
   EmojiRating('trash', '\u{1F4A9}', 'Trash', 'Overall bad performance', false),
 ];
 
+/// The ratings a player can pay to clean up - the NEGATIVE ones. DERIVED from
+/// the `positive` flag (not a hardcoded list), so adding a new negative emoji
+/// above makes it removable here automatically - matching removableEmojiKeys()
+/// in functions/emojiScrub.js.
+List<EmojiRating> get kRemovableEmojiRatings =>
+    kEmojiRatings.where((r) => !r.positive).toList();
+
 /// The emoji character for a rating key, or empty if unknown.
 String emojiCharFor(String key) {
   for (final r in kEmojiRatings) {

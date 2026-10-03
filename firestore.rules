@@ -50,7 +50,7 @@ service cloud.firestore {
           'careerRankedMatches', 'skipsUsedToday', 'skipsResetDate',
           'takedowns', 'lastNotifiedRankTitle', 'lastSeenRankTitle',
           'dailyReward', 'followerCount', 'lastSeenFameMilestone',
-          'emojiCounts', 'votesCast', 'emojiTopAwards',
+          'emojiCounts', 'votesCast', 'emojiTopAwards', 'emojiScrub',
         ]);
 
       // Uses .get(field, default) rather than direct field access - a
@@ -190,6 +190,12 @@ service cloud.firestore {
         // Shit Bag without ever topping the board.
         request.resource.data.get('emojiTopAwards', null) ==
           resource.data.get('emojiTopAwards', null) &&
+        // The daily emoji-cleanup counter ({day, count}), written only by
+        // scrubEmojiRating. A client that could reset it would bypass the daily
+        // cap and scrub its negative counts without limit - buying a clean
+        // public identity, which the cap exists to prevent.
+        request.resource.data.get('emojiScrub', null) ==
+          resource.data.get('emojiScrub', null) &&
         request.resource.data.get('clipCredits', null) ==
           resource.data.get('clipCredits', null) &&
         // The username, and its lowercased search copy. Written only by

@@ -97,6 +97,17 @@ const DEFAULTS = {
    * removing a feature people already rely on is exactly the move that
    * needs to be instant. */
   dayPassEnabled: true,
+  /** EMOJI CLEANUP (spend points to remove a NEGATIVE emoji - 🥱/💩).
+   *
+   * emojiScrubPrice is the points cost per ONE emoji removed; emojiScrubMaxPerDay
+   * caps how many can be removed in a Pacific day, which is what keeps the
+   * public counts (Crowd-read %, APPLAUSE board, superlative awards) from
+   * becoming freely buyable rather than earned. Both are PLACEHOLDERS to tune
+   * against real earning rates. emojiScrubEnabled is the kill switch, like
+   * dayPassEnabled - only an explicit false disables it. */
+  emojiScrubPrice: 50,
+  emojiScrubMaxPerDay: 25,
+  emojiScrubEnabled: true,
 };
 
 const LIMITS = {
@@ -112,6 +123,8 @@ const LIMITS = {
   // the incentive that gets matches judged in the first place.
   votePointsPerDay: {min: 1, max: 1000},
   dayPassPrice: {min: 1, max: 100000},
+  emojiScrubPrice: {min: 1, max: 100000},
+  emojiScrubMaxPerDay: {min: 1, max: 100000},
 };
 
 function readPointsSettings(data) {
@@ -121,6 +134,7 @@ function readPointsSettings(data) {
   // explicit false switches this off - a typo must not silently disable a
   // live feature.
   if (data.dayPassEnabled === false) out.dayPassEnabled = false;
+  if (data.emojiScrubEnabled === false) out.emojiScrubEnabled = false;
   for (const [key, limit] of Object.entries(LIMITS)) {
     const value = data[key];
     // Per-field fallback, so one bad value never discards a whole good

@@ -2,23 +2,36 @@ import 'package:flutter/material.dart';
 
 import '../core/emoji_ratings.dart';
 
-/// A player's audience-emoji identity in ONE card (developer's call,
-/// 2026-09-29 - merged with the old separate "Crowd badges" row, which
-/// duplicated these same four emojis). Each emoji is drawn as its MEDAL - gold
-/// for the two positives (🔥/🧠) once a tier is earned, tarnished grey for the
-/// two negatives (🥱/💩), dim until earned - with its count, its share of the
-/// mix, and the earned tier name beneath. The auto-nickname sits centred below.
-class EmojiStatsCard extends StatelessWidget {
+/// A player's audience-emoji identity in ONE card. Each emoji is drawn as its
+/// MEDAL - gold for the two positives (🔥/🧠) once a tier is earned, tarnished
+/// grey for the two negatives (🥱/💩), dim until earned - with its primary
+/// number and the earned tier name beneath. The auto-nickname sits centred
+/// below. The emoji numbers now live ONLY here (pulled off the Home card to
+/// keep Home simple, developer's call 2026-10-03).
+///
+/// TAP TO TOGGLE: the primary number flips between each emoji's SHARE (%) and
+/// the raw TOTAL received, mirroring the toggle the Home pill used to have.
+/// Default is the share, same as Home's old default.
+class EmojiStatsCard extends StatefulWidget {
   const EmojiStatsCard({super.key, required this.counts});
 
   /// The user document's emojiCounts map (may be null/partial).
   final Map<String, dynamic>? counts;
 
-  static const _gold = Color(0xFFF4C838);
-  static const _tarnish = Color(0xFF9198A3);
+  static const gold = Color(0xFFF4C838);
+  static const tarnish = Color(0xFF9198A3);
+
+  @override
+  State<EmojiStatsCard> createState() => _EmojiStatsCardState();
+}
+
+class _EmojiStatsCardState extends State<EmojiStatsCard> {
+  /// false = show each emoji's share (%); true = show the raw total received.
+  bool _showCounts = false;
 
   @override
   Widget build(BuildContext context) {
+    final counts = widget.counts;
     final text = Theme.of(context).textTheme;
     final total = emojiTotalOf(counts);
     final nickname = emojiNicknameOf(counts);
@@ -27,7 +40,7 @@ class EmojiStatsCard extends StatelessWidget {
       for (final s in emojiBadgeSlots(counts)) s.emojiKey: s,
     };
 
-    return Container(
+    final card = Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -51,9 +64,12 @@ class EmojiStatsCard extends StatelessWidget {
                         child: _EmojiColumn(
                           rating: r,
                           slot: slots[r.key]!,
+                          showCounts: _showCounts,
                           count: emojiCountOf(counts, r.key),
                           percent: percents[r.key]!,
-                          accent: r.positive ? _gold : _tarnish,
+                          accent: r.positive
+                              ? EmojiStatsCard.gold
+                              : EmojiStatsCard.tarnish,
                         ),
                       ),
                   ],
@@ -72,6 +88,14 @@ class EmojiStatsCard extends StatelessWidget {
               ],
             ),
     );
+
+    // Only tappable once there is something to toggle.
+    if (total == 0) return card;
+    return GestureDetector(
+      onTap: () => setState(() => _showCounts = !_showCounts),
+      behavior: HitTestBehavior.opaque,
+      child: card,
+    );
   }
 }
 
@@ -79,6 +103,7 @@ class _EmojiColumn extends StatelessWidget {
   const _EmojiColumn({
     required this.rating,
     required this.slot,
+    required this.showCounts,
     required this.count,
     required this.percent,
     required this.accent,
@@ -86,6 +111,7 @@ class _EmojiColumn extends StatelessWidget {
 
   final EmojiRating rating;
   final EmojiBadgeSlot slot;
+  final bool showCounts;
   final int count;
   final int percent;
   final Color accent;
@@ -99,18 +125,10 @@ class _EmojiColumn extends StatelessWidget {
         _Medal(emoji: rating.emoji, earned: earned, accent: accent),
         const SizedBox(height: 6),
         Text(
-          '$count',
+          showCounts ? _abbrevCount(count) : '$percent%',
           style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
         ),
-        Text(
-          '$percent%',
-          style: text.bodySmall?.copyWith(
-            color: rating.positive
-                ? const Color(0xFF6FE39A)
-                : Colors.white.withValues(alpha: 0.5),
-          ),
-        ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 4),
         // The earned tier name (Spark / Bright / ...), or a muted dash while
         // still locked - keeps the four columns aligned.
         Text(
@@ -122,8 +140,8 @@ class _EmojiColumn extends StatelessWidget {
             fontSize: 11,
             fontWeight: earned ? FontWeight.w700 : FontWeight.w400,
             color: earned
-                ? (accent == EmojiStatsCard._gold
-                    ? EmojiStatsCard._gold
+                ? (accent == EmojiStatsCard.gold
+                    ? EmojiStatsCard.gold
                     : Colors.white.withValues(alpha: 0.72))
                 : Colors.white.withValues(alpha: 0.28),
           ),
@@ -131,6 +149,24 @@ class _EmojiColumn extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Compact totals so a big number never overflows the narrow column:
+/// 142 -> "142", 3000 -> "3k", 61000 -> "61k", 1500 -> "1.5k".
+String _abbrevCount(int n) {
+  if (n < 1000) return '$n';
+  if (n < 1000000) {
+    final k = n / 1000;
+    final s = k >= 10 || k == k.roundToDouble()
+        ? k.round().toString()
+        : k.toStringAsFixed(1);
+    return '${s}k';
+  }
+  final m = n / 1000000;
+  final s = m >= 10 || m == m.roundToDouble()
+      ? m.round().toString()
+      : m.toStringAsFixed(1);
+  return '${s}m';
 }
 
 /// The compact medallion: the emoji glyph in an [accent]-rimmed disc when a
@@ -148,7 +184,7 @@ class _Medal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gold = accent == EmojiStatsCard._gold;
+    final gold = accent == EmojiStatsCard.gold;
     final discColors = gold
         ? const [Color(0xFF3A2F14), Color(0xFF1A1508)]
         : const [Color(0xFF2C2C33), Color(0xFF151519)];

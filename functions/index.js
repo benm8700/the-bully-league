@@ -1311,6 +1311,18 @@ exports.getDayPassState = onCall((request) => {
   return getDayPassState(request.auth);
 });
 
+// Spend points to clean up a negative emoji rating (🥱/💩). emojiCounts is
+// server-only, so this is the only write path; see functions/emojiScrub.js.
+exports.scrubEmojiRating = onCall((request) => {
+  const {scrubEmojiRating} = require("./emojiScrub");
+  return scrubEmojiRating(request.auth, request.data);
+});
+
+exports.getEmojiScrubState = onCall((request) => {
+  const {getEmojiScrubState} = require("./emojiScrub");
+  return getEmojiScrubState(request.auth);
+});
+
 /**
  * Free Rewards: a daily login reward, claimed once per Pacific day, on an
  * escalating 7-day cycle - see functions/dailyReward.js. Server-minted

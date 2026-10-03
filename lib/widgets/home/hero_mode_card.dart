@@ -299,6 +299,19 @@ class RoastHero extends StatelessWidget {
       // is untouched.
       aspectRatio: 5 / 3,
       onTap: onFindMatch,
+      // A "?" explainer pinned top-right, matching the tournament hero's for
+      // continuity - same icon, size, and dark disc.
+      topRight: IconButton(
+        icon: const Icon(Icons.help_outline),
+        iconSize: 28,
+        color: Colors.white,
+        tooltip: 'About Roast a Stranger',
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.black.withValues(alpha: 0.42),
+          padding: const EdgeInsets.all(6),
+        ),
+        onPressed: () => _showRoastInfo(context, accent),
+      ),
       centerAlignment: const Alignment(0, -0.5),
       center: Text(
         'VS',
@@ -338,6 +351,72 @@ class RoastHero extends StatelessWidget {
               icon: const Icon(Icons.bolt, size: 20),
               label: const Text('FIND A MATCH'),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Explains the Roast a Stranger mode: what it is, how a battle runs, how you
+  /// win, and the comedy line. Opened by the "?" top-right, mirroring the
+  /// tournament hero's explainer.
+  void _showRoastInfo(BuildContext context, Color accent) {
+    final body = Theme.of(context).textTheme.bodyMedium;
+    Widget heading(String label) => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: accent,
+                ),
+          ),
+        );
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Roast a Stranger'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Get matched with a random opponent for a live, one-on-one '
+                'roast battle. No bracket, no waiting for the hour - just you, '
+                'them, and a crowd to settle it.',
+                style: body,
+              ),
+              const SizedBox(height: 16),
+              heading('How it works'),
+              Text(
+                'You take turns roasting each other on camera. Before the bell '
+                'you get to watch their intro video, so you walk in with ammo '
+                'instead of winging it. The whole thing is recorded.',
+                style: body,
+              ),
+              const SizedBox(height: 16),
+              heading('How you win'),
+              Text(
+                'The crowd watches and votes - most votes takes it. These are '
+                'rated, so a win climbs your rank and a loss costs you, and '
+                'your best moments can become a clip you can post.',
+                style: body,
+              ),
+              const SizedBox(height: 16),
+              heading('Keep it funny'),
+              Text(
+                'Go as hard as you want - it is comedy. However, deliberate '
+                'hate or harassment will not be tolerated.',
+                style: body,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got it'),
           ),
         ],
       ),
