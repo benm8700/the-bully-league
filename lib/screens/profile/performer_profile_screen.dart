@@ -3,8 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/follows_service.dart';
+import '../../core/social_links.dart';
 import '../../widgets/belt_flair.dart';
 import '../../widgets/emoji_stats_card.dart';
+import '../../widgets/social_links_section.dart';
 import '../../widgets/follow_button.dart';
 import '../../widgets/home/rank_badges.dart';
 import '../../widgets/match_clip_player.dart';
@@ -113,6 +115,10 @@ class PerformerProfileScreen extends StatelessWidget {
               EmojiStatsCard(
                 counts: (user?['emojiCounts'] as Map?)?.cast<String, dynamic>(),
               ),
+              if (socialLinksOf(user).isNotEmpty) ...[
+                const SizedBox(height: 30),
+                SocialLinksSection(links: socialLinksOf(user)),
+              ],
               const SizedBox(height: 30),
               _ClipsSection(uid: uid),
             ],

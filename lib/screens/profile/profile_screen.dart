@@ -10,12 +10,14 @@ import 'package:provider/provider.dart';
 
 import '../../core/badges/badges.dart';
 import '../../core/emoji_ratings.dart';
+import '../../core/social_links.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../widgets/badges/badge_case.dart';
 import '../../widgets/belt_flair.dart';
 import '../../widgets/emoji_stats_card.dart';
+import '../../widgets/social_links_editor.dart';
 import '../account/delete_account_screen.dart';
 import 'emoji_scrub_sheet.dart';
 import 'form_card.dart';
@@ -539,6 +541,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           : const Text('Save'),
                     ),
                     const SizedBox(height: 28),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    // Curated external links (socials / tickets) shown on the
+                    // fame page - the payoff of being followed. Its own save,
+                    // separate from the profile-field Save above.
+                    SocialLinksEditor(
+                      initialLinks: socialLinksOf(_userData),
+                      onSaved: _loadProfile,
+                    ),
+                    const SizedBox(height: 16),
                     const Divider(),
                     const SizedBox(height: 8),
                     // Referral bits live down here, not at the top - inviting a

@@ -4084,13 +4084,54 @@ never currency or power.
   to "Following"; the Fame tab then listed PlayerTwo at #1 with "❤ 1". The two
   fresh callables/triggers deployed with no manual IAM fix.
 
-**NOT built (fast-follows):** Follow buttons on the live spectator view, a
-completed battle (opponent), and Judge-feed clips (the Ranks/Fame board is the
-V1 discovery path); the follower count next to names in the live "Tonight's
-Talent" lineup; external links (curated handles); performer-authored "I'm live"
-broadcasts to followers (a possible future creator/subscriber perk); and clips
-actually rendering on the profile (the index is ready, but beta has no
-published clips to show). Fame is also the front of the FUTURE creator-economy
+**FAST-FOLLOWS — NOW BUILT (doc corrected 2026-10-04).** The follow button is
+wired into every discovery surface, reusing `FollowButton(compact: true)`:
+- **Judge feed** (`feed_page.dart`) - a person-add icon on the right rail opens
+  a "Follow a roaster" sheet listing both players with inline Follow pills
+  (each row also taps through to the fame page).
+- **Live spectator view** (`live_viewer_screen.dart`) - each performer's name +
+  a compact Follow button, "so the crowd can back a performer right from the
+  live battle".
+- **My Battles** (`my_battles_screen.dart`) - a Follow pill for the opponent on
+  each battle card.
+- **"Tonight's Talent" lineup** (`watch_live_list.dart`) - a ❤ follower count
+  under each performer's name, served by `spectator.js` (`player1Followers` /
+  `player2Followers` off the authoritative `followerCount`) - verified it is
+  actually populated, not a dead field.
+- **Fame page** (`performer_profile_screen.dart`) - the primary Follow surface.
+
+**Deliberately NOT on the vote-queue screen** (`vote_screen.dart`): it is a
+focused JUDGING surface, and following a player before judging their battle
+could bias the vote (the same reason the live tally is hidden there). The feed
+already covers follow-while-judging on the primary content surface.
+
+**CURATED EXTERNAL LINKS ON THE FAME PAGE — BUILT (2026-10-04).** The payoff of
+following: a comedian's fame page shows their socials / shows / tickets.
+DELIBERATELY CURATED, not free-text, because pointing out of an 18+ app is a
+store-review/safety surface. `lib/core/social_links.dart` defines a FIXED
+platform set - Instagram / TikTok / YouTube / X as HANDLE fields, Website /
+Tickets as URL fields - with pure, tested (`test/social_links_test.dart`, 11
+checks) normalise + build helpers: handle fields strip a leading @, pull the
+handle out of a pasted profile URL, and validate a strict charset (no spaces /
+slashes / injection); URL fields require an http(s) URL with a dotted host. The
+app BUILDS the platform URL from the stored handle, so a handle field can never
+carry an arbitrary link. Stored at `users/{uid}.profile.links` (a plain
+own-profile client write, same path as the other profile fields - no backend).
+- **Editor** (`SocialLinksEditor`, own profile only) - one field per platform,
+  its own Save, writes the normalised map to `profile.links`.
+- **Display** (`SocialLinksSection`, on the performer/public fame page) - pink
+  "FIND ME ON" chips; renders nothing when the performer set no links. **Every
+  tap goes through a "Leaving The Bully League" confirmation** before
+  `launchUrl(externalApplication)` - the required discipline for external links.
+- **Still a KNOWN follow-up**: no report/moderation path specifically for a
+  malicious link in someone's own `website`/`tickets` field (the leave-app
+  confirm + the curated shape are the V1 mitigation; a reviewer could add a
+  report-this-profile path later).
+
+**STILL genuinely NOT built:** performer-authored "I'm live" broadcasts to
+followers (a future creator/subscriber perk); and clips actually rendering on
+the profile (the index is ready, but the beta has no published clips to show).
+Fame is also the front of the FUTURE creator-economy
 funnel (following -> crowd -> gifts/support when gifting ships -> the "earn
 from your fans" hook), which is economy work for the developer's planned
 advisor review, so V1 stays reward-free.
