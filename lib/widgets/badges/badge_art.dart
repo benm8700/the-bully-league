@@ -33,8 +33,9 @@ class BadgeArt extends StatelessWidget {
         BadgeMetric.wins => Icons.local_fire_department,
         BadgeMetric.battlesPlayed => Icons.sports_mma,
         BadgeMetric.voteStreakDays => Icons.gavel,
-        // Never reached for the emoji awards (they render the glyph medallion),
-        // but the switch must be exhaustive.
+        // Never reached for glyph-medallion badges (emoji awards + the 🏆
+        // champion render their glyph), but the switch must be exhaustive.
+        BadgeMetric.tournamentWins ||
         BadgeMetric.topFire ||
         BadgeMetric.topClever ||
         BadgeMetric.topBoring ||
@@ -70,11 +71,12 @@ class BadgeArt extends StatelessWidget {
     );
   }
 
-  /// A medallion with the award's emoji glyph. Positives (🔥/🧠) get the gold
-  /// disc; negatives (🥱/💩) get a tarnished grey disc so a 💩 trophy never
-  /// reads as a gold honour - matching the emoji-badge medals elsewhere.
+  /// A medallion with the award's glyph. Honours (🔥/🧠 and the 🏆 champion)
+  /// get the gold disc; negatives (🥱/💩) get a tarnished grey disc so a 💩
+  /// trophy never reads as a gold honour - matching the emoji-badge medals.
   Widget _emojiMedallion() {
-    final positive = def.emoji == '🔥' || def.emoji == '🧠';
+    final positive =
+        def.emoji == '🔥' || def.emoji == '🧠' || def.emoji == '🏆';
     final accent =
         positive ? const Color(0xFFF4C838) : const Color(0xFF9198A3);
     return Container(

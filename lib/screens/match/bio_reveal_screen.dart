@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/matchmaking_service.dart';
+import '../../widgets/belt_flair.dart';
 import '../../widgets/looping_video.dart';
 import 'match_screen.dart';
 import 'matchmaking_screen.dart';
@@ -376,6 +377,14 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
                   'Here\'s your ammo. Use it.',
                   style: Theme.of(context).textTheme.bodySmall,
                   textAlign: TextAlign.center,
+                ),
+                // If your opponent holds The Belt, you're facing the champion -
+                // shown because the belt is public (unlike hidden rank). Renders
+                // nothing otherwise.
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Center(
+                      child: BeltFlair(uid: widget.pairing.opponentId)),
                 ),
                 const SizedBox(height: 20),
                 if (_loadError != null)

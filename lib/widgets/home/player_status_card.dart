@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/services/belt_service.dart';
 import '../../screens/profile/profile_screen.dart';
 import 'rank_badges.dart';
 
@@ -54,11 +55,27 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
   Map<String, dynamic>? _meter;
   int? _rank;
 
+  /// True when THIS player currently holds The Belt - shown as a small 🏆
+  /// before their rank title so the reigning champion feels it on Home.
+  bool _holdsBelt = false;
+
   @override
   void initState() {
     super.initState();
     _loadMeter();
     _loadRank();
+    _loadBelt();
+  }
+
+  Future<void> _loadBelt() async {
+    try {
+      final belt = await BeltService.get();
+      if (mounted && belt.holderUid == widget.uid) {
+        setState(() => _holdsBelt = true);
+      }
+    } catch (_) {
+      // Quiet: no belt flair rather than an error.
+    }
   }
 
   Future<void> _loadMeter() async {
@@ -130,15 +147,24 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
           child: FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(
-              title,
-              maxLines: 1,
-              softWrap: false,
-              style: text.titleMedium?.copyWith(
-                fontSize: 19,
-                fontWeight: FontWeight.w800,
-                color: titleColor, // gold for Legend/GOAT, else white
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_holdsBelt) ...[
+                  const Text('🏆', style: TextStyle(fontSize: 17)),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  title,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: text.titleMedium?.copyWith(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: titleColor, // gold for Legend/GOAT, else white
+                  ),
+                ),
+              ],
             ),
           ),
         ),

@@ -323,9 +323,13 @@ already handles honestly ("someone else got better").
   tune once there is earning data. Earning rates today: ranked match = 10 XP
   (+25 for a win), judging = 5/vote capped at 10/day. So Open Micer (50 XP)
   is a few matches; Hall of Famer (5000) is a long grind.
-- **Tournament "title fights"** (putting a title on the line in a tournament)
-  are decided in principle but NOT built - the everyday losable title is GOAT
-  for now.
+- **Tournament "title fights" — BUILT (2026-10-04) as THE BELT + a permanent
+  Champion badge.** See the dedicated section below. The snag it had to solve:
+  the visible XP titles only ever RISE (never fall), so a "title fight" needed
+  its own losable thing to stake - that is THE BELT (a single scarce title held
+  by the reigning Daily Gauntlet champion, like GOAT, not a second ladder).
+  Separately, ever winning ANY tournament now earns a permanent "Champion"
+  award badge in the profile Awards case.
 - **The form card is still Elo-history under the hood** (just not shown);
   re-centring it on XP/results is a natural later pass.
 - **NOT yet deployed or live-verified.** All 47 local suites pass and the
@@ -334,6 +338,78 @@ already handles honestly ("someone else got better").
   run against the deployed backend. Per this project's own discipline, the
   seam between awardPoints, finalize and syncGoatTier wants a real coreLoop
   run before it is trusted.
+
+## Title fights — THE BELT + permanent Champion badge — BUILT (2026-10-04)
+
+**The one-line version: there is ONE belt platform-wide, held by whoever most
+recently won the Daily Gauntlet - win it and take it, win it again and you
+DEFEND it, lose it when someone else wins. And ever winning ANY tournament
+earns a permanent "Champion" award badge.** This is the "title fight" the
+backlog wanted, built as two linked pieces (both the developer's call this
+session).
+
+**THE SNAG IT SOLVES, worth keeping written down.** The visible XP titles
+(Average Joe → Featured Talent) are MONOTONIC - they only ever rise, never
+fall (the one-status-ladder + "your rank only climbs" rules). So "put a title
+on the line" has nothing among the normal titles to lose. The only losable
+title was GOAT (a live top-5 Elo spot). THE BELT is a SECOND losable title of
+the same shape as GOAT: a single scarce honour, not a new ladder - which is why
+it does not break one-status-ladder.
+
+**THE BELT (losable, nightly).**
+- Lives at `stats/belt` (client-readable, server-write-only - a client that
+  could write it would crown itself). Written ONLY by the `onTournamentCompleted`
+  Firestore trigger (`functions/belt.js`).
+- **A FORMAT-AGNOSTIC trigger** on the tournament doc's `status -> "completed"`
+  transition, so it catches the climb sweep, the swiss sweep, and any future
+  format in ONE place without touching each crowning site. Only the Daily
+  Gauntlet (`createdBy === "auto"`) contests the belt; a manually-created
+  special tournament carries its own prizes and never moves this title.
+- **Transition logic is PURE + tested** (`beltTransition`, 8 checks in
+  `functions/test/belt.test.js`): a different champion TAKES it (defenseCount
+  resets to 0, records previousHolderUid); the SAME champion winning again
+  DEFENDS (defenseCount++); a cancelled gauntlet (no winner) leaves it
+  unchanged; and - the idempotency guard - the SAME tournament can never award
+  it twice (so an at-least-once trigger re-fire never double-counts a defense).
+- **Surfaces (all read `stats/belt` via `BeltService` / `BeltFlair`):**
+  1. **Ranks screen** - a gold "🏆 REIGNING CHAMPION · {name} · Defended ×N"
+     banner above all three boards (the belt is the top prize of the whole
+     competition). Taps through to the holder's fame page. Renders nothing until
+     someone holds it.
+  2. **Home Player Status card** - a small 🏆 before the holder's rank title
+     (one glyph, only the ~1 champion sees it; keeps Home lean).
+  3. **Profile** (own + performer) - a "🏆 Reigning Champion · ×N" pill under
+     the identity header (reusable `lib/widgets/belt_flair.dart`).
+  4. **Pre-match bio reveal** - if your OPPONENT holds the belt, "🏆 Reigning
+     Champion" shows on their card ("you're facing the champ"). A deliberate,
+     reversible exception to the hide-opponent-rank rule, justified because the
+     belt is PUBLIC (unlike hidden Elo) - easy to pull if it feels like too much.
+
+**PERMANENT CHAMPION BADGE (earned-and-kept).**
+- The same trigger increments a lifetime `tournamentWins` on the champion of
+  EVERY tournament (gauntlet, special, bracket - not just the gauntlet), via
+  `recordTournamentWin`, idempotent through a `championRecorded` flag on the
+  tournament doc. `tournamentWins` is server-only in `firestore.rules`
+  (create-denylist + update-immutability, like `votesCast`).
+- A standalone `tournament_champion` badge (`kBadges`, `BadgeMetric.tournamentWins`,
+  threshold 1) earns at the first win and is KEPT. Rendered as a GOLD 🏆 glyph
+  medallion (no PNG - `badge_art.dart`'s `_emojiMedallion` now treats 🏆 as a
+  gold honour alongside 🔥/🧠). It is earned ONLY from the server `tournamentWins`
+  field, never the client-writable `badges.earned` set (added to the new
+  `kServerAwardIds` strip, same protection as the emoji superlative awards), so
+  a modified client cannot inject it.
+
+**Deployed and DEVICE-VERIFIED on the Moto (2026-10-04)** by priming a holder:
+the Champion badge-earned popup fired on launch, Home showed 🏆 before the
+rank title, the Ranks banner showed "REIGNING CHAMPION · MedalMoto · Defended
+×2", and the profile showed the belt pill + the gold Champion badge in the
+Awards case. Primed data cleaned up afterwards.
+
+**Still open / not built:** the "challenger match" variant (a dedicated
+champion-vs-#1 title match, deferred as a future special-event layer); belt
+lineage/history beyond `previousHolderUid`; and a "you won/lost The Belt"
+popup (the Champion BADGE popup already fires; a belt-change popup would mirror
+the rank-change/fame-milestone ones).
 
 ## Audience Emoji Ratings — the emoji ecosystem — BUILT (2026-09-23)
 

@@ -51,6 +51,7 @@ service cloud.firestore {
           'takedowns', 'lastNotifiedRankTitle', 'lastSeenRankTitle',
           'dailyReward', 'followerCount', 'lastSeenFameMilestone',
           'emojiCounts', 'votesCast', 'emojiTopAwards', 'emojiScrub',
+          'tournamentWins',
         ]);
 
       // Uses .get(field, default) rather than direct field access - a
@@ -178,6 +179,12 @@ service cloud.firestore {
         // others, but it is a public identity number, so it stays server-only.
         request.resource.data.get('votesCast', null) ==
           resource.data.get('votesCast', null) &&
+        // Lifetime tournaments won, incremented only by the onTournamentCompleted
+        // trigger (Admin SDK) when a tournament crowns this player. It drives a
+        // permanent "Tournament Champion" award badge, so a client able to write
+        // it could hand itself the badge without ever winning.
+        request.resource.data.get('tournamentWins', null) ==
+          resource.data.get('tournamentWins', null) &&
         // Per-player emoji ratings (🔥/🧠/🥱/💩), tallied only by castVote via
         // the Admin SDK as ballots come in. These are a player's public
         // identity - profile flair, badges, the Hottest board, their

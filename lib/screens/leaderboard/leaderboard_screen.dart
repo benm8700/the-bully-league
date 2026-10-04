@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/emoji_ratings.dart';
+import '../../core/services/belt_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
 import '../profile/performer_profile_screen.dart';
@@ -150,11 +151,23 @@ class LeaderboardScreen extends StatelessWidget {
               ),
             ),
             SafeArea(
-              child: TabBarView(
+              child: Column(
                 children: [
-                  _buildPlayers(context, skillQuery, fame: false, topPad: topPad),
-                  _buildPlayers(context, fameQuery, fame: true, topPad: topPad),
-                  _EmojiBoard(topPad: topPad),
+                  // The reigning champion of the Daily Gauntlet - the belt is
+                  // the top prize of the whole competition, so it sits above
+                  // all three boards. Renders nothing until someone holds it.
+                  const _BeltBanner(),
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        _buildPlayers(context, skillQuery,
+                            fame: false, topPad: topPad),
+                        _buildPlayers(context, fameQuery,
+                            fame: true, topPad: topPad),
+                        _EmojiBoard(topPad: topPad),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -228,6 +241,96 @@ class LeaderboardScreen extends StatelessWidget {
                   : null,
             );
           },
+        );
+      },
+    );
+  }
+}
+
+/// The reigning champion banner - THE BELT, held by whoever most recently won
+/// the Daily Gauntlet. A single scarce, losable title (the belt changes hands
+/// the next time someone wins a gauntlet). Public, like the GOAT flame. Renders
+/// nothing until a champion exists, and taps through to the holder's profile.
+class _BeltBanner extends StatelessWidget {
+  const _BeltBanner();
+
+  static const _gold = Color(0xFFF4C838);
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<BeltHolder>(
+      stream: BeltService.watch(),
+      builder: (context, snap) {
+        final belt = snap.data;
+        if (belt == null || !belt.hasHolder) return const SizedBox.shrink();
+        final name = belt.holderName ?? 'Champion';
+        final uid = belt.holderUid;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: uid == null
+                  ? null
+                  : () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => PerformerProfileScreen(
+                          uid: uid, seedUsername: belt.holderName))),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF3A2F14), Color(0xFF1A1508)],
+                  ),
+                  border: Border.all(color: _gold.withValues(alpha: 0.6)),
+                ),
+                child: Row(
+                  children: [
+                    const Text('🏆', style: TextStyle(fontSize: 22)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'REIGNING CHAMPION',
+                            style: TextStyle(
+                              color: _gold,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (belt.defenseCount > 0)
+                      Text(
+                        'Defended ×${belt.defenseCount}',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         );
       },
     );

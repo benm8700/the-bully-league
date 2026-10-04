@@ -14,6 +14,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../widgets/badges/badge_case.dart';
+import '../../widgets/belt_flair.dart';
 import '../../widgets/emoji_stats_card.dart';
 import '../account/delete_account_screen.dart';
 import 'emoji_scrub_sheet.dart';
@@ -400,6 +401,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       rankTitle: _rankTitle,
                       photoUrl: _photoUrls.isNotEmpty ? _photoUrls.first : null,
                     ),
+                    // The Belt (if you hold it) - the reigning Daily Gauntlet
+                    // champion wears it on their own profile too. Renders
+                    // nothing when you don't hold it.
+                    if (FirebaseAuth.instance.currentUser != null) ...[
+                      const SizedBox(height: 10),
+                      Center(
+                        child: BeltFlair(
+                            uid: FirebaseAuth.instance.currentUser!.uid),
+                      ),
+                    ],
                     // Career record strip - the "homebase" numbers that live
                     // nowhere else (Home shows XP + rank, not W-L). Hidden for a
                     // brand-new player with no history so a fresh profile stays

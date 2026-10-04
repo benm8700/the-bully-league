@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/follows_service.dart';
+import '../../widgets/belt_flair.dart';
 import '../../widgets/emoji_stats_card.dart';
 import '../../widgets/follow_button.dart';
 import '../../widgets/home/rank_badges.dart';
@@ -102,6 +103,8 @@ class PerformerProfileScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+              const SizedBox(height: 14),
+              Center(child: BeltFlair(uid: uid)),
               const SizedBox(height: 22),
               _FollowerCount(count: followers),
               const SizedBox(height: 18),

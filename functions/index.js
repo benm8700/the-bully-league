@@ -1462,3 +1462,12 @@ exports.runSeasonReset = onCall(async (request) => {
 });
 
 exports.onVoteCast = onVoteCast;
+
+/**
+ * The Belt + the permanent Tournament Champion award. A Firestore trigger on
+ * a tournament's status -> "completed" transition records a lifetime
+ * tournamentWins on the champion (any tournament -> the Awards-case badge) and,
+ * for the nightly Daily Gauntlet only, awards/defends the single losable belt
+ * at stats/belt. See functions/belt.js.
+ */
+exports.onTournamentCompleted = require("./belt").onTournamentCompleted;
