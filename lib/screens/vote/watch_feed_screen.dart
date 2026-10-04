@@ -399,8 +399,8 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
         icon: Icons.gavel_outlined,
         title: 'Nothing to judge right now',
         message: 'When battles finish they land here for you to vote on - and '
-            'judging earns you points. The most show up during Sixes and '
-            'Sevens, so check back then.',
+            'judging earns you points. The most show up during the Daily '
+            'Gauntlet, so check back then.',
       );
     }
 
