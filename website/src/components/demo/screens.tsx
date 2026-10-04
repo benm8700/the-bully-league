@@ -72,13 +72,13 @@ export function ScreenHome() {
         </div>
       </div>
 
-      {/* Sixes and Sevens */}
+      {/* Daily Gauntlet */}
       <div
         className="mt-3 rounded-2xl border p-4"
         style={{ borderColor: "rgba(232,184,75,0.35)", background: "linear-gradient(160deg, rgba(232,184,75,0.10), rgba(255,255,255,0.02))" }}
       >
         <div className="flex items-center gap-1.5">
-          <span className="eyebrow" style={{ color: "var(--reward)" }}>Sixes and Sevens</span>
+          <span className="eyebrow" style={{ color: "var(--reward)" }}>Daily Gauntlet</span>
         </div>
         <p className="mt-1.5 text-[13px] font-semibold leading-snug">
           The nightly tournament — win prestige &amp; prizes
@@ -358,8 +358,8 @@ export function ScreenVote() {
   );
 }
 
-// -- 6. SIXES AND SEVENS — THE CLIMB --------------------------------------
-export function ScreenSixes() {
+// -- 6. DAILY GAUNTLET — THE CLIMB ----------------------------------------
+export function ScreenGauntlet() {
   const ladder = [
     ["Champion", "1 left"],
     ["3 wins", "2 left"],
@@ -370,7 +370,7 @@ export function ScreenSixes() {
   return (
     <ScreenShell>
       <div className="flex items-center justify-between pb-2 pt-3">
-        <span className="display text-[19px]" style={{ color: "var(--reward)" }}>Sixes and Sevens</span>
+        <span className="display text-[19px]" style={{ color: "var(--reward)" }}>Daily Gauntlet</span>
         <span className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold" style={{ background: "rgba(255,59,71,0.14)", color: "var(--live)" }}>
           <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--live)" }} /> LIVE
         </span>
@@ -455,5 +455,5 @@ export const DEMO_SCREENS: DemoScreen[] = [
   { id: "opponent", label: "Opponent", tagline: "Study your opponent. Load up on ammo.", render: () => <ScreenOpponent /> },
   { id: "battle", label: "Battle", tagline: "Three rounds. One mic at a time. No mercy.", render: () => <ScreenBattle /> },
   { id: "vote", label: "Vote", tagline: "The crowd judges every battle.", render: () => <ScreenVote /> },
-  { id: "sixes", label: "Sixes & Sevens", tagline: "The nightly tournament climb.", render: () => <ScreenSixes /> },
+  { id: "gauntlet", label: "Daily Gauntlet", tagline: "The nightly tournament.", render: () => <ScreenGauntlet /> },
 ];

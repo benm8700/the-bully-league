@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getTopRoasters } from "@/lib/leaderboard";
 import { StoreCta } from "@/components/StoreCta";
 import { PhoneFrame } from "@/components/demo/PhoneFrame";
-import { ScreenBattle, ScreenSixes } from "@/components/demo/screens";
+import { ScreenBattle, ScreenGauntlet } from "@/components/demo/screens";
 
 // Revalidate rather than force-dynamic: this page has no per-request input
 // (no cookies/params), so Next would otherwise statically render it once at
@@ -19,7 +19,7 @@ export default async function Home() {
     <main className="flex-1">
       <Hero />
       <HowItWorks />
-      <SixesAndSevens />
+      <DailyGauntlet />
       <Rules />
       <Leaderboard roasters={topRoasters} />
     </main>
@@ -106,21 +106,21 @@ function HowItWorks() {
   );
 }
 
-/* ------------------------------------------------------ Sixes & Sevens */
-function SixesAndSevens() {
+/* ------------------------------------------------------ Daily Gauntlet */
+function DailyGauntlet() {
   return (
     <section className="border-y border-outline-soft" style={{ background: "linear-gradient(180deg, rgba(232,184,75,0.05), transparent)" }}>
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-20 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="order-2 lg:order-1">
           <PhoneFrame>
-            <ScreenSixes />
+            <ScreenGauntlet />
           </PhoneFrame>
         </div>
         <div className="order-1 lg:order-2">
           <span className="eyebrow inline-block" style={{ color: "var(--reward)" }}>
             The main event
           </span>
-          <h2 className="mt-3 text-4xl sm:text-5xl">Sixes and Sevens</h2>
+          <h2 className="mt-3 text-4xl sm:text-5xl">The Daily Gauntlet</h2>
           <p className="mt-4 text-[15px] leading-relaxed text-muted">
             Every night, 6–7pm Pacific, the whole app battles at once. It&apos;s
             the nightly tournament — and the busiest hour of the day, so it&apos;s
