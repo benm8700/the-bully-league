@@ -668,6 +668,22 @@ exports.voteReminders = onSchedule("every 120 minutes", async () => {
   }
 });
 
+/**
+ * GOAT throne watch - warns a GOAT when a rising challenger is closing on
+ * their top-5 spot, and hypes the challenger (the "defend your throne" drama
+ * before the passive displacement actually happens). Publishes the current
+ * threat to stats/goatThrone for the in-app banner. See functions/goatThrone.js.
+ */
+exports.watchGoatThrone = onSchedule("every 6 hours", async () => {
+  const {sweepGoatThrone} = require("./goatThrone");
+  try {
+    const result = await sweepGoatThrone();
+    console.log("watchGoatThrone:", JSON.stringify(result));
+  } catch (err) {
+    console.error("watchGoatThrone failed:", err);
+  }
+});
+
 exports.autoRenderHighlights = onSchedule(
     {schedule: "every 5 minutes", memory: "4GiB", cpu: 2, timeoutSeconds: 540},
     async () => {

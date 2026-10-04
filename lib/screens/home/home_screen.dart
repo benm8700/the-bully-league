@@ -14,6 +14,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/entitlement_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../widgets/admin_only.dart';
+import '../../widgets/home/goat_throne_banner.dart';
 import '../../widgets/home/hero_mode_card.dart';
 import '../../widgets/home/player_status_card.dart';
 import '../../widgets/home/home_quick_actions.dart';
@@ -135,6 +136,9 @@ class HomeScreen extends StatelessWidget {
                     // waiting, or somebody challenging you.
                     const _ActiveMatchBanner(),
                     const _IncomingChallengeBanner(),
+                    // The "defend your throne" warning - shown only to a GOAT
+                    // under threat or the challenger closing on their spot.
+                    const GoatThroneBanner(),
                     const _TrialStatus(),
                     const SizedBox(height: 8),
                     // THE HEADLINE: Sixes and Sevens IS the nightly

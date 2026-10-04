@@ -411,6 +411,53 @@ lineage/history beyond `previousHolderUid`; and a "you won/lost The Belt"
 popup (the Champion BADGE popup already fires; a belt-change popup would mirror
 the rank-change/fame-milestone ones).
 
+### GOAT throne defence — Option 1 (the drama layer) — BUILT (2026-10-04)
+
+**The ask: a GOAT should feel the fight to RETAIN their status against an
+up-and-comer.** The key realisation: GOAT is ALREADY losable to a rising
+player - it is the top-5 by hidden rating among XP-eligible players, so an
+up-and-comer who out-rates the lowest GOAT bumps them out (`syncGoatTier`), and
+the rank-change popups already nail the MOMENT (GOAT up: "...if a challenger
+surpasses you, you'll have to defend it in a title fight"; GOAT displaced:
+"you've been bested... return, and take your status back"). What was missing
+was the DRAMA BEFORE it happens - a warning. The developer chose **Option 3**:
+build the drama layer now (Option 1), with the literal **direct challenge
+duel (Option 2)** deferred to a future scheduled special event.
+
+**BUILT - `functions/goatThrone.js`, the `watchGoatThrone` scheduled job
+(every 6 hours).**
+- **Pure, tested `throneThreat` (8 checks)** MIRRORS `syncGoatTier` exactly so
+  it never warns about a bump that cannot happen: the GOAT pool is the top
+  `GOAT_POOL_SIZE` XP-eligible players, a threat exists only when the pool is
+  FULL (an open slot means a challenger would JOIN, not displace), and the
+  challenger must ALSO be XP-eligible (an XP-ineligible hot-rating account can
+  never take GOAT, so it is never a threat - explicitly tested). Threat =
+  lowest GOAT's rating minus the top eligible non-GOAT's rating ≤
+  `THRONE_MARGIN_RATING` (75, a placeholder; the rating gap is NEVER surfaced,
+  only the FACT of a threat).
+- Publishes the current threat to **`stats/goatThrone`** (client-readable,
+  server-write-only via the existing `stats/{document}` rule - no rules change)
+  which drives the in-app banner, and pushes a ONE-TIME warning to each side
+  when the pairing is NEW (keyed by `notifiedPair`, claimed before sending, so
+  a persistent threat never re-pushes - fatigue is how an app earns an OS
+  mute). Reuses the `rank_change` notification category (muting rank changes
+  mutes this too). Best-effort; a failed push never throws.
+- **In-app `GoatThroneBanner`** on Home (`lib/widgets/home/goat_throne_banner.dart`),
+  shown ONLY to the vulnerable GOAT ("Your throne is under threat - {challenger}
+  is closing in") or the challenger ("A GOAT throne is in reach - you're closing
+  in on {goat}"), crimson (a warning, distinct from the gold belt banner).
+  Renders nothing for everyone else and when no throne is under threat.
+- **Live-verified**: the real sweep ran against live Firestore (`underThreat:
+  false` and `stats/goatThrone` written - correct, since nobody is at the 5000
+  XP GOAT-eligibility threshold in the beta yet, so there is no throne). Added
+  to `scheduledJobScan.js`'s coverage. The Home banner is device-verified by
+  priming `stats/goatThrone`.
+- **Does NOT change how GOAT is won/lost** - purely a warning layer over the
+  existing passive displacement. **Option 2 (the direct GOAT challenge duel -
+  a #1 contender formally battles a specific GOAT head-to-head for the throne)
+  remains the future special-event build**, same scheduling constraint as the
+  belt's challenger-match variant.
+
 ## Audience Emoji Ratings — the emoji ecosystem — BUILT (2026-09-23)
 
 **The one-line version: after a battle, every judge rates BOTH roasters with one

@@ -80,6 +80,7 @@ const JOBS = [
     fn: "awardEmojiTopTitles"},
   {name: "dailyRewardReminder", mod: "../dailyRewardReminder",
     fn: "sendDailyRewardReminder"},
+  {name: "watchGoatThrone", mod: "../goatThrone", fn: "sweepGoatThrone"},
 ];
 
 /**
