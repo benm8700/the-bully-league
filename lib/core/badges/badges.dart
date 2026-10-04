@@ -25,6 +25,7 @@ enum BadgeMetric {
   wins,
   battlesPlayed,
   voteStreakDays,
+  votesCast,
   tournamentWins,
   topFire,
   topClever,
@@ -177,6 +178,43 @@ const List<BadgeDef> kBadges = [
     threshold: 7,
     prestige: 40,
   ),
+  // Judging-VOLUME family (tiered) - lifetime battles judged, off the
+  // votesCast counter. Distinct from Loyal Juror (a streak of DAYS); this is
+  // total votes cast. Votes are the scarce resource the ladder runs on, so
+  // judging a lot is worth recognising.
+  BadgeDef(
+    id: 'juror_1',
+    title: 'Juror',
+    earnedDesc: 'Judged 10 battles',
+    lockedHint: 'Judge 10 battles',
+    metric: BadgeMetric.votesCast,
+    threshold: 10,
+    prestige: 20,
+    family: 'juror',
+    level: 1,
+  ),
+  BadgeDef(
+    id: 'juror_2',
+    title: 'Magistrate',
+    earnedDesc: 'Judged 100 battles',
+    lockedHint: 'Judge 100 battles',
+    metric: BadgeMetric.votesCast,
+    threshold: 100,
+    prestige: 52,
+    family: 'juror',
+    level: 2,
+  ),
+  BadgeDef(
+    id: 'juror_3',
+    title: 'Chief Justice',
+    earnedDesc: 'Judged 500 battles',
+    lockedHint: 'Judge 500 battles',
+    metric: BadgeMetric.votesCast,
+    threshold: 500,
+    prestige: 88,
+    family: 'juror',
+    level: 3,
+  ),
   // Tournament champion - a PERMANENT award for ever winning any tournament
   // (the nightly gauntlet, a special event, a bracket). Earned-and-kept, like
   // the emoji superlative awards, off the server-set `tournamentWins` counter.
@@ -249,6 +287,7 @@ class BadgeStats {
     required this.wins,
     required this.battlesPlayed,
     required this.voteStreakDays,
+    this.votesCast = 0,
     this.tournamentWins = 0,
     this.topFire = false,
     this.topClever = false,
@@ -259,6 +298,7 @@ class BadgeStats {
   final int wins;
   final int battlesPlayed;
   final int voteStreakDays;
+  final int votesCast;
   final int tournamentWins;
 
   /// The permanent "ever been #1 in this emoji" award flags, from the
@@ -283,6 +323,7 @@ class BadgeStats {
           (u['rankedMatchesPlayed'] as num?)?.toInt() ??
           0,
       voteStreakDays: streakDays,
+      votesCast: (u['votesCast'] as num?)?.toInt() ?? 0,
       tournamentWins: (u['tournamentWins'] as num?)?.toInt() ?? 0,
       topFire: flag('fire'),
       topClever: flag('clever'),
@@ -295,6 +336,7 @@ class BadgeStats {
         BadgeMetric.wins => wins,
         BadgeMetric.battlesPlayed => battlesPlayed,
         BadgeMetric.voteStreakDays => voteStreakDays,
+        BadgeMetric.votesCast => votesCast,
         BadgeMetric.tournamentWins => tournamentWins,
         BadgeMetric.topFire => topFire ? 1 : 0,
         BadgeMetric.topClever => topClever ? 1 : 0,

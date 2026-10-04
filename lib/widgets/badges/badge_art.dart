@@ -33,6 +33,7 @@ class BadgeArt extends StatelessWidget {
         BadgeMetric.wins => Icons.local_fire_department,
         BadgeMetric.battlesPlayed => Icons.sports_mma,
         BadgeMetric.voteStreakDays => Icons.gavel,
+        BadgeMetric.votesCast => Icons.balance,
         // Never reached for glyph-medallion badges (emoji awards + the 🏆
         // champion render their glyph), but the switch must be exhaustive.
         BadgeMetric.tournamentWins ||

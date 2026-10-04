@@ -1231,9 +1231,12 @@ Raised by the developer: what protects someone who is unhappy that their match f
   battles, playing during Sixes and Sevens, winning a tournament, a comeback
   after being down, etc.). A collectible layer of recognition on top of the
   daily quests, shown on the profile. **Now built and live**: `kBadges` in
-  `lib/core/badges/badges.dart` (families: wins, battles-played, judging, plus
-  one-offs like First Blood / Loyal Juror), rendered on the Profile as an
-  "Awards" case, earned off the same metrics the quests/points ledger already
+  `lib/core/badges/badges.dart` (families: wins, battles-played, plus a
+  judging-VOLUME "Juror" family - Juror/Magistrate/Chief Justice at 10/100/500
+  off the lifetime `votesCast` counter, added 2026-10-04 - and one-offs like
+  First Blood, Loyal Juror (a judging STREAK, distinct from the volume family),
+  and the Champion award for winning a tournament), rendered on the Profile as
+  an "Awards" case, earned off the same metrics the quests/points ledger already
   track. Device-verified showing real progress (e.g. "Contender 14/50").
   **NO feature/pin mechanism (removed 2026-09-29, developer's call)** - badges
   are just displayed; the old tap-to-feature pin, the featured-badge pill at
