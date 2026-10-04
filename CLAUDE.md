@@ -4126,10 +4126,14 @@ own-profile client write, same path as the other profile fields - no backend).
   "FIND ME ON" chips; renders nothing when the performer set no links. **Every
   tap goes through a "Leaving The Bully League" confirmation** before
   `launchUrl(externalApplication)` - the required discipline for external links.
-- **Still a KNOWN follow-up**: no report/moderation path specifically for a
-  malicious link in someone's own `website`/`tickets` field (the leave-app
-  confirm + the curated shape are the V1 mitigation; a reviewer could add a
-  report-this-profile path later).
+- **The report-a-profile follow-up is now CLOSED (2026-10-04).** The fame page
+  (`performer_profile_screen.dart`) gained a neutral ⋮ overflow menu (shown
+  only on OTHERS' profiles) → "Report this player", opening the existing
+  `ReportScreen(reportedUserId: uid)` (matchId is optional, so a profile report
+  needs no match). This covers a malicious external link AND any abusive
+  profile, mirrors the feed's "tucked-away ⋮, not a prominent flag" discipline,
+  and strengthens Apple 1.2 flagging coverage on the profile surface. The
+  leave-app confirm + curated link shape remain the first-line mitigation.
 
 **STILL genuinely NOT built:** performer-authored "I'm live" broadcasts to
 followers (a future creator/subscriber perk); and clips actually rendering on

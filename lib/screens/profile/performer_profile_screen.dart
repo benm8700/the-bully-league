@@ -7,6 +7,7 @@ import '../../core/social_links.dart';
 import '../../widgets/belt_flair.dart';
 import '../../widgets/emoji_stats_card.dart';
 import '../../widgets/social_links_section.dart';
+import '../moderation/report_screen.dart';
 import '../../widgets/follow_button.dart';
 import '../../widgets/home/rank_badges.dart';
 import '../../widgets/match_clip_player.dart';
@@ -53,6 +54,29 @@ class PerformerProfileScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text('Profile'),
+        actions: [
+          // A neutral overflow menu (not a prominent flag) so a profile - or a
+          // bad external link on it - can be reported, without inviting
+          // trigger-happy reports. Mirrors the feed's report discipline and
+          // keeps Apple 1.2 flagging reachable on this surface too. Never on
+          // your own profile.
+          if (!isMe)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              tooltip: 'More',
+              onSelected: (v) {
+                if (v == 'report') {
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => ReportScreen(reportedUserId: uid),
+                  ));
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                    value: 'report', child: Text('Report this player')),
+              ],
+            ),
+        ],
       ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
