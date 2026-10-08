@@ -4,9 +4,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../core/services/watch_feed_service.dart';
 import '../theme/app_theme.dart';
 import 'emoji_rate_row.dart';
 import 'live_tally.dart';
+import 'turnstile_challenge.dart';
 
 /// The crowd's ballot, during the short window after a live battle ends.
 ///
@@ -73,6 +75,55 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
     super.dispose();
   }
 
+  final _feedService = WatchFeedService();
+
+  /// Formats a vote-window countdown as m:ss (e.g. 9:45), since a 10-minute
+  /// window as raw seconds ("600s left") reads badly.
+  String _fmtLeft(Duration d) {
+    final s = d.inSeconds < 0 ? 0 : d.inSeconds;
+    final m = s ~/ 60;
+    final sec = (s % 60).toString().padLeft(2, '0');
+    return '$m:$sec';
+  }
+
+  /// Makes sure this judge has a vote session, raising the one-time Turnstile
+  /// check right here if not - so judging a live battle no longer requires a
+  /// detour to the Judge tab first. Returns false if the check was dismissed.
+  Future<bool> _ensureSession() async {
+    try {
+      if (await _feedService.sessionVotesRemaining() > 0) return true;
+    } catch (_) {/* fall through to the challenge */}
+    if (!mounted) return false;
+    final token = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => Padding(
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Quick check before you vote',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              const Text('Once only - then judge as many battles as you like.',
+                  textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
+              const SizedBox(height: 16),
+              TurnstileChallenge(
+                onToken: (t) => Navigator.of(sheetContext).pop(t),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (token == null) return false;
+    await _feedService.startSession(token);
+    return true;
+  }
+
   Future<void> _submit(int roundCount) async {
     if (_picks.length < roundCount ||
         _emojiP1 == null ||
@@ -85,6 +136,13 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
       _error = null;
     });
     try {
+      // Establish a vote session right here if needed, so the vote never
+      // bounces off a missing-session error.
+      final hasSession = await _ensureSession();
+      if (!hasSession) {
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
       await FirebaseFunctions.instance
           .httpsCallable('castVote')
           .call<Map<String, dynamic>>({
@@ -189,11 +247,30 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
     }
     final allPicked = _picks.length >= roundCount;
     return _shell(context, [
-      Text(
-        left == null
-            ? 'Who won each round?'
-            : 'Who won each round? ${left.inSeconds}s left',
-        style: text.titleMedium,
+      Row(
+        children: [
+          Expanded(
+            child: Text('Who won each round?', style: text.titleMedium),
+          ),
+          if (left != null) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: context.palette.live.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.timer_outlined, size: 15, color: context.palette.live),
+                const SizedBox(width: 4),
+                Text('${_fmtLeft(left)} left',
+                    style: text.labelLarge?.copyWith(
+                        color: context.palette.live,
+                        fontWeight: FontWeight.w800)),
+              ]),
+            ),
+          ],
+        ],
       ),
       const SizedBox(height: 10),
       for (int r = 0; r < roundCount; r++) ...[

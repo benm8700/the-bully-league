@@ -58,7 +58,7 @@ const CLIMB_PRESENCE_STALE_MS = 75 * 1000;
  * still here - same idea as a live tournament. The chance to OBJECT to the
  * clip is untouched (a full day, via objectionWindowEndMs); this shortens
  * voting only. */
-const CLIMB_VOTE_MS = 90 * 1000;
+const CLIMB_VOTE_MS = 10 * 60 * 1000;
 
 /** Two climbers meet at most once (single elimination eliminates the loser),
  * so a match id derived from the pair is unique for the tournament. Sorted so

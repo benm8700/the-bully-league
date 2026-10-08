@@ -65,6 +65,14 @@ const int kQuietAudioThreshold = 8;
 /// the difference between useful and twitchy.
 const int kSustainedSamples = 3;
 
+/// How many consecutive quiet AUDIO samples before warning. Separate from the
+/// video count because audio is sampled far more often (Agora reports volume
+/// ~every 200ms, vs throttled video frames), so 3 samples was only ~600ms - a
+/// normal pause between sentences, which false-fired "nobody can hear you" on
+/// a talking roaster (2026-10-07). ~25 samples is ~5s of CONTINUOUS silence,
+/// which is a dead mic, not a dramatic pause.
+const int kSustainedAudioSamples = 25;
+
 /// Tracks consecutive bad readings and reports when a problem is real.
 ///
 /// Deliberately stateful and pure - no clock, no I/O - so the whole
@@ -74,11 +82,16 @@ class CaptureQualityMonitor {
     this.darkThreshold = kDarkLumaThreshold,
     this.quietThreshold = kQuietAudioThreshold,
     this.sustained = kSustainedSamples,
+    this.audioSustained = kSustainedAudioSamples,
   });
 
   final int darkThreshold;
   final int quietThreshold;
   final int sustained;
+
+  /// Consecutive quiet audio samples before warning (see
+  /// kSustainedAudioSamples - deliberately higher than [sustained]).
+  final int audioSustained;
 
   int _darkRun = 0;
   int _quietRun = 0;
@@ -87,7 +100,7 @@ class CaptureQualityMonitor {
 
   /// True at the moment a problem becomes sustained, and only then.
   bool get isDark => _darkRun >= sustained;
-  bool get isQuiet => _quietRun >= sustained;
+  bool get isQuiet => _quietRun >= audioSustained;
 
   /// Records a video sample. Returns a message to show, or null.
   ///
@@ -113,7 +126,7 @@ class CaptureQualityMonitor {
   String? recordAudioLevel(int level) {
     if (level < quietThreshold) {
       _quietRun++;
-      if (_quietRun >= sustained && !_quietReported) {
+      if (_quietRun >= audioSustained && !_quietReported) {
         _quietReported = true;
         return 'Nobody can hear you - check your mic.';
       }

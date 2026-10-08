@@ -118,12 +118,23 @@ void main() {
       expect(m.isDark, isFalse);
     });
 
-    test('a dead mic is reported on the same sustained rule', () {
-      final m = CaptureQualityMonitor();
+    test('a dead mic is reported after a sustained run of silence', () {
+      // audioSustained is deliberately high in production (audio samples
+      // ~5x faster than video); the rule itself is what this checks.
+      final m = CaptureQualityMonitor(audioSustained: 3);
       expect(m.recordAudioLevel(0), isNull);
       m.recordAudioLevel(0);
       final message = m.recordAudioLevel(0);
       expect(message, contains('hear you'));
+    });
+
+    test('a brief pause does NOT trip the mic warning', () {
+      // ~1s of quiet at the production cadence (a normal pause between
+      // sentences) must stay silent - the real false-fire that was reported.
+      final m = CaptureQualityMonitor();
+      for (var i = 0; i < 5; i++) {
+        expect(m.recordAudioLevel(0), isNull);
+      }
     });
 
     test('normal speech never trips the mic warning', () {
