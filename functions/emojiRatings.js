@@ -23,6 +23,11 @@ const RATINGS = {
   clever: {emoji: "\u{1F9E0}", label: "Clever", blurb: "Smart / original material", positive: true},
   boring: {emoji: "\u{1F971}", label: "Boring", blurb: "Didn't entertain me", positive: false},
   trash: {emoji: "\u{1F4A9}", label: "Trash", blurb: "Overall bad performance", positive: false},
+  // Red Flag: crossed the line from comedy into just offensive (developer's
+  // call, 2026-10-07). A RATING, not a ban button - it piles into the player's
+  // stats like the other negatives and is scrubbable with points. positive:
+  // false, so it renders tarnished and is removable, automatically.
+  red_flag: {emoji: "\u{1F6A9}", label: "Red Flag", blurb: "Crossed the line / offensive", positive: false},
 };
 
 /** The rating keys, in display order. */
@@ -81,10 +86,11 @@ function nicknameFor(user) {
 
   // Keyed by the dominant emoji, refined by the runner-up.
   const NICKS = {
-    fire: {clever: "The Headliner", boring: "All Flash", trash: "Hit or Miss", fire: "On Fire"},
-    clever: {fire: "The Mastermind", boring: "Too Smart for the Room", trash: "Cult Favourite", clever: "Big Brain"},
-    boring: {fire: "Slow Burn", clever: "Dry", trash: "Human Ambien", boring: "The Snooze"},
-    trash: {fire: "Trainwreck", clever: "Misunderstood", boring: "Dumpster Fire", trash: "The Stinker"},
+    fire: {clever: "The Headliner", boring: "All Flash", trash: "Hit or Miss", red_flag: "Shock Jock", fire: "On Fire"},
+    clever: {fire: "The Mastermind", boring: "Too Smart for the Room", trash: "Cult Favourite", red_flag: "The Provocateur", clever: "Big Brain"},
+    boring: {fire: "Slow Burn", clever: "Dry", trash: "Human Ambien", red_flag: "Just Mean", boring: "The Snooze"},
+    trash: {fire: "Trainwreck", clever: "Misunderstood", boring: "Dumpster Fire", red_flag: "Cancelled", trash: "The Stinker"},
+    red_flag: {fire: "Shock Jock", clever: "The Provocateur", boring: "Just Offensive", trash: "Cancelled", red_flag: "Walking Red Flag"},
   };
   return (NICKS[t1] && NICKS[t1][t2]) || RATINGS[t1].label;
 }
@@ -117,6 +123,11 @@ const BADGE_TIERS = {
     {at: 10, id: "trash_1", title: "Rotten"},
     {at: 50, id: "trash_2", title: "Dumpster"},
     {at: 150, id: "trash_3", title: "Biohazard"},
+  ],
+  red_flag: [
+    {at: 10, id: "red_flag_1", title: "Red Flag"},
+    {at: 50, id: "red_flag_2", title: "Walking Red Flag"},
+    {at: 150, id: "red_flag_3", title: "Human Red Flag"},
   ],
 };
 

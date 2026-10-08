@@ -20,12 +20,15 @@ class EmojiRating {
   final bool positive;
 }
 
-/// The four ratings, in display order (positives first).
+/// The ratings, in display order (positives first). 🚩 Red Flag is a negative
+/// rating (crossed the line / offensive) - a pure stat like the others, not a
+/// ban button (developer's call, 2026-10-07).
 const List<EmojiRating> kEmojiRatings = [
   EmojiRating('fire', '\u{1F525}', 'Fire', 'Overall great performance', true),
   EmojiRating('clever', '\u{1F9E0}', 'Clever', 'Smart / original material', true),
   EmojiRating('boring', '\u{1F971}', 'Boring', "Didn't entertain me", false),
   EmojiRating('trash', '\u{1F4A9}', 'Trash', 'Overall bad performance', false),
+  EmojiRating('red_flag', '\u{1F6A9}', 'Red Flag', 'Crossed the line / offensive', false),
 ];
 
 /// The ratings a player can pay to clean up - the NEGATIVE ones. DERIVED from
@@ -103,10 +106,11 @@ String? emojiNicknameOf(Map<String, dynamic>? counts) {
   final ranked = c.keys.toList()..sort((a, b) => c[b]!.compareTo(c[a]!));
   final t1 = ranked[0], t2 = ranked[1];
   const nicks = {
-    'fire': {'clever': 'The Headliner', 'boring': 'All Flash', 'trash': 'Hit or Miss', 'fire': 'On Fire'},
-    'clever': {'fire': 'The Mastermind', 'boring': 'Too Smart for the Room', 'trash': 'Cult Favourite', 'clever': 'Big Brain'},
-    'boring': {'fire': 'Slow Burn', 'clever': 'Dry', 'trash': 'Human Ambien', 'boring': 'The Snooze'},
-    'trash': {'fire': 'Trainwreck', 'clever': 'Misunderstood', 'boring': 'Dumpster Fire', 'trash': 'The Stinker'},
+    'fire': {'clever': 'The Headliner', 'boring': 'All Flash', 'trash': 'Hit or Miss', 'red_flag': 'Shock Jock', 'fire': 'On Fire'},
+    'clever': {'fire': 'The Mastermind', 'boring': 'Too Smart for the Room', 'trash': 'Cult Favourite', 'red_flag': 'The Provocateur', 'clever': 'Big Brain'},
+    'boring': {'fire': 'Slow Burn', 'clever': 'Dry', 'trash': 'Human Ambien', 'red_flag': 'Just Mean', 'boring': 'The Snooze'},
+    'trash': {'fire': 'Trainwreck', 'clever': 'Misunderstood', 'boring': 'Dumpster Fire', 'red_flag': 'Cancelled', 'trash': 'The Stinker'},
+    'red_flag': {'fire': 'Shock Jock', 'clever': 'The Provocateur', 'boring': 'Just Offensive', 'trash': 'Cancelled', 'red_flag': 'Walking Red Flag'},
   };
   return nicks[t1]?[t2] ??
       kEmojiRatings.firstWhere((r) => r.key == t1).label;
@@ -150,6 +154,11 @@ const Map<String, List<EmojiBadgeTier>> kEmojiBadgeTiers = {
     EmojiBadgeTier('trash_1', 10, 'Rotten'),
     EmojiBadgeTier('trash_2', 50, 'Dumpster'),
     EmojiBadgeTier('trash_3', 150, 'Biohazard'),
+  ],
+  'red_flag': [
+    EmojiBadgeTier('red_flag_1', 10, 'Red Flag'),
+    EmojiBadgeTier('red_flag_2', 50, 'Walking Red Flag'),
+    EmojiBadgeTier('red_flag_3', 150, 'Human Red Flag'),
   ],
 };
 

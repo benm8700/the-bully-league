@@ -23,8 +23,8 @@
  */
 const {getFirestore} = require("firebase-admin/firestore");
 
-/** The four emoji keys, in display order. */
-const EMOJI_AWARD_KEYS = ["fire", "clever", "boring", "trash"];
+/** The emoji keys that get a #1-ever superlative award, in display order. */
+const EMOJI_AWARD_KEYS = ["fire", "clever", "boring", "trash", "red_flag"];
 
 /**
  * True when this account should have the award stamped - i.e. it does not

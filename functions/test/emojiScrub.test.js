@@ -19,7 +19,8 @@ function test(name, fn) {
 }
 
 test("only the NEGATIVE emojis are removable (derived from the shared set)", () => {
-  assert.deepStrictEqual(removableEmojiKeys().sort(), ["boring", "trash"]);
+  assert.deepStrictEqual(removableEmojiKeys().sort(),
+      ["boring", "red_flag", "trash"]);
   assert.strictEqual(isRemovableEmoji("boring"), true);
   assert.strictEqual(isRemovableEmoji("trash"), true);
   // The two positives can never be cleaned up.

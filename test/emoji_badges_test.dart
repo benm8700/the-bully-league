@@ -7,7 +7,8 @@ void main() {
     // changes a threshold, id or title, this test should be updated in lockstep
     // with the client constant - that is the whole point of pinning it.
     test('all four tracks, thresholds 10/50/150', () {
-      expect(kEmojiBadgeTiers.keys.toList(), ['fire', 'clever', 'boring', 'trash']);
+      expect(kEmojiBadgeTiers.keys.toList(),
+          ['fire', 'clever', 'boring', 'trash', 'red_flag']);
       for (final key in kEmojiBadgeTiers.keys) {
         expect(kEmojiBadgeTiers[key]!.map((t) => t.at).toList(), [10, 50, 150],
             reason: key);
@@ -22,13 +23,14 @@ void main() {
       expect(emojiIsPositive('clever'), isTrue);
       expect(emojiIsPositive('boring'), isFalse);
       expect(emojiIsPositive('trash'), isFalse);
+      expect(emojiIsPositive('red_flag'), isFalse);
     });
   });
 
   group('emojiBadgeSlots', () {
     test('no ratings: all four tracks locked at the first tier', () {
       final slots = emojiBadgeSlots(null);
-      expect(slots.length, 4);
+      expect(slots.length, 5);
       for (final s in slots) {
         expect(s.earned, isFalse);
         expect(s.count, 0);
@@ -70,7 +72,7 @@ void main() {
     test('negative emojis now produce (tarnished) badge slots', () {
       final slots = emojiBadgeSlots({'trash': 999, 'boring': 12});
       expect(slots.map((s) => s.emojiKey).toList(),
-          ['fire', 'clever', 'boring', 'trash']);
+          ['fire', 'clever', 'boring', 'trash', 'red_flag']);
       final trash = slots.firstWhere((s) => s.emojiKey == 'trash');
       expect(trash.earnedTier!.id, 'trash_3'); // 999 → top tier
       expect(trash.isMaxed, isTrue);

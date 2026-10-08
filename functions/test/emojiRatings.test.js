@@ -20,7 +20,8 @@ function test(name, fn) {
 }
 
 test("exactly the four ratings are allowed", () => {
-  assert.deepStrictEqual(RATING_KEYS, ["fire", "clever", "boring", "trash"]);
+  assert.deepStrictEqual(RATING_KEYS,
+      ["fire", "clever", "boring", "trash", "red_flag"]);
   for (const k of RATING_KEYS) assert.ok(isRating(k), `${k} should be valid`);
   for (const k of ["skull", "eggplant", "", null, 3, "FIRE"]) {
     assert.ok(!isRating(k), `${k} should be invalid`);
@@ -32,7 +33,7 @@ test("countsOf tolerates missing, partial and garbage maps", () => {
   assert.deepStrictEqual(countsOf({}), emptyCounts());
   assert.deepStrictEqual(
       countsOf({emojiCounts: {fire: 3, clever: "x", boring: -2, junk: 9}}),
-      {fire: 3, clever: 0, boring: 0, trash: 0});
+      {fire: 3, clever: 0, boring: 0, trash: 0, red_flag: 0});
 });
 
 test("no nickname below the minimum signal", () => {

@@ -31,6 +31,7 @@ enum BadgeMetric {
   topClever,
   topBoring,
   topTrash,
+  topRedFlag,
 }
 
 /// One badge definition. Tiered badges share a [family] and differ by [level]
@@ -87,6 +88,7 @@ const Set<String> kEmojiAwardIds = {
   'emoji_top_clever',
   'emoji_top_boring',
   'emoji_top_trash',
+  'emoji_top_red_flag',
 };
 
 /// Badge ids that may ONLY be earned from a server-set field, never from the
@@ -225,8 +227,12 @@ const List<BadgeDef> kBadges = [
     earnedDesc: 'Won a tournament',
     lockedHint: 'Win a tournament',
     metric: BadgeMetric.tournamentWins,
+    // The top award: winning a whole tournament is the rarest, hardest thing
+    // here, so it carries the highest prestige and leads the Awards case
+    // (developer's call, 2026-10-07). Above even the platform-#1 emoji awards
+    // (90) and the 50-win Executioner (95).
     threshold: 1,
-    prestige: 85,
+    prestige: 100,
     emoji: '🏆',
   ),
   // Emoji superlative awards - permanent "ever been #1 in the whole league for
@@ -272,6 +278,16 @@ const List<BadgeDef> kBadges = [
     prestige: 15,
     emoji: '💩',
   ),
+  BadgeDef(
+    id: 'emoji_top_red_flag',
+    title: 'Public Menace',
+    earnedDesc: 'Held the most 🚩 in the league',
+    lockedHint: 'Be #1 for 🚩 in the league',
+    metric: BadgeMetric.topRedFlag,
+    threshold: 1,
+    prestige: 15,
+    emoji: '🚩',
+  ),
 ];
 
 BadgeDef? badgeById(String id) {
@@ -293,6 +309,7 @@ class BadgeStats {
     this.topClever = false,
     this.topBoring = false,
     this.topTrash = false,
+    this.topRedFlag = false,
   });
 
   final int wins;
@@ -307,6 +324,7 @@ class BadgeStats {
   final bool topClever;
   final bool topBoring;
   final bool topTrash;
+  final bool topRedFlag;
 
   /// careerRankedMatches never resets (season reset zeroes rankedMatchesPlayed
   /// but keeps career), so it is the honest "battles played" for a lifetime
@@ -329,6 +347,7 @@ class BadgeStats {
       topClever: flag('clever'),
       topBoring: flag('boring'),
       topTrash: flag('trash'),
+      topRedFlag: flag('red_flag'),
     );
   }
 
@@ -342,6 +361,7 @@ class BadgeStats {
         BadgeMetric.topClever => topClever ? 1 : 0,
         BadgeMetric.topBoring => topBoring ? 1 : 0,
         BadgeMetric.topTrash => topTrash ? 1 : 0,
+        BadgeMetric.topRedFlag => topRedFlag ? 1 : 0,
       };
 }
 

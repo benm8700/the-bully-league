@@ -5,8 +5,14 @@ import 'badge_art.dart';
 
 /// The awards case shown on the profile: every badge, earned in colour and
 /// locked ones greyed with their criteria, tiered badges showing progress to
-/// the next tier. Achievements only - never an ordered ladder (one-status
-/// rule), so there is no ranking or sorting-by-strength here.
+/// the next tier.
+///
+/// ORDERED BY IMPORTANCE (prestige, highest first) so the rarest awards lead
+/// and the everyone-gets-them ones (Contender, Road Dog) sit at the end - the
+/// tournament Champion trophy is the very first tile (developer's call,
+/// 2026-10-07). This is display ordering, NOT a competing status ladder (the
+/// one-status rule is about a rival rank/title progression; a showcase of
+/// achievements sorted by rarity is not that).
 ///
 /// There is no "feature/pin" mechanism (removed 2026-09-29, developer's call):
 /// badges are just displayed, not pinned.
@@ -23,7 +29,9 @@ class BadgeCase extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final slots = badgeSlots(stats, earnedIds);
+    // Most important first (Champion leads); common ones fall to the end.
+    final slots = [...badgeSlots(stats, earnedIds)]
+      ..sort((a, b) => b.def.prestige.compareTo(a.def.prestige));
     final earnedCount = slots.where((s) => s.earned).length;
 
     return Column(

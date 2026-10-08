@@ -40,7 +40,8 @@ class BadgeArt extends StatelessWidget {
         BadgeMetric.topFire ||
         BadgeMetric.topClever ||
         BadgeMetric.topBoring ||
-        BadgeMetric.topTrash =>
+        BadgeMetric.topTrash ||
+        BadgeMetric.topRedFlag =>
           Icons.emoji_events,
       };
 

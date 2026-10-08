@@ -17,7 +17,8 @@ function test(name, fn) {
 }
 
 test("the four emoji keys are present and in order", () => {
-  assert.deepStrictEqual(EMOJI_AWARD_KEYS, ["fire", "clever", "boring", "trash"]);
+  assert.deepStrictEqual(EMOJI_AWARD_KEYS,
+      ["fire", "clever", "boring", "trash", "red_flag"]);
 });
 
 test("a never-awarded account needs the award", () => {
