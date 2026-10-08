@@ -1,16 +1,13 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/services/lobby_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/home_action_button.dart';
 import '../../widgets/home/rank_badges.dart';
-import '../moderation/report_screen.dart';
 import '../profile/performer_profile_screen.dart';
+import 'gauntlet_chat.dart';
 import 'gauntlet_watch.dart';
 
 /// The Daily Gauntlet LOBBY: a whole-event "green room".
@@ -21,7 +18,7 @@ import 'gauntlet_watch.dart';
 /// (server-side, onGauntletEnded), so a night's banter never outlives the
 /// night. Every message is moderated + rate-limited server-side before it
 /// appears, and any message can be reported (long-press) into the review queue.
-class GauntletLobbyScreen extends StatefulWidget {
+class GauntletLobbyScreen extends StatelessWidget {
   const GauntletLobbyScreen({
     super.key,
     required this.tournamentId,
@@ -32,76 +29,22 @@ class GauntletLobbyScreen extends StatefulWidget {
   final String? name;
 
   @override
-  State<GauntletLobbyScreen> createState() => _GauntletLobbyScreenState();
-}
-
-class _GauntletLobbyScreenState extends State<GauntletLobbyScreen> {
-  final _service = LobbyService();
-  final _controller = TextEditingController();
-  bool _sending = false;
-
-  String? get _myUid => FirebaseAuth.instance.currentUser?.uid;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _send() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty || _sending) return;
-    setState(() => _sending = true);
-    try {
-      await _service.post(widget.tournamentId, text);
-      _controller.clear();
-    } on FirebaseFunctionsException catch (e) {
-      if (mounted) {
-        // The server's message is the one that knows why (too fast, blocked,
-        // gauntlet ended). Show it plainly.
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? "Couldn't post that.")),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't post that - try again.")),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.name == null ? 'Lobby' : '${widget.name} · Lobby'),
+        title: Text(name == null ? 'Lobby' : '$name · Lobby'),
         actions: const [HomeActionButton()],
       ),
       // A command centre for everyone waiting (the eliminated, the between-
       // battles, the spectators): the live status up top - time left, how many
-      // battles are on, who's still in, who's out - and the chat below, open
-      // throughout so people who've already gone can keep talking.
+      // battles are on, who's still in, who's out - and the shared chat below,
+      // open throughout so people who've already gone can keep talking.
       body: Column(
         children: [
-          _CommandHeader(
-              tournamentId: widget.tournamentId, name: widget.name),
-          _Roster(tournamentId: widget.tournamentId),
+          _CommandHeader(tournamentId: tournamentId, name: name),
+          _Roster(tournamentId: tournamentId),
           const Divider(height: 1),
-          Expanded(
-            child: _ChatList(
-              tournamentId: widget.tournamentId,
-              myUid: _myUid,
-            ),
-          ),
-          _Composer(
-            controller: _controller,
-            sending: _sending,
-            onSend: _send,
-          ),
+          Expanded(child: GauntletChat(tournamentId: tournamentId)),
         ],
       ),
     );
@@ -347,182 +290,3 @@ class _RosterChip extends StatelessWidget {
   }
 }
 
-/// The live chat. Newest at the bottom (reversed list), each message
-/// long-press -> report. Read directly (a cheap listener); posting goes
-/// through the moderated callable.
-class _ChatList extends StatelessWidget {
-  const _ChatList({required this.tournamentId, required this.myUid});
-
-  final String tournamentId;
-  final String? myUid;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('tournaments')
-          .doc(tournamentId)
-          .collection('lobbyChat')
-          .orderBy('createdAt', descending: true)
-          .limit(100)
-          .snapshots(),
-      builder: (context, snapshot) {
-        final docs = snapshot.data?.docs ?? const [];
-        if (docs.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(28),
-              child: Text(
-                'Quiet in here. Say something - the room is watching.\n'
-                'Chat clears when the gauntlet ends.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          );
-        }
-        return ListView.builder(
-          reverse: true,
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          itemCount: docs.length,
-          itemBuilder: (context, i) {
-            final d = docs[i].data();
-            return _MessageTile(
-              username: d['username'] as String? ?? 'Roaster',
-              text: d['text'] as String? ?? '',
-              uid: d['uid'] as String? ?? '',
-              isMine: d['uid'] == myUid,
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _MessageTile extends StatelessWidget {
-  const _MessageTile({
-    required this.username,
-    required this.text,
-    required this.uid,
-    required this.isMine,
-  });
-
-  final String username;
-  final String text;
-  final String uid;
-  final bool isMine;
-
-  void _reportSheet(BuildContext context) {
-    if (isMine || uid.isEmpty) return;
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.flag_outlined),
-              title: Text('Report $username'),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => ReportScreen(reportedUserId: uid),
-                ));
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final text2 = Theme.of(context).textTheme;
-    return Align(
-      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-      child: GestureDetector(
-        onLongPress: () => _reportSheet(context),
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 3),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.78),
-          decoration: BoxDecoration(
-            color: isMine
-                ? scheme.primary.withValues(alpha: 0.22)
-                : scheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            crossAxisAlignment:
-                isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-            children: [
-              if (!isMine)
-                Text(
-                  username,
-                  style: text2.labelSmall?.copyWith(
-                      color: scheme.primary,
-                      fontWeight: FontWeight.w700),
-                ),
-              Text(text, style: text2.bodyMedium),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Composer extends StatelessWidget {
-  const _Composer({
-    required this.controller,
-    required this.sending,
-    required this.onSend,
-  });
-
-  final TextEditingController controller;
-  final bool sending;
-  final VoidCallback onSend;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: controller,
-                minLines: 1,
-                maxLines: 4,
-                maxLength: 280,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => onSend(),
-                decoration: const InputDecoration(
-                  hintText: 'Say something to the room…',
-                  counterText: '',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filled(
-              onPressed: sending ? null : onSend,
-              icon: sending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.send),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

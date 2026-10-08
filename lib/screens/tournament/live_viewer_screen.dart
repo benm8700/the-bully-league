@@ -40,9 +40,15 @@ class LiveViewerScreen extends StatefulWidget {
   State<LiveViewerScreen> createState() => _LiveViewerScreenState();
 }
 
-class _LiveViewerScreenState extends State<LiveViewerScreen> {
+class _LiveViewerScreenState extends State<LiveViewerScreen>
+    with WidgetsBindingObserver {
   final SpectatorService _spectator = AgoraSpectatorService();
   bool _loading = true;
+
+  /// True once we've left the Agora channel because the battle ended (or the
+  /// app was backgrounded). Stops the match audio continuing to play after the
+  /// live stream is over - the leak the live test hit.
+  bool _watchStopped = false;
   String? _error;
   String? _player1Id;
   String? _player2Id;
@@ -65,11 +71,24 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _start();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Leave the Agora channel when the app is backgrounded, so the match audio
+    // can never keep playing out of a phone (or the emulator) the viewer has
+    // navigated away from.
+    if (state != AppLifecycleState.resumed) {
+      _spectator.stopWatching();
+      _watchStopped = true;
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _heartbeat?.cancel();
     _watchersSub?.cancel();
     // Drop my heartbeat so the count falls promptly when I leave. Best-effort:
@@ -192,59 +211,103 @@ class _LiveViewerScreenState extends State<LiveViewerScreen> {
             )
           : _loading
               ? const Center(child: CircularProgressIndicator())
-              : Column(
-                  children: [
-                    Expanded(
-                      child: ValueListenableBuilder<String?>(
-                        valueListenable: _spectator.failure,
-                        builder: (context, failure, _) {
-                          // A rejected or expired token is otherwise
-                          // indistinguishable from two players who have
-                          // not started - both are a screen that says
-                          // "waiting" forever.
-                          if (failure != null) {
-                            return Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(24),
-                                child: Text(failure,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                        color: Colors.white70)),
-                              ),
-                            );
-                          }
-                          return ValueListenableBuilder<Set<int>>(
-                            valueListenable: _spectator.presentUids,
-                            builder: (context, present, _) => Column(
-                              children: [
-                                // Players publish as fixed uids 1 and 2,
-                                // assigned server-side at pairing, so the
-                                // layout never has to negotiate who is
-                                // who.
-                                Expanded(
-                                    child: _tile(1, present, _player1Id,
-                                        _player1Name)),
-                                const SizedBox(height: 2),
-                                Expanded(
-                                    child: _tile(2, present, _player2Id,
-                                        _player2Name)),
-                              ],
+              : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('matches')
+                      .doc(widget.matchId)
+                      .snapshots(),
+                  builder: (context, snap) {
+                    final completed =
+                        snap.data?.data()?['status'] == 'completed';
+                    final haveNames = _player1Id != null && _player2Id != null;
+                    // The battle is over: leave the Agora channel (this is what
+                    // stops the match audio - the leak the live test hit) and
+                    // put the BALLOT front and centre, rather than a dead video
+                    // feed and a "watch the clip" dead-end.
+                    if (completed && !_watchStopped) {
+                      _watchStopped = true;
+                      WidgetsBinding.instance.addPostFrameCallback(
+                          (_) => _spectator.stopWatching());
+                    }
+                    if (completed && haveNames) {
+                      return Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                            child: Text(
+                              'Battle finished - cast your vote',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                    // Renders nothing until the battle ends, then becomes
-                    // the ballot, then the count, then the verdict.
-                    if (_player1Id != null && _player2Id != null)
-                      LiveVotePanel(
-                        matchId: widget.matchId,
-                        player1Id: _player1Id!,
-                        player2Id: _player2Id!,
-                        player1Name: _player1Name,
-                        player2Name: _player2Name,
-                      ),
-                  ],
+                          ),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: LiveVotePanel(
+                                matchId: widget.matchId,
+                                player1Id: _player1Id!,
+                                player2Id: _player2Id!,
+                                player1Name: _player1Name,
+                                player2Name: _player2Name,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+                    // Live: the two video tiles, plus the vote panel (which
+                    // renders nothing until the battle ends).
+                    return Column(
+                      children: [
+                        Expanded(
+                          child: ValueListenableBuilder<String?>(
+                            valueListenable: _spectator.failure,
+                            builder: (context, failure, _) {
+                              // A rejected or expired token is otherwise
+                              // indistinguishable from two players who have
+                              // not started - both are a screen that says
+                              // "waiting" forever.
+                              if (failure != null) {
+                                return Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Text(failure,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                            color: Colors.white70)),
+                                  ),
+                                );
+                              }
+                              return ValueListenableBuilder<Set<int>>(
+                                valueListenable: _spectator.presentUids,
+                                builder: (context, present, _) => Column(
+                                  children: [
+                                    Expanded(
+                                        child: _tile(1, present, _player1Id,
+                                            _player1Name)),
+                                    const SizedBox(height: 2),
+                                    Expanded(
+                                        child: _tile(2, present, _player2Id,
+                                            _player2Name)),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        if (haveNames)
+                          LiveVotePanel(
+                            matchId: widget.matchId,
+                            player1Id: _player1Id!,
+                            player2Id: _player2Id!,
+                            player1Name: _player1Name,
+                            player2Name: _player2Name,
+                          ),
+                      ],
+                    );
+                  },
                 ),
     );
   }

@@ -112,6 +112,11 @@ class AgoraSpectatorService implements SpectatorService {
 
   @override
   Future<void> stopWatching() async {
+    // Mute first so the match audio stops the instant we leave the viewer,
+    // even if leaveChannel lags - the audio leak the live test hit.
+    try {
+      await _engine?.muteAllRemoteAudioStreams(true);
+    } catch (_) {/* leaving anyway */}
     await _engine?.leaveChannel();
     _watching.value = false;
     _present.value = {};

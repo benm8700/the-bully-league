@@ -1,10 +1,12 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
-import '../../widgets/empty_state.dart';
 import '../../widgets/home_action_button.dart';
+import 'gauntlet_chat.dart';
 import 'live_viewer_screen.dart';
 
 /// Shared "watch the gauntlet" pieces: the live tournament pulse, the list of
@@ -216,23 +218,113 @@ class GauntletWatchList extends StatelessWidget {
         return Column(
           children: [
             for (final e in entries)
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.sensors, color: context.palette.live),
-                  title: Text(
-                      e.value == 0 ? 'Opening battle' : '${e.value}-win battle'),
-                  subtitle: const Text('Watch and vote'),
-                  trailing: const Icon(Icons.play_arrow),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => LiveViewerScreen(matchId: e.key),
-                    ),
-                  ),
-                ),
-              ),
+              _WatchRow(matchId: e.key, winTier: e.value),
           ],
         );
       },
+    );
+  }
+}
+
+/// One battle in the judge list. Streams the match so a just-finished battle
+/// flips from "Battling now" to "Vote now - Xm left" and stays in the list
+/// through its whole vote window, instead of vanishing the moment it ends.
+class _WatchRow extends StatefulWidget {
+  const _WatchRow({required this.matchId, required this.winTier});
+
+  final String matchId;
+  final int winTier;
+
+  @override
+  State<_WatchRow> createState() => _WatchRowState();
+}
+
+class _WatchRowState extends State<_WatchRow> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    // Keeps the "Xm left" fresh - the match doc itself doesn't change during
+    // the vote window, so the stream alone would never update the countdown.
+    _ticker = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tier = widget.winTier == 0 ? 'Opening battle' : '${widget.winTier}-win battle';
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('matches')
+          .doc(widget.matchId)
+          .snapshots(),
+      builder: (context, snap) {
+        final m = snap.data?.data();
+        final completed = m?['status'] == 'completed';
+        final finalized = m?['voteFinalized'] == true;
+        int? minsLeft;
+        if (completed && m != null) {
+          final comp = m['completedAt'];
+          final vw = m['voteWindowMs'];
+          if (comp is Timestamp && vw is num) {
+            final end = comp.millisecondsSinceEpoch + vw.toInt();
+            minsLeft =
+                ((end - DateTime.now().millisecondsSinceEpoch) / 60000).ceil();
+          }
+        }
+        final voteNow =
+            completed && !finalized && (minsLeft == null || minsLeft > 0);
+        final live = context.palette.live;
+        final reward = context.palette.reward;
+        return Card(
+          child: ListTile(
+            leading: Icon(voteNow ? Icons.how_to_vote : Icons.sensors,
+                color: voteNow ? reward : live),
+            title: Text(tier,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text(voteNow
+                ? (minsLeft != null && minsLeft > 0
+                    ? 'Vote now · ${minsLeft}m left'
+                    : 'Vote now')
+                : 'Battling now · watch'),
+            trailing: voteNow
+                ? _VoteNowTag(color: reward)
+                : const Icon(Icons.play_arrow),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => LiveViewerScreen(matchId: widget.matchId),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _VoteNowTag extends StatelessWidget {
+  const _VoteNowTag({required this.color});
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text('VOTE',
+          style: TextStyle(
+              color: color, fontWeight: FontWeight.w800, fontSize: 11)),
     );
   }
 }
@@ -260,41 +352,45 @@ class GauntletWatchScreen extends StatelessWidget {
         title: Text(name == null ? 'Judge the Gauntlet' : 'Judge: $name'),
         actions: const [HomeActionButton()],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
+      // Command centre: the live status + battles up top, the lobby chat
+      // below so the room keeps talking the whole event.
+      body: Column(
         children: [
-          GauntletPulse(tournamentId: tournamentId),
-          const SizedBox(height: 24),
-          Text('Live now - watch and vote', style: text.titleMedium),
-          const SizedBox(height: 4),
-          Text('Judging earns you points, and it is the crowd that decides.',
-              style: text.bodySmall),
-          const SizedBox(height: 12),
-          GauntletWatchList(
-            tournamentId: tournamentId,
-            excludeUid: myUid,
-            emptyText: 'No battles live right now. '
-                'Check back in a minute - the gauntlet is rolling.',
+          Expanded(
+            flex: 5,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              children: [
+                GauntletPulse(tournamentId: tournamentId),
+                const SizedBox(height: 18),
+                Text('Live now - watch and vote', style: text.titleMedium),
+                const SizedBox(height: 4),
+                Text('Judging earns you points, and the crowd decides.',
+                    style: text.bodySmall),
+                const SizedBox(height: 10),
+                GauntletWatchList(
+                  tournamentId: tournamentId,
+                  excludeUid: myUid,
+                  emptyText: 'No battles live right now. '
+                      'Check back in a minute - the gauntlet is rolling.',
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 24),
-          const _NothingLiveHint(),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Row(
+              children: [
+                const Icon(Icons.forum_outlined, size: 16),
+                const SizedBox(width: 6),
+                Text('Lobby chat', style: text.titleSmall),
+              ],
+            ),
+          ),
+          Expanded(flex: 6, child: GauntletChat(tournamentId: tournamentId)),
         ],
       ),
-    );
-  }
-}
-
-class _NothingLiveHint extends StatelessWidget {
-  const _NothingLiveHint();
-
-  @override
-  Widget build(BuildContext context) {
-    return const EmptyState(
-      icon: Icons.gavel,
-      title: 'The crowd is the judge',
-      message:
-          'Battles pop up here the moment two roasters go live. Watch a few, '
-          'pick who landed it, and bank the points.',
     );
   }
 }
