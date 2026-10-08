@@ -217,34 +217,10 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     });
   }
 
-  /// Readying up ends the reveal early (once both are ready), so it forgoes
-  /// the rest of the time to study the opponent's intro. That must be a
-  /// DELIBERATE act, not a stray tap - a confirmation stands between the
-  /// button and starting the battle so nobody skips their prep by accident.
-  Future<void> _confirmReady() async {
-    if (_busy || _iAmReady) return;
-    final go = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ready to battle?'),
-        content: const Text(
-            'The battle starts the moment you are both ready. You will not '
-            'get more time to watch their intro or read their card.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Keep studying'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text("I'm ready"),
-          ),
-        ],
-      ),
-    );
-    if (go == true) await _onReady();
-  }
-
+  /// Readying up ends the reveal early (once both are ready), forgoing the
+  /// rest of the study time. There is no confirmation step - the button says
+  /// exactly what it does and a second "are you sure?" popup just reads as the
+  /// app not trusting the tap (developer's call, 2026-10-07).
   Future<void> _onReady() async {
     if (_busy || _iAmReady) return;
     setState(() {
@@ -527,7 +503,7 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           FilledButton(
-            onPressed: (_busy || _iAmReady) ? null : _confirmReady,
+            onPressed: (_busy || _iAmReady) ? null : _onReady,
             child: Text(_iAmReady ? 'Ready - waiting for opponent' : "I'm Ready"),
           ),
           // Only ever offered once the opponent has genuinely gone quiet,
@@ -551,6 +527,12 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
               style: Theme.of(context).textTheme.bodySmall,
               textAlign: TextAlign.center,
             )
+          // No skipping in tournament play (developer's call, 2026-10-07):
+          // a bracket/gauntlet opponent is the one you were drawn against, and
+          // dodging them would break the format. The only way out is the
+          // opponent-gone escape above, which the forfeit sweep backs up.
+          else if (widget.pairing.mode == 'tournament')
+            const SizedBox.shrink()
           else if (skipsLeft == null || skipsLeft > 0)
             TextButton(
               onPressed: _busy ? null : _onSkip,

@@ -151,26 +151,11 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
                                   child: InkWell(onTap: openTournament),
                                 ),
                               ),
-                              Positioned(
-                                top: 6,
-                                right: 6,
-                                child: IconButton(
-                                  icon: const Icon(Icons.help_outline),
-                                  // Larger and full-white on a dark disc: at 20
-                                  // and white70 it was nearly invisible against
-                                  // the bright gold art.
-                                  iconSize: 28,
-                                  color: Colors.white,
-                                  tooltip: 'About this tournament',
-                                  style: IconButton.styleFrom(
-                                    backgroundColor:
-                                        Colors.black.withValues(alpha: 0.42),
-                                    padding: const EdgeInsets.all(6),
-                                  ),
-                                  onPressed: () =>
-                                      _showTournamentInfo(context, config),
-                                ),
-                              ),
+                              // The "?" help affordance used to float here on
+                              // the bright gold art and was nearly invisible
+                              // (developer's call, 2026-10-07). Moved to the
+                              // dark strip below the art as a clear "How it
+                              // works" link, where it reads unmistakably.
                             ],
                           ),
                         ),
@@ -215,6 +200,24 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
                                     context,
                                     label: 'ENTER TOURNAMENT',
                                     onTap: openTournament,
+                                  ),
+                                ),
+                                // The "How it works" explainer, on the dark
+                                // strip where it's clearly visible (it used to
+                                // be a near-invisible "?" floating on the art).
+                                TextButton.icon(
+                                  onPressed: () =>
+                                      _showTournamentInfo(context, config),
+                                  icon: const Icon(Icons.help_outline, size: 18),
+                                  label: const Text('How the tournament works'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor:
+                                        Colors.white.withValues(alpha: 0.82),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    minimumSize: const Size(0, 32),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                   ),
                                 ),
                               ],

@@ -38,8 +38,11 @@ const RESOLVE_GRACE_MS = 5 * 60 * 1000;
  * on a match where the battle NEVER started (see climbForfeitDecision) - a
  * battle in progress is exempt, which is the bug the 2026-09-01 dry run
  * found: a real battle stays `pending` its whole duration and was being
- * killed at this timeout. */
-const MATCH_TIMEOUT_MS = 8 * 60 * 1000;
+ * killed at this timeout. 5 min (was 8): long enough to cover consent + the
+ * camera check + a bit of bio-reveal study, short enough that a player left
+ * alone by a no-show gets their forfeit win quickly rather than waiting out a
+ * dead match (developer's call, 2026-10-07). */
+const MATCH_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** Once BOTH players have readied the battle has started; heartbeats stop, so
  * presence can no longer be judged. Only after this long crash-safety window
@@ -576,8 +579,46 @@ async function _sweepOne(db, ref, nowMs) {
   });
 }
 
+/**
+ * Crash / back-out recovery for the gauntlet. Finds whether the caller is
+ * still an ACTIVE climber (waiting for a next opponent OR mid-battle) in a
+ * live gauntlet, so Home can offer a one-click "return to the gauntlet"
+ * exactly like the matchmaking-queue banner does for a ranked match.
+ *
+ * The matchmaking-queue recovery (getActiveMatch) can't see this: a gauntlet
+ * runs off climb.climbers on the tournament doc, not the queue. So without
+ * this, backing out of (or crashing during) the gauntlet stranded you on
+ * Home even though you were still in it. Returning to ClimbScreen resumes the
+ * poll, which routes you straight back into your current battle if you have
+ * one - the timer kept running, but you get the chance to salvage it.
+ *
+ * A single-field `status == in_progress` query (no composite index); there is
+ * normally just the one nightly gauntlet live at a time.
+ */
+async function getActiveGauntlet(auth) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const db = getFirestore();
+  const snap = await db.collection("tournaments")
+      .where("status", "==", "in_progress").limit(10).get();
+  for (const doc of snap.docs) {
+    const t = doc.data();
+    if (!isClimb(t)) continue;
+    const me = climbersOf(t).find((c) => c && c.uid === auth.uid);
+    if (!me || !isActive(me)) continue;
+    return {
+      found: true,
+      tournamentId: doc.id,
+      name: t.name || "Daily Gauntlet",
+      inMatch: me.status === STATUS.in_match,
+      wins: num(me.wins),
+    };
+  }
+  return {found: false};
+}
+
 module.exports = {
   joinClimb,
+  getActiveGauntlet,
   climbPoll,
   applyClimbResult,
   applyClimbTie,

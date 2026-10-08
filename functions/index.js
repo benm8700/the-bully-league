@@ -584,6 +584,20 @@ exports.climbPoll = onCall((request) => {
   return climbPoll(request.auth, request.data);
 });
 
+// The Daily Gauntlet lobby chat: the only write path, so moderation, rate
+// limiting and the window gate can never be skipped. See functions/lobby.js.
+exports.postLobbyMessage = onCall((request) => {
+  const {postLobbyMessage} = require("./lobby");
+  return postLobbyMessage(request.auth, request.data);
+});
+
+// Crash/back-out recovery for the gauntlet: is the caller still an active
+// climber in a live gauntlet? Lets Home offer a one-click return.
+exports.getActiveGauntlet = onCall((request) => {
+  const {getActiveGauntlet} = require("./climbPlay");
+  return getActiveGauntlet(request.auth);
+});
+
 // The climb's backstop: force-resolves the endgame, forfeits stale unplayed
 // matches so one no-show cannot freeze the ladder, and crowns the champion at
 // the window's end. Every minute because climb matches are short.
@@ -1487,3 +1501,7 @@ exports.onVoteCast = onVoteCast;
  * at stats/belt. See functions/belt.js.
  */
 exports.onTournamentCompleted = require("./belt").onTournamentCompleted;
+
+// Wipes a gauntlet's lobby chat the moment it ends (completed or cancelled),
+// so a night's chat never outlives the night. See functions/lobby.js.
+exports.onGauntletEnded = require("./lobby").onGauntletEnded;

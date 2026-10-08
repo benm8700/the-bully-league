@@ -278,6 +278,28 @@ class MatchmakingService {
     }
   }
 
+  /// Crash/back-out recovery for the gauntlet: whether the caller is still an
+  /// active climber (waiting or mid-battle) in a live gauntlet, so Home can
+  /// offer a one-click return. Purely additive - a failure just hides the
+  /// banner.
+  Future<ActiveGauntlet?> activeGauntlet() async {
+    try {
+      final result = await _functions
+          .httpsCallable('getActiveGauntlet')
+          .call<Map<String, dynamic>>();
+      final data = result.data;
+      if (data['found'] != true) return null;
+      return ActiveGauntlet(
+        tournamentId: data['tournamentId'] as String,
+        name: data['name'] as String? ?? 'Daily Gauntlet',
+        inMatch: data['inMatch'] == true,
+        wins: (data['wins'] as num?)?.toInt() ?? 0,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Asks the backend to start recording this match. Called once by the
   /// host device as the match begins.
   ///
@@ -399,4 +421,22 @@ class SkipAllowance {
   /// Extra skips earned by judging today. Zero for most players, so the
   /// UI only mentions it when it is actually non-zero.
   final int earned;
+}
+
+/// Where the caller currently is in a live gauntlet, for the Home recovery
+/// banner. [inMatch] is true if they are mid-battle (returning resumes the
+/// poll, which routes them straight back into it); false if they are waiting
+/// for a next opponent.
+class ActiveGauntlet {
+  const ActiveGauntlet({
+    required this.tournamentId,
+    required this.name,
+    required this.inMatch,
+    required this.wins,
+  });
+
+  final String tournamentId;
+  final String name;
+  final bool inMatch;
+  final int wins;
 }

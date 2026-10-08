@@ -23,6 +23,7 @@ import '../../widgets/event_window_banner.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
+import '../tournament/climb_screen.dart';
 import '../elite/elite_league_screen.dart';
 import '../profile/profile_screen.dart';
 import '../friends/challenge_screen.dart';
@@ -135,6 +136,7 @@ class HomeScreen extends StatelessWidget {
                     // Anything urgent stays at the very top: a match
                     // waiting, or somebody challenging you.
                     const _ActiveMatchBanner(),
+                    const _ActiveGauntletBanner(),
                     const _IncomingChallengeBanner(),
                     // The "defend your throne" warning - shown only to a GOAT
                     // under threat or the challenger closing on their spot.
@@ -795,6 +797,117 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
                     'friend' => 'Rejoin battle',
                     _ => 'Rejoin match',
                   },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One-click return to a live gauntlet you backed out of or crashed during.
+///
+/// The matchmaking-queue banner above can't see the gauntlet (it runs off the
+/// tournament doc, not the queue), so without this, leaving or crashing out of
+/// the gauntlet stranded you on Home even though you were still in it.
+/// Returning resumes the ClimbScreen poll, which routes you straight back into
+/// your current battle if you have one. Re-checks on resume, like the other.
+class _ActiveGauntletBanner extends StatefulWidget {
+  const _ActiveGauntletBanner();
+
+  @override
+  State<_ActiveGauntletBanner> createState() => _ActiveGauntletBannerState();
+}
+
+class _ActiveGauntletBannerState extends State<_ActiveGauntletBanner>
+    with WidgetsBindingObserver {
+  final _service = MatchmakingService();
+  ActiveGauntlet? _active;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _check();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _check();
+  }
+
+  Future<void> _check() async {
+    final active = await _service.activeGauntlet();
+    if (!mounted) return;
+    setState(() => _active = active);
+  }
+
+  void _return() {
+    final active = _active;
+    if (active == null) return;
+    setState(() => _active = null);
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+          // Consent was given on first entry; the ClimbScreen only re-prompts
+          // as a fallback if it somehow arrives unconsented.
+          builder: (_) => ClimbScreen(
+            tournamentId: active.tournamentId,
+            name: active.name,
+            consented: true,
+          ),
+        ))
+        .then((_) => _check());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final active = _active;
+    if (active == null) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Card(
+        color: context.palette.reward.withValues(alpha: 0.18),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: context.palette.reward.withValues(alpha: 0.6)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.emoji_events, color: context.palette.reward),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      active.inMatch
+                          ? "You're in a gauntlet battle - get back in"
+                          : "You're still in the gauntlet",
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, color: scheme.onSurface),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _return,
+                  icon: const Icon(Icons.replay),
+                  label: Text(active.inMatch
+                      ? 'Rejoin your battle'
+                      : 'Return to the gauntlet'),
                 ),
               ),
             ],

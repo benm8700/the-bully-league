@@ -456,6 +456,21 @@ service cloud.firestore {
           get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.status == 'open';
         allow update: if false;
       }
+
+      // The Daily Gauntlet lobby chat. Clients READ it live (a cheap listener),
+      // but may never WRITE directly: every message goes through the
+      // postLobbyMessage Cloud Function, which moderates, rate-limits and
+      // window-gates it. A direct client write would skip all of that.
+      match /lobbyChat/{messageId} {
+        allow read: if request.auth != null;
+        allow write: if false;
+      }
+      // Per-poster rate records, written only by the Cloud Function. Closed to
+      // clients entirely - a client that could reset its own record would
+      // bypass the rate limit.
+      match /lobbyRate/{userId} {
+        allow read, write: if false;
+      }
     }
 
     match /reports/{reportId} {

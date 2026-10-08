@@ -6,6 +6,7 @@ import '../../widgets/empty_state.dart';
 import '../../core/services/clip_cache.dart';
 import '../../core/services/watch_feed_service.dart';
 import '../../widgets/turnstile_challenge.dart';
+import '../tournament/gauntlet_watch.dart';
 import 'feed_page.dart';
 
 /// The Judge tab: one vertical feed of battles.
@@ -367,6 +368,15 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
           SafeArea(
             top: false,
             child: _buildBody(),
+          ),
+          // Tournament judging, surfaced where everyone already is. Sits at the
+          // top-centre between the vote badge (left) and the clip controls
+          // (right); renders nothing unless a gauntlet battle is live.
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 0,
+            right: 0,
+            child: const Center(child: GauntletLivePill()),
           ),
         ],
       ),

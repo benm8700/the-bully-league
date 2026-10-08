@@ -11,7 +11,8 @@ import '../../core/services/matchmaking_service.dart';
 import '../../theme/app_theme.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
-import 'live_viewer_screen.dart';
+import 'gauntlet_lobby_screen.dart';
+import 'gauntlet_watch.dart';
 
 /// The nightly "climb" tournament, from the player's seat.
 ///
@@ -255,8 +256,9 @@ class _ClimbScreenState extends State<ClimbScreen> {
 
   // --- Watch list ----------------------------------------------------------
 
-  /// The header, then the OTHER live battles to watch/vote on, read live from
-  /// the tournament document (the in-match climbers and their match ids).
+  /// The header, the live tournament pulse (how many battles are on, who's
+  /// still in, who's out), then the OTHER live battles to watch/vote on - all
+  /// read live from the tournament document, no extra callable.
   Widget _statusWithWatch(BuildContext context, Widget header) {
     final text = Theme.of(context).textTheme;
     return ListView(
@@ -270,6 +272,23 @@ class _ClimbScreenState extends State<ClimbScreen> {
           ),
           child: header,
         ),
+        const SizedBox(height: 16),
+        GauntletPulse(tournamentId: widget.tournamentId),
+        const SizedBox(height: 12),
+        // The green room: hang out + chat with everyone while you wait for a
+        // same-tier opponent.
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => GauntletLobbyScreen(
+                tournamentId: widget.tournamentId,
+                name: widget.name,
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.forum_outlined),
+          label: const Text('Lobby & chat'),
+        ),
         const SizedBox(height: 24),
         Text('Live now - watch and vote',
             style: text.titleMedium),
@@ -277,7 +296,8 @@ class _ClimbScreenState extends State<ClimbScreen> {
         Text('Judging earns you points, and it is the crowd that decides.',
             style: text.bodySmall),
         const SizedBox(height: 12),
-        _WatchList(tournamentId: widget.tournamentId, myUid: _uid),
+        GauntletWatchList(
+            tournamentId: widget.tournamentId, excludeUid: _uid),
       ],
     );
   }
@@ -334,58 +354,6 @@ class _ClimbScreenState extends State<ClimbScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// The live climb battles happening right now, other than the viewer's own.
-/// Read straight from the tournament document's climb.climbers - no extra
-/// callable - so waiting players can spectate + vote.
-class _WatchList extends StatelessWidget {
-  const _WatchList({required this.tournamentId, required this.myUid});
-
-  final String tournamentId;
-  final String myUid;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('tournaments').doc(tournamentId).snapshots(),
-      builder: (context, snapshot) {
-        final climbers = ((snapshot.data?.data()?['climb']
-            as Map<String, dynamic>?)?['climbers'] as List?) ?? const [];
-        // Distinct match ids of in-match climbers, excluding my own battle.
-        final matchIds = <String>{};
-        for (final c in climbers) {
-          final m = (c as Map)['currentMatchId'] as String?;
-          if (m == null) continue;
-          if (c['uid'] == myUid) continue;
-          matchIds.add(m);
-        }
-        if (matchIds.isEmpty) {
-          return Text('No other battles live this second - hang tight.',
-              style: Theme.of(context).textTheme.bodySmall);
-        }
-        return Column(
-          children: [
-            for (final matchId in matchIds)
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.sensors, color: context.palette.live),
-                  title: const Text('Live battle'),
-                  subtitle: const Text('Watch and vote'),
-                  trailing: const Icon(Icons.play_arrow),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => LiveViewerScreen(matchId: matchId),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
     );
   }
 }

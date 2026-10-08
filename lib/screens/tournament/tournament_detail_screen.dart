@@ -9,6 +9,8 @@ import '../../widgets/admin_only.dart';
 import '../../widgets/live_checkin.dart';
 import '../../widgets/watch_live_list.dart';
 import 'climb_screen.dart';
+import 'gauntlet_lobby_screen.dart';
+import 'gauntlet_watch.dart';
 import 'gauntlet_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
@@ -320,7 +322,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                     const SizedBox(height: 16),
                     if (status == 'completed' || status == 'cancelled')
                       const Text('This gauntlet has finished.')
-                    else if (liveNow || status == 'open')
+                    else if (liveNow || status == 'open') ...[
                       FilledButton.icon(
                         onPressed: () async {
                           // Recording-consent acknowledgement before joining,
@@ -343,8 +345,40 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                         },
                         icon: const Icon(Icons.trending_up),
                         label: const Text('Enter the gauntlet'),
-                      )
-                    else if (preWindow)
+                      ),
+                      const SizedBox(height: 8),
+                      // Judge-straight-to-it: a spectator can watch and vote on
+                      // the live battles without entering the gauntlet (or
+                      // finishing a match first). Votes are the scarce resource,
+                      // so this path is always open.
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => GauntletWatchScreen(
+                              tournamentId: widget.tournamentId,
+                              name: name,
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(Icons.gavel),
+                        label: const Text('Judge live battles'),
+                      ),
+                      const SizedBox(height: 8),
+                      // The green room: hang out + chat with everyone in
+                      // tonight's gauntlet while you wait.
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => GauntletLobbyScreen(
+                              tournamentId: widget.tournamentId,
+                              name: name,
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(Icons.forum_outlined),
+                        label: const Text('Lobby & chat'),
+                      ),
+                    ] else if (preWindow)
                       const Text(
                           'Not live yet - come back when the Daily Gauntlet '
                           'starts.')

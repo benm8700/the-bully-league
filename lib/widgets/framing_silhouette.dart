@@ -3,13 +3,14 @@ import 'package:flutter/material.dart';
 /// The pre-match framing guide, shared by the camera check and the tutorial so
 /// the framing you practise is the framing you see before every battle.
 ///
-/// It is a transparent smiley face - a circle you line your own face up in,
-/// with X eyes and a grin. The X-eyed grin is the on-brand "roasted to death,
-/// still laughing" bit; it is only ever seen in-app by signed-in adults during
-/// the camera check, so a playful KO face beats a plain oval. The old
-/// full-body silhouette locked people into one pose and body shape, so most
-/// real people never fit it; a face circle only cares about your head, which
-/// is all the framing actually needs.
+/// It is a transparent X-eyed grin - just the eyes and mouth, no ring around
+/// them (developer's call, 2026-10-07: the circle read as clutter; the floating
+/// KO face looks cleaner over the live camera). The X-eyed grin is the on-brand
+/// "roasted to death, still laughing" bit; it is only ever seen in-app by
+/// signed-in adults during the camera check. The features are still sized and
+/// placed off an invisible head radius so they stay proportioned and sit high
+/// in the frame on any screen - which keeps the old framing cue (sit back,
+/// head-and-shoulders) without drawing the ring.
 ///
 /// Drawn with a dark under-stroke beneath a white line so it stays legible
 /// over both a bright and a dark camera feed.
@@ -34,9 +35,6 @@ class _FramingPainter extends CustomPainter {
     final h = size.height;
     Offset o(double fx, double fy) => Offset(w * fx, h * fy);
 
-    final fill = Paint()
-      ..color = Colors.white.withValues(alpha: 0.10)
-      ..style = PaintingStyle.fill;
     final under = Paint()
       ..color = Colors.black.withValues(alpha: 0.35)
       ..style = PaintingStyle.stroke
@@ -50,15 +48,13 @@ class _FramingPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    // Face circle - the thing you line your head up with. Everything else is
-    // sized off its radius so the smiley stays proportioned on any screen.
+    // Invisible head radius - the eyes and mouth are sized and placed off it
+    // so the KO face stays proportioned and sits high in the frame on any
+    // screen, even though the ring itself is no longer drawn. The smaller
+    // radius still nudges people to sit BACK (head-and-shoulders) rather than
+    // jamming their face into the lens.
     final c = o(0.50, 0.30);
-    // Deliberately smaller than face-filling: a smaller circle makes people
-    // sit BACK from the camera (framing head-and-shoulders) rather than
-    // pressing their face right up to the lens. Sat high in the frame so
-    // there is no wasted dead space above the head.
     final r = w * 0.20;
-    final headPath = Path()..addOval(Rect.fromCircle(center: c, radius: r));
 
     // X eyes: two short crossing strokes each, up and out from the centre.
     final eyeDx = r * 0.42;
@@ -83,12 +79,7 @@ class _FramingPainter extends CustomPainter {
       ..moveTo(c.dx - smileHalf, smileY)
       ..quadraticBezierTo(c.dx, smileY + smileDip, c.dx + smileHalf, smileY);
 
-    // Circle first (faint fill + outline).
-    canvas.drawPath(headPath, fill);
-    canvas.drawPath(headPath, under);
-    canvas.drawPath(headPath, line);
-
-    // Then the X eyes and the grin as strokes, dark halo under white line.
+    // The X eyes and the grin as strokes, dark halo under white line. No ring.
     for (final p in [eyes, mouth]) {
       canvas.drawPath(p, under);
       canvas.drawPath(p, line);
