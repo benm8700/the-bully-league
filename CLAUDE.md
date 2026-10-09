@@ -4488,11 +4488,28 @@ reads cowardly; calling out your rival is the play the crowd wants).
   **parallelism lives ONLY in the qualifier layer, never the finals.**
 - **Finals battles still move Elo** like any ranked match, so a strong tournament
   feeds next week's qualifying - the cycle keeps turning.
+- **CALLOUT SCREEN SPEC (live client, NOT built - this is the spec for when it
+  is, 2026-10-09).** The #1 does NOT scroll through windows researching
+  strangers: they are choosing among only **3 people** (the other finalists)
+  whom they already studied during the week-long qualifier / "Tonight's Field"
+  phase - the research is deliberately front-loaded there so the callout stays a
+  fast, dramatic PICK, not homework. The screen shows **all 3 candidates
+  side-by-side on ONE screen** (face + name + rank crest, no scrolling); each
+  card is tappable for a quick refresher (intro video / ammo) but the #1 should
+  not NEED it; tapping one locks the pick, snaps that opponent SIDE-BY-SIDE with
+  the #1 for the staredown, and the #1 trash-talks the pick out loud. Three
+  faces, tap to pick. The backend (candidate list = field minus #1, pick
+  validation, bracket build via `mainStageCallout`/`createBracket`) is built and
+  tested; only this screen is unbuilt (parked with the rest of the live client).
 
 ### Main Stage battle format - the chess clock + interrupts
-Replaces the normal 3x15s format on the Main Stage (study phase cut - study
-happens on the qualifier roster beforehand, so the battle is ~a few min of
-actual talk):
+**ALL THREE Main Stage battles use this format - both semifinals AND the final**
+(confirmed 2026-10-09). It is a property of being a Main Stage battle, not of
+being the final: `mainStageBattle.createBattle` is called identically for every
+matchup in the bracket, with no per-round distinction. The normal 3x15s format
+is only ever used for ordinary ranked/daily battles, never on the Main Stage.
+The study phase is cut (study happens on the qualifier roster beforehand), so a
+Main Stage battle is ~a few min of actual talk:
 - **Two 1-minute clocks that run ONLY while you hold the floor** (chess-clock) -
   "talk as long as you want" is bounded by your remaining minute, so no
   filibuster. Unused seconds BANK for later in the battle.
