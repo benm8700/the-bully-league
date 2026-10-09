@@ -504,6 +504,40 @@ exports.submitPrizeClaim = onCall(async (request) => {
   return submitPrizeClaim(request.auth, request.data);
 });
 
+// Main Stage (weekly finals) lifecycle. Gated on config/tournament.enabled like
+// the qualifier: until it flips, no Main Stage tournament is ever created or
+// locked, so this sweep no-ops and the callables below have nothing to act on.
+// Creates the tournament from the frozen qualifier snapshot and locks the
+// field + panel at Thu 4pm Pacific. See mainStageTournament.js.
+exports.sweepMainStage = onSchedule("every 15 minutes", async () => {
+  const {sweepMainStage} = require("./mainStageTournament");
+  try {
+    const r = await sweepMainStage();
+    if (!r.skipped) console.log("sweepMainStage:", JSON.stringify(r));
+  } catch (err) {
+    console.error("sweepMainStage failed:", err);
+  }
+});
+
+// A finalist/alternate confirms or declines their Main Stage invite.
+exports.respondToMainStageInvite = onCall(async (request) => {
+  const {respondToInvite} = require("./mainStageTournament");
+  return respondToInvite(request.auth, request.data);
+});
+
+// The founder hand-picks the 5-seat panel (head judge + guests). Admin-only.
+exports.setMainStageJudges = onCall(async (request) => {
+  const {setJudges} = require("./mainStageTournament");
+  await requireAdmin(request.auth);
+  return setJudges(request.auth, request.data, true);
+});
+
+// The #1 seed's live callout -> builds the bracket and opens the show.
+exports.mainStageCallout = onCall(async (request) => {
+  const {callout} = require("./mainStageTournament");
+  return callout(request.auth, request.data);
+});
+
 /**
  * Rolls a recent sample of matches into stats/matchStats once a day - round
  * length, completion rate, votes per match, counts by mode. The data already

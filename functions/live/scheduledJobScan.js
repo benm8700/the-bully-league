@@ -77,6 +77,8 @@ const JOBS = [
   {name: "sweepGauntlet", mod: "../swissPlay", fn: "sweepGauntlet"},
   {name: "sweepWeeklyQualifier", mod: "../weeklyTournament",
     fn: "sweepWeeklyQualifier", note: "no-ops while config/tournament off"},
+  {name: "sweepMainStage", mod: "../mainStageTournament",
+    fn: "sweepMainStage", note: "no-ops while config/tournament off"},
   {name: "aggregateMatchStats", mod: "../matchStats", fn: "aggregateMatchStats"},
   {name: "awardEmojiTopAwards", mod: "../emojiTopAwards",
     fn: "awardEmojiTopTitles"},

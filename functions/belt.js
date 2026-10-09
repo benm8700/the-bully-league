@@ -49,9 +49,18 @@ function beltTransition(current, {championUid, championName, tournamentId, nowMs
   };
 }
 
-/** The belt is only contested in the nightly Daily Gauntlet. PURE. */
+/**
+ * The belt is only contested in the nightly Daily Gauntlet. PURE.
+ *
+ * It is auto-created (createdBy "auto") AND is NOT the weekly Main Stage: the
+ * Main Stage finals are also auto-created ("auto") but are a separate, bigger
+ * weekly event that carries its own prize and the permanent Champion badge -
+ * winning it must never move the nightly belt, which is explicitly the Daily
+ * Gauntlet champion's title. (A future daily format keeps the belt; only
+ * mainstage is carved out.)
+ */
 function isGauntlet(t) {
-  return !!t && t.createdBy === "auto";
+  return !!t && t.createdBy === "auto" && t.format !== "mainstage";
 }
 
 /** The crowned champion of a completed gauntlet, whatever the format wrote. */

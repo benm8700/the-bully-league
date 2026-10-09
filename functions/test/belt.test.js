@@ -69,9 +69,18 @@ test("a defense with no fresh name keeps the stored name", () => {
 
 test("only the Daily Gauntlet (createdBy auto) contests the belt", () => {
   assert.strictEqual(isGauntlet({createdBy: "auto"}), true);
+  assert.strictEqual(isGauntlet({createdBy: "auto", format: "climb"}), true);
+  assert.strictEqual(isGauntlet({createdBy: "auto", format: "swiss"}), true);
   assert.strictEqual(isGauntlet({createdBy: "admin"}), false);
   assert.strictEqual(isGauntlet({}), false);
   assert.strictEqual(isGauntlet(null), false);
+});
+
+test("the weekly Main Stage (also auto) never moves the daily belt", () => {
+  // buildMainStageDoc writes createdBy "auto" too, so without the format carve-
+  // out a weekly finals win would wrongly take the nightly belt.
+  assert.strictEqual(
+      isGauntlet({createdBy: "auto", format: "mainstage"}), false);
 });
 
 test("championOf reads the winner whatever the format wrote", () => {
