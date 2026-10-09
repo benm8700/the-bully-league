@@ -257,6 +257,23 @@ class MainStageService {
   }
 }
 
+/// The bracket slot a finalist is about to play - everything
+/// [MainStageService.startBattle] needs. Carried through the pre-match camera
+/// check so the battle is only CREATED once the player passes the check and
+/// commits (a finals battle can't be requeued if the setup is bad).
+@immutable
+class MainStageStart {
+  const MainStageStart({
+    required this.tournamentId,
+    required this.roundIdx,
+    required this.matchIdx,
+  });
+
+  final String tournamentId;
+  final int roundIdx;
+  final int matchIdx;
+}
+
 /// The pairing for a Main Stage chess-clock battle - the two named
 /// semifinalists in one channel, plus the clock config from the server.
 class MainStageBattlePairing {

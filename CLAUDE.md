@@ -4430,10 +4430,12 @@ games) are tunable placeholders per the economy-advisor-review discipline.
   desk** (the five judges seeing each other and debating on camera - the lean
   model has each judge watch the battle + vote, no cross-judge video); the
   founder "editor's-choice" pick + 50-pick badge; the **Home rework**
-  (ranked-primary + weekly-tournament countdown/qualifying banner); a pre-match
-  camera/mic check before the finals battle; and - the real gate - a **2-device
-  dry run** of the live battle + judging (none of the live client is verified on
-  real devices yet). Everything stays behind `config/tournament.enabled`.
+  (ranked-primary + weekly-tournament countdown/qualifying banner); and - the
+  real gate - a **2-device dry run** of the live battle + judging (none of the
+  live client is verified on real devices yet). Everything stays behind
+  `config/tournament.enabled`. (The pre-match camera/mic check before the finals
+  battle IS now wired - consent -> PreMatchScreen `mainStageStart` branch, which
+  creates the battle only on ready, so a back-out strands nothing.)
 - **Context (the earlier 2026-10-09 PARK, now lifted):** the player-facing live
   build had been parked pending the developer's advisor + blitzkrieg
   conversations; the developer then directed the lean build to proceed this

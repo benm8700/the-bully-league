@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import '../../core/services/main_stage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
+import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import 'judges_room_screen.dart';
 import 'live_viewer_screen.dart';
-import 'main_stage_battle_screen.dart';
 import 'main_stage_callout_screen.dart';
 
 /// The Main Stage (weekly finals) front door: tells the viewer where they stand
@@ -31,9 +31,10 @@ class _MainStageScreenState extends State<MainStageScreen> {
   String? _error;
 
   /// A finals battle is recorded, so recording consent is required first (same
-  /// as every recorded match); then start the battle and step on stage. The
-  /// battle screen brings up the camera via Agora - a pre-match lighting/mic
-  /// check could be slotted in before it later.
+  /// as every recorded match); then a camera/mic check, which matters MORE
+  /// here than in ranked - a finals battle can't be requeued if the setup is
+  /// bad. The check CREATES the battle only on "ready" (startBattle lives in
+  /// PreMatchScreen's mainStageStart branch), so a back-out strands nothing.
   Future<void> _startBattle(MainStageView v) async {
     if (v.myMatchupRound == null || v.myMatchupIndex == null) return;
     setState(() {
@@ -48,19 +49,19 @@ class _MainStageScreenState extends State<MainStageScreen> {
         if (mounted) setState(() => _startingBattle = false);
         return;
       }
-      final pairing = await _service.startBattle(
-        tournamentId: v.tournamentId,
-        roundIdx: v.myMatchupRound!,
-        matchIdx: v.myMatchupIndex!,
-      );
       if (!mounted) return;
       await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => MainStageBattleScreen(pairing: pairing)),
+        MaterialPageRoute(
+          builder: (_) => PreMatchScreen(
+            mode: 'ranked', // unused for the mainStage branch (no queue)
+            mainStageStart: MainStageStart(
+              tournamentId: v.tournamentId,
+              roundIdx: v.myMatchupRound!,
+              matchIdx: v.myMatchupIndex!,
+            ),
+          ),
+        ),
       );
-    } catch (e) {
-      if (mounted) {
-        setState(() => _error = "Couldn't start your battle — try again.");
-      }
     } finally {
       if (mounted) setState(() => _startingBattle = false);
     }

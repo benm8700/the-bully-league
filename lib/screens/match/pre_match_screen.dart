@@ -10,11 +10,13 @@ import 'package:sensors_plus/sensors_plus.dart';
 import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
 import '../../core/services/capture_quality.dart';
+import '../../core/services/main_stage_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/steadiness_monitor.dart';
 import '../../core/services/video_call_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/framing_silhouette.dart';
+import '../tournament/main_stage_battle_screen.dart';
 import '../tournament/tournament_lobby_screen.dart';
 import 'bio_reveal_screen.dart';
 import 'matchmaking_screen.dart';
@@ -58,7 +60,15 @@ class PreMatchScreen extends StatefulWidget {
     this.tournamentId,
     this.challengeMatchId,
     this.climbPairing,
+    this.mainStageStart,
   });
+
+  /// Set when this check precedes a MAIN STAGE (weekly finals) battle. The
+  /// bracket slot is already decided; on ready we CREATE the battle (startBattle
+  /// stamps the match) and step straight on stage. Checking the camera first,
+  /// then creating the match, means a failed check or a back-out never leaves a
+  /// stranded battle the opponent could rejoin.
+  final MainStageStart? mainStageStart;
 
   /// Set when this check precedes an already-agreed FRIEND battle. Like a
   /// tournament match there is no queue to join - the two players are
@@ -249,6 +259,34 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     if (!mounted) return;
     final tournamentId = widget.tournamentId;
     final challengeMatchId = widget.challengeMatchId;
+
+    // Main Stage finals: create the battle now (the camera is verified), then
+    // step straight on stage - no bio reveal / warmup, the chess-clock format
+    // opens the moment both are in. startBattle is idempotent, so if the
+    // opponent started first we rejoin the SAME match.
+    final mainStageStart = widget.mainStageStart;
+    if (mainStageStart != null) {
+      try {
+        final pairing = await MainStageService().startBattle(
+          tournamentId: mainStageStart.tournamentId,
+          roundIdx: mainStageStart.roundIdx,
+          matchIdx: mainStageStart.matchIdx,
+        );
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => MainStageBattleScreen(pairing: pairing),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _navigating = false;
+          _error = "Couldn't start your battle — try again.";
+        });
+      }
+      return;
+    }
 
     // Climb match: the pairing is already in hand, so straight to the bio
     // reveal (the intro + warmup + battle flow) like any other named matchup.
