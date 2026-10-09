@@ -1,8 +1,5 @@
 export const runtime = "nodejs";
 
-import { AdminAuthError, getAdminFirestore, verifyAdmin } from "@/lib/firebaseAdmin";
-import { FieldValue } from "firebase-admin/firestore";
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 const STATUSES = ["active", "banned", "flagged"];
 const REVIEW_STATES = ["reviewed", "actioned", "dismissed"];
@@ -11,15 +8,33 @@ const CONFIG_DOCS = ["tournament", "monetization"];
 // All admin WRITES go through here, each verified admin-only and stamped with
 // who did it. Admin SDK writes bypass firestore.rules, which is exactly why the
 // verifyAdmin gate (real ID token + isAdmin) is non-negotiable.
+//
+// firebase-admin is imported DYNAMICALLY inside the handler (see
+// metrics/route.ts): a top-level import crashes the serverless function on
+// Vercel with a bare 500.
 export async function POST(request: Request) {
+  let FieldValue: typeof import("firebase-admin/firestore").FieldValue;
+  let db: FirebaseFirestore.Firestore;
   let admin: { uid: string };
   try {
-    admin = await verifyAdmin(request);
-  } catch (e) {
-    if (e instanceof AdminAuthError) {
-      return Response.json({ error: e.message }, { status: e.status });
+    const { AdminAuthError, getAdminFirestore, verifyAdmin } = await import(
+      "@/lib/firebaseAdmin"
+    );
+    ({ FieldValue } = await import("firebase-admin/firestore"));
+    try {
+      admin = await verifyAdmin(request);
+    } catch (e) {
+      if (e instanceof AdminAuthError) {
+        return Response.json({ error: e.message }, { status: e.status });
+      }
+      throw e;
     }
-    throw e;
+    db = getAdminFirestore();
+  } catch (e) {
+    return Response.json(
+      { error: String((e as Error)?.message ?? e) },
+      { status: 500 },
+    );
   }
 
   let body: Record<string, unknown>;
@@ -29,7 +44,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const db = getAdminFirestore();
   const type = String(body.type ?? "");
   const stamp = {
     by: admin.uid,

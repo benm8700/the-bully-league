@@ -1,17 +1,28 @@
 export const runtime = "nodejs";
 
-import { AdminAuthError, verifyAdmin } from "@/lib/firebaseAdmin";
-import { collectMetrics } from "@/lib/adminMetrics";
-
+// firebase-admin is imported DYNAMICALLY inside the handler. A top-level import
+// of firebase-admin (directly or transitively) crashes the Route Handler's
+// serverless function at load on Vercel with a bare 500 - proven in production:
+// the identical me route only started working once its import was deferred this
+// way. Deferring it also lets any real failure be caught and reported.
 export async function GET(request: Request) {
   try {
-    await verifyAdmin(request);
-  } catch (e) {
-    if (e instanceof AdminAuthError) {
-      return Response.json({ error: e.message }, { status: e.status });
+    const { AdminAuthError, verifyAdmin } = await import("@/lib/firebaseAdmin");
+    const { collectMetrics } = await import("@/lib/adminMetrics");
+    try {
+      await verifyAdmin(request);
+    } catch (e) {
+      if (e instanceof AdminAuthError) {
+        return Response.json({ error: e.message }, { status: e.status });
+      }
+      throw e;
     }
-    throw e;
+    const metrics = await collectMetrics();
+    return Response.json(metrics);
+  } catch (e) {
+    return Response.json(
+      { error: String((e as Error)?.message ?? e) },
+      { status: 500 },
+    );
   }
-  const metrics = await collectMetrics();
-  return Response.json(metrics);
 }
