@@ -1026,15 +1026,18 @@ Raised by the developer: what protects someone who is unhappy that their match f
   - **STILL OPEN**: the developer wanted to revisit the whole Home rank-card
     design later (a full overhaul or further tweaks); that larger pass is
     unchanged by this.
-- **APP LAUNCHER ICON — NOT DESIGNED (2026-09-28, developer).** The actual
-  app icon (the `com.bullyleague.app` launcher/exe icon on the home screen and
-  in the store listing) is still the Flutter default. Needs a real designed
-  icon — on brand (Comedy Night: charcoal + hot-pink, the wordmark/mask motif)
-  and in the full Android adaptive-icon set (foreground/background layers +
-  legacy density variants), wired via `flutter_launcher_icons` or the manifest
-  `mipmap` set. It is a Play-listing requirement, so it must land before the
-  internal-testing upload. Capture now; design later with the other brand art
-  (rank crests, emoji badge art, the intro/outro card).
+- **APP LAUNCHER ICON — DONE (~2026-10-03; this note was stale until
+  2026-10-09).** The launcher icon IS designed and wired: `pubspec.yaml`
+  carries a `flutter_launcher_icons` config (source: the developer's 1024x1024
+  head-to-head image), and the generated Android adaptive-icon set is in the
+  tree (`ic_launcher_foreground.png` across all drawable densities,
+  `mipmap-anydpi-v26/ic_launcher.xml`, `ic_launcher.png` across all mipmaps,
+  dated Oct 3). Brand art also present: `assets/branding/bully_league_header.png`
+  and `bully_league_wordmark.png`. **(The original 2026-09-28 "NOT DESIGNED /
+  still Flutter default" note was never updated when the icon was made — a
+  reminder that CLAUDE.md can drift from reality; verify against the tree.)**
+  Still open for a designer: illustrated emoji/badge art (currently glyphs) and
+  the clip intro/outro card + audio sting.
 - **EMOJI SUPERLATIVE AWARDS — BUILT (2026-10-01).** The per-player emoji
   ratings (🔥 Fire / 🧠 Clever / 🥱 Boring / 💩 Trash) now grow four
   platform-wide superlative AWARDS: The Inferno (most 🔥), The Mastermind
