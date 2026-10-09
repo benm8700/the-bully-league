@@ -480,6 +480,22 @@ exports.publishOnlineCount = onSchedule("every 1 minutes", async () => {
   }
 });
 
+// The weekly tournament qualifier: publishes the live weekly-Elo leaderboard
+// and, when a week closes (Wed 11:59pm PST), freezes the top-4 + alternates.
+// GATED on config/tournament.enabled, which ships FALSE - until the developer
+// flips it this no-ops, so the tournament stays inert though fully built. See
+// weeklyTournament.js. 15 min is plenty: the board need not be minute-fresh and
+// the cutoff is caught well inside the Thu-4pm acceptance window.
+exports.sweepWeeklyQualifier = onSchedule("every 15 minutes", async () => {
+  const {sweepWeeklyQualifier} = require("./weeklyTournament");
+  try {
+    const r = await sweepWeeklyQualifier();
+    if (!r.skipped) console.log("sweepWeeklyQualifier:", JSON.stringify(r));
+  } catch (err) {
+    console.error("sweepWeeklyQualifier failed:", err);
+  }
+});
+
 /**
  * Rolls a recent sample of matches into stats/matchStats once a day - round
  * length, completion rate, votes per match, counts by mode. The data already

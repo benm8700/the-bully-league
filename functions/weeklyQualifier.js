@@ -77,6 +77,29 @@ function qualifyingWeek(nowMs) {
   };
 }
 
+/**
+ * The week that has most recently CLOSED as of nowMs: [cutoff - 7d, cutoff),
+ * where cutoff is the Thursday 00:00 Pacific at or before now. The snapshot job
+ * runs just after a cutoff and uses this to freeze the final standings of the
+ * week that just ended.
+ *
+ * Invariant with qualifyingWeek: the current week starts exactly where the
+ * most-recently-closed week ended, so qualifyingWeek(now).startMs ===
+ * mostRecentlyClosedWeek(now).cutoffMs (pinned by a test).
+ */
+function mostRecentlyClosedWeek(nowMs) {
+  const {dayKey} = pacificNow(new Date(nowMs));
+  const daysBack = (weekdayOf(dayKey) - THURSDAY + 7) % 7; // 0 if today is Thu
+  const cutoffDayKey = addDaysKey(dayKey, -daysBack);
+  const startDayKey = addDaysKey(cutoffDayKey, -7);
+  return {
+    startDayKey,
+    cutoffDayKey,
+    startMs: pacificWallClockToUtcMs(startDayKey, 0, 0),
+    cutoffMs: pacificWallClockToUtcMs(cutoffDayKey, 0, 0),
+  };
+}
+
 /** Coerce a ratingHistory `at` (Firestore Timestamp, millis, or Date) to ms. */
 function toMs(at) {
   if (at == null) return NaN;
@@ -133,6 +156,7 @@ function topN(standings, n) {
 
 module.exports = {
   qualifyingWeek,
+  mostRecentlyClosedWeek,
   computeStandings,
   topN,
   toMs,

@@ -1,6 +1,7 @@
 const assert = require("assert");
 const {
   qualifyingWeek,
+  mostRecentlyClosedWeek,
   computeStandings,
   topN,
   weekdayOf,
@@ -76,6 +77,40 @@ check("cutoff and start always land on a Thursday, now always inside", () => {
     assert.strictEqual(weekdayOf(w.startDayKey), THURSDAY);
     assert.ok(now >= w.startMs && now < w.cutoffMs,
         `now within week for ${new Date(now).toISOString()}`);
+  }
+});
+
+console.log("weekly qualifier - mostRecentlyClosedWeek (snapshot target)");
+
+check("just after a Thursday cutoff -> the week that just closed", () => {
+  // Thu Jan 8 2026 00:05 PST = Jan 8 08:05 UTC, just past the Thu 00:00 cutoff.
+  const now = Date.UTC(2026, 0, 8, 8, 5);
+  const w = mostRecentlyClosedWeek(now);
+  assert.strictEqual(w.cutoffDayKey, "2026-01-08");
+  assert.strictEqual(w.startDayKey, "2026-01-01");
+  assert.ok(now >= w.cutoffMs, "the cutoff is at or before now");
+  assert.ok(now - w.cutoffMs < 60 * 60 * 1000, "and only just passed");
+});
+
+check("mid-week (Wed) -> the PREVIOUS Thursday, not this imminent one", () => {
+  // Wed Jan 7 2026 23:00 PST = Jan 8 07:00 UTC, before this week's cutoff.
+  const now = Date.UTC(2026, 0, 8, 7, 0);
+  const w = mostRecentlyClosedWeek(now);
+  assert.strictEqual(w.cutoffDayKey, "2026-01-01");
+  // now is ~7 days past that cutoff, so a grace-windowed snapshot won't fire.
+  assert.ok(now - w.cutoffMs > 6 * 24 * HOUR);
+});
+
+check("mirror invariant: current week starts where the closed week ended", () => {
+  for (const now of [
+    Date.UTC(2026, 6, 1, 19, 0),
+    Date.UTC(2026, 0, 8, 8, 5),
+    Date.UTC(2026, 9, 30, 19, 0),
+    Date.UTC(2026, 2, 12, 3, 0),
+  ]) {
+    assert.strictEqual(
+        qualifyingWeek(now).startMs, mostRecentlyClosedWeek(now).cutoffMs,
+        `mirror at ${new Date(now).toISOString()}`);
   }
 });
 

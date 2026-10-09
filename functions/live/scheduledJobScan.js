@@ -75,6 +75,8 @@ const JOBS = [
     fn: "sweepExpiredMatches"},
   {name: "sweepClimb", mod: "../climbPlay", fn: "sweepClimb"},
   {name: "sweepGauntlet", mod: "../swissPlay", fn: "sweepGauntlet"},
+  {name: "sweepWeeklyQualifier", mod: "../weeklyTournament",
+    fn: "sweepWeeklyQualifier", note: "no-ops while config/tournament off"},
   {name: "aggregateMatchStats", mod: "../matchStats", fn: "aggregateMatchStats"},
   {name: "awardEmojiTopAwards", mod: "../emojiTopAwards",
     fn: "awardEmojiTopTitles"},
