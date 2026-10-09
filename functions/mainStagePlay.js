@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {loadBracket} = require("./mainStageLifecycle");
-const {tallyJudgeVotes} = require("./mainStageJudging");
+const {tallyJudgeVotes, stalledBattleVerdict} = require("./mainStageJudging");
 const {DEFAULTS: BATTLE_DEFAULTS} = require("./mainStageBattle");
 
 /**
@@ -181,8 +181,76 @@ async function castMainStageJudgeVote(auth, data) {
   return outcome;
 }
 
+/**
+ * The backstop the show cannot run without: force-close any on-stage battle
+ * whose panel has stalled past its judging deadline, so a quiet or absent judge
+ * can never halt the whole finals with the audience watching. Settles on
+ * whatever votes were cast (head-judge tiebreak), or the higher seed if the
+ * panel is dead-even or silent - a bracket must advance exactly one player.
+ *
+ * Scans only LIVE mainstage tournaments (a handful at most), and only matchups
+ * with a started battle (a stamped matchId) and no winner yet. Idempotent: a
+ * battle decided by a real vote between the read and the claim is left alone.
+ */
+async function forceCloseStalledBattles(db, now = Date.now()) {
+  const snap = await db.collection("tournaments")
+      .where("format", "==", "mainstage")
+      .where("status", "==", "live").get();
+  const out = [];
+  for (const d of snap.docs) {
+    const t = d.data();
+    if (!t.bracket) continue;
+    const bracket = loadBracket(t.bracket); // core shape: rounds[][]
+    const field = Array.isArray(t.field) ? t.field : [];
+    const panel = Array.isArray(t.judges) ? t.judges : [];
+    const headJudge =
+      (t.handPickedJudges || []).find((u) => panel.includes(u)) || null;
+    for (let ri = 0; ri < bracket.rounds.length; ri++) {
+      const round = bracket.rounds[ri] || [];
+      for (let mi = 0; mi < round.length; mi++) {
+        const m = round[mi];
+        if (!m || !m.matchId || m.winner != null) continue;
+        const matchRef = db.collection("matches").doc(m.matchId);
+        const match = (await matchRef.get()).data();
+        if (!match) continue;
+        const votes = {};
+        const vs = await matchRef.collection("mainStageVotes").get();
+        vs.forEach((v) => {
+          votes[v.id] = v.data().winnerUid;
+        });
+        const verdict = stalledBattleVerdict(
+            {match, votes, panel, headJudge, field, now});
+        if (!verdict.stalled) continue;
+        // Claim it: a real vote may have decided it since the read above.
+        const claimed = await db.runTransaction(async (tx) => {
+          const fresh = (await tx.get(matchRef)).data();
+          if (!fresh || fresh.judgeWinnerId) return false;
+          tx.update(matchRef, {
+            judgeWinnerId: verdict.winner,
+            status: "completed",
+            judgeForceClosedAt: FieldValue.serverTimestamp(),
+          });
+          return true;
+        });
+        if (!claimed) continue;
+        // Settle OUTSIDE the tx (same as a live verdict): finalize applies the
+        // finals Elo and routes to recordBattleResult -> bracket advance.
+        try {
+          const {finalizeMatch} = require("./matchFinalization");
+          await finalizeMatch(m.matchId, {force: true});
+        } catch (e) {
+          console.error(`mainstage force-close ${m.matchId}:`, e.message);
+        }
+        out.push({tournamentId: d.id, matchId: m.matchId, winner: verdict.winner});
+      }
+    }
+  }
+  return out;
+}
+
 module.exports = {
   startMainStageBattle,
   castMainStageJudgeVote,
+  forceCloseStalledBattles,
   JUDGE_WINDOW_MS,
 };

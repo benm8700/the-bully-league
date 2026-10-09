@@ -4385,19 +4385,61 @@ games) are tunable placeholders per the economy-advisor-review discipline.
   claim flow (Home banner -> `submitPrizeClaim`) and the admin dashboard's
   outstanding-prize ages are built. `$600 FMV` non-cash ceiling for now (no 1099
   below it); cash stays off pending processor/entity.
-- **NOT built yet:** the LIVE real-time layer on top of the lifecycle - the
-  chess-clock battle TRANSPORT (mic/floor sync driving `mainStageBattle.reduce`
-  across devices), the live open group-debate judges' room / broadcast, live
-  panel voting, the founder "editor's-choice" pick + 50-pick badge, and the
-  client UI. Plus the Home rework (ranked-primary + weekly-tournament
-  countdown/qualifying banner). All of it goes behind the same
-  `config/tournament.enabled` flag.
-- **PARKED (developer's call 2026-10-09, Q1):** the player-facing client/live
-  tournament build (Home rework + tournament screens + the live judges' room /
-  broadcast) is deliberately HELD until after the developer's advisor +
-  blitzkrieg-rollout conversations, since those move the monetization and launch
-  plan. **Resurface it after those conversations.** The backend foundation above
-  is complete and inert behind the flag in the meantime.
+- **DONE - the LEAN LIVE CLIENT + SETTLEMENT (built this session, 2026-10-09;
+  the developer un-parked it: "ok can we start building all this stuff?" ->
+  "yes continue wiring and building everything").** The whole lean finals loop
+  is now wired end-to-end, still inert behind `config/tournament.enabled`:
+  - **Settlement backend** (`mainStagePlay.js` + `mainStageJudging.js`):
+    `startMainStageBattle` (short `ms_<hash>` id, stamps player ratings +
+    `mainStage:{...}` + the chess-clock config, stamps the matchId onto the
+    bracket matchup for rejoin); `castMainStageJudgeVote` (open per-judge vote to
+    `matches/{id}/mainStageVotes/{judge}`, `tallyJudgeVotes` with head-judge
+    tiebreak + early-decisive close, on decided stamps `judgeWinnerId` + status
+    completed + `finalizeMatch(force)` -> finals Elo + `recordBattleResult`
+    bracket advance). `matchFinalization.js` routes `match.mainStage`.
+    Live-verified `functions/live/mainStageSettleChecks.js` **8/8** (start,
+    rejoin-same-match, non-judge refused, panel verdict settles + advances +
+    moves Elo, and - new - a judge CAN spectate the live mainstage battle while
+    a battler is refused).
+  - **The stalled-panel FORCE-CLOSE backstop** (`forceCloseStalledBattles` in
+    `mainStagePlay.js`, run from `sweepMainStage` every 15m): a battle whose
+    judging window (`match.createdAt + judgeWindowMs`, default 12m) has elapsed
+    with too few votes is force-closed so a quiet/absent judge can NEVER halt
+    the whole show. Pure `stalledBattleVerdict` (missing-start safety; plurality
+    + head-judge tiebreak; **a dead-even or silent panel advances the HIGHER
+    SEED**, because a bracket must have exactly one winner - unlike a gauntlet
+    tie). Idempotent claim (a real late vote wins the race). 8 pure checks +
+    `functions/live/mainStageForceCloseChecks.js` **6/6** (a 13-min-old silent
+    battle advances the #1 seed + moves Elo + advances the bracket; a fresh
+    battle is left alone; a second sweep is a no-op).
+  - **Spectating a mainstage battle** (`spectator.js`): the spectate gate now
+    accepts format `mainstage` (running status `"live"`) and matches linked via
+    `match.mainStage`, so the crowd AND the judges can watch the finals.
+    `watchLiveMatch` deployed. +2 pure tests (spectator 16).
+  - **Client**: `MainStageScreen` (front door: accept/decline, locked field,
+    #1 callout routing, live "Play your match" / "Open the judges' room" /
+    "Watch the battle" / "between battles"), `MainStageCalloutScreen`,
+    `MainStageBattleScreen` (the chess-clock + interrupt transport, host-
+    authoritative over the Agora data channel, driving the verified
+    `MainStageBattleState` reducer; mic follows the floor-holder),
+    `JudgesRoomScreen` (spectator video + open vote + the "N of M voted" live
+    tally), crowd watch reuses `LiveViewerScreen`. Home `MainStageBanner` +
+    `WeeklyStandingBanner`; a 4th WEEKLY tab on the Ranks board. All analyze
+    clean; the battle reducer has 16 Dart tests.
+- **STILL NOT built / deferred:** the full **judges'-video-table / broadcast
+  desk** (the five judges seeing each other and debating on camera - the lean
+  model has each judge watch the battle + vote, no cross-judge video); the
+  founder "editor's-choice" pick + 50-pick badge; the **Home rework**
+  (ranked-primary + weekly-tournament countdown/qualifying banner); a pre-match
+  camera/mic check before the finals battle; and - the real gate - a **2-device
+  dry run** of the live battle + judging (none of the live client is verified on
+  real devices yet). Everything stays behind `config/tournament.enabled`.
+- **Context (the earlier 2026-10-09 PARK, now lifted):** the player-facing live
+  build had been parked pending the developer's advisor + blitzkrieg
+  conversations; the developer then directed the lean build to proceed this
+  session. The ECONOMY/monetization questions (qualification: skill vs
+  engagement, free-vs-subscriber access) remain the parked advisor topic - see
+  [[economy-needs-advisor-review]].
 - **ADMIN COMMAND CENTER - BUILT (2026-10-09), web, in `website/`.** A gated
   `/admin` dashboard (developer tooling, Q2). Server-side admin gate
   `verifyAdmin` (real Firebase ID token + `isAdmin`) on four Route Handlers:

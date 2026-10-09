@@ -134,14 +134,18 @@ async function lockDueTournaments(db, now = Date.now()) {
   return results;
 }
 
-/** The scheduled sweep: create then lock, both gated on the launch flag. */
+/** The scheduled sweep: create, lock, and force-close any stalled on-stage
+ * panel - all gated on the launch flag. The force-close is the backstop that
+ * stops a quiet judge halting the whole show. */
 async function sweepMainStage(now = Date.now()) {
   const db = getFirestore();
   const cfg = (await db.collection("config").doc("tournament").get()).data();
   if (!tournamentEnabled(cfg)) return {skipped: "disabled"};
   const created = await createFromSnapshot(db, now);
   const locked = await lockDueTournaments(db, now);
-  return {created, locked};
+  const {forceCloseStalledBattles} = require("./mainStagePlay");
+  const forceClosed = await forceCloseStalledBattles(db, now);
+  return {created, locked, forceClosed};
 }
 
 /** A finalist/alternate confirms or declines (callable body). */

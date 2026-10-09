@@ -1,5 +1,6 @@
 const assert = require("assert");
-const {tallyJudgeVotes} = require("../mainStageJudging");
+const {tallyJudgeVotes, stalledBattleVerdict, DEFAULT_JUDGE_WINDOW_MS} =
+    require("../mainStageJudging");
 
 let passed = 0;
 function check(name, fn) {
@@ -91,6 +92,76 @@ check("a promoted standby counts once folded into the panel", () => {
   assert.strictEqual(r.winner, "A");
   assert.strictEqual(r.counts["B"], 2); // j5's vote counted
   assert.strictEqual(r.decided, true);
+});
+
+// --- stalled-panel force-close (the bracket must never halt) --------------
+
+console.log("\nmain stage - stalled-panel force-close");
+
+const START = 1_000_000_000_000;
+const WIN = DEFAULT_JUDGE_WINDOW_MS;
+const battle = (over = {}) => ({
+  createdAt: START, judgeWindowMs: WIN, player1Id: "A", player2Id: "B", ...over,
+});
+const FIELD = ["A", "B", "C", "D"]; // A is the #1 seed
+
+check("not stalled before the deadline", () => {
+  const r = stalledBattleVerdict({match: battle(), votes: {head: "A"},
+    panel: PANEL, headJudge: "head", field: FIELD, now: START + WIN - 1});
+  assert.strictEqual(r.stalled, false);
+});
+
+check("an already-decided battle is never force-closed", () => {
+  const r = stalledBattleVerdict({match: battle({judgeWinnerId: "A"}),
+    votes: {}, panel: PANEL, headJudge: "head", field: FIELD,
+    now: START + WIN + 999999});
+  assert.strictEqual(r.stalled, false);
+});
+
+check("a missing start time never force-closes (missing-field safety)", () => {
+  const r = stalledBattleVerdict({match: battle({createdAt: null}),
+    votes: {}, panel: PANEL, headJudge: "head", field: FIELD,
+    now: START + WIN + 999999});
+  assert.strictEqual(r.stalled, false);
+});
+
+check("past the deadline, a plurality decides it even with seats out", () => {
+  const r = stalledBattleVerdict({match: battle(),
+    votes: {head: "A", j1: "A", j2: "B"}, panel: PANEL, headJudge: "head",
+    field: FIELD, now: START + WIN});
+  assert.strictEqual(r.stalled, true);
+  assert.strictEqual(r.winner, "A");
+});
+
+check("a bare tie at the deadline is broken by the head judge", () => {
+  const r = stalledBattleVerdict({match: battle(),
+    votes: {head: "B", j1: "A"}, panel: PANEL, headJudge: "head",
+    field: FIELD, now: START + WIN});
+  assert.strictEqual(r.winner, "B"); // head judge sat with B
+});
+
+check("a dead tie with no head-judge vote: the HIGHER SEED advances", () => {
+  const r = stalledBattleVerdict({match: battle(),
+    votes: {j1: "A", j2: "B"}, panel: PANEL, headJudge: "head",
+    field: FIELD, now: START + WIN});
+  assert.strictEqual(r.stalled, true);
+  assert.strictEqual(r.winner, "A"); // A seeded ahead of B
+});
+
+check("ZERO votes at the deadline still yields the higher seed, not null", () => {
+  // The battle's host may have vanished before anyone judged - the bracket
+  // still has to advance exactly one player.
+  const r = stalledBattleVerdict({match: battle({player1Id: "B", player2Id: "A"}),
+    votes: {}, panel: PANEL, headJudge: "head", field: FIELD, now: START + WIN});
+  assert.strictEqual(r.stalled, true);
+  assert.strictEqual(r.winner, "A"); // A outranks B whichever slot it's in
+});
+
+check("the stamped judgeWindowMs overrides the default", () => {
+  const short = stalledBattleVerdict({match: battle({judgeWindowMs: 1000}),
+    votes: {}, panel: PANEL, headJudge: "head", field: FIELD,
+    now: START + 1000});
+  assert.strictEqual(short.stalled, true); // past the short stamped window
 });
 
 console.log(`\n${passed} passed`);

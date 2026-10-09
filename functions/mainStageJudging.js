@@ -70,4 +70,64 @@ function tallyJudgeVotes(votes, panel, {headJudge = null, forceClose = false} = 
   return {counts, cast, remaining, winner: decided ? winner : null, tie, decided};
 }
 
-module.exports = {tallyJudgeVotes};
+/** 12 minutes from battle start covers a chess-clock battle (~a few minutes)
+ * plus the judging debate, after which a stalled panel is force-closed so the
+ * bracket can never halt. The stamped `match.judgeWindowMs` wins over this. */
+const DEFAULT_JUDGE_WINDOW_MS = 12 * 60 * 1000;
+
+/** Milliseconds from a Firestore Timestamp, a {_seconds}/{seconds} shape, or a
+ * plain number - 0 when unknowable, so a missing start is never treated as
+ * "long ago" (the missing-field trap that would force-close a fresh battle). */
+function tsMs(v) {
+  if (v == null) return 0;
+  if (typeof v === "number") return v;
+  if (typeof v.toMillis === "function") return v.toMillis();
+  const s = v._seconds ?? v.seconds;
+  return typeof s === "number" ? s * 1000 : 0;
+}
+
+/**
+ * Decide an on-stage battle whose panel has STALLED past its judging deadline,
+ * so a quiet or absent judge can never halt the whole finals with the audience
+ * watching. Pure, so the deadline + tiebreak are pinned by tests rather than
+ * discovered live.
+ *
+ *   match  - the battle doc: needs createdAt (ms-able), judgeWindowMs,
+ *            player1Id/player2Id, and judgeWinnerId (already settled -> skip).
+ *   votes  - {judgeUid: winnerUid}
+ *   panel  - seated judge uids; headJudge breaks a bare tie (as in a live vote)
+ *   field  - the tournament seed order (field[0] = #1). THE DETERMINISTIC
+ *            TIEBREAK when the panel is dead-even or silent: the HIGHER SEED
+ *            advances. A bracket must have exactly one winner, so a null verdict
+ *            is never acceptable here - unlike a gauntlet tie, where both climb.
+ *   now    - ms.
+ *
+ * @return {{stalled: boolean, winner?: string}} stalled only past the deadline
+ *   with no winner yet; winner is always one of the two battlers when stalled.
+ */
+function stalledBattleVerdict(
+    {match, votes, panel, headJudge = null, field = [], now}) {
+  if (!match || match.judgeWinnerId) return {stalled: false};
+  const startMs = tsMs(match.createdAt);
+  if (!startMs) return {stalled: false}; // unknowable start - never force-close
+  const stamped = Number(match.judgeWindowMs);
+  const windowMs = stamped > 0 ? stamped : DEFAULT_JUDGE_WINDOW_MS;
+  if (now < startMs + windowMs) return {stalled: false};
+
+  const p1 = match.player1Id;
+  const p2 = match.player2Id;
+  const tally = tallyJudgeVotes(votes, panel, {headJudge, forceClose: true});
+  let winner = tally.winner;
+  if (winner !== p1 && winner !== p2) {
+    // Dead tie or no votes at the deadline: the higher seed advances, so the
+    // bracket always gets exactly one winner. An unknown seed sorts last.
+    const rank = (u) => {
+      const i = field.indexOf(u);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    winner = rank(p1) <= rank(p2) ? p1 : p2;
+  }
+  return {stalled: true, winner};
+}
+
+module.exports = {tallyJudgeVotes, stalledBattleVerdict, DEFAULT_JUDGE_WINDOW_MS};
