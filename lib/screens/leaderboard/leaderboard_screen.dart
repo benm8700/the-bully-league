@@ -43,7 +43,15 @@ const Color _cleverAccent = Color(0xFF2FD4C6);
 /// GOATs they don't get the goat" (the developer's call, 2026-08-31). The
 /// board and the profile title therefore always agree on who a GOAT is.
 class LeaderboardScreen extends StatelessWidget {
-  const LeaderboardScreen({super.key, this.embedded = false});
+  const LeaderboardScreen({
+    super.key,
+    this.embedded = false,
+    this.initialTab = 0,
+  });
+
+  /// Which board to open on (0 RANKS, 1 FAME, 2 APPLAUSE, 3 WEEKLY). Lets the
+  /// tournament banner's weekly-standing hook deep-link straight to WEEKLY.
+  final int initialTab;
 
   /// True when shown as a bottom-nav tab.
   final bool embedded;
@@ -90,6 +98,7 @@ class LeaderboardScreen extends StatelessWidget {
 
     return DefaultTabController(
       length: 4,
+      initialIndex: initialTab,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         // The cinematic stage background runs behind everything, including the

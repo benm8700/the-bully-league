@@ -16,6 +16,7 @@ import '../../core/services/matchmaking_service.dart';
 import '../../widgets/admin_only.dart';
 import '../../widgets/home/goat_throne_banner.dart';
 import '../../widgets/home/prize_claim_banner.dart';
+import '../../widgets/home/weekly_standing_banner.dart';
 import '../../widgets/home/hero_mode_card.dart';
 import '../../widgets/home/player_status_card.dart';
 import '../../widgets/home/home_quick_actions.dart';
@@ -151,6 +152,10 @@ class HomeScreen extends StatelessWidget {
                     // first. Tapping it goes to the tournament, where
                     // check-in lives.
                     const EventWindowBanner(),
+                    // One-line "where you stand this week" hook under the
+                    // tournament banner, tapping through to the WEEKLY Ranks
+                    // board. Renders nothing until a weekly race is live.
+                    const WeeklyStandingBanner(),
                     const SizedBox(height: 12),
                     // Secondary hero: Roast a Stranger (play now). Illustrated
                     // red/blue VS artwork with the title, subtitle and FIND A
