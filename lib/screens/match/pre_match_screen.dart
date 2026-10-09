@@ -248,6 +248,20 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     super.dispose();
   }
 
+  /// The ready button's label. "Find an Opponent" only fits plain matchmaking;
+  /// in every flow where the opponent is ALREADY known (Main Stage, a
+  /// tournament, the gauntlet, a friend challenge) that reads as redundant - so
+  /// the camera check just confirms you're set and sends you straight in.
+  String get _readyLabel {
+    if (widget.mainStageStart != null) return 'Step on stage';
+    if (widget.climbPairing != null ||
+        widget.challengeMatchId != null ||
+        widget.tournamentId != null) {
+      return "I'm Ready";
+    }
+    return 'Find an Opponent';
+  }
+
   Future<void> _onReady() async {
     if (_navigating) return;
     setState(() => _navigating = true);
@@ -427,7 +441,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : Text(_micVerified
-                          ? 'Find an Opponent'
+                          ? _readyLabel
                           : _micPeak > 2
                               ? 'Almost - a little louder'
                               : 'Say something to test your mic...'),
