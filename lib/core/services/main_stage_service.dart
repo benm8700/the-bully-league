@@ -22,6 +22,8 @@ class MainStageView {
     required this.isTopSeed,
     required this.field,
     required this.candidates,
+    this.myMatchupRound,
+    this.myMatchupIndex,
   });
 
   final String tournamentId;
@@ -43,7 +45,15 @@ class MainStageView {
   /// Empty unless [isTopSeed] and the callout is open (status == locked).
   final List<String> candidates;
 
+  /// The viewer's ready, unsettled bracket matchup (both players known, no
+  /// winner), once the show is live - null if they have no battle to play
+  /// right now (eliminated, waiting, a bye, or not a finalist).
+  final int? myMatchupRound;
+  final int? myMatchupIndex;
+
   bool get calloutOpen => isTopSeed && status == 'locked';
+  bool get hasBattleToPlay =>
+      status == 'live' && myMatchupRound != null && myMatchupIndex != null;
 }
 
 /// Reads the Main Stage tournament and drives its two player-facing callables
@@ -126,6 +136,31 @@ class MainStageService {
     final candidates =
         isTopSeed ? field.where((u) => u != uid).toList() : const <String>[];
 
+    // The viewer's ready matchup, if the show is live. The bracket is the
+    // Firestore-safe shape: {rounds: [{matches: [{a, b, winner}]}]}.
+    int? myRound;
+    int? myIdx;
+    if (status == 'live') {
+      final rounds = (t['bracket'] as Map?)?['rounds'];
+      if (rounds is List) {
+        outer:
+        for (var ri = 0; ri < rounds.length; ri++) {
+          final matches = (rounds[ri] as Map?)?['matches'];
+          if (matches is! List) continue;
+          for (var mi = 0; mi < matches.length; mi++) {
+            final m = matches[mi];
+            if (m is! Map) continue;
+            final ready = m['a'] != null && m['b'] != null && m['winner'] == null;
+            if (ready && (m['a'] == uid || m['b'] == uid)) {
+              myRound = ri;
+              myIdx = mi;
+              break outer;
+            }
+          }
+        }
+      }
+    }
+
     return MainStageView(
       tournamentId: id,
       status: status,
@@ -134,6 +169,8 @@ class MainStageService {
       isTopSeed: isTopSeed,
       field: field,
       candidates: candidates,
+      myMatchupRound: myRound,
+      myMatchupIndex: myIdx,
     );
   }
 

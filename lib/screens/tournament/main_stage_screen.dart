@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/services/main_stage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
+import '../match/recording_consent_screen.dart';
+import 'main_stage_battle_screen.dart';
 import 'main_stage_callout_screen.dart';
 
 /// The Main Stage (weekly finals) front door: tells the viewer where they stand
@@ -23,7 +25,44 @@ class MainStageScreen extends StatefulWidget {
 class _MainStageScreenState extends State<MainStageScreen> {
   late final MainStageService _service = widget.service ?? MainStageService();
   bool _submitting = false;
+  bool _startingBattle = false;
   String? _error;
+
+  /// A finals battle is recorded, so recording consent is required first (same
+  /// as every recorded match); then start the battle and step on stage. The
+  /// battle screen brings up the camera via Agora - a pre-match lighting/mic
+  /// check could be slotted in before it later.
+  Future<void> _startBattle(MainStageView v) async {
+    if (v.myMatchupRound == null || v.myMatchupIndex == null) return;
+    setState(() {
+      _startingBattle = true;
+      _error = null;
+    });
+    try {
+      final consented = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
+      );
+      if (consented != true) {
+        if (mounted) setState(() => _startingBattle = false);
+        return;
+      }
+      final pairing = await _service.startBattle(
+        tournamentId: v.tournamentId,
+        roundIdx: v.myMatchupRound!,
+        matchIdx: v.myMatchupIndex!,
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => MainStageBattleScreen(pairing: pairing)),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = "Couldn't start your battle — try again.");
+      }
+    } finally {
+      if (mounted) setState(() => _startingBattle = false);
+    }
+  }
 
   Future<void> _respond(String tournamentId, bool accept) async {
     setState(() {
@@ -71,13 +110,46 @@ class _MainStageScreenState extends State<MainStageScreen> {
 
   List<Widget> _body(MainStageView v) {
     if (v.status == 'live') {
+      final gold = context.palette.reward;
+      if (v.hasBattleToPlay) {
+        return [
+          _headline("You're up on the Main Stage", context.palette.live),
+          const SizedBox(height: 8),
+          Text('Your semifinal is ready. Step on stage when you are.',
+              style: _muted()),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, style: TextStyle(color: context.palette.live)),
+          ],
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: gold,
+              foregroundColor: Colors.black,
+              minimumSize: const Size(0, 54),
+            ),
+            icon: const Icon(Icons.mic),
+            label: const Text('Play your match'),
+            onPressed: _startingBattle ? null : () => _startBattle(v),
+          ),
+        ];
+      }
+      if (v.role == MainStageRole.judge) {
+        return [
+          _headline('The Main Stage is LIVE', context.palette.live),
+          const SizedBox(height: 8),
+          Text('You are on the panel. Watch the battles and cast your verdict.',
+              style: _muted()),
+          const SizedBox(height: 20),
+          _statusPill(Icons.gavel, 'Judging',
+              'Open a live battle from the tournament to judge it.', gold),
+        ];
+      }
       return [
         _headline('The Main Stage is LIVE', context.palette.live),
         const SizedBox(height: 8),
-        const Text(
-          'The finals are happening now. Head to the tournament to watch and '
-          'judge the battles.',
-        ),
+        Text('The finals are happening now — watch the battles live.',
+            style: _muted()),
       ];
     }
     if (v.status == 'locked') return _locked(v);
