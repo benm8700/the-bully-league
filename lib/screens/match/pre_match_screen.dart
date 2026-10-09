@@ -278,7 +278,17 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
             builder: (_) => MainStageBattleScreen(pairing: pairing),
           ),
         );
-      } catch (e) {
+      } on FirebaseFunctionsException catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _navigating = false;
+          // The server's precondition message is written to be read ("that
+          // battle has already been played", etc.); pass it through.
+          _error = e.code == 'failed-precondition'
+              ? (e.message ?? "This battle isn't available right now.")
+              : "Couldn't start your battle — try again.";
+        });
+      } catch (_) {
         if (!mounted) return;
         setState(() {
           _navigating = false;

@@ -68,7 +68,20 @@ async function startMainStageBattle(auth, data) {
     if (auth.uid !== m.a && auth.uid !== m.b) {
       throw httpsError("permission-denied", "You're not in this matchup.");
     }
-    if (m.matchId) return m.matchId; // already created - rejoin it
+    if (m.matchId) {
+      // Rejoin ONLY a battle that is still playable. Once completeMatch has
+      // flipped it to completed/abandoned, its Agora token is refused (the
+      // match has ended) and the matchup is awaiting the judges' verdict - so
+      // handing the id back would strand the client on a dead channel with a
+      // raw "failed-precondition". Block re-entry cleanly until it's resolved.
+      const existing =
+        (await tx.get(db.collection("matches").doc(m.matchId))).data();
+      const stillPlayable = existing &&
+        (existing.status === "pending" || existing.status === "in_progress");
+      if (stillPlayable) return m.matchId; // genuine rejoin of a live battle
+      throw httpsError("failed-precondition",
+          "That battle has already been played - the judges are deciding it.");
+    }
 
     const id = `ms_${crypto.randomBytes(12).toString("hex")}`;
     const [uA, uB] = await Promise.all([

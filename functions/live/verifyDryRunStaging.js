@@ -137,6 +137,14 @@ async function run() {
     assert.strictEqual(m.status, "completed");
   });
 
+  await check("a completed battle cannot be re-entered (blocked until resolved)", async () => {
+    // The bug the dry run hit: re-starting handed back the ended match, whose
+    // Agora token is then refused ("battle setup failed"). Now refused cleanly.
+    const r = await callFn("startMainStageBattle", tokT1, {tournamentId: TID, roundIdx: 0, matchIdx: 0});
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.match(r.body.error.message, /already been played/);
+  });
+
   await check("the one-judge panel's vote settles + advances the bracket", async () => {
     const r = await callFn("castMainStageJudgeVote", tokTJ, {matchId, winnerUid: T1});
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));

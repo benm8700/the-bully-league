@@ -9,6 +9,7 @@ import '../../core/services/agora_spectator_service.dart';
 import '../../core/services/main_stage_service.dart';
 import '../../core/services/spectator_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/house_theme.dart';
 
 /// The Main Stage judges' room: a seated panellist watches the battle live and
 /// casts their OPEN verdict. Unlike the crowd's live vote, a judge's pick is
@@ -251,14 +252,34 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.gavel, size: 48, color: context.palette.reward),
-              const SizedBox(height: 12),
-              Text(
-                '$_player1Name  vs  $_player2Name',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w700),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _numBadge(1, fg: _p1Color),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(_player1Name,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: _p1Color, fontWeight: FontWeight.w800)),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: Text('vs',
+                        style: TextStyle(color: Colors.white38)),
+                  ),
+                  _numBadge(2, fg: _p2Color),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(_player2Name,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: _p2Color, fontWeight: FontWeight.w800)),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               const Text('Cast your verdict below.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white54)),
@@ -285,37 +306,78 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
     );
   }
 
+  // Warm vs cool "stage gels" so the two battlers are told apart at a glance -
+  // player 1 is always red/①, player 2 always blue/②, matching the vote
+  // buttons. A judge who doesn't know the names can still vote the right person.
+  static const _p1Color = House.gelRed;
+  static const _p2Color = House.gelBlue;
+
   Widget _tile(int playerUid, Set<int> present, String name) {
     final view = _spectator.playerVideo(playerUid);
+    final color = playerUid == 1 ? _p1Color : _p2Color;
     return Stack(
       fit: StackFit.expand,
       children: [
-        view ??
-            ColoredBox(
-              color: const Color(0xFF111111),
-              child: Center(
-                child: Text(
-                  present.contains(playerUid)
-                      ? name
-                      : 'Waiting for $name…',
-                  style: const TextStyle(color: Colors.white54),
+        Container(
+          decoration: BoxDecoration(border: Border.all(color: color, width: 3)),
+          child: view ??
+              ColoredBox(
+                color: const Color(0xFF111111),
+                child: Center(
+                  child: Text(
+                    present.contains(playerUid)
+                        ? name
+                        : 'Waiting for $name…',
+                    style: const TextStyle(color: Colors.white54),
+                  ),
                 ),
               ),
-            ),
+        ),
+        // A clear numbered, colour-coded name banner across the top of each
+        // battler's video - the thing that makes the vote unambiguous.
         Positioned(
-          left: 10,
-          bottom: 8,
+          top: 0,
+          left: 0,
+          right: 0,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(8),
+            color: color.withValues(alpha: 0.92),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              children: [
+                _numBadge(playerUid),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800)),
+                ),
+              ],
             ),
-            child: Text(name,
-                style: const TextStyle(color: Colors.white, fontSize: 12)),
           ),
         ),
       ],
+    );
+  }
+
+  /// A small circled number (①/②) in the player's colour, used on the tile and
+  /// on the matching vote button so the two read as the same battler.
+  Widget _numBadge(int n, {Color fg = Colors.white, Color? bg}) {
+    return Container(
+      width: 22,
+      height: 22,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: bg ?? Colors.black.withValues(alpha: 0.3),
+        shape: BoxShape.circle,
+        border: Border.all(color: fg, width: 1.5),
+      ),
+      child: Text('$n',
+          style: TextStyle(
+              color: fg, fontSize: 12, fontWeight: FontWeight.w900)),
     );
   }
 
@@ -352,12 +414,12 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
                 children: [
                   Expanded(
                     child: _voteButton(
-                        _player1Id, _player1Name, p1, myPick, decided),
+                        1, _player1Id, _player1Name, p1, myPick, decided),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _voteButton(
-                        _player2Id, _player2Name, p2, myPick, decided),
+                        2, _player2Id, _player2Name, p2, myPick, decided),
                   ),
                 ],
               ),
@@ -381,24 +443,40 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
     );
   }
 
-  Widget _voteButton(
-      String? uid, String name, int count, String? myPick, bool decided) {
-    final gold = context.palette.reward;
+  Widget _voteButton(int n, String? uid, String name, int count, String? myPick,
+      bool decided) {
+    final color = n == 1 ? _p1Color : _p2Color;
     final mine = myPick != null && myPick == uid;
+    // Picked = filled in the player's colour; otherwise a dark button carrying
+    // that colour as a border + badge, so it reads as the same battler as the
+    // same-numbered, same-coloured video tile above.
     return FilledButton(
-      onPressed: (decided || _submitting || uid == null) ? null : () => _vote(uid),
+      onPressed:
+          (decided || _submitting || uid == null) ? null : () => _vote(uid),
       style: FilledButton.styleFrom(
-        minimumSize: const Size(0, 60),
-        backgroundColor: mine ? gold : Colors.white12,
-        foregroundColor: mine ? Colors.black : Colors.white,
+        minimumSize: const Size(0, 66),
+        backgroundColor: mine ? color : Colors.white10,
+        foregroundColor: Colors.white,
+        side: BorderSide(color: color, width: mine ? 0 : 2),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _numBadge(n,
+                  fg: Colors.white, bg: mine ? Colors.black26 : color),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
           Text('$count',
               style:
                   const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),

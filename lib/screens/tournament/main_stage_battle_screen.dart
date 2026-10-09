@@ -61,8 +61,14 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
         uid: widget.pairing.agoraUid,
         token: token,
       );
-    } catch (e) {
-      if (mounted) setState(() => _error = 'Battle setup failed: $e');
+    } catch (_) {
+      // Never surface a raw Firebase error. The usual cause is the match
+      // having already ended (its token is refused), so point back.
+      if (mounted) {
+        setState(() => _error =
+            "Couldn't connect to the battle. It may have already ended — "
+            'head back and try again.');
+      }
       return;
     }
     if (!mounted) return;
