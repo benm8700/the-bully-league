@@ -4292,125 +4292,186 @@ while adding the developer's all-day study idea.
   changes for real users yet - the single-elim climb is still tonight's live
   Daily Gauntlet.
 
-## Tournament model — DECISION RECORD (2026-10-08), DESIGN ONLY / NOT BUILT
+## Tournament model — DECISION RECORD (2026-10-09), BUILD NOW / LAUNCH BEHIND A FLAG
 
-**This is now THE authoritative tournament design and SUPERSEDES the prior
+**This is THE authoritative tournament design and SUPERSEDES the prior
 direction** (the 2026-09-16 "Daily Gauntlet = nightly Swiss/climb, crowd-judged
-live" record, and the live-tournament crowd-voting model). Nothing here is built
-yet - it is a settled design to build toward. Every number (top-4, 5 judges,
-Thursday, the qualifier metric, battle length) is a tunable placeholder per the
-economy-advisor-review discipline. Mapping onto the existing climb/swiss code is
-TBD; do NOT assume the current engines implement this.
+live" record, and the live-tournament crowd-voting model). **BUILD APPROACH
+(developer's explicit call 2026-10-09): build ALL of this NOW - the live judges'
+debate with open on-air voting, the chess-clock + interrupt battle format, the
+callout, everything - but gate the whole tournament system behind a FAILSAFE
+LAUNCH FLAG** (same pattern as the monetization system: fully built and deployed,
+shipped OFF via config, flipped on only when tested and ready). You phase the
+LAUNCH, not the feature set. There is NO v1/v2 feature split and NO solo-spoken-
+verdict fallback - an earlier draft of this record invented that phasing; it was
+wrong and is removed. Numbers (top-4, 5 judges, Thursday, battle clocks, min
+games) are tunable placeholders per the economy-advisor-review discipline.
 
 ### The center of gravity
 **The weekly tournament is the app's heart - the destination that gives every
-ranked battle a point.** Ranked play is the ROAD to it AND rewarding on its own:
-the ladder, rank titles, fame/followers, clips, Crowd Favourite and emoji keep
-the ~99% who never reach a finals engaged daily. So ranked is "the road with its
-own rewards aimed at a clear summit," NOT "a pointless feeder." The tournament
-gives the ladder a story and a peak; the ladder gives non-finalists their
-ongoing payoff. (Watch at scale: a single 4-person weekly peak is very exclusive
-for 100+ users - eventually add rungs, e.g. tiered events / a second tournament
-/ more finalists, so the destination stays reachable. Not needed in beta.)
+ranked battle a point** (developer confirmed: all ranked play builds toward the
+tournament, which is the real goal). Ranked play is the ROAD to it AND rewarding
+on its own: the ladder, rank titles, fame/followers, clips, Crowd Favourite and
+emoji keep the ~99% who never reach a finals engaged daily. So ranked is "the
+road with its own rewards aimed at a clear summit," NOT "a pointless feeder."
+(Watch at scale: a single 4-person weekly peak is very exclusive for 100+ users -
+eventually add rungs, e.g. tiered events / a second tournament / more finalists,
+so the destination stays reachable. Not needed in beta.)
 
 ### Two layers
 1. **Week-long qualifier (scales to any number).** Ordinary ranked battles all
-   week ARE the qualifier - every ranked win that week counts toward a weekly
-   leaderboard. Crowd-judged, parallel, async - so it handles 10 or 10,000.
-   Crowd-judging is fine HERE because the thin-crowd randomness problem is only a
-   *thin*-crowd problem (100 people around = plenty of votes) and qualifiers are
-   low-stakes. Standings = **wins, with a light quality guard** (ranked wins
-   only, repeat-opponent cap to stop farming the same friend) - metric is
-   tunable (raw wins vs win-rate-with-min-games vs weekly rating gain).
-2. **The Main Stage finals (the show), one night a week.** The top qualifiers
-   advance to a live, panel-judged, single-elimination bracket.
+   week ARE the qualifier. Crowd-judged, parallel, async - so it handles 10 or
+   10,000. Crowd-judging is fine HERE because the thin-crowd randomness problem
+   is only a *thin*-crowd problem (100 people = plenty of votes) and qualifiers
+   are low-stakes. **Qualifying metric = WEEKLY ELO GAIN** (each player's hidden-
+   rating change over the week), NOT raw wins. Reason: Elo already fuses wins,
+   losses AND opponent strength into one principled "who actually proved
+   themselves" number, and it is farm-proof (beating weak opponents gains ~0, so
+   grinding scrubs does nothing). A hand-rolled wins/win-ratio blend would be a
+   worse, gameable reinvention of Elo. **Eligibility floor: 5 completed ranked
+   matches that week** (config), so a 2-match lucky-upset fluke can't steal a
+   Main Stage slot. (A legible public board can still show "wins" while ranking
+   by weekly Elo gain.)
+2. **The Main Stage finals (the show), one night a week.** The top 4 advance to
+   a live, panel-judged, single-elimination bracket.
 
-### Cadence
-**Weekly (default Thursday), NOT nightly.** Easier to fill with both players and
+### Cadence & timeline
+**Weekly (default Thursday), NOT nightly** - easier to fill with players AND
 judges, and makes it appointment-TV special. **The daily 6-7pm Pacific window
-STAYS** as casual crowd-judged ranked battling - the daily habit loop, and where
-qualifier wins pile up. The panel event is the weekly climax on top of that.
+STAYS** as casual crowd-judged ranked battling (the daily habit loop, where
+qualifier Elo accrues). Thursday the tournament IS the 6-7pm event.
+- **Wednesday 11:59pm PST = the single cutoff for everything:** qualifying ends,
+  any match still unjudged LOCKS and does NOT count toward the tally, a snapshot
+  is taken, and **the top 4 players AND the 5 judges are posted together.**
+- **Acceptance window: Wed 11:59pm -> Thursday 4pm PST.** Finalists and judges
+  are notified and must confirm. Field + panel LOCK at 4pm, so there is never a
+  6pm scramble.
 
-### Snapshot-and-seed
-**15 minutes before the finals, a job snapshots the weekly leaderboard and the
-top 4 auto-enter** - no sign-up scramble, no "did I make it" check-in. (Same
-shape as the existing auto-create + event-window stamp patterns.)
+### Qualifier -> finalists, alternates, no-shows
+- Top 4 by weekly Elo gain (min 5 games) auto-qualify.
+- **4 ALTERNATES (ranks 5-8 by weekly Elo), ALL notified they are alternates.**
+  If a finalist declines or doesn't confirm by Thu 4pm, the highest confirmed
+  alternate rolls in. Four alternates all-notified = effectively never a dead
+  slot ("no production failure").
+- **Give people the choice** (a forced AFK finalist wrecks the show worse than
+  an alternate). Tell alternates plainly: "You're an alternate for tonight - if
+  a finalist drops by 4pm, you're in; confirm you're around just in case."
+- Last-ditch: if a CONFIRMED finalist still no-shows at 6pm, their opponent byes.
 
-### The finals format
-**Top 4, single-elimination, ONE battle at a time** = 2 semifinals + 1 final = 3
-battles, ~15-20 min of stage time (weekly event can run ~an hour with intros /
-gifting / crowd moments). The whole room watches the same fight; the full panel
-judges every battle. **The panel REVIVES single-elim** - the only reason we
-abandoned it before was thin random votes making a knockout unfair, and a
-reliable panel erases that. People knocked out become the audience (still
-gifting, emoji, Crowd-Favourite voting). **One-at-a-time is mandatory** because
-all judges must see every battle; parallel battles with a split panel would
-recreate thin-panel randomness AND fragment the show - **parallelism lives ONLY
-in the qualifier layer, never the finals.** Cut the pre-battle STUDY phase (not
-the roast rounds) so a tournament battle runs ~3-4 min - study happens on the
-qualifier roster beforehand.
+### The bracket - the #1 CALLOUT
+**Top 4, single-elimination, ONE battle at a time** = 2 semifinals + 1 final.
+**The #1 qualifier (highest weekly Elo gain of the 4 present) PICKS their
+semifinal opponent, live on stage, as a trash-talk callout** ("I'm taking you
+because..."); the other two are auto-paired; the two semi winners meet in the
+final. **TELEVISE THE CALLOUT** - it's a peak content moment: show the three
+potential opponents' reaction shots (who's sweating, who's begging to be
+picked), #1 justifies the pick out loud, and the chosen one snaps SIDE-BY-SIDE
+with #1 for a staredown. (No new system - it's one more camera the live
+production cuts to, like the judges' table and battle feeds.) The "pick the weak
+one to coast" risk is self-policing on a roast stage (picking the easy mark
+reads cowardly; calling out your rival is the play the crowd wants).
+- One-at-a-time is MANDATORY: all judges must see every battle. Parallel battles
+  with a split panel would recreate thin-panel randomness AND fragment the show -
+  **parallelism lives ONLY in the qualifier layer, never the finals.**
+- **Finals battles still move Elo** like any ranked match, so a strong tournament
+  feeds next week's qualifying - the cycle keeps turning.
 
-### The panel
-**5 judges, including the founder.** Why 5: few enough to be coveted and give
-each judge impactful airtime (talent shows run 3-5 for exactly this reason),
-enough that no single judge can decide a result (majority needs 3), and odd so
-no ties. Bigger (9-11) is fairer but kills prestige/airtime and is hard to
-recruit; 3 is too swingy (one person too powerful).
+### Main Stage battle format - the chess clock + interrupts
+Replaces the normal 3x15s format on the Main Stage (study phase cut - study
+happens on the qualifier roster beforehand, so the battle is ~a few min of
+actual talk):
+- **Two 1-minute clocks that run ONLY while you hold the floor** (chess-clock) -
+  "talk as long as you want" is bounded by your remaining minute, so no
+  filibuster. Unused seconds BANK for later in the battle.
+- **Yielding is free:** stop whenever and the floor passes to your opponent (no
+  cost). Interrupts are ONLY for cutting in while the other person holds the
+  floor.
+- **2 interrupts ("steals") each.** Interrupting spends one token AND starts your
+  clock (you pay with your own time - stops griefing/spam), and you hold the
+  floor until you yield, your clock runs out, or they burn a steal to take it
+  back. The 2-cap keeps it dramatic (hoard it for the perfect comeback) AND keeps
+  mic mute/unmute to ~4 clean events a battle, not rapid-fire - which also
+  removes the real-time-audio-sync technical risk that unlimited toggling had.
+- **A few-second shot-clock:** once the floor is yours you must start talking or
+  it bounces, so nobody can stall in a "you-go-first" standoff.
+- Battle ends when both clocks hit zero. Judges vote on who was funnier, so
+  hoarding time while saying nothing just loses - no exploit.
+
+### The panel - 5 judges, MOST-JUDGED autofill (NOT a lottery)
+**5 judges including the founder.** Why 5: the live group debate has a
+conversation ceiling (6+ people talking live = chaos, quiet judges vanish, grid
+cramped), AND open on-air voting needs enough independent ballots that a
+bandwagon of 2 can't settle it - the live-debate ceiling and the fairness/
+bandwagon floor MEET at exactly 5. Odd = no ties.
 - **Founder = permanent head judge** (always one of the 5; breaks a tie if an
-  even panel ever occurs). The other **4 seats are drawn weekly by LOTTERY**
-  from everyone who opted in and is in good standing (not banned/flagged, no
-  nuisance history). Drawn -> **offered** -> accept or decline (decline -> next
-  name drawn; spares cover no-shows). Equal chance for anyone eligible (not
-  merit-gated) - that's what makes the seat coveted-but-attainable ("could be me
-  next week"), rewards good behaviour (stay eligible), and rotates the spotlight
-  through the community = the ecosystem flywheel (people want the mic -> opt in
-  -> you always have judges -> better show).
-- **Scaling the draw:** as the opt-in pool grows, weight the draw toward people
-  who haven't judged recently so it keeps feeling attainable. Not needed in beta.
-- **Celebrity guests** take one of the 4 drawn seats on marquee/special nights -
-  the panel is a *seat you can fill*, which is the whole growth lever (ties into
-  the comedian-promo plan: a guest judge is a far easier ask than a guest
-  roaster). Flagship future version: the 12-jury + 1-judge "courtroom" (13) for
-  big special events.
-- **Config + floor:** panel size is a dial; below a minimum of real judges,
-  fall back to crowd voting rather than cancel - never leave a result unjudged.
+  even panel ever occurs via a dropout). Shown on screen as the **Founder's
+  Pick**.
+- **Selection is NOT a lottery (reversed 2026-10-09).** The founder HAND-PICKS
+  any seats (friends, celebrities, whoever); the REMAINING seats AUTOFILL from
+  the **most-judged-that-week** pool (excluding finalists and hand-picks). This
+  makes judging - the scarce resource - its own rewarding "track" for host-type
+  personalities, the seat is the payoff for a week of active judging, and it
+  feeds the qualifier layer with votes. A weekly **admin prompt** asks the
+  founder how many / which guest judges; founder types usernames (set up
+  reusable **"guest judge" accounts** to assign on the fly) and the rest fill
+  automatically. Judges confirm by Thu 4pm like players; a decline/no-show pulls
+  the next most-judged name.
+- **Volume-farm guard:** "most judged" rewards raw volume, so lean on the
+  existing watch-time gate + daily (and a weekly) vote cap so nobody spam-clicks
+  onto the panel.
+- **Celebrity guests** take a hand-picked seat - the panel is a *seat you can
+  fill*, the whole growth lever (a guest judge is a far easier ask than a guest
+  roaster; ties into the comedian-promo plan). Flagship future: the 12-jury +
+  1-judge "courtroom" (13) for big special events.
+- **Config + floor:** below a minimum of real judges, fall back to crowd voting
+  rather than cancel - never leave a result unjudged.
 
-### Who decides, and the crowd's role
-**The panel alone decides the tournament WIN** (5 independent ballots, majority).
-The crowd does NOT decide the win, but stays engaged: **emoji ratings** (feed
-player stats), a **non-binding "Crowd Favourite" vote** (locked right after the
-battle, BEFORE the judges' debate airs, so it's an independent read), and
-**gifting**. The founder's ballot is shown on screen as the **Founder's Pick**.
+### Judging IS the live group debate (no solo verdicts)
+**The panel alone decides the WIN** (5 independent ballots, majority). The format
+is a **live, free-flowing group debate** - the judges' table arguing/joking it
+out, up to ~5 min (can wrap early on a blowout), everyone encouraged to speak but
+talking freely (not rigid turns, nobody silent). **Voting is LIVE and OPEN during
+the debate:** each judge casts their vote in the moment (whenever, can narrate
+it), and the **audience sees each vote land live as a running tally** while the
+panel talks. This is a live 5-way judges' video room broadcast to the crowd, the
+stage cutting between the battle and the judges' table like a real broadcast
+desk - the heaviest build, but built now (behind the launch flag), not deferred.
+- **Integrity tension:** open live voting maximizes transparency (nothing hidden)
+  but invites bandwagon/anchoring around a dominant or celebrity voice; the 5
+  independent ballots mean no one person decides. **OPTIONAL guard, NOT yet
+  decided:** also capture each judge's private gut-read the instant the battle
+  ends and reveal it at the end ("where they started vs. landed") - blunts
+  bandwagoning AND adds "who changed their mind" drama without breaking the
+  live-vote flow.
 
-### Judging as a show - v1 then v2
-- **v1 (ship first, reuses the intro-video pipeline):** panel casts votes +
-  each judge gives an individual **30-sec spoken verdict** (on camera, moderated
-  via the existing SafeSearch path, **required to cast a vote** - the integrity
-  lock, you can't lazily vote if you must justify on camera). A few play live on
-  the main stage (always the founder, the celebrity when present); **all become
-  watchable after a viewer casts their Crowd-Favourite vote** (anti-bias, same
-  rule as Founder's Pick).
-- **v2 (the north star, the heaviest build):** replace solo speeches with a
-  **live free-flowing group debate** - the judges' table arguing/joking it out,
-  up to ~5 min (can wrap early on a blowout), **everyone encouraged to speak but
-  talk freely / debate** (not rigid turns, nobody silent). **Voting is LIVE and
-  OPEN during the debate:** each judge casts their vote in the moment (whenever,
-  can narrate it), and the **audience sees each vote land live as a running
-  tally** while the panel talks. Still 5 independent ballots, majority wins.
-  Build note: this is a live 5-way judges' video room broadcast to the crowd,
-  with the "stage" cutting between the battle and the judges' table like a real
-  broadcast desk - genuinely new production on top of the Agora live/spectator
-  infra, hence phased after v1.
-- **Integrity tension to watch in v2:** public live sequential voting maximizes
-  transparency (nothing hidden = its own accountability) but invites
-  bandwagon/anchoring around a dominant or celebrity voice. The 5 independent
-  ballots mean no one person decides. **OPTIONAL guard, NOT yet decided:** also
-  capture each judge's private gut-read the instant the battle ends and reveal it
-  at the end ("where they started vs. where they landed") - blunts bandwagoning
-  AND adds "who changed their mind" drama without breaking the live-vote flow.
+### Crowd role & prizes
+- **Crowd:** does NOT decide the win, but engages via **emoji ratings** (feed
+  player stats), a **non-binding "Crowd Favourite" vote** (locked right after
+  each battle, BEFORE the debate airs, so it stays an independent read), and
+  **gifting**.
+- **Prizes = prestige for now, real/scarce prizes built later** (developer likes
+  the hidden-lore scarcity prestige route; cash/experiential is advisor/future).
+  Champion takes **The Belt** (re-point the existing reigning-champion Belt from
+  daily -> this weekly tournament) + a **tournaments-won leaderboard**; later a
+  **champion-exclusive unlockable skin** (from the backlog - scarcity that can't
+  be bought) + a **reigning-champion spotlight**. Finalists get a **fancy
+  "Main Stage" finalist badge.**
+
+### STILL TO DISCUSS (parked 2026-10-09, do NOT decide unilaterally)
+**The economy/monetization ripple of this overhaul** - its own dedicated session,
+overlapping the planned advisor review. Open questions the developer raised:
+how subscriptions, points and free-vs-subscriber access change now that the
+tournament is the center of gravity; and crucially **whether qualification should
+be effort/engagement-based (daily login + judging + earning points) rather than
+(or blended with) pure skill/Elo.** Pure-Elo rewards the BEST; engagement-based
+rewards the MOST ACTIVE and pulls people in daily - a real fork, possibly a
+blend. Not decided. See [[economy-needs-advisor-review]], [[one-status-ladder]].
 
 ### One-sentence summary
-Battle all week to climb the leaderboard -> the top 4 are snapshotted in 15 min
-before showtime -> Thursday night they fight one-at-a-time on a live Main Stage
-judged by a 5-person panel (you + 4 drawn by lottery) who debate and vote in the
-open, while the crowd rates with emoji, crowns a Crowd Favourite, and gifts.
+Battle ranked all week to climb the hidden-Elo leaderboard -> Wednesday midnight
+the top 4 (min 5 games) + 5 judges (your hand-picks + most-judged autofill) are
+snapshotted and posted, confirm by Thursday 4pm -> Thursday 6-7pm the #1 seed
+calls out their opponent live, four fight one-at-a-time on a chess-clock-with-
+steals Main Stage, a 5-judge panel debates and votes in the open, and the crowd
+rates with emoji, crowns a Crowd Favourite, and gifts - all built now, launched
+only when the flag is flipped.
