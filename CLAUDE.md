@@ -4348,9 +4348,24 @@ games) are tunable placeholders per the economy-advisor-review discipline.
   blitzkrieg-rollout conversations, since those move the monetization and launch
   plan. **Resurface it after those conversations.** The backend foundation above
   is complete and inert behind the flag in the meantime.
-- **The ADMIN dashboard is NOT parked** - it's separate developer tooling
-  (requested 2026-10-09, Q2), useful now; its tournament-control panels light up
-  as the tournament system is un-parked. See its own build note when created.
+- **ADMIN COMMAND CENTER - BUILT (2026-10-09), web, in `website/`.** A gated
+  `/admin` dashboard (developer tooling, Q2). Server-side admin gate
+  `verifyAdmin` (real Firebase ID token + `isAdmin`) on four Route Handlers:
+  `/api/admin/metrics` (live counts: online, subscribers, signups, battles,
+  votes, published clips, moderation-queue sizes; config flags; recent pending
+  reports/support/appeals - each query defensive), `/api/admin/users` (search
+  by username/uid), `/api/admin/action` (ban/unban/flag, comp/revoke access,
+  flip `config/tournament` + `config/monetization`, resolve moderation items -
+  all admin-only + audit-stamped), `/api/admin/me` (client gate). The client
+  page sends the signed-in user's ID token as a Bearer header. Reuses the
+  existing Vercel Admin SDK creds - **no new env vars**. **Verified:** clean
+  Next 16 build + TS; every data/action route returns 401 without a token; all
+  16 metric queries run against real Firestore with no missing indexes.
+  **NOT yet done:** the admin HAPPY path isn't browser-tested (needs a real
+  admin login), and the site must be **deployed/pushed** for `/admin` to go
+  live. **Tournament-control panels** (select judges, cancel w/ auto-message,
+  set rules, issue prizes) are deferred - they slot in when the tournament is
+  un-parked.
 
 ### The center of gravity
 **The weekly tournament is the app's heart - the destination that gives every
