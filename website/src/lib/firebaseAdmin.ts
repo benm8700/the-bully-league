@@ -1,26 +1,25 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { getAuth } from "firebase-admin/auth";
+
+// NOTE: we deliberately do NOT import "firebase-admin/auth". Its token
+// verification pulls in jwks-rsa -> jose (pure ESM), and require()-ing that on
+// Vercel's serverless Node runtime throws ERR_REQUIRE_ESM, which crashed every
+// admin route in production. ID tokens are verified via Firebase's REST API
+// (verifyIdTokenViaRest) instead, which needs no jose; firebase-admin here is
+// used only for Firestore (no ESM-only deps).
 
 // Server-only - the Admin SDK reads/writes Firestore directly, bypassing
-// firestore.rules entirely. This is deliberate: the website's homepage
-// needs to show the live Top 5 leaderboard to ANONYMOUS visitors (see
-// CLAUDE.md's Website homepage decision), and firestore.rules currently
-// requires request.auth != null on every users/{userId} read - loosening
-// that for public reads would expose full profile docs (ammoText,
-// hometown, etc.) to the internet. Routing through server-side Admin SDK
-// code instead matches the same "sensitive access goes through
-// server-side code, not relaxed client rules" pattern used everywhere else
-// in this project (Cloud Functions for rating/points writes, etc.).
+// firestore.rules. Deliberate: the public site must show data to anonymous
+// visitors without relaxing rules (see CLAUDE.md's Website homepage decision),
+// and admin writes must bypass client rules behind the verifyAdmin gate.
 function getAdminApp() {
   const existing = getApps();
   if (existing.length > 0) return existing[0]!;
 
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  // Service account keys from the Firebase console JSON have literal
-  // "\n" sequences in the private key field, not real newlines - env vars
-  // can't hold real newlines cleanly, so this must be unescaped.
+  // Service account keys from the Firebase console JSON have literal "\n"
+  // sequences in the private key - env vars can't hold real newlines, so unescape.
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
   if (!projectId || !clientEmail || !privateKey) {
@@ -40,10 +39,6 @@ export function getAdminFirestore() {
   return getFirestore(getAdminApp());
 }
 
-export function getAdminAuth() {
-  return getAuth(getAdminApp());
-}
-
 /** Thrown by verifyAdmin; carries the HTTP status a route should return. */
 export class AdminAuthError extends Error {
   constructor(
@@ -55,15 +50,47 @@ export class AdminAuthError extends Error {
   }
 }
 
+// Firebase Web API key - PUBLIC (same value committed in firebaseClient.ts and
+// shipped in the app). Used only to call the Identity Toolkit REST endpoint,
+// which ties the lookup to this project; it is not a secret.
+const FIREBASE_WEB_API_KEY = "AIzaSyA07YDK7gkBPg20MfJZd7brXiST43j68kM";
+
 /**
- * Gate for every admin Route Handler. The admin dashboard is a CLIENT page
- * (client-side Firebase Auth, no session cookies), so it sends the signed-in
- * user's Firebase ID token as `Authorization: Bearer <token>`. This verifies
- * that token server-side AND that the account carries `isAdmin === true`
- * (which is server-only in firestore.rules and set by hand in the console) -
- * so being an admin cannot be forged from the client. Returns the caller's
- * uid/email, or throws AdminAuthError with 401 (not signed in / bad token) or
- * 403 (signed in but not an admin).
+ * Verify a Firebase ID token WITHOUT firebase-admin/auth (see the note at the
+ * top). accounts:lookup returns the account iff the token is a valid, unexpired
+ * Firebase ID token for THIS project (the API key scopes it), so it both
+ * authenticates and yields the uid. Throws AdminAuthError(401) otherwise.
+ */
+async function verifyIdTokenViaRest(
+  idToken: string,
+): Promise<{ uid: string; email?: string }> {
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_WEB_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      },
+    );
+  } catch {
+    throw new AdminAuthError(401, "Could not verify token");
+  }
+  if (!res.ok) throw new AdminAuthError(401, "Invalid or expired token");
+  const data = (await res.json()) as {
+    users?: { localId?: string; email?: string }[];
+  };
+  const user = data.users?.[0];
+  if (!user?.localId) throw new AdminAuthError(401, "Invalid or expired token");
+  return { uid: user.localId, email: user.email };
+}
+
+/**
+ * Checks the signed-in caller's Firebase ID token (Authorization: Bearer) AND
+ * that their account carries isAdmin === true (server-only in firestore.rules,
+ * set by hand). Returns the caller's uid/email, or throws AdminAuthError 401
+ * (not signed in / bad token) or 403 (signed in but not an admin).
  */
 export async function verifyAdmin(
   request: Request,
@@ -72,19 +99,33 @@ export async function verifyAdmin(
   const match = /^Bearer (.+)$/.exec(header);
   if (!match) throw new AdminAuthError(401, "Missing bearer token");
 
-  let decoded;
-  try {
-    decoded = await getAdminAuth().verifyIdToken(match[1]!);
-  } catch {
-    throw new AdminAuthError(401, "Invalid or expired token");
-  }
-
+  const caller = await verifyIdTokenViaRest(match[1]!);
   const snap = await getAdminFirestore()
     .collection("users")
-    .doc(decoded.uid)
+    .doc(caller.uid)
     .get();
   if (snap.data()?.isAdmin !== true) {
     throw new AdminAuthError(403, "Admin only");
   }
-  return { uid: decoded.uid, email: decoded.email };
+  return caller;
+}
+
+/** Non-throwing variant for the /me gate: who you are + whether you're admin. */
+export async function describeCaller(
+  request: Request,
+): Promise<{ signedIn: boolean; admin: boolean; uid?: string; email?: string }> {
+  const header = request.headers.get("authorization") ?? "";
+  const match = /^Bearer (.+)$/.exec(header);
+  if (!match) return { signedIn: false, admin: false };
+  const caller = await verifyIdTokenViaRest(match[1]!);
+  const snap = await getAdminFirestore()
+    .collection("users")
+    .doc(caller.uid)
+    .get();
+  return {
+    signedIn: true,
+    admin: snap.data()?.isAdmin === true,
+    uid: caller.uid,
+    email: caller.email,
+  };
 }
