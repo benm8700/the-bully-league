@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
 
 // Tells the admin page whether the signed-in caller is an admin, so it can

@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { AdminAuthError, getAdminFirestore, verifyAdmin } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 

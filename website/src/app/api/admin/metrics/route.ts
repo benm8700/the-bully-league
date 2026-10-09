@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { AdminAuthError, verifyAdmin } from "@/lib/firebaseAdmin";
 import { collectMetrics } from "@/lib/adminMetrics";
 

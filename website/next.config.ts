@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // firebase-admin lazy-requires native/sub-packages (gRPC, google-gax) that
+  // Next's bundler does NOT trace into a Route Handler's serverless function on
+  // Vercel - so every /api/admin/* route crashed at import with a 500 in prod
+  // while the Server Components using the same import (homepage, /matches)
+  // worked. Marking it external keeps it a plain node_modules require that
+  // Vercel's file tracer then includes wholesale. The documented fix.
+  serverExternalPackages: ["firebase-admin"],
   // App stores specifically ask for a "Privacy Policy URL" and often a
   // Terms URL too, but CLAUDE.md's Security & Compliance Baseline decided
   // on ONE combined document rather than maintaining separate pages - these
