@@ -15,6 +15,7 @@ import '../../core/services/entitlement_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../widgets/admin_only.dart';
 import '../../widgets/home/goat_throne_banner.dart';
+import '../../widgets/home/main_stage_banner.dart';
 import '../../widgets/home/prize_claim_banner.dart';
 import '../../widgets/home/weekly_standing_banner.dart';
 import '../../widgets/home/hero_mode_card.dart';
@@ -140,6 +141,10 @@ class HomeScreen extends StatelessWidget {
                     const _ActiveMatchBanner(),
                     const _ActiveGauntletBanner(),
                     const _IncomingChallengeBanner(),
+                    // When you're in this week's finals (finalist/alternate/
+                    // judge), the front door to the Main Stage - confirm your
+                    // spot, make your callout. Nothing otherwise.
+                    const MainStageBanner(),
                     const PrizeClaimBanner(),
                     // The "defend your throne" warning - shown only to a GOAT
                     // under threat or the challenger closing on their spot.
