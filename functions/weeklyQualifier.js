@@ -154,10 +154,38 @@ function topN(standings, n) {
   return standings.slice(0, Math.max(0, n));
 }
 
+/**
+ * Rank judges by how many battles they judged this week - the "most-judged"
+ * pool that autofills the Main Stage panel's open seats. Pure: hand it the
+ * week's ballots ({uid, at}) and the window.
+ *
+ * Counts one per ballot (the one-ballot-per-voter-per-match guard means a
+ * ballot IS a distinct battle judged). Malformed/out-of-window entries are
+ * skipped. Order is deterministic: most judged, then uid.
+ */
+function computeJudgeStandings(ballots, opts = {}) {
+  const {startMs, cutoffMs} = opts;
+  const byUid = new Map();
+  for (const e of ballots || []) {
+    if (!e || typeof e.uid !== "string" || !e.uid) continue;
+    const at = toMs(e.at);
+    if (!Number.isFinite(at)) continue;
+    if (Number.isFinite(startMs) && at < startMs) continue;
+    if (Number.isFinite(cutoffMs) && at >= cutoffMs) continue;
+    byUid.set(e.uid, (byUid.get(e.uid) || 0) + 1);
+  }
+  return [...byUid.entries()]
+      .map(([uid, judged]) => ({uid, judged}))
+      .sort((a, b) =>
+        b.judged - a.judged ||
+        (a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0));
+}
+
 module.exports = {
   qualifyingWeek,
   mostRecentlyClosedWeek,
   computeStandings,
+  computeJudgeStandings,
   topN,
   toMs,
   addDaysKey,

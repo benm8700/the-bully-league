@@ -3,6 +3,7 @@ const {
   qualifyingWeek,
   mostRecentlyClosedWeek,
   computeStandings,
+  computeJudgeStandings,
   topN,
   weekdayOf,
 } = require("../weeklyQualifier");
@@ -199,6 +200,33 @@ check("topN selects finalists (and alternates) in order", () => {
   assert.deepStrictEqual(topN(s, 4).map((p) => p.uid), ["a", "b", "c", "d"]);
   assert.strictEqual(topN(s, 0).length, 0);
   assert.strictEqual(topN(s, 99).length, 5);
+});
+
+console.log("weekly qualifier - computeJudgeStandings (most-judged pool)");
+
+const jb = (uid, at = 1500) => ({uid, at});
+
+check("ranks judges by ballot count, most first", () => {
+  const s = computeJudgeStandings([
+    jb("a"), jb("a"), jb("a"), jb("b"), jb("b"), jb("c"),
+  ], {startMs: 1000, cutoffMs: 2000});
+  assert.deepStrictEqual(s.map((x) => x.uid), ["a", "b", "c"]);
+  assert.strictEqual(s[0].judged, 3);
+});
+
+check("judge count ignores ballots outside the window", () => {
+  const s = computeJudgeStandings([
+    jb("a", 999), jb("a", 2000), jb("a", 1500), jb("a", 1800),
+  ], {startMs: 1000, cutoffMs: 2000});
+  assert.strictEqual(s[0].judged, 2, "only the two in-window ballots count");
+});
+
+check("judge ties break by uid; malformed ballots are skipped", () => {
+  const s = computeJudgeStandings([
+    jb("zed"), jb("amy"), {uid: "", at: 1500}, {at: 1500}, null,
+    {uid: "x", at: "bad"},
+  ], {startMs: 1000, cutoffMs: 2000});
+  assert.deepStrictEqual(s.map((x) => x.uid), ["amy", "zed"]);
 });
 
 console.log(`\n${passed} passed`);

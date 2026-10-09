@@ -64,6 +64,15 @@ const PROBES = [
   {u: uid("friend"), mode: "friend", deltas: [200, 200, 200, 200]}, // non-ladder
 ];
 
+// Judge probes: distinct voters with descending ballot counts in the closed
+// week, to verify the most-judged pool is ranked and excludes finalists.
+const MATCHES = ["wqm-1", "wqm-2", "wqm-3", "wqm-4"];
+const JUDGES = [
+  {u: uid("jA"), n: 4},
+  {u: uid("jB"), n: 3},
+  {u: uid("jC"), n: 2},
+];
+
 async function seed() {
   const batch = db.batch();
   for (const p of PROBES) {
@@ -76,6 +85,13 @@ async function seed() {
       });
     });
   }
+  for (const j of JUDGES) {
+    for (let i = 0; i < j.n; i++) {
+      const ref = db.collection("votes").doc(MATCHES[i])
+          .collection("ballots").doc(j.u);
+      batch.set(ref, {timestamp: Timestamp.fromMillis(atMid + i)});
+    }
+  }
   await batch.commit();
 }
 
@@ -86,6 +102,12 @@ async function cleanup() {
     const batch = db.batch();
     snap.forEach((d) => batch.delete(d.ref));
     await batch.commit();
+  }
+  for (const j of JUDGES) {
+    for (let i = 0; i < j.n; i++) {
+      await db.collection("votes").doc(MATCHES[i])
+          .collection("ballots").doc(j.u).delete().catch(() => {});
+    }
   }
   await db.collection("stats").doc("weeklyQualifier").delete().catch(() => {});
   await db.collection("stats").doc("weeklyQualifierSnapshot").delete()
@@ -145,6 +167,19 @@ async function main() {
     const all = uidsOf([...(snap.finalists || []), ...(snap.alternates || [])]);
     assert.ok(!all.includes(uid("friend")), "friend-mode probe excluded");
   });
+
+  await check("judge pool is most-judged, ranked, finalists excluded",
+      async () => {
+        const snap = (await db.collection("stats")
+            .doc("weeklyQualifierSnapshot").get()).data();
+        const pool = (snap.judgePool || []).map((j) => j.uid);
+        const ia = pool.indexOf(uid("jA"));
+        const ib = pool.indexOf(uid("jB"));
+        const ic = pool.indexOf(uid("jC"));
+        assert.ok(ia >= 0 && ib >= 0 && ic >= 0, "jA,jB,jC all in the pool");
+        assert.ok(ia < ib && ib < ic, "ranked by ballots judged");
+        assert.ok(!pool.includes(uid("a")), "a finalist is never in the pool");
+      });
 
   await check("live board written for the CURRENT week", async () => {
     const live = (await db.collection("stats")

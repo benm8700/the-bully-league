@@ -4,6 +4,7 @@ const {
   qualifyingWeek,
   mostRecentlyClosedWeek,
   computeStandings,
+  computeJudgeStandings,
   topN,
 } = require("./weeklyQualifier");
 
@@ -34,6 +35,10 @@ const FINALISTS = 4;
 const ALTERNATES = 4;
 const MIN_GAMES = 5; // matches the decision record's eligibility floor
 const LIVE_BOARD_SIZE = 50; // enough to show a real board without bloat
+// The most-judged-this-week pool frozen alongside the finalists: enough to
+// autofill a 5-seat panel after excluding finalists, hand-picks and the
+// ineligible, with comfortable margin. judgePanel.selectPanel consumes it.
+const JUDGE_POOL_SIZE = 25;
 // Only snapshot a cutoff that closed RECENTLY, so a job that was down for days
 // and recovers doesn't freeze a stale week. Thu 00:00 -> comfortably before the
 // Thu 6pm show; idempotency (below) stops a re-snapshot within the window.
@@ -65,6 +70,23 @@ async function collectWeekEntries(db, startMs, endMs) {
     entries.push({uid, delta: d.delta, mode: d.mode, at: d.at});
   });
   return entries;
+}
+
+/**
+ * All ballots cast in [startMs, endMs), across every match, as {uid, at}. The
+ * voter's uid is the ballot doc id (votes/{matchId}/ballots/{voterId}), and the
+ * ballot's time is its `timestamp`. Feeds the most-judged-this-week pool.
+ */
+async function collectWeekBallots(db, startMs, endMs) {
+  const snap = await db.collectionGroup("ballots")
+      .where("timestamp", ">=", Timestamp.fromMillis(startMs))
+      .where("timestamp", "<", Timestamp.fromMillis(endMs))
+      .get();
+  const ballots = [];
+  snap.forEach((doc) => {
+    ballots.push({uid: doc.id, at: doc.data().timestamp});
+  });
+  return ballots;
 }
 
 async function sweepWeeklyQualifier(now = Date.now()) {
@@ -108,18 +130,29 @@ async function sweepWeeklyQualifier(now = Date.now()) {
       });
       const finalists = topN(standings, FINALISTS);
       const alternates = standings.slice(FINALISTS, FINALISTS + ALTERNATES);
+      // The most-judged-this-week pool, frozen alongside the field, for the
+      // panel autofill (judgePanel.selectPanel adds the founder's hand-picks
+      // and excludes finalists). Finalists can't judge, so drop them here too.
+      const ballots = await collectWeekBallots(
+          db, closed.startMs, closed.cutoffMs);
+      const finalistSet = new Set(finalists.map((f) => f.uid));
+      const judgePool = computeJudgeStandings(ballots, {
+        startMs: closed.startMs, cutoffMs: closed.cutoffMs,
+      }).filter((j) => !finalistSet.has(j.uid)).slice(0, JUDGE_POOL_SIZE);
       await snapRef.set({
         tournamentDayKey: closed.cutoffDayKey,
         startMs: closed.startMs,
         cutoffMs: closed.cutoffMs,
         finalists,
         alternates,
+        judgePool,
         snapshotAt: FieldValue.serverTimestamp(),
       });
       snapshot = {
         tournamentDayKey: closed.cutoffDayKey,
         finalists: finalists.length,
         alternates: alternates.length,
+        judgePool: judgePool.length,
       };
     }
   }
