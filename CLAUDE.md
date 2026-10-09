@@ -3026,6 +3026,18 @@ tournaments/{tournamentId} (extended)
 
 **The one-line version, and it should stay this legible in the product too: "Free to watch. Free to battle ranked at 6pm. Subscribe to battle whenever."**
 
+### REFINEMENT (2026-10-09): battling is a metered resource OUTSIDE the window; points are the currency; engagement earns it
+
+A brainstorm pass harmonised monetization with the tournament-is-the-heart model. The **shape** below is DECIDED; the **numbers** (exchange rate, free allowance, price, when to tighten) are explicitly the developer's advisor-review territory - see [[economy-needs-advisor-review]]. Updated one-liner: **"Watch & judge free always. Battle free 6-7pm. Battle any other time: spend points or subscribe."**
+
+- **Watch + judge: free and UNLIMITED, forever.** Non-negotiable guardrail - they are the vote supply, the audience, AND the earn-your-battles loop. Only *battling* is ever metered.
+- **Battle free during the 6-7pm window** (developer's call 2026-10-09, kept over full metering). This preserves the window's real job - **liquidity concentration** (a thin userbase forced online together so the queue is full) and a genuine free path - and crucially means **charging never starves the peak-time pool** (the marketplace-supply trap that full metering would spring). Free users are told plainly: *"Your free battles are 6-7pm Pacific; to battle other times, spend points or subscribe."*
+- **Battle ANY OTHER time = spend points, or subscribe for unlimited anytime.** This is the new monetization lever, and it lives OUTSIDE the window on purpose.
+- **"Points" is the ONE spendable currency already in the model** (the spendable `pointsBalance`, not lifetime XP). No new "battle point" currency - a battle outside the window simply costs points. **This finally gives points a clear primary sink**, answering the long-open "what are points for": the loop is **judge + dailies + play -> earn points -> spend on battles -> battles make clips, feed the ladder, generate votes -> repeat**, with subscription short-cutting it. Spending draws down the wallet, never the lifetime-XP title (consistent with the existing points/pointsBalance split and [[one-status-ladder]]).
+- **Earning:** judging is the biggest earner (it feeds the scarce resource - votes), dailies a steady trickle, playing gives a little back - so an active free player keeps a slow battle rhythm but judging is the fast lane. Rates = advisor dial.
+- **LAUNCH GENEROUS, TIGHTEN WHEN LIQUID** (behind the config flag). A meter on a dead app kills the clips->installs cold-start loop (a paywall is a *harvesting* move, wrong at zero users); a meter on a busy app converts. So launch loose and tighten the outside-window cost once there's a real crowd.
+- **Qualification is UNCHANGED and stays pure weekly-Elo (skill).** Engagement does not grind you a finals spot (that would deflate the Main Stage); it feeds qualification *naturally* through battle volume - more battles (free window + points-funded + subscriber-unlimited) = more chances to gain weekly Elo. Finals therefore tilt toward subscribers, accepted, but a great free player can still occasionally carry in on window + earned battles.
+
 The developer's stated goal for this pass was explicit and reframes everything: **maximum profit, and/or an acquisition in the low millions.** The earlier plan (subscription for side features, everything core free forever) was re-opened against that goal and deliberately made harder.
 
 ### The model
