@@ -24,6 +24,7 @@ type QueueItem = {
   detail?: string;
   reportedUserId?: string;
   createdAt?: number | null;
+  diagnostics?: Record<string, unknown> | null;
 };
 
 function tsToMs(v: unknown): number | null {
@@ -55,6 +56,7 @@ async function recent(
         detail: x.detail ?? x.message,
         reportedUserId: x.reportedUserId,
         createdAt: tsToMs(x.createdAt),
+        diagnostics: x.diagnostics ?? null,
       } as QueueItem;
     })
     .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
@@ -149,7 +151,7 @@ export async function collectMetrics() {
         .where("timestamp", ">=", since(DAY_MS)),
     ),
     count(db.collection("reports").where("status", "==", "pending")),
-    count(db.collection("supportRequests").where("status", "==", "pending")),
+    count(db.collection("supportRequests").where("status", "==", "open")),
     count(db.collection("banAppeals").where("status", "==", "pending")),
     safe(async () => (await db.collection("stats").doc("presence").get()).data()),
     safe(async () =>
@@ -159,7 +161,9 @@ export async function collectMetrics() {
       (await db.collection("config").doc("monetization").get()).data(),
     ),
     safe(() => recent("reports")),
-    safe(() => recent("supportRequests")),
+    // Support/bug reports write status "open", NOT "pending" - querying
+    // "pending" here silently emptied the whole Support queue (and the stat).
+    safe(() => recent("supportRequests", "status", "open")),
     safe(() => recent("banAppeals")),
     safe(() => recentPrizes()),
   ]);

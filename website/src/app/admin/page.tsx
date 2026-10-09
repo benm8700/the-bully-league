@@ -45,6 +45,7 @@ type QueueItem = {
   detail?: string;
   reportedUserId?: string;
   createdAt?: number | null;
+  diagnostics?: Record<string, unknown> | null;
 };
 
 type FoundUser = {
@@ -313,6 +314,24 @@ function Prizes({ metrics, act }: { metrics: Metrics; act: (p: Record<string, un
   );
 }
 
+// Compact diagnostics pills on a support/bug item - which build + OS it was
+// filed on, so a terse report is triageable.
+function Diag({ d }: { d: Record<string, unknown> }) {
+  const ver = d.appVersion
+    ? `v${String(d.appVersion)}${d.buildNumber ? `+${String(d.buildNumber)}` : ""}`
+    : null;
+  const os = [d.platform, d.osVersion].filter(Boolean).map(String).join(" ");
+  const parts = [ver, os].filter((p): p is string => !!p);
+  if (parts.length === 0) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {parts.map((p) => (
+        <span key={p} className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">{p}</span>
+      ))}
+    </div>
+  );
+}
+
 function Queues({ metrics, act }: { metrics: Metrics; act: (p: Record<string, unknown>, l: string) => void }) {
   const blocks: { title: string; items: QueueItem[]; type: string }[] = [
     { title: "Reports", items: metrics.queues.reports, type: "reviewReport" },
@@ -330,8 +349,10 @@ function Queues({ metrics, act }: { metrics: Metrics; act: (p: Record<string, un
             <ul className="space-y-2">
               {b.items.map((it) => (
                 <li key={it.id} className="rounded border border-zinc-800 bg-black/30 p-2 text-xs text-zinc-300">
-                  <div className="font-medium text-zinc-200">{it.category ?? it.reason ?? "item"}</div>
-                  {it.detail && <div className="mt-0.5 line-clamp-3 text-zinc-500">{it.detail}</div>}
+                  <div className="font-medium text-zinc-200">{it.category === "bug_report" ? "🐞 Bug report" : (it.category ?? it.reason ?? "item")}</div>
+                  {it.detail && <div className="mt-0.5 line-clamp-4 text-zinc-500 whitespace-pre-wrap">{it.detail}</div>}
+                  {it.diagnostics && <Diag d={it.diagnostics} />}
+                  {it.createdAt && <div className="mt-1 text-[10px] text-zinc-600">{new Date(it.createdAt).toLocaleString()}</div>}
                   <div className="mt-2 flex gap-2">
                     <button onClick={() => act({ type: b.type, id: it.id, status: "reviewed" }, `${b.title} reviewed`)} className="rounded bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700">Reviewed</button>
                     <button onClick={() => act({ type: b.type, id: it.id, status: "actioned" }, `${b.title} actioned`)} className="rounded bg-amber-600/80 px-2 py-1 text-white hover:bg-amber-600">Actioned</button>

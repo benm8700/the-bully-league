@@ -1,6 +1,9 @@
+import 'dart:io' show Platform;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 /// In-app support/contact form (Build Order step 9b) - CLAUDE.md's Support
 /// & Launch Strategy decision explicitly calls for this over a plain email
@@ -63,6 +66,10 @@ class _SupportScreenState extends State<SupportScreen> {
         'message': _messageController.text.trim(),
         'status': 'open',
         'createdAt': FieldValue.serverTimestamp(),
+        // Auto-attached so a terse "it broke" is actionable - the single most
+        // useful thing for triaging a BETA bug report (which build? which OS?).
+        // Best-effort: gathering this must never stop a report being filed.
+        'diagnostics': await _diagnostics(),
       });
       if (mounted) setState(() => _resultMessage = 'Request submitted. We\'ll get back to you.');
     } catch (e) {
@@ -70,6 +77,22 @@ class _SupportScreenState extends State<SupportScreen> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  /// App build + OS, so a bug report says which version it happened on.
+  /// Best-effort: any failure yields an empty map rather than blocking submit.
+  Future<Map<String, dynamic>> _diagnostics() async {
+    final out = <String, dynamic>{};
+    try {
+      out['platform'] = Platform.operatingSystem;
+      out['osVersion'] = Platform.operatingSystemVersion;
+    } catch (_) {/* non-mobile / unavailable */}
+    try {
+      final info = await PackageInfo.fromPlatform();
+      out['appVersion'] = info.version;
+      out['buildNumber'] = info.buildNumber;
+    } catch (_) {/* plugin unavailable */}
+    return out;
   }
 
   @override
