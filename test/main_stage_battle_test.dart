@@ -139,6 +139,27 @@ void main() {
     expect(after.floor, isNull);
   });
 
+  test('toMap/fromMap round-trips through a JSON-like data channel', () {
+    var s = open();
+    s = s.reduce(MsEvent.startTalking, by: 'a', atMs: 0);
+    s = s.reduce(MsEvent.interrupt, by: 'b', atMs: 4000); // b floor, token spent
+    s = s.reduce(MsEvent.tick, atMs: 7000);
+    // Simulate the num->/dynamic coercion the Agora data channel imposes.
+    final wire = <String, dynamic>{
+      ...s.toMap(),
+      'remaining': {for (final e in s.remaining.entries) e.key: e.value + 0.0},
+    };
+    final r = MainStageBattleState.fromMap(wire);
+    expect(r.floor, s.floor);
+    expect(r.talking, s.talking);
+    expect(r.status, s.status);
+    expect(r.remaining['a'], s.remaining['a']);
+    expect(r.remaining['b'], s.remaining['b']);
+    expect(r.steals['b'], s.steals['b']);
+    expect(r.config.turnMs, s.config.turnMs);
+    expect(r.mutedPlayer, s.mutedPlayer);
+  });
+
   test('reduce never mutates the input state', () {
     final s0 = open();
     final before = s0.remaining['a'];

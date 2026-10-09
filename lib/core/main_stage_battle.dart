@@ -111,6 +111,56 @@ class MainStageBattleState {
     }
   }
 
+  /// Serialize for broadcasting the authoritative state host -> guest over the
+  /// Agora data stream (sendMatchMessage takes a Map). Config is included so a
+  /// guest that somehow created its state with different timings still renders
+  /// the host's truth.
+  Map<String, dynamic> toMap() => {
+        'players': players,
+        'config': {
+          'turnMs': config.turnMs,
+          'interrupts': config.interrupts,
+          'shotClockMs': config.shotClockMs,
+        },
+        'remaining': remaining,
+        'steals': steals,
+        'floor': floor,
+        'talking': talking,
+        'floorTakenMs': floorTakenMs,
+        'lastMs': lastMs,
+        'status': status.name,
+        'endReason': endReason,
+      };
+
+  /// Rebuild a state a host broadcast. Tolerant of the JSON round-trip
+  /// (num->int, dynamic maps) the data channel imposes.
+  static MainStageBattleState fromMap(Map<String, dynamic> m) {
+    final players = (m['players'] as List).cast<String>();
+    final cfg = (m['config'] as Map?) ?? const {};
+    final s = MainStageBattleState._(
+      [players[0], players[1]],
+      MainStageBattleConfig(
+        turnMs: (cfg['turnMs'] as num?)?.toInt() ?? kMainStageTurnMs,
+        interrupts: (cfg['interrupts'] as num?)?.toInt() ?? kMainStageInterrupts,
+        shotClockMs:
+            (cfg['shotClockMs'] as num?)?.toInt() ?? kMainStageShotClockMs,
+      ),
+    );
+    (m['remaining'] as Map).forEach((k, v) {
+      s.remaining[k as String] = (v as num).toInt();
+    });
+    (m['steals'] as Map).forEach((k, v) {
+      s.steals[k as String] = (v as num).toInt();
+    });
+    s.floor = m['floor'] as String?;
+    s.talking = m['talking'] == true;
+    s.floorTakenMs = (m['floorTakenMs'] as num?)?.toInt();
+    s.lastMs = (m['lastMs'] as num?)?.toInt();
+    s.status = MsStatus.values.byName((m['status'] as String?) ?? 'pending');
+    s.endReason = m['endReason'] as String?;
+    return s;
+  }
+
   /// The player whose mic is muted right now (the non-holder), or null.
   String? get mutedPlayer =>
       status == MsStatus.live && floor != null ? _other(floor!) : null;
