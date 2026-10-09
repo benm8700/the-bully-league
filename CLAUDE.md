@@ -4351,12 +4351,46 @@ games) are tunable placeholders per the economy-advisor-review discipline.
   full-pipeline integration test). The judge-pool (most-judged-this-week) is also
   frozen on the qualifier snapshot. So the hard LOGIC of the Main Stage is done
   and verified.
-- **NOT built yet:** the LIVE layer on top of those cores - none is exported as
-  a callable (only `sweepWeeklyQualifier` is wired), no live open group-debate
-  judges' room / broadcast, no live voting, no client UI, no snapshot->live-
-  tournament seeding wiring, and no prizes (Belt / tournaments-won board /
-  finalist badge / champion skin). Plus the Home rework (ranked-primary +
-  weekly-tournament countdown/qualifying banner). All of it goes behind the same
+- **DONE - the Main Stage LIFECYCLE WIRING (built + deployed this session,
+  2026-10-09, flag-off).** The deterministic skeleton over the pure cores -
+  `functions/mainStageLifecycle.js` (pure decisions: `buildMainStageDoc`,
+  `confirmedFrom`, `lockOutcome`, `inviteResponse`, `calloutResult`, plus
+  `storeBracket`/`loadBracket`; 20 unit tests) and `functions/mainStageTournament.js`
+  (the Firestore wiring): `createFromSnapshot` (build the tournament from the
+  frozen snapshot, invite finalists+alternates, idempotent by derived id),
+  `lockDueTournaments` (Thu 4pm Pacific: resolve the confirmed field + 5-seat
+  panel with banned judges excluded, or cancel for too few), `recordBattleResult`
+  (each battle's winner advances the bracket; the champion completes the
+  tournament, firing the shared `onTournamentCompleted` trigger). Three callables
+  deployed - `respondToMainStageInvite`, `setMainStageJudges` (admin),
+  `mainStageCallout` (the #1's live callout -> bracket) - plus the scheduled
+  `sweepMainStage` (every 15m, create+lock), all GATED on
+  `config/tournament.enabled` so they deploy inert like the qualifier.
+  Live-verified against the deployed backend (`functions/live/mainStageChecks.js`,
+  **8/8 green**): the create/lock/callout/result seams, the per-user ban
+  exclusion, and bracket advancement to a champion.
+  - **Two real seam bugs fixed, neither visible to pure tests:** (1) Firestore
+    can't store an array that directly contains another array, which the
+    bracket's `rounds` ([[semi,semi],[final]]) is - `storeBracket`/`loadBracket`
+    map it to an array-of-`{matches}` at the storage boundary. (2) `belt.js`'s
+    `isGauntlet` matched `createdBy === "auto"`, but Main Stage is auto-created
+    too, so a weekly win would have moved the DAILY belt; now excludes
+    `format === "mainstage"` (Main Stage grants the permanent Champion badge via
+    the shared trigger, but never the belt), pinned by a belt test.
+- **DONE - PRIZES (built + deployed this session, 2026-10-09).** See the
+  "Tournament prizes" section: `functions/prizes.js` (`prizePlan` pure +
+  `awardPrizeForTournament` hooked into the `onTournamentCompleted` trigger -
+  points auto-award via `awardPoints`; non-cash recorded to `prizeFulfillments`
+  with `wonAtMs`, notifies winner + admins; cash recorded, not paid). The player
+  claim flow (Home banner -> `submitPrizeClaim`) and the admin dashboard's
+  outstanding-prize ages are built. `$600 FMV` non-cash ceiling for now (no 1099
+  below it); cash stays off pending processor/entity.
+- **NOT built yet:** the LIVE real-time layer on top of the lifecycle - the
+  chess-clock battle TRANSPORT (mic/floor sync driving `mainStageBattle.reduce`
+  across devices), the live open group-debate judges' room / broadcast, live
+  panel voting, the founder "editor's-choice" pick + 50-pick badge, and the
+  client UI. Plus the Home rework (ranked-primary + weekly-tournament
+  countdown/qualifying banner). All of it goes behind the same
   `config/tournament.enabled` flag.
 - **PARKED (developer's call 2026-10-09, Q1):** the player-facing client/live
   tournament build (Home rework + tournament screens + the live judges' room /
