@@ -1418,6 +1418,9 @@ Raised by the developer: what protects someone who is unhappy that their match f
 
 ## App Store Compliance — IMPORTANT, TIME-SENSITIVE
 - **Comments feature — REVERSED, DECIDED: NO COMMENT SECTIONS ANYWHERE.** Not in the app, not on the website, not under posted clips. **The developer's reason is welfare, not engineering: they do not want comments affecting the roasters' mental state.** This overrides the earlier "planning a comments feature" position recorded below, and was stated after comments had been proposed twice as an engagement mechanism — do not re-propose one.
+  - **RECORDED EXCEPTION — the GAUNTLET LOBBY CHAT (shipped 2026-10-07; documented here 2026-10-09 after an audit found it undocumented).** A live, ephemeral lobby chat for the Daily Gauntlet IS built and IS a chat surface, so it knowingly reopens this otherwise-firm rule — the developer chose it deliberately for event hype/engagement. Code: `functions/lobby.js` (`postLobbyMessage` callable + `onGauntletEnded` trigger that WIPES the chat when the gauntlet ends), `lib/core/services/lobby_service.dart`, `lib/screens/tournament/gauntlet_chat.dart` + `gauntlet_lobby_screen.dart`, wired into the climb/gauntlet/tournament screens; `functions/test/lobby.test.js`; `firestore.rules` has `lobbyChat` (read signed-in, write server-only via the moderated callable) + `lobbyRate`.
+  - **Why it is judged a NARROW exception rather than a reversal:** it is GROUP + EPHEMERAL (purged when the gauntlet ends, fresh daily) + MODERATED (server `contentProblem` filter) + rate-limited + reportable, and it lives ONLY in the tournament lobby. That is different in kind from the thing the rule forbids — permanent, one-sided, anonymous text attached to one roaster's face under their clip/profile. **The general rule still stands: NO comments under clips, on profiles, on the website, or anywhere persistent, and do NOT generalise the lobby chat into broader comments.**
+  - **WELFARE TENSION TO WATCH (flagged, not resolved):** a group chat can still pile onto one roaster. The protections above (ephemeral, moderated, reportable, in service of comedy per the moderation line) are the mitigation; if roaster welfare in chat ever looks like a problem, revisit whether the lobby can target a specific performer. See the `no-comments-protect-roasters` memory, which carries this exception.
   - **The principle generalises, and is the part to carry forward**: the psychological welfare of the person being roasted outweighs engagement gains. The app already asks a lot of participants — they consent to being insulted on camera by a stranger and to that footage being posted. That consent is *bounded*: a mutual, time-boxed, skill-framed contest against one opponent. A comment section is one-sided, unbounded, permanent, and from strangers who agreed to nothing. Stacking the second on the first isn't a fair trade for retention.
   - **What to build instead when engagement around clips is wanted**: mechanisms with no harassment surface — **reactions rather than text**, **autoplay-next rather than discussion threads**, share buttons. These give a visitor something to do and give the feed a popularity signal without attaching anonymous text to a real person's face.
   - **A related trap worth keeping written down**: had comments ever been added, keeping them OFF the in-app feed would have been essential, because Apple's Guideline 1.2 24-hour SLA switches on the moment third-party text renders inside the reviewed app. Easy to cross by accident later via "why does the app show less than the site?" Now moot, but the reasoning is why the app/website split matters for other content types too.
@@ -4338,13 +4341,23 @@ games) are tunable placeholders per the economy-advisor-review discipline.
   - Deployed. `functions/live/weeklyQualifierChecks.js` = **7/7 green** on the
     real backend; verified afterwards the flag is off and no residue remains.
   - No rules change needed (`stats/` + `config/` already client-read/server-write).
-- **NOT built yet (the rest):** the Main Stage itself (top-4 bracket + #1
-  live callout, the chess-clock + 2-interrupt battle format, the 5-judge panel
-  + live open group debate + live voting, snapshot->tournament seeding, judge
-  selection = hand-pick + most-judged autofill, acceptance/alternate flow,
-  prizes = Belt / tournaments-won board / finalist badge / champion skin), and
-  the Home rework (ranked-primary + weekly-tournament countdown/qualifying
-  banner). All of it goes behind the same `config/tournament.enabled` flag.
+- **DONE - the Main Stage PURE CORES (built + tested this session, 2026-10-09;
+  not wired/deployed, no UI).** All pure/deterministic, each with a
+  `functions/test/*.test.js`: `mainStageBracket.js` (top-4 + #1 live-callout
+  bracket), `mainStageBattle.js` (chess-clock + 2-interrupt battle state
+  machine), `judgePanel.js` (5-judge hand-pick + most-judged autofill, finalists
+  excluded), `tournamentAcceptance.js` (acceptance/alternate field resolution),
+  `mainStageAssembly.js` (snapshot->field+panel+bracket glue, with a
+  full-pipeline integration test). The judge-pool (most-judged-this-week) is also
+  frozen on the qualifier snapshot. So the hard LOGIC of the Main Stage is done
+  and verified.
+- **NOT built yet:** the LIVE layer on top of those cores - none is exported as
+  a callable (only `sweepWeeklyQualifier` is wired), no live open group-debate
+  judges' room / broadcast, no live voting, no client UI, no snapshot->live-
+  tournament seeding wiring, and no prizes (Belt / tournaments-won board /
+  finalist badge / champion skin). Plus the Home rework (ranked-primary +
+  weekly-tournament countdown/qualifying banner). All of it goes behind the same
+  `config/tournament.enabled` flag.
 - **PARKED (developer's call 2026-10-09, Q1):** the player-facing client/live
   tournament build (Home rework + tournament screens + the live judges' room /
   broadcast) is deliberately HELD until after the developer's advisor +
