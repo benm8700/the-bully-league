@@ -538,6 +538,21 @@ exports.mainStageCallout = onCall(async (request) => {
   return callout(request.auth, request.data);
 });
 
+// Start (or rejoin) a Main Stage bracket battle - the two named semifinalists
+// into a shared channel, chess-clock timings stamped on the match.
+exports.startMainStageBattle = onCall(async (request) => {
+  const {startMainStageBattle} = require("./mainStagePlay");
+  return startMainStageBattle(request.auth, request.data);
+});
+
+// A seated judge casts an open vote; the 5-vote verdict settles the battle and
+// advances the bracket. (A deadline force-close sweep for a stalled panel is a
+// follow-up; the verdict normally lands when the panel is decided.)
+exports.castMainStageJudgeVote = onCall(async (request) => {
+  const {castMainStageJudgeVote} = require("./mainStagePlay");
+  return castMainStageJudgeVote(request.auth, request.data);
+});
+
 /**
  * Rolls a recent sample of matches into stats/matchStats once a day - round
  * length, completion rate, votes per match, counts by mode. The data already

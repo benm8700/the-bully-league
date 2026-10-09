@@ -149,40 +149,55 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     return {skipped: "window-open"};
   }
 
-  // PER-ROUND VOTING (2026-09-17): the winner is whoever won the MOST
-  // ROUNDS, not one overall vote. Each ballot picks a winner per round; a
-  // tied round counts for neither, and an equal number of rounds won is an
-  // overall tie (winnerId null) - which preserves the existing tie rule.
-  const {tallyBallots, matchResultFromRounds} =
-      require("./perRoundVoting");
-  const ballotsSnap = await db.collection("votes").doc(matchId).collection("ballots").get();
-  const roundCount = Math.max(1, Math.trunc(Number(match.settings?.roundCount) || 3));
-  const ballots = ballotsSnap.docs.map((doc) =>
-    ballotToRoundPicks(doc.data(), roundCount, match.player1Id, match.player2Id));
-  const {rounds, totalWeight} =
-      tallyBallots(ballots, match.player1Id, match.player2Id, roundCount);
-  const result = matchResultFromRounds(rounds, match.player1Id, match.player2Id);
-  const winnerId = result.winnerId;
-  const roundsWon = {
-    player1: result.roundsWonP1,
-    player2: result.roundsWonP2,
-    tied: result.roundsTied,
-  };
-  // Per-player TOTAL round-weight, kept for the margin/share displays
-  // (autoRender's voteMargin, watchFeed's verdict). Used only as a ratio, so
-  // its absolute scale (roughly roundCount x the judge count) does not matter
-  // - the winner and rating magnitude come from the fields above.
+  // WINNER SOURCE. A MAIN STAGE finals battle is decided by the 5-judge PANEL,
+  // not community ballots: the verdict (judgeWinnerId) is written by the
+  // judging flow before this is force-called, and finals always move the full
+  // Elo (the panel IS the evidence), so no vote-confidence discount. Every
+  // other mode is per-round community voting, unchanged.
+  let winnerId;
+  let roundsWon;
   let player1Weight = 0;
   let player2Weight = 0;
-  for (const r of rounds) {
-    player1Weight += r.p1;
-    player2Weight += r.p2;
+  let judgeWeight = 0;
+  let mainStageFullConfidence = false;
+  if (match.mainStage) {
+    winnerId = match.judgeWinnerId ?? null;
+    roundsWon = null;
+    mainStageFullConfidence = true;
+  } else {
+    // PER-ROUND VOTING (2026-09-17): the winner is whoever won the MOST
+    // ROUNDS, not one overall vote. Each ballot picks a winner per round; a
+    // tied round counts for neither, and an equal number of rounds won is an
+    // overall tie (winnerId null) - which preserves the existing tie rule.
+    const {tallyBallots, matchResultFromRounds} =
+        require("./perRoundVoting");
+    const ballotsSnap = await db.collection("votes").doc(matchId).collection("ballots").get();
+    const roundCount = Math.max(1, Math.trunc(Number(match.settings?.roundCount) || 3));
+    const ballots = ballotsSnap.docs.map((doc) =>
+      ballotToRoundPicks(doc.data(), roundCount, match.player1Id, match.player2Id));
+    const {rounds, totalWeight} =
+        tallyBallots(ballots, match.player1Id, match.player2Id, roundCount);
+    const result = matchResultFromRounds(rounds, match.player1Id, match.player2Id);
+    winnerId = result.winnerId;
+    roundsWon = {
+      player1: result.roundsWonP1,
+      player2: result.roundsWonP2,
+      tied: result.roundsTied,
+    };
+    // Per-player TOTAL round-weight, kept for the margin/share displays
+    // (autoRender's voteMargin, watchFeed's verdict). Used only as a ratio, so
+    // its absolute scale (roughly roundCount x the judge count) does not matter
+    // - the winner and rating magnitude come from the fields above.
+    for (const r of rounds) {
+      player1Weight += r.p1;
+      player2Weight += r.p2;
+    }
+    // CONFIDENCE is keyed to the JUDGE COUNT (weighted ballots), not the
+    // round-weight sum - a match is well-judged when many people judged it,
+    // and each person casts one ballot however many rounds it covers. This
+    // keeps the confidence magnitude identical to the pre-per-round behaviour.
+    judgeWeight = totalWeight;
   }
-  // CONFIDENCE is keyed to the JUDGE COUNT (weighted ballots), not the
-  // round-weight sum - a match is well-judged when many people judged it,
-  // and each person casts one ballot however many rounds it covers. This
-  // keeps the confidence magnitude identical to the pre-per-round behaviour.
-  const judgeWeight = totalWeight;
 
   // A FRIEND BATTLE GETS A REAL VERDICT AND NOTHING ELSE.
   //
@@ -259,7 +274,7 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     // match is judged by the rules that were in force when it was played
     // rather than by whatever the config says a day later. Falls back to
     // the default for matches recorded before this was configurable.
-    const confidence = voteConfidence(
+    const confidence = mainStageFullConfidence ? 1 : voteConfidence(
         judgeWeight,
         match.settings?.fullConfidenceVotes,
     );
@@ -396,7 +411,17 @@ async function finalizeMatch(matchId, {force = false} = {}) {
   // a slot it doesn't have).
   if (match.mode === "tournament") {
     try {
-      if (match.swiss) {
+      if (match.mainStage) {
+        // Main Stage finals: advance the 4-player #1-callout bracket via the
+        // mainstage core (NOT the async bracket). The winner came from the
+        // judge panel above; checked first so a finals match never falls into
+        // the swiss/climb/async paths, which expect fields it doesn't carry.
+        const {recordBattleResult} = require("./mainStageTournament");
+        const {tournamentId, roundIdx, matchIdx} = match.mainStage;
+        const applied = winnerId ? await recordBattleResult(
+            db, tournamentId, roundIdx, matchIdx, winnerId) : {ok: false};
+        console.log(`mainstage advance for ${matchId}:`, JSON.stringify(applied));
+      } else if (match.swiss) {
         // Daily Gauntlet's SWISS format: a win moves the record (winner +1
         // win, loser +1 loss, both back to waiting - non-elimination); a TIE
         // (no winner) scores neither. Either way the gauntlet MUST be moved or

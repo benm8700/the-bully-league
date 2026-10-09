@@ -400,6 +400,15 @@ service cloud.firestore {
         );
         allow write: if false;
       }
+
+      // Main Stage finals judge votes are OPEN by design - the crowd watches
+      // the 5-judge tally land live. So any signed-in client may READ them
+      // (unlike community ballots, which are private); writes are server-only
+      // via castMainStageJudgeVote, so a client can't crown anyone.
+      match /mainStageVotes/{judgeUid} {
+        allow read: if request.auth != null;
+        allow write: if false;
+      }
     }
 
     // A vote session: one CAPTCHA solve buying a bounded run of votes, so
