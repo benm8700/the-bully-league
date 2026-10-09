@@ -96,15 +96,23 @@ function lockOutcome({
   panelSize = PANEL_SIZE,
 } = {}) {
   const confirmed = confirmedFrom(invites);
+  // Hand-picked judges are PROVISIONAL: they take a seat only if they confirmed
+  // (invite accepted) by the lock. An unconfirmed hand-pick - including the
+  // founder, if they never confirmed - is dropped and the most-judged pool
+  // backfills the seat automatically. That IS the "if I don't show, auto-fill"
+  // behaviour; pool judges need no confirmation, they are the fallback.
+  const confirmedSet = new Set(confirmed);
+  const confirmedHandPicks = handPicked.filter((u) => confirmedSet.has(u));
   const a = assembleMainStage({
-    finalists, alternates, confirmed, handPicked, judgePool, exclude,
-    pick: null, panelSize,
+    finalists, alternates, confirmed, handPicked: confirmedHandPicks,
+    judgePool, exclude, pick: null, panelSize,
   });
   return {
     field: a.field,
     full: a.full,
     judges: a.judges,
     judgeShortfall: a.judgeShortfall,
+    judgeStandby: a.judgeStandby || [],
     cancel: a.field.length < minField,
   };
 }

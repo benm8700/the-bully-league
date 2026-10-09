@@ -100,4 +100,27 @@ check("garbage uids are ignored", () => {
   assert.deepStrictEqual(judges, ["founder", "j1", "j2"]);
 });
 
+check("standby = eligible pool judges beyond the seated panel", () => {
+  const {judges, standby} = selectPanel({
+    handPicked: ["head"],
+    rankedPool: ["j1", "j2", "j3", "j4", "j5", "j6"],
+    panelSize: 5,
+  });
+  assert.deepStrictEqual(judges, ["head", "j1", "j2", "j3", "j4"]);
+  // j5, j6 are not seated and are eligible -> standby for a live no-show.
+  assert.deepStrictEqual(standby, ["j5", "j6"]);
+});
+
+check("standby never includes finalists or excluded accounts", () => {
+  const {standby} = selectPanel({
+    handPicked: [],
+    rankedPool: ["j1", "j2", "j3", "j4", "j5", "banned", "fin"],
+    finalists: ["fin"],
+    exclude: ["banned"],
+    panelSize: 5,
+  });
+  assert.ok(!standby.includes("banned"));
+  assert.ok(!standby.includes("fin"));
+});
+
 console.log(`\n${passed} passed`);

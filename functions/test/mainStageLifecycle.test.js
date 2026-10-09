@@ -131,7 +131,23 @@ check(`lock: fewer than MIN_FIELD (${MIN_FIELD}) confirmed -> cancel`, () => {
   assert.strictEqual(out.cancel, true);
 });
 
-check("lock: a hand-picked judge takes a seat ahead of the pool", () => {
+check("lock: a CONFIRMED hand-pick takes a seat ahead of the pool", () => {
+  const out = lockOutcome({
+    finalists: ["f1", "f2", "f3", "f4"],
+    alternates: [],
+    invites: {f1: "accepted", f2: "accepted", f3: "accepted", f4: "accepted",
+      head: "accepted"}, // head judge confirmed
+    judgePool: ["j1", "j2", "j3", "j4", "j5"],
+    handPicked: ["head"],
+  });
+  assert.strictEqual(out.judges[0], "head");
+  assert.strictEqual(out.judges.length, 5);
+  // head + j1..j4 seated; j5 is the standby for a live no-show.
+  assert.deepStrictEqual(out.judgeStandby, ["j5"]);
+});
+
+check("lock: an UNCONFIRMED hand-pick is dropped, the pool backfills", () => {
+  // "head" (even the founder) never confirmed -> pool fills all 5 seats.
   const out = lockOutcome({
     finalists: ["f1", "f2", "f3", "f4"],
     alternates: [],
@@ -139,8 +155,21 @@ check("lock: a hand-picked judge takes a seat ahead of the pool", () => {
     judgePool: ["j1", "j2", "j3", "j4", "j5"],
     handPicked: ["head"],
   });
-  assert.strictEqual(out.judges[0], "head");
-  assert.strictEqual(out.judges.length, 5);
+  assert.ok(!out.judges.includes("head"));
+  assert.deepStrictEqual(out.judges, ["j1", "j2", "j3", "j4", "j5"]);
+  assert.strictEqual(out.judgeShortfall, 0);
+});
+
+check("lock: no hand-picks at all -> panel is the top of the pool", () => {
+  const out = lockOutcome({
+    finalists: ["f1", "f2", "f3", "f4"],
+    alternates: [],
+    invites: {f1: "accepted", f2: "accepted", f3: "accepted", f4: "accepted"},
+    judgePool: ["j1", "j2", "j3", "j4", "j5", "j6"],
+    handPicked: [],
+  });
+  assert.deepStrictEqual(out.judges, ["j1", "j2", "j3", "j4", "j5"]);
+  assert.deepStrictEqual(out.judgeStandby, ["j6"]);
 });
 
 check("lock: a finalist can never be a judge even if in the pool", () => {

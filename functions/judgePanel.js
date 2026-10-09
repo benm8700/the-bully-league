@@ -48,7 +48,21 @@ function selectPanel({
   // celebrity guest are locked before the autofill), then the most-judged pool.
   for (const uid of handPicked) add(uid);
   for (const uid of rankedPool) add(uid);
-  return {judges, shortfall: Math.max(0, panelSize - judges.length)};
+
+  // Standby: eligible pool judges NOT seated (beyond panelSize or because the
+  // panel filled first). These backfill a judge who confirmed at the 4pm lock
+  // but still no-shows at the live stage, so the panel keeps its 5 live votes
+  // without anyone being hand-managed. Hand-picks are deliberately NOT standby:
+  // a dropped hand-pick is someone who declined, not a fallback.
+  const standby = [];
+  for (const uid of rankedPool) {
+    if (typeof uid !== "string" || !uid) continue;
+    if (seen.has(uid) || blocked.has(uid)) continue;
+    if (standby.includes(uid)) continue;
+    standby.push(uid);
+  }
+
+  return {judges, shortfall: Math.max(0, panelSize - judges.length), standby};
 }
 
 module.exports = {selectPanel, DEFAULT_PANEL_SIZE};

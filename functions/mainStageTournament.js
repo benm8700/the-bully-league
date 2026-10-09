@@ -124,6 +124,7 @@ async function lockDueTournaments(db, now = Date.now()) {
         field: out.field,
         judges: out.judges,
         judgeShortfall: out.judgeShortfall,
+        judgeStandby: out.judgeStandby, // backfills a live judge no-show
         lockedAt: FieldValue.serverTimestamp(),
       });
       results.push({id: d.id, locked: true, field: out.field.length,
@@ -172,8 +173,16 @@ async function setJudges(auth, data, isAdmin) {
     if (!doc || (doc.status !== "accepting" && doc.status !== "locked")) {
       throw httpsError("failed-precondition", "Judges can only be set before the show.");
     }
-    tx.update(ref, {handPickedJudges: judges.filter((u) => typeof u === "string")});
-    return {ok: true, count: judges.length};
+    const picks = judges.filter((u) => typeof u === "string");
+    // Hand-picked judges are provisional until they confirm, so they go on the
+    // invite list (pending) exactly like finalists - respondToMainStageInvite
+    // accepts anyone on that list. Don't clobber a judge who already answered.
+    const invites = {...(doc.invites || {})};
+    for (const uid of picks) {
+      if (!(uid in invites)) invites[uid] = "pending";
+    }
+    tx.update(ref, {handPickedJudges: picks, invites});
+    return {ok: true, count: picks.length};
   });
 }
 

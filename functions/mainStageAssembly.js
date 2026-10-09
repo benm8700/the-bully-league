@@ -48,7 +48,7 @@ function assembleMainStage({
       .filter((u) => typeof u === "string" && u);
   // Finalists can never judge; selectPanel enforces it, so the panel is safe
   // to finalise at the 4pm lock even before the bracket exists.
-  const {judges, shortfall} = selectPanel({
+  const {judges, shortfall, standby} = selectPanel({
     handPicked, rankedPool: poolUids, finalists: field, exclude, panelSize,
   });
 
@@ -69,6 +69,7 @@ function assembleMainStage({
     top: field[0] || null, // the #1 who makes the callout
     judges,
     judgeShortfall: shortfall,
+    judgeStandby: standby, // eligible pool judges to backfill a live no-show
     bracket,
     bracketError,
   };
