@@ -24,6 +24,18 @@ type Metrics = {
     support: QueueItem[];
     appeals: QueueItem[];
   };
+  prizes: PrizeItem[];
+};
+
+type PrizeItem = {
+  id: string;
+  prize: string | null;
+  prizeType: string | null;
+  winnerUid: string | null;
+  winnerUsername: string | null;
+  status: string;
+  wonAtMs: number | null;
+  shipping: { name?: string; address?: string; phone?: string } | null;
 };
 
 type QueueItem = {
@@ -203,6 +215,7 @@ export default function AdminPage() {
             </div>
           </div>
 
+          <Prizes metrics={metrics} act={act} />
           <Queues metrics={metrics} act={act} />
           <UserSearch user={user!} act={act} />
         </>
@@ -243,6 +256,60 @@ function Toggle({ label, on, onClick }: { label: string; on: boolean; onClick: (
     >
       {label}: {on ? "ON" : "OFF"} <span className="ml-1 text-xs opacity-70">(tap to {on ? "disable" : "enable"})</span>
     </button>
+  );
+}
+
+function prizeAge(wonAtMs: number | null): string {
+  if (!wonAtMs) return "date unknown";
+  const d = new Date(wonAtMs);
+  const days = Math.floor((Date.now() - wonAtMs) / 86400000);
+  const ago = days <= 0 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`;
+  return `won ${d.toLocaleDateString()} · ${ago}`;
+}
+
+function Prizes({ metrics, act }: { metrics: Metrics; act: (p: Record<string, unknown>, l: string) => void }) {
+  const items = metrics.prizes ?? [];
+  return (
+    <div className="mb-8">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+        Prizes to fulfill <span className="text-zinc-500">({items.length})</span>
+      </h2>
+      {items.length === 0 ? (
+        <p className="text-xs text-zinc-600">No prizes outstanding.</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((p) => {
+            const stale = p.wonAtMs != null && Date.now() - p.wonAtMs > 7 * 86400000;
+            return (
+              <div key={p.id} className={`rounded-lg border p-3 text-sm ${stale ? "border-amber-500/50 bg-amber-500/10" : "border-zinc-800 bg-zinc-900/60"}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-white">{p.prize ?? "(prize)"}</span>
+                  <span className="text-xs text-zinc-500">→ {p.winnerUsername ?? p.winnerUid}</span>
+                  <span className={`rounded px-1.5 py-0.5 text-xs ${p.status === "claimed" ? "bg-green-500/15 text-green-300" : "bg-zinc-700/40 text-zinc-400"}`}>{p.status}</span>
+                  {p.prizeType === "cash" && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">CASH — handle manually</span>}
+                </div>
+                <div className={`mt-1 text-xs ${stale ? "text-amber-300" : "text-zinc-500"}`}>{prizeAge(p.wonAtMs)}</div>
+                {p.shipping ? (
+                  <div className="mt-2 rounded border border-zinc-800 bg-black/30 p-2 text-xs text-zinc-300">
+                    <div className="font-medium text-zinc-200">Ship to:</div>
+                    <div>{p.shipping.name}</div>
+                    <div className="whitespace-pre-wrap">{p.shipping.address}</div>
+                    {p.shipping.phone && <div>{p.shipping.phone}</div>}
+                  </div>
+                ) : (
+                  <div className="mt-1 text-xs text-zinc-600">Waiting on the winner to submit shipping details…</div>
+                )}
+                <div className="mt-2">
+                  <button onClick={() => act({ type: "markPrizeFulfilled", id: p.id }, "Prize fulfilled")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600">
+                    Mark fulfilled
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

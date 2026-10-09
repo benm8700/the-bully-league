@@ -60,6 +60,44 @@ async function recent(
     .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 }
 
+type PrizeItem = {
+  id: string;
+  prize: string | null;
+  prizeType: string | null;
+  winnerUid: string | null;
+  winnerUsername: string | null;
+  status: string;
+  wonAtMs: number | null;
+  shipping: { name?: string; address?: string; phone?: string } | null;
+};
+
+// Outstanding non-cash prizes (owed or claimed-but-not-shipped), oldest first
+// so the longest-outstanding sits on top. wonAtMs drives the dashboard's
+// "won N days ago" age.
+async function recentPrizes(): Promise<PrizeItem[]> {
+  const db = getAdminFirestore();
+  const snap = await db
+    .collection("prizeFulfillments")
+    .where("status", "in", ["owed", "claimed"])
+    .limit(50)
+    .get();
+  return snap.docs
+    .map((d) => {
+      const x = d.data();
+      return {
+        id: d.id,
+        prize: x.prize ?? null,
+        prizeType: x.prizeType ?? null,
+        winnerUid: x.winnerUid ?? null,
+        winnerUsername: x.winnerUsername ?? null,
+        status: x.status ?? "owed",
+        wonAtMs: typeof x.wonAtMs === "number" ? x.wonAtMs : null,
+        shipping: x.shipping ?? null,
+      } as PrizeItem;
+    })
+    .sort((a, b) => (a.wonAtMs ?? 0) - (b.wonAtMs ?? 0));
+}
+
 export type AdminMetrics = Awaited<ReturnType<typeof collectMetrics>>;
 
 export async function collectMetrics() {
@@ -93,6 +131,7 @@ export async function collectMetrics() {
     reports,
     support,
     appeals,
+    prizes,
   ] = await Promise.all([
     count(users),
     count(users.where("subscription.active", "==", true)),
@@ -122,6 +161,7 @@ export async function collectMetrics() {
     safe(() => recent("reports")),
     safe(() => recent("supportRequests")),
     safe(() => recent("banAppeals")),
+    safe(() => recentPrizes()),
   ]);
 
   return {
@@ -152,5 +192,6 @@ export async function collectMetrics() {
       support: (support as QueueItem[] | null) ?? [],
       appeals: (appeals as QueueItem[] | null) ?? [],
     },
+    prizes: (prizes as PrizeItem[] | null) ?? [],
   };
 }

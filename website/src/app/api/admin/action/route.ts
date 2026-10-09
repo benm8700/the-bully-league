@@ -95,6 +95,16 @@ export async function POST(request: Request) {
         return Response.json({ ok: true, doc, enabled });
       }
 
+      case "markPrizeFulfilled": {
+        const id = String(body.id ?? "");
+        if (!id) return bad("id required");
+        await db
+          .collection("prizeFulfillments")
+          .doc(id)
+          .set({ status: "fulfilled", fulfilled: stamp }, { merge: true });
+        return Response.json({ ok: true, id });
+      }
+
       case "reviewReport":
       case "resolveSupport":
       case "resolveAppeal": {
