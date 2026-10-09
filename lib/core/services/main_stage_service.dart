@@ -162,4 +162,67 @@ class MainStageService {
       'pickUid': pickUid,
     });
   }
+
+  /// Start (or rejoin) a finals bracket battle. Returns the pairing the
+  /// chess-clock battle screen consumes. Both named players call this and get
+  /// the SAME match (the server stamps the id onto the bracket matchup).
+  Future<MainStageBattlePairing> startBattle({
+    required String tournamentId,
+    required int roundIdx,
+    required int matchIdx,
+  }) async {
+    final res = await _functions
+        .httpsCallable('startMainStageBattle')
+        .call<Map<String, dynamic>>({
+      'tournamentId': tournamentId,
+      'roundIdx': roundIdx,
+      'matchIdx': matchIdx,
+    });
+    final d = Map<String, dynamic>.from(res.data as Map);
+    final cfg = Map<String, dynamic>.from(d['mainStageConfig'] as Map? ?? {});
+    return MainStageBattlePairing(
+      matchId: d['matchId'] as String,
+      channelName: d['channelName'] as String,
+      opponentId: d['opponentId'] as String,
+      agoraUid: (d['agoraUid'] as num).toInt(),
+      turnMs: (cfg['turnMs'] as num?)?.toInt() ?? 60000,
+      interrupts: (cfg['interrupts'] as num?)?.toInt() ?? 2,
+      shotClockMs: (cfg['shotClockMs'] as num?)?.toInt() ?? 7000,
+    );
+  }
+
+  /// A seated judge casts (or changes) their open vote. Throws if the caller
+  /// isn't on the panel (server-enforced).
+  Future<void> castJudgeVote(String matchId, String winnerUid) async {
+    await _functions
+        .httpsCallable('castMainStageJudgeVote')
+        .call<Map<String, dynamic>>({
+      'matchId': matchId,
+      'winnerUid': winnerUid,
+    });
+  }
+}
+
+/// The pairing for a Main Stage chess-clock battle - the two named
+/// semifinalists in one channel, plus the clock config from the server.
+class MainStageBattlePairing {
+  const MainStageBattlePairing({
+    required this.matchId,
+    required this.channelName,
+    required this.opponentId,
+    required this.agoraUid,
+    required this.turnMs,
+    required this.interrupts,
+    required this.shotClockMs,
+  });
+
+  final String matchId;
+  final String channelName;
+  final String opponentId;
+  final int agoraUid; // 1 = player1 (the host), 2 = player2
+  final int turnMs;
+  final int interrupts;
+  final int shotClockMs;
+
+  bool get isHost => agoraUid == 1;
 }

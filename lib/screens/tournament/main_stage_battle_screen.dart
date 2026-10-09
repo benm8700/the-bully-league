@@ -1,0 +1,341 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
+import '../../core/main_stage_battle.dart';
+import '../../core/services/agora_video_service.dart';
+import '../../core/services/agora_token_service.dart';
+import '../../core/services/main_stage_service.dart';
+import '../../core/services/matchmaking_service.dart';
+import '../../core/services/video_call_service.dart';
+import '../../theme/app_theme.dart';
+
+/// The Main Stage finals battle: the chess-clock + interrupt format, driving
+/// the verified MainStageBattleState engine live over Agora. Host-authoritative
+/// (player1/agoraUid 1 runs the engine and broadcasts the whole state each
+/// tick; the guest renders it and sends yield/interrupt intents back). Reuses
+/// the proven match video/mic/dispose path. When both clocks hit zero the host
+/// marks the battle complete, and the 5-judge panel then settles it - this
+/// screen ends at "the panel decides".
+class MainStageBattleScreen extends StatefulWidget {
+  const MainStageBattleScreen({super.key, required this.pairing});
+
+  final MainStageBattlePairing pairing;
+
+  @override
+  State<MainStageBattleScreen> createState() => _MainStageBattleScreenState();
+}
+
+class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
+  late final VideoCallService _video;
+  final _matchmaking = MatchmakingService();
+  StreamSubscription<Map<String, dynamic>>? _msgSub;
+  Timer? _tick;
+
+  final String _myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+  late final String _oppUid = widget.pairing.opponentId;
+  bool get _isHost => widget.pairing.isHost;
+
+  MainStageBattleState? _battle;
+  bool _initialized = false;
+  bool _completeSent = false;
+  String? _error;
+
+  int get _nowMs => DateTime.now().millisecondsSinceEpoch;
+
+  @override
+  void initState() {
+    super.initState();
+    _video = AgoraVideoCallService();
+    _setup();
+  }
+
+  Future<void> _setup() async {
+    try {
+      await _video.initialize();
+      final token = await fetchAgoraToken(widget.pairing.channelName);
+      await _video.joinChannel(
+        channelName: widget.pairing.channelName,
+        uid: widget.pairing.agoraUid,
+        token: token,
+      );
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Battle setup failed: $e');
+      return;
+    }
+    if (!mounted) return;
+    _msgSub = _video.matchMessages.listen(_onMessage);
+    setState(() => _initialized = true);
+
+    if (_isHost) {
+      // The host owns the engine. Open with the host on the floor, then tick.
+      final cfg = MainStageBattleConfig(
+        turnMs: widget.pairing.turnMs,
+        interrupts: widget.pairing.interrupts,
+        shotClockMs: widget.pairing.shotClockMs,
+      );
+      var b = MainStageBattleState.create([_myUid, _oppUid], config: cfg);
+      b = b.reduce(MsEvent.open, by: _myUid, atMs: _nowMs);
+      _battle = b;
+      _afterStateChange(broadcast: true);
+      _tick = Timer.periodic(const Duration(milliseconds: 300), (_) {
+        if (_battle == null || _battle!.isOver) return;
+        _hostApply(MsEvent.tick);
+      });
+    }
+  }
+
+  /// Host-only: apply an event to the engine, auto-start the holder's talk
+  /// clock (so the shot-clock never ping-pongs - V1 keeps talk auto-started;
+  /// voice-driven start is a later refinement), then broadcast + react.
+  void _hostApply(MsEvent ev, {String? by}) {
+    if (!_isHost || _battle == null) return;
+    var b = _battle!.reduce(ev, by: by, atMs: _nowMs);
+    if (b.floor != null && !b.talking) {
+      b = b.reduce(MsEvent.startTalking, by: b.floor, atMs: _nowMs);
+    }
+    _battle = b;
+    _afterStateChange(broadcast: true);
+  }
+
+  void _onMessage(Map<String, dynamic> m) {
+    final t = m['t'];
+    if (t == 'ms_state' && !_isHost) {
+      final s = m['s'];
+      if (s is Map) {
+        _battle = MainStageBattleState.fromMap(Map<String, dynamic>.from(s));
+        _afterStateChange(broadcast: false);
+      }
+    } else if (t == 'ms_intent' && _isHost) {
+      final ev = _eventFromName(m['ev'] as String?);
+      if (ev != null) _hostApply(ev, by: m['by'] as String?);
+    }
+  }
+
+  MsEvent? _eventFromName(String? n) {
+    switch (n) {
+      case 'yield':
+        return MsEvent.yield;
+      case 'interrupt':
+        return MsEvent.interrupt;
+      default:
+        return null;
+    }
+  }
+
+  /// Push an intent: the host applies it directly; the guest sends it to the
+  /// host (who is authoritative). Yield only matters if you hold the floor;
+  /// interrupt only if the opponent does - the engine re-checks either way.
+  void _intent(MsEvent ev) {
+    if (_battle == null || _battle!.isOver) return;
+    if (_isHost) {
+      _hostApply(ev, by: _myUid);
+    } else {
+      _video.sendMatchMessage({'t': 'ms_intent', 'ev': ev.name, 'by': _myUid});
+    }
+  }
+
+  /// Common reaction to any new state: refresh the mic (only the floor-holder
+  /// is heard), repaint, broadcast if host, and settle on end.
+  void _afterStateChange({required bool broadcast}) {
+    final b = _battle;
+    if (b == null) return;
+    // Mute me unless I hold the floor (one speaker at a time, the turn rule).
+    _video.muteLocalAudio(b.mutedPlayer == _myUid);
+    if (broadcast && _isHost) {
+      _video.sendMatchMessage({'t': 'ms_state', 's': b.toMap()});
+    }
+    if (b.isOver && _isHost && !_completeSent) {
+      _completeSent = true;
+      _tick?.cancel();
+      // Mark the battle complete so the judge panel can settle it.
+      _matchmaking.completeMatch(widget.pairing.matchId).catchError((_) {});
+    }
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    _msgSub?.cancel();
+    _video.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(child: _body()),
+    );
+  }
+
+  Widget _body() {
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(_error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70)),
+        ),
+      );
+    }
+    if (!_initialized || _battle == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final b = _battle!;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _video.remoteVideoView() ??
+            const ColoredBox(
+              color: Colors.black,
+              child: Center(
+                child: Text('Waiting for your opponent…',
+                    style: TextStyle(color: Colors.white70)),
+              ),
+            ),
+        Positioned(
+          right: 16,
+          bottom: 120,
+          width: 100,
+          height: 140,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: _video.localVideoView(),
+          ),
+        ),
+        _clocks(b),
+        if (b.isOver) _endOverlay() else _controls(b),
+      ],
+    );
+  }
+
+  String _fmt(int ms) {
+    final s = (ms / 1000).ceil();
+    final m = s ~/ 60;
+    final r = s % 60;
+    return '$m:${r.toString().padLeft(2, '0')}';
+  }
+
+  Widget _clocks(MainStageBattleState b) {
+    return Positioned(
+      top: 12,
+      left: 12,
+      right: 12,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _clockChip('You', b.remaining[_myUid] ?? 0, b.floor == _myUid,
+              b.steals[_myUid] ?? 0),
+          _clockChip('Them', b.remaining[_oppUid] ?? 0, b.floor == _oppUid,
+              b.steals[_oppUid] ?? 0),
+        ],
+      ),
+    );
+  }
+
+  Widget _clockChip(String label, int ms, bool onFloor, int steals) {
+    final gold = context.palette.reward;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: onFloor ? gold.withValues(alpha: 0.9) : Colors.black54,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: onFloor ? gold : Colors.white24, width: onFloor ? 2 : 1),
+      ),
+      child: Column(
+        children: [
+          Text(label,
+              style: TextStyle(
+                  color: onFloor ? Colors.black : Colors.white70,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700)),
+          Text(_fmt(ms),
+              style: TextStyle(
+                  color: onFloor ? Colors.black : Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900)),
+          Text('${'●' * steals}${'○' * ((widget.pairing.interrupts) - steals)}',
+              style: TextStyle(
+                  color: onFloor ? Colors.black87 : Colors.white54,
+                  fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _controls(MainStageBattleState b) {
+    final iHoldFloor = b.floor == _myUid;
+    final oppHoldsFloor = b.floor == _oppUid;
+    final canInterrupt = oppHoldsFloor &&
+        (b.steals[_myUid] ?? 0) > 0 &&
+        (b.remaining[_myUid] ?? 0) > 0;
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 24,
+      child: Row(
+        children: [
+          Expanded(
+            child: FilledButton(
+              onPressed: iHoldFloor ? () => _intent(MsEvent.yield) : null,
+              style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 54),
+                  backgroundColor: Colors.white24),
+              child: const Text('Yield'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton(
+              onPressed: canInterrupt ? () => _intent(MsEvent.interrupt) : null,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 54),
+                backgroundColor: context.palette.live,
+              ),
+              child: Text('Interrupt (${b.steals[_myUid] ?? 0})'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _endOverlay() {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        color: Colors.black87,
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Time',
+                style: TextStyle(
+                    color: context.palette.reward,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900)),
+            const SizedBox(height: 6),
+            const Text(
+              'Both clocks are out. The judges decide it now — hang tight for '
+              'the verdict.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
