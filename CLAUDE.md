@@ -4342,6 +4342,15 @@ games) are tunable placeholders per the economy-advisor-review discipline.
   prizes = Belt / tournaments-won board / finalist badge / champion skin), and
   the Home rework (ranked-primary + weekly-tournament countdown/qualifying
   banner). All of it goes behind the same `config/tournament.enabled` flag.
+- **PARKED (developer's call 2026-10-09, Q1):** the player-facing client/live
+  tournament build (Home rework + tournament screens + the live judges' room /
+  broadcast) is deliberately HELD until after the developer's advisor +
+  blitzkrieg-rollout conversations, since those move the monetization and launch
+  plan. **Resurface it after those conversations.** The backend foundation above
+  is complete and inert behind the flag in the meantime.
+- **The ADMIN dashboard is NOT parked** - it's separate developer tooling
+  (requested 2026-10-09, Q2), useful now; its tournament-control panels light up
+  as the tournament system is un-parked. See its own build note when created.
 
 ### The center of gravity
 **The weekly tournament is the app's heart - the destination that gives every
@@ -4375,7 +4384,10 @@ so the destination stays reachable. Not needed in beta.)
 **Weekly (default Thursday), NOT nightly** - easier to fill with players AND
 judges, and makes it appointment-TV special. **The daily 6-7pm Pacific window
 STAYS** as casual crowd-judged ranked battling (the daily habit loop, where
-qualifier Elo accrues). Thursday the tournament IS the 6-7pm event.
+qualifier Elo accrues). **On Thursday the 6-7pm slot IS the finals SHOW**
+(everyone watches / judges / gifts; the top 4 play) - so free-tier free
+battling runs the OTHER six nights, and Thursday's hour is the Main Stage, not
+an open free-battle window (developer's call 2026-10-09, Q3).
 - **Wednesday 11:59pm PST = the single cutoff for everything:** qualifying ends,
   any match still unjudged LOCKS and does NOT count toward the tally, a snapshot
   is taken, and **the top 4 players AND the 5 judges are posted together.**
