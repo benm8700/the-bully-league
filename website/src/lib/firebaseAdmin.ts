@@ -1,5 +1,6 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 
 // Server-only - the Admin SDK reads/writes Firestore directly, bypassing
 // firestore.rules entirely. This is deliberate: the website's homepage
@@ -37,4 +38,53 @@ function getAdminApp() {
 
 export function getAdminFirestore() {
   return getFirestore(getAdminApp());
+}
+
+export function getAdminAuth() {
+  return getAuth(getAdminApp());
+}
+
+/** Thrown by verifyAdmin; carries the HTTP status a route should return. */
+export class AdminAuthError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AdminAuthError";
+  }
+}
+
+/**
+ * Gate for every admin Route Handler. The admin dashboard is a CLIENT page
+ * (client-side Firebase Auth, no session cookies), so it sends the signed-in
+ * user's Firebase ID token as `Authorization: Bearer <token>`. This verifies
+ * that token server-side AND that the account carries `isAdmin === true`
+ * (which is server-only in firestore.rules and set by hand in the console) -
+ * so being an admin cannot be forged from the client. Returns the caller's
+ * uid/email, or throws AdminAuthError with 401 (not signed in / bad token) or
+ * 403 (signed in but not an admin).
+ */
+export async function verifyAdmin(
+  request: Request,
+): Promise<{ uid: string; email?: string }> {
+  const header = request.headers.get("authorization") ?? "";
+  const match = /^Bearer (.+)$/.exec(header);
+  if (!match) throw new AdminAuthError(401, "Missing bearer token");
+
+  let decoded;
+  try {
+    decoded = await getAdminAuth().verifyIdToken(match[1]!);
+  } catch {
+    throw new AdminAuthError(401, "Invalid or expired token");
+  }
+
+  const snap = await getAdminFirestore()
+    .collection("users")
+    .doc(decoded.uid)
+    .get();
+  if (snap.data()?.isAdmin !== true) {
+    throw new AdminAuthError(403, "Admin only");
+  }
+  return { uid: decoded.uid, email: decoded.email };
 }
