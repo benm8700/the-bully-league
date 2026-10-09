@@ -143,6 +143,10 @@ exports.onTournamentCompleted = onDocumentUpdated(
           .catch((err) => console.error(`win record ${id}:`, err.message));
       await awardBeltForTournament(db, id, after)
           .catch((err) => console.error(`belt award ${id}:`, err.message));
+      // Prizes (points auto-award, non-cash recorded for fulfillment). Also
+      // best-effort and independent - see prizes.js.
+      await require("./prizes").awardPrizeForTournament(db, id, after)
+          .catch((err) => console.error(`prize award ${id}:`, err.message));
     });
 
 module.exports.beltTransition = beltTransition;

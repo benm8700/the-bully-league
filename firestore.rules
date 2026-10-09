@@ -327,6 +327,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Non-cash prize fulfillment records (winner + prize + wonAtMs + the
+    // winner's submitted shipping details). A winner may READ their own record
+    // (to see status), and that's all - the shipping PII is otherwise private.
+    // Writes are server-only: the record is created by the prize-award trigger,
+    // the winner's shipping comes through the submitPrizeClaim callable (Admin
+    // SDK), and the admin marks it fulfilled from the dashboard (Admin SDK).
+    match /prizeFulfillments/{id} {
+      allow read: if request.auth != null &&
+        request.auth.uid == resource.data.winnerUid;
+      allow write: if false;
+    }
+
     // Live-match spectator heartbeats, powering the "N watching" count on the
     // live viewer. A signed-in viewer may READ the count and write ONLY their
     // own heartbeat doc (uid == userId), so the number reflects distinct

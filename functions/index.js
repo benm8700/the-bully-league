@@ -496,6 +496,14 @@ exports.sweepWeeklyQualifier = onSchedule("every 15 minutes", async () => {
   }
 });
 
+// A prize winner submits their shipping/contact details for a non-cash prize.
+// Only the winner of that fulfillment may claim it; the details are written
+// server-side (the record is server-only in firestore.rules). See prizes.js.
+exports.submitPrizeClaim = onCall(async (request) => {
+  const {submitPrizeClaim} = require("./prizes");
+  return submitPrizeClaim(request.auth, request.data);
+});
+
 /**
  * Rolls a recent sample of matches into stats/matchStats once a day - round
  * length, completion rate, votes per match, counts by mode. The data already
