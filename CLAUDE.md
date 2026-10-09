@@ -4442,6 +4442,42 @@ games) are tunable placeholders per the economy-advisor-review discipline.
   session. The ECONOMY/monetization questions (qualification: skill vs
   engagement, free-vs-subscriber access) remain the parked advisor topic - see
   [[economy-needs-advisor-review]].
+- **PRE-DRY-RUN REVIEW (2026-10-09) - full sweep, two live-client bugs fixed,
+  dry-run staging built + verified.** Ran every test before a planned 2-device
+  dry run: all 72 pure suites pass, flutter analyze clean, and the full live
+  sweep is green (coreLoop 22, mainStage 8/8/8/6, weeklyQualifier 8,
+  callableHealth 72/72, scheduledJobScan 21/21, rulesAudit 11). Two real bugs
+  in the device-unverified live client, both fixed + analyze-clean:
+  1. **`MainStageBattleScreen` started the host's chess clock the instant the
+     host joined** - before the opponent arrived. Since both players arrive
+     independently (each through consent + the camera check), whoever landed
+     first silently burned their 1-minute clock talking to an empty room. Fixed:
+     the host now opens the engine only once `VideoCallService.remoteUid` shows
+     the opponent is in the channel (guarded against uid-flap re-open), and the
+     first arrival sees "Waiting for your opponent… your clock has not started."
+  2. **`JudgesRoomScreen` hard-errored the whole screen if the spectator video
+     couldn't be fetched** - which happens the moment the battle ends
+     (`already-finished`). A judge opening the room as the battle finished could
+     not vote, and judge votes have no deadline. Fixed: the match doc is read
+     first for the battlers + tournament, names/panel resolve from Firestore,
+     and the live video is a best-effort extra - voting + the live tally always
+     work, with a neutral "cast your verdict" panel when there's no video.
+  - **Noted gap (not fixed): a Main Stage battle is NOT recorded.**
+    `MainStageBattleScreen` never starts a cloud recording (unlike `MatchScreen`),
+    so the marquee finals produce no highlight clip. Real follow-up; not a dry-
+    run blocker.
+  - **DRY-RUN STAGING - BUILT + VERIFIED.** `functions/live/primeMainStageDryRun.js`
+    stages a live `mainstage` tournament (two named battler accounts as the
+    #1-callout semifinal + a one-judge panel + two synthetic bench finalists for
+    a valid 4-seed bracket); `teardownMainStageDryRun.js` removes it and restores
+    the battlers' rating/wins/losses from a snapshot. `verifyDryRunStaging.js`
+    drove the whole thing headlessly against the deployed backend - prime,
+    startMainStageBattle ×2, the **real completeMatch** on a mainstage match (the
+    seam mainStageSettleChecks skipped - confirmed it cleanly settles
+    pending->completed), the judge vote settling + advancing the bracket, then
+    teardown + restore: **8/8, no orphans left.** The runbook is `MAIN_STAGE_DRY_RUN.md`
+    at the repo root. The per-action callables are NOT flag-gated, so the dry run
+    works with `config/tournament.enabled` OFF.
 - **ADMIN COMMAND CENTER - BUILT (2026-10-09), web, in `website/`.** A gated
   `/admin` dashboard (developer tooling, Q2). Server-side admin gate
   `verifyAdmin` (real Firebase ID token + `isAdmin`) on four Route Handlers:

@@ -43,6 +43,7 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
 
   bool _loading = true;
   bool _watchStopped = false;
+  bool _hasVideo = false; // whether the live spectator stream attached
   String? _error;
   String? _player1Id;
   String? _player2Id;
@@ -82,50 +83,81 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
 
   Future<void> _start() async {
     try {
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('watchLiveMatch')
-          .call<Map<String, dynamic>>({'matchId': widget.matchId});
-      final data = result.data;
-      await _spectator.initialize();
-      await _spectator.watch(
-        channelName: data['channelName'] as String,
-        token: data['token'] as String,
-        uid: (data['agoraUid'] as num).toInt(),
-      );
-      // The "of N" denominator: how many judges are on the panel. One-time
-      // read via the match's tournament link, so the tally reads "2 of 5".
-      final tid = data['tournamentId'] as String?;
-      if (tid != null) {
-        final t = await FirebaseFirestore.instance
-            .collection('tournaments')
-            .doc(tid)
-            .get();
-        final judges = t.data()?['judges'];
-        if (judges is List) _panelSize = judges.length;
+      // The MATCH DOC is the source of truth for who is battling and which
+      // tournament this is - read it FIRST, so the judge can always vote even
+      // when the live video can't be fetched. (A judge who opens the room just
+      // as the battle ends gets "already-finished" from watchLiveMatch; the
+      // open vote has no deadline, so they must still be able to settle it.)
+      final matchSnap = await _matchRef.get();
+      final m = matchSnap.data();
+      if (m == null || m['mainStage'] == null) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _error = "That battle isn't available.";
+          });
+        }
+        return;
       }
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _player1Id = data['player1Id'] as String?;
-          _player2Id = data['player2Id'] as String?;
-          _player1Name = data['player1Name'] as String? ?? 'Player 1';
-          _player2Name = data['player2Name'] as String? ?? 'Player 2';
-        });
+      _player1Id = m['player1Id'] as String?;
+      _player2Id = m['player2Id'] as String?;
+      final tid = (m['mainStage'] as Map?)?['tournamentId'] as String?;
+      await _resolveNamesAndPanel(tid);
+
+      // Attach the LIVE video as a best-effort extra. Its failure (battle over,
+      // viewing unconfigured, a token error) must never block the verdict.
+      try {
+        final result = await FirebaseFunctions.instance
+            .httpsCallable('watchLiveMatch')
+            .call<Map<String, dynamic>>({'matchId': widget.matchId});
+        final data = result.data;
+        await _spectator.initialize();
+        await _spectator.watch(
+          channelName: data['channelName'] as String,
+          token: data['token'] as String,
+          uid: (data['agoraUid'] as num).toInt(),
+        );
+        _hasVideo = true;
+        // Prefer the names the token call resolved, if present.
+        _player1Name = data['player1Name'] as String? ?? _player1Name;
+        _player2Name = data['player2Name'] as String? ?? _player2Name;
+      } catch (_) {
+        _hasVideo = false; // vote + tally still work without the video
       }
-    } on FirebaseFunctionsException catch (e) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = e.message ?? "Couldn't open the battle.";
-        });
-      }
+      if (mounted) setState(() => _loading = false);
     } catch (_) {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = "Couldn't connect to the battle.";
+          _error = "Couldn't open the judges' room.";
         });
       }
+    }
+  }
+
+  /// Player names + the "of N" panel denominator, straight from Firestore so
+  /// they do not depend on the live-video token call succeeding.
+  Future<void> _resolveNamesAndPanel(String? tournamentId) async {
+    final db = FirebaseFirestore.instance;
+    Future<String?> nameOf(String? uid) async {
+      if (uid == null) return null;
+      try {
+        final s = await db.collection('users').doc(uid).get();
+        return s.data()?['username'] as String?;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final results = await Future.wait([nameOf(_player1Id), nameOf(_player2Id)]);
+    _player1Name = results[0] ?? 'Player 1';
+    _player2Name = results[1] ?? 'Player 2';
+    if (tournamentId != null) {
+      try {
+        final t = await db.collection('tournaments').doc(tournamentId).get();
+        final judges = t.data()?['judges'];
+        if (judges is List) _panelSize = judges.length;
+      } catch (_) {/* denominator is cosmetic; the tally still shows counts */}
     }
   }
 
@@ -204,6 +236,32 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
               const Text('The panel has decided. The bracket moves on.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white70)),
+            ],
+          ),
+        ),
+      );
+    }
+    // No live video (battle already ended, or viewing unavailable): the judge
+    // still votes. Show a neutral prompt rather than a dead black video area.
+    if (!_hasVideo || _watchStopped) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.gavel, size: 48, color: context.palette.reward),
+              const SizedBox(height: 12),
+              Text(
+                '$_player1Name  vs  $_player2Name',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              const Text('Cast your verdict below.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white54)),
             ],
           ),
         ),

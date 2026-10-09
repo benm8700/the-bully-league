@@ -39,6 +39,7 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
 
   MainStageBattleState? _battle;
   bool _initialized = false;
+  bool _engineStarted = false;
   bool _completeSent = false;
   String? _error;
 
@@ -69,21 +70,35 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
     setState(() => _initialized = true);
 
     if (_isHost) {
-      // The host owns the engine. Open with the host on the floor, then tick.
-      final cfg = MainStageBattleConfig(
-        turnMs: widget.pairing.turnMs,
-        interrupts: widget.pairing.interrupts,
-        shotClockMs: widget.pairing.shotClockMs,
-      );
-      var b = MainStageBattleState.create([_myUid, _oppUid], config: cfg);
-      b = b.reduce(MsEvent.open, by: _myUid, atMs: _nowMs);
-      _battle = b;
-      _afterStateChange(broadcast: true);
-      _tick = Timer.periodic(const Duration(milliseconds: 300), (_) {
-        if (_battle == null || _battle!.isOver) return;
-        _hostApply(MsEvent.tick);
-      });
+      // The host owns the engine - but it must NOT open (and start draining
+      // its own clock) until the opponent is actually in the channel. Both
+      // players arrive independently through consent + the camera check, so
+      // whoever lands first would otherwise burn their minute talking to an
+      // empty room. Wait for the remote participant, then open exactly once.
+      _video.remoteUid.addListener(_maybeStartHostEngine);
+      _maybeStartHostEngine();
     }
+  }
+
+  /// Host-only: open the chess-clock engine the first moment the opponent is
+  /// present, then drive it on a timer. Guarded so a remote reconnect (uid
+  /// flapping) never re-opens a battle already under way.
+  void _maybeStartHostEngine() {
+    if (!_isHost || _engineStarted || _video.remoteUid.value == null) return;
+    _engineStarted = true;
+    final cfg = MainStageBattleConfig(
+      turnMs: widget.pairing.turnMs,
+      interrupts: widget.pairing.interrupts,
+      shotClockMs: widget.pairing.shotClockMs,
+    );
+    var b = MainStageBattleState.create([_myUid, _oppUid], config: cfg);
+    b = b.reduce(MsEvent.open, by: _myUid, atMs: _nowMs);
+    _battle = b;
+    _afterStateChange(broadcast: true);
+    _tick = Timer.periodic(const Duration(milliseconds: 300), (_) {
+      if (_battle == null || _battle!.isOver) return;
+      _hostApply(MsEvent.tick);
+    });
   }
 
   /// Host-only: apply an event to the engine, auto-start the holder's talk
@@ -159,6 +174,7 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
   void dispose() {
     _tick?.cancel();
     _msgSub?.cancel();
+    _video.remoteUid.removeListener(_maybeStartHostEngine);
     _video.dispose();
     super.dispose();
   }
@@ -183,7 +199,29 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
       );
     }
     if (!_initialized || _battle == null) {
-      return const Center(child: CircularProgressIndicator());
+      // Before the engine opens: connecting, or (for the first arrival) waiting
+      // on the opponent. Say so, and promise the clock has not started - the
+      // host's engine does not open until the opponent is in the channel.
+      final waitingForOpponent = _initialized && _isHost && !_engineStarted;
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                waitingForOpponent
+                    ? 'Waiting for your opponent to arrive…\nYour clock has not started.'
+                    : 'Connecting to the stage…',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ],
+          ),
+        ),
+      );
     }
     final b = _battle!;
     return Stack(
