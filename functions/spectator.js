@@ -63,16 +63,24 @@ function spectateProblem({match, tournament, uid}) {
   }
   if (match.mode !== "tournament") return "not-a-tournament-match";
   // A climb match carries its tournament id under `climb`, a bracket match
-  // under `tournament` - either makes it watchable.
-  if (!match.tournament?.tournamentId && !match.climb?.tournamentId) {
+  // under `tournament`, a Main Stage finals battle under `mainStage` - any
+  // of the three makes it a live event somebody signed up to perform in.
+  if (!match.tournament?.tournamentId && !match.climb?.tournamentId &&
+      !match.mainStage?.tournamentId) {
     return "not-a-tournament-match";
   }
   if (!tournament) return "tournament-not-found";
-  // Both live-bracket and climb tournaments are live events you can watch.
-  if (tournament.format !== "live" && tournament.format !== "climb") {
+  // Live-bracket, climb, and Main Stage tournaments are all live events you
+  // can watch. Main Stage is the weekly finals - its battles are the whole
+  // show, so the crowd (and the judges) must be able to watch them.
+  const fmt = tournament.format;
+  if (fmt !== "live" && fmt !== "climb" && fmt !== "mainstage") {
     return "not-a-live-event";
   }
-  if (tournament.status !== "in_progress") return "not-running";
+  // Each format marks "a battle is happening now" with its own status word:
+  // live/climb tournaments use in_progress; a Main Stage week uses "live".
+  const running = fmt === "mainstage" ? "live" : "in_progress";
+  if (tournament.status !== running) return "not-running";
   // Once a match is over there is nothing to watch live - the clip is the
   // way to see it, and that path has its own consent and takedown rules.
   if (match.status !== "pending" && match.status !== "in_progress") {
@@ -110,7 +118,7 @@ async function watchLiveMatch(auth, data, appCertificate) {
 
   let tournament = null;
   const tournamentId = match?.tournament?.tournamentId ||
-    match?.climb?.tournamentId;
+    match?.climb?.tournamentId || match?.mainStage?.tournamentId;
   if (tournamentId) {
     const tSnap = await db.collection("tournaments").doc(tournamentId).get();
     tournament = tSnap.exists ? tSnap.data() : null;

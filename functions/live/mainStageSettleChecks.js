@@ -144,6 +144,22 @@ async function run() {
     assert.strictEqual(r.body.result.agoraUid, 2); // pB is player2
   });
 
+  // The spectator path must now serve a LIVE mainstage battle - this is how
+  // both the crowd and the judges watch it. Check it WHILE pending (watchable
+  // only while the battle is live), before we simulate completion below.
+  await check("a judge can spectate the live mainstage battle", async () => {
+    const tok = await idToken(JUDGES[2]); // a seated judge, not a battler
+    const r = await callFn("watchLiveMatch", tok, {matchId});
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.ok(r.body.result.token, "a subscriber token");
+    assert.strictEqual(r.body.result.channelName, `match_${matchId}`);
+  });
+
+  await check("a battler is sent to the player path, not spectating", async () => {
+    const r = await callFn("watchLiveMatch", tokPA, {matchId});
+    assert.strictEqual(r.status, 403, JSON.stringify(r.body));
+  });
+
   // Simulate the battle having been played to its end (completeMatch would do
   // this; the judge-vote settlement requires a completed battle).
   await db.collection("matches").doc(matchId).update({status: "completed"});

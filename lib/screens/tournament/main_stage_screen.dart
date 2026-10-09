@@ -4,6 +4,8 @@ import '../../core/services/main_stage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
 import '../match/recording_consent_screen.dart';
+import 'judges_room_screen.dart';
+import 'live_viewer_screen.dart';
 import 'main_stage_battle_screen.dart';
 import 'main_stage_callout_screen.dart';
 
@@ -135,21 +137,65 @@ class _MainStageScreenState extends State<MainStageScreen> {
         ];
       }
       if (v.role == MainStageRole.judge) {
+        final battle = v.liveBattleMatchId;
         return [
           _headline('The Main Stage is LIVE', context.palette.live),
           const SizedBox(height: 8),
-          Text('You are on the panel. Watch the battles and cast your verdict.',
+          Text('You are on the panel. Watch the battle and cast your verdict.',
               style: _muted()),
           const SizedBox(height: 20),
-          _statusPill(Icons.gavel, 'Judging',
-              'Open a live battle from the tournament to judge it.', gold),
+          if (battle != null)
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: gold,
+                foregroundColor: Colors.black,
+                minimumSize: const Size(0, 54),
+              ),
+              icon: const Icon(Icons.gavel),
+              label: const Text("Open the judges' room"),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => JudgesRoomScreen(matchId: battle),
+                ),
+              ),
+            )
+          else
+            _statusPill(Icons.hourglass_top, 'Between battles',
+                'The next battle is being set up. The room opens when the '
+                    'battlers step on stage.', gold),
         ];
       }
+      // Finalist waiting their turn, or the crowd: watch the battle on stage.
+      final battle = v.liveBattleMatchId;
       return [
         _headline('The Main Stage is LIVE', context.palette.live),
         const SizedBox(height: 8),
-        Text('The finals are happening now — watch the battles live.',
+        Text(
+            v.role == MainStageRole.finalist
+                ? "You're in the bracket — watch the battle on stage while you "
+                    'wait for your turn.'
+                : 'The finals are happening now — watch the battles live.',
             style: _muted()),
+        const SizedBox(height: 20),
+        if (battle != null)
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: context.palette.live,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(0, 54),
+            ),
+            icon: const Icon(Icons.visibility),
+            label: const Text('Watch the battle'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => LiveViewerScreen(matchId: battle),
+              ),
+            ),
+          )
+        else
+          _statusPill(Icons.hourglass_top, 'Between battles',
+              'The next battle is being set up — hang tight.',
+              Theme.of(context).colorScheme.onSurfaceVariant),
       ];
     }
     if (v.status == 'locked') return _locked(v);

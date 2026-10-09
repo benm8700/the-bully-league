@@ -63,6 +63,31 @@ test("a friend battle is private too", () => {
       "not-a-tournament-match");
 });
 
+test("a Main Stage finals battle is watchable (the whole show)", () => {
+  // The weekly finals are the event the crowd AND the judges turn up for,
+  // so a mainstage battle must be spectatable. It links via `mainStage`
+  // (not `tournament`/`climb`) and its tournament runs with status "live".
+  const msMatch = {...match, tournament: undefined,
+    mainStage: {tournamentId: "ms1", roundIdx: 0, matchIdx: 0}};
+  assert.strictEqual(
+      ask({match: msMatch, tournament: {format: "mainstage", status: "live"}}),
+      null);
+});
+
+test("a Main Stage week not yet live is not watchable", () => {
+  const msMatch = {...match, tournament: undefined,
+    mainStage: {tournamentId: "ms1", roundIdx: 0, matchIdx: 0}};
+  // "locked" is the pre-show state; the running word for mainstage is "live".
+  assert.strictEqual(
+      ask({match: msMatch, tournament: {format: "mainstage", status: "locked"}}),
+      "not-running");
+  // And an in_progress mainstage is NOT running - that word is for live/climb.
+  assert.strictEqual(
+      ask({match: msMatch,
+        tournament: {format: "mainstage", status: "in_progress"}}),
+      "not-running");
+});
+
 test("an ASYNC tournament match is not spectatable", () => {
   // Nobody is assembled to watch it, and its players did not sign up for
   // a live audience.

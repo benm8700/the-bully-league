@@ -24,6 +24,7 @@ class MainStageView {
     required this.candidates,
     this.myMatchupRound,
     this.myMatchupIndex,
+    this.liveBattleMatchId,
   });
 
   final String tournamentId;
@@ -50,6 +51,12 @@ class MainStageView {
   /// right now (eliminated, waiting, a bye, or not a finalist).
   final int? myMatchupRound;
   final int? myMatchupIndex;
+
+  /// The battle currently ON STAGE, if any - the one matchup with a started
+  /// match (a stamped matchId) and no winner yet. Main Stage runs one battle
+  /// at a time, so there is at most one. This is what judges judge and the
+  /// crowd watches. Null between battles (nobody has stepped on stage yet).
+  final String? liveBattleMatchId;
 
   bool get calloutOpen => isTopSeed && status == 'locked';
   bool get hasBattleToPlay =>
@@ -136,25 +143,34 @@ class MainStageService {
     final candidates =
         isTopSeed ? field.where((u) => u != uid).toList() : const <String>[];
 
-    // The viewer's ready matchup, if the show is live. The bracket is the
-    // Firestore-safe shape: {rounds: [{matches: [{a, b, winner}]}]}.
+    // The viewer's ready matchup + the one battle currently on stage, if the
+    // show is live. The bracket is the Firestore-safe shape:
+    // {rounds: [{matches: [{a, b, winner, matchId?}]}]}. A matchup gets a
+    // matchId stamped on it once someone starts it (mainStagePlay.js).
     int? myRound;
     int? myIdx;
+    String? liveBattleMatchId;
     if (status == 'live') {
       final rounds = (t['bracket'] as Map?)?['rounds'];
       if (rounds is List) {
-        outer:
         for (var ri = 0; ri < rounds.length; ri++) {
           final matches = (rounds[ri] as Map?)?['matches'];
           if (matches is! List) continue;
           for (var mi = 0; mi < matches.length; mi++) {
             final m = matches[mi];
             if (m is! Map) continue;
-            final ready = m['a'] != null && m['b'] != null && m['winner'] == null;
-            if (ready && (m['a'] == uid || m['b'] == uid)) {
+            final unsettled =
+                m['a'] != null && m['b'] != null && m['winner'] == null;
+            if (!unsettled) continue;
+            // My own battle to PLAY (take the first one I'm in).
+            if (myRound == null && (m['a'] == uid || m['b'] == uid)) {
               myRound = ri;
               myIdx = mi;
-              break outer;
+            }
+            // The battle on stage to WATCH/JUDGE (started = has a matchId).
+            final mid = m['matchId'];
+            if (liveBattleMatchId == null && mid is String && mid.isNotEmpty) {
+              liveBattleMatchId = mid;
             }
           }
         }
@@ -171,6 +187,7 @@ class MainStageService {
       candidates: candidates,
       myMatchupRound: myRound,
       myMatchupIndex: myIdx,
+      liveBattleMatchId: liveBattleMatchId,
     );
   }
 
