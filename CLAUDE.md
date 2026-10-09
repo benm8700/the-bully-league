@@ -4307,6 +4307,30 @@ verdict fallback - an earlier draft of this record invented that phasing; it was
 wrong and is removed. Numbers (top-4, 5 judges, Thursday, battle clocks, min
 games) are tunable placeholders per the economy-advisor-review discipline.
 
+### BUILD STATUS (updated 2026-10-09)
+- **DONE - the weekly-Elo QUALIFIER (first brick), deployed and flag-off.**
+  - `functions/weeklyQualifier.js` (pure): `qualifyingWeek` (Wed-11:59pm-PST /
+    Thu-00:00 Pacific week, DST-correct 169h), `mostRecentlyClosedWeek`,
+    `computeStandings` (weekly Elo gain, ladder modes only, min-5-games floor).
+    17 unit tests (`test/weeklyQualifier.test.js`).
+  - `functions/weeklyTournament.js` + the `sweepWeeklyQualifier` scheduled job
+    (every 15 min, in index.js): publishes the live board to
+    `stats/weeklyQualifier` and freezes top-4 + 4 alternates to
+    `stats/weeklyQualifierSnapshot` at the cutoff (idempotent). GATED on
+    `config/tournament.enabled`, which is **false** - no-ops until flipped.
+  - Collection-group index on `ratingHistory.at` added + deployed (the live
+    check caught the missing-index `FAILED_PRECONDITION`, the usual trap).
+  - Deployed. `functions/live/weeklyQualifierChecks.js` = **7/7 green** on the
+    real backend; verified afterwards the flag is off and no residue remains.
+  - No rules change needed (`stats/` + `config/` already client-read/server-write).
+- **NOT built yet (the rest):** the Main Stage itself (top-4 bracket + #1
+  live callout, the chess-clock + 2-interrupt battle format, the 5-judge panel
+  + live open group debate + live voting, snapshot->tournament seeding, judge
+  selection = hand-pick + most-judged autofill, acceptance/alternate flow,
+  prizes = Belt / tournaments-won board / finalist badge / champion skin), and
+  the Home rework (ranked-primary + weekly-tournament countdown/qualifying
+  banner). All of it goes behind the same `config/tournament.enabled` flag.
+
 ### The center of gravity
 **The weekly tournament is the app's heart - the destination that gives every
 ranked battle a point** (developer confirmed: all ranked play builds toward the
