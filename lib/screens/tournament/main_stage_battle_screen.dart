@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/main_stage_battle.dart';
 import '../../core/services/agora_video_service.dart';
@@ -27,11 +28,17 @@ class MainStageBattleScreen extends StatefulWidget {
   State<MainStageBattleScreen> createState() => _MainStageBattleScreenState();
 }
 
-class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
+class _MainStageBattleScreenState extends State<MainStageBattleScreen>
+    with SingleTickerProviderStateMixin {
   late final VideoCallService _video;
   final _matchmaking = MatchmakingService();
   StreamSubscription<Map<String, dynamic>>? _msgSub;
   Timer? _tick;
+
+  // Drives the red "you're being cut into" flash on the floor-holder's clock
+  // while an interrupt is in its grace window. Haptic fires once on the edge.
+  late final AnimationController _pulse;
+  bool _beingInterrupted = false;
 
   final String _myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
   late final String _oppUid = widget.pairing.opponentId;
@@ -48,6 +55,8 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
   @override
   void initState() {
     super.initState();
+    _pulse = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 450));
     _video = AgoraVideoCallService();
     _setup();
   }
@@ -96,6 +105,7 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
       turnMs: widget.pairing.turnMs,
       interrupts: widget.pairing.interrupts,
       shotClockMs: widget.pairing.shotClockMs,
+      graceMs: widget.pairing.graceMs,
     );
     var b = MainStageBattleState.create([_myUid, _oppUid], config: cfg);
     b = b.reduce(MsEvent.open, by: _myUid, atMs: _nowMs);
@@ -175,13 +185,37 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
       // Mark the battle complete so the judge panel can settle it.
       _matchmaking.completeMatch(widget.pairing.matchId).catchError((_) {});
     }
+    _driveInterruptCue(b);
     if (mounted) setState(() {});
+  }
+
+  /// Flash + buzz when an interrupt is winding up. The flash animates whenever
+  /// SOMEONE is being cut into (shown on the target's clock on both screens);
+  /// the haptic fires once, only on MY device, only when I'm the one being
+  /// interrupted — the person who needs the "land it now" jolt.
+  void _driveInterruptCue(MainStageBattleState b) {
+    final pending = b.pendingBy != null && b.status == MsStatus.live;
+    if (pending && !_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    } else if (!pending && _pulse.isAnimating) {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+    final iAmTarget =
+        pending && b.pendingBy == _oppUid && b.floor == _myUid;
+    if (iAmTarget && !_beingInterrupted) {
+      _beingInterrupted = true;
+      HapticFeedback.heavyImpact();
+    } else if (!iAmTarget && _beingInterrupted) {
+      _beingInterrupted = false;
+    }
   }
 
   @override
   void dispose() {
     _tick?.cancel();
     _msgSub?.cancel();
+    _pulse.dispose();
     _video.remoteUid.removeListener(_maybeStartHostEngine);
     _video.dispose();
     super.dispose();
@@ -267,31 +301,55 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
   }
 
   Widget _clocks(MainStageBattleState b) {
+    // The clock of whoever is being cut into flashes red (shown on both
+    // screens). target == the holder the pending interrupt is aimed at.
+    final target =
+        b.pendingBy == null ? null : (b.pendingBy == _myUid ? _oppUid : _myUid);
     return Positioned(
       top: 12,
       left: 12,
       right: 12,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _clockChip('You', b.remaining[_myUid] ?? 0, b.floor == _myUid,
-              b.steals[_myUid] ?? 0),
-          _clockChip('Them', b.remaining[_oppUid] ?? 0, b.floor == _oppUid,
-              b.steals[_oppUid] ?? 0),
-        ],
+      child: AnimatedBuilder(
+        animation: _pulse,
+        builder: (context, _) => Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _clockChip('You', b.remaining[_myUid] ?? 0, b.floor == _myUid,
+                b.steals[_myUid] ?? 0,
+                flash: target == _myUid),
+            _clockChip('Them', b.remaining[_oppUid] ?? 0, b.floor == _oppUid,
+                b.steals[_oppUid] ?? 0,
+                flash: target == _oppUid),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _clockChip(String label, int ms, bool onFloor, int steals) {
+  Widget _clockChip(String label, int ms, bool onFloor, int steals,
+      {bool flash = false}) {
     final gold = context.palette.reward;
+    const hotRed = Color(0xFFFF2D3A);
+    final t = flash ? Curves.easeInOut.transform(_pulse.value) : 0.0;
+    final baseBorder = onFloor ? gold : Colors.white24;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: onFloor ? gold.withValues(alpha: 0.9) : Colors.black54,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: onFloor ? gold : Colors.white24, width: onFloor ? 2 : 1),
+          color: flash ? Color.lerp(baseBorder, hotRed, 0.4 + 0.6 * t)! : baseBorder,
+          width: flash ? 2.5 : (onFloor ? 2 : 1),
+        ),
+        boxShadow: flash
+            ? [
+                BoxShadow(
+                  color: hotRed.withValues(alpha: 0.25 + 0.45 * t),
+                  blurRadius: 8 + 12 * t,
+                  spreadRadius: 1 + 2 * t,
+                ),
+              ]
+            : null,
       ),
       child: Column(
         children: [
@@ -318,9 +376,11 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
     final iHoldFloor = b.floor == _myUid;
     final oppHoldsFloor = b.floor == _oppUid;
     final oppOutOfTime = (b.remaining[_oppUid] ?? 0) == 0;
+    final iAmInterrupting = b.pendingBy == _myUid; // my cut-in is winding up
     final canInterrupt = oppHoldsFloor &&
         (b.steals[_myUid] ?? 0) > 0 &&
-        (b.remaining[_myUid] ?? 0) > 0;
+        (b.remaining[_myUid] ?? 0) > 0 &&
+        b.pendingBy == null; // one interrupt in flight at a time
 
     // Dead-air escape: you hold the floor, your opponent is spent, and you have
     // nothing left to say. End it now rather than draining a banked clock in
@@ -378,9 +438,17 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
               onPressed: canInterrupt ? () => _intent(MsEvent.interrupt) : null,
               style: FilledButton.styleFrom(
                 minimumSize: const Size(0, 54),
-                backgroundColor: context.palette.live,
+                backgroundColor:
+                    iAmInterrupting ? context.palette.reward : context.palette.live,
+                foregroundColor: iAmInterrupting ? Colors.black : null,
+                disabledBackgroundColor: iAmInterrupting
+                    ? context.palette.reward.withValues(alpha: 0.9)
+                    : null,
+                disabledForegroundColor: iAmInterrupting ? Colors.black : null,
               ),
-              child: Text('Interrupt (${b.steals[_myUid] ?? 0})'),
+              child: Text(iAmInterrupting
+                  ? 'Cutting in…'
+                  : 'Interrupt (${b.steals[_myUid] ?? 0})'),
             ),
           ),
         ],

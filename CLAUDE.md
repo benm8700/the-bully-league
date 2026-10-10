@@ -999,6 +999,27 @@ Raised by the developer: what protects someone who is unhappy that their match f
     - **Verified by running the real sweep against real Firestore**: an open round is announced to both players and marked on the bracket, a second sweep says nothing, near the deadline only the absentee is warned, nobody is chased once both have checked in, and closed or decided rounds send nothing. **7 live checks plus 15 local tests.**
 
 ## Problems To Solve Later (Backlog — flagged during planning, not yet designed)
+- **INTERRUPTS IN REGULAR ROAST-A-STRANGER / QUALIFIER MATCHES, GATED BY POINTS —
+  NEW IDEA (2026-10-10, developer).** The Main Stage chess-clock "interrupt"
+  mechanic (cut in on the person holding the floor; see the Tournament model
+  decision record + `main_stage_battle.dart`) is fun enough that the developer
+  wants it in ordinary ranked/qualifier battles too — BUT as a SCARCE, EARNED
+  resource, not free: **subscribers get X free interrupts per match; free users
+  must UNLOCK them with points** (the spendable `pointsBalance`, not lifetime
+  XP). This is attractive because it finally gives interrupts a monetization/
+  points-sink role AND it is pay-for-convenience, not pay-to-win — an interrupt
+  buys you the floor, not the verdict (the crowd still judges who was funnier),
+  so it stays on the right side of the one-status-ladder / no-pay-to-win line
+  the monetization model protects. Open design questions, NOT yet decided:
+  (1) how many free interrupts a subscriber gets and the points price per
+  interrupt for free users (advisor-review economy numbers — see
+  [[economy-needs-advisor-review]]); (2) whether the normal 3×15s turn format
+  even has "a floor to cut into" the way the chess-clock format does, or whether
+  adopting interrupts means adopting (some of) the chess-clock format for ranked
+  too — a real format question, since today ranked turns are fixed and
+  alternating with the opponent HARD-muted, so there is literally nothing to
+  interrupt; (3) how it interacts with the 1.5s interrupt-grace + cue being
+  built now for the Main Stage. Capture only; design later with the economy pass.
 - **EMOJI STUFF IS NOW PROFILE-ONLY; HOME SIMPLIFIED (2026-10-03, developer's
   call, superseding the earlier Option-1 de-dup).** The developer decided the
   emoji ratings make Home "clunky", so **the emoji pill was REMOVED from the
@@ -4426,13 +4447,37 @@ games) are tunable placeholders per the economy-advisor-review discipline.
     tally), crowd watch reuses `LiveViewerScreen`. Home `MainStageBanner` +
     `WeeklyStandingBanner`; a 4th WEEKLY tab on the Ranks board. All analyze
     clean; the battle reducer has 16 Dart tests.
+- **2-DEVICE DRY RUN - DONE (2026-10-10), the live battle is verified on real
+  hardware.** The full lean finals loop ran on two phones (Moto=MedalMoto,
+  S22=ReviewS22): finalist banner -> Play your match -> consent -> camera check
+  -> the chess-clock battle with bidirectional video, the clock-gate, Yield,
+  both Interrupts, and the end-early dead-air button; plus the judge-vote ->
+  settle -> Elo -> bracket-advance pipeline on a real match (judge settled via
+  backend `castMainStageJudgeVote`, since the panel was one judge). So the live
+  CLIENT is no longer device-unverified. The judge was settled from the backend
+  rather than a 3rd live device; a full 5-judge live panel is still only
+  backend-tested.
+- **INTERRUPT GRACE + CUE - BUILT + DEVICE-VERIFIED (2026-10-10).** An interrupt
+  no longer gags the holder mid-punchline: it commits + spends the token, then a
+  **1.5s grace** (tunable via `config/tournament.mainStageGraceMs`, bounds 0-10s,
+  0 = instant) lets them land their line before the floor passes. Cue: the held
+  player's clock chip pulses RED + a one-time haptic buzz on that phone, and the
+  interrupter's button flips to gold "Cutting in…". Two-phase engine in
+  `mainStageBattle.js` + the Dart mirror (engine default 0 so the steal tests
+  stay valid; the product stamps 1.5s). Developer confirmed it "felt good" on
+  the phones. See the backlog note on extending interrupts to regular matches.
 - **STILL NOT built / deferred:** the full **judges'-video-table / broadcast
   desk** (the five judges seeing each other and debating on camera - the lean
   model has each judge watch the battle + vote, no cross-judge video); the
   founder "editor's-choice" pick + 50-pick badge; the **Home rework**
-  (ranked-primary + weekly-tournament countdown/qualifying banner); and - the
-  real gate - a **2-device dry run** of the live battle + judging (none of the
-  live client is verified on real devices yet). Everything stays behind
+  (ranked-primary + weekly-tournament countdown/qualifying banner); and - a
+  content gap flagged 2026-10-10 - **in-app INSTRUCTIONS/RULES explaining the
+  Main Stage battle format to players**: the `RulesScreen` + tutorial describe
+  the normal 3x15s alternating format, but NOTHING tells a finalist how the
+  chess-clock works (banked time, free yield, 2 interrupts that cost a token +
+  start your clock, the 1.5s grace, the shot-clock, end-early). Needs a Main
+  Stage explainer before the tournament launches - a finalist should not meet
+  these rules for the first time live on stage. Everything stays behind
   `config/tournament.enabled`. (The pre-match camera/mic check before the finals
   battle IS now wired - consent -> PreMatchScreen `mainStageStart` branch, which
   creates the battle only on ready, so a back-out strands nothing.)

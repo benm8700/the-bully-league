@@ -25,7 +25,32 @@ const DEFAULTS = {
   turnMs: 60 * 1000, // each player's total talk budget
   interrupts: 2, // "steals" each
   shotClockMs: 7 * 1000, // start talking within this of taking the floor
+  // Grace window before an interrupt actually takes the floor, so the person
+  // being cut into gets a beat to LAND their line rather than being gagged
+  // mid-punchline. 0 = instant (the pure-engine default, and what the existing
+  // tests assert). The PRODUCT stamps a real grace (see mainStagePlay +
+  // resolveGraceMs); it is kept out of the engine default so the steal mechanic
+  // can still be tested in isolation.
+  graceMs: 0,
 };
+
+// Product default + bounds for the interrupt grace. Lives here (pure, testable)
+// but is NOT the engine DEFAULTS value - the engine stays instant so the raw
+// steal rules test cleanly; the battle-creating callable applies this.
+const GRACE_DEFAULT_MS = 1500;
+const GRACE_MAX_MS = 10 * 1000;
+
+/**
+ * Resolve a (console-tunable) interrupt grace to a safe value. Anything
+ * non-finite or out of [0, GRACE_MAX_MS] falls back to the product default -
+ * this config is hand-edited in the Firebase console with no validation layer,
+ * exactly like the match-settings timings.
+ */
+function resolveGraceMs(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0 || n > GRACE_MAX_MS) return GRACE_DEFAULT_MS;
+  return Math.trunc(n);
+}
 
 /** A fresh battle between two distinct players. */
 function createBattle(players, config = {}) {
@@ -43,6 +68,8 @@ function createBattle(players, config = {}) {
     talking: false, // has the floor-holder started talking (shot-clock)
     floorTakenMs: null,
     lastMs: null, // when the floor-holder's clock last settled
+    pendingBy: null, // an interrupt committed, in its grace window (who cut in)
+    pendingAtMs: null, // when that interrupt was fired
     status: "pending", // pending -> live -> ended
     endReason: null,
   };
@@ -56,12 +83,18 @@ function cloneState(state) {
   return {...state, remaining: {...state.remaining}, steals: {...state.steals}};
 }
 
-/** Give the floor to `p` at `atMs`, resetting the shot-clock/talking. */
+/**
+ * Give the floor to `p` at `atMs`, resetting the shot-clock/talking. Any floor
+ * change cancels/consumes a pending interrupt - the universal rule that keeps
+ * the pending state from surviving a floor it no longer describes.
+ */
 function takeFloor(s, p, atMs) {
   s.floor = p;
   s.talking = false;
   s.floorTakenMs = atMs;
   s.lastMs = atMs;
+  s.pendingBy = null;
+  s.pendingAtMs = null;
 }
 
 /**
@@ -103,6 +136,26 @@ function reduce(state, ev) {
   if (s.status === "live") settle(s, ev.atMs);
   if (s.status === "ended") return s;
 
+  // Resolve a pending interrupt. The interrupter already spent a token and gave
+  // the holder a grace window to finish their line; once it elapses the floor
+  // passes to them. If the floor already moved on its own (the holder ran out
+  // or yielded - takeFloor clears pending) this never fires. Runs before the
+  // event so a `tick` (fired every ~300ms live) is what lands the hand-off.
+  if (s.pendingBy != null && s.status === "live") {
+    const target = other(s, s.pendingBy);
+    if (s.floor !== target) {
+      s.pendingBy = null; // floor already left the person being cut into
+      s.pendingAtMs = null;
+    } else if (ev.atMs - s.pendingAtMs >= s.config.graceMs) {
+      if (s.remaining[s.pendingBy] > 0) {
+        takeFloor(s, s.pendingBy, ev.atMs); // grace elapsed -> cut in (clears pending)
+      } else {
+        s.pendingBy = null;
+        s.pendingAtMs = null;
+      }
+    }
+  }
+
   switch (ev.type) {
     case "open":
       if (s.status !== "pending" || !s.players.includes(ev.by)) return s;
@@ -131,8 +184,17 @@ function reduce(state, ev) {
       if (s.floor !== opp) return s; // can only cut in on the holder
       if (s.steals[ev.by] <= 0) return s; // out of steals
       if (s.remaining[ev.by] <= 0) return s; // no time to take the floor with
-      s.steals[ev.by] -= 1;
-      takeFloor(s, ev.by, ev.atMs);
+      if (s.pendingBy != null) return s; // an interrupt is already winding up
+      s.steals[ev.by] -= 1; // the token is spent the instant you commit
+      if (s.config.graceMs > 0) {
+        // Commit, but let the holder land their line - the floor passes when
+        // the grace elapses (resolved above on the next tick). The UI flashes
+        // the holder's clock + buzzes them so the beat has teeth.
+        s.pendingBy = ev.by;
+        s.pendingAtMs = ev.atMs;
+      } else {
+        takeFloor(s, ev.by, ev.atMs); // graceMs 0 -> instant steal
+      }
       return s;
     }
 
@@ -184,5 +246,8 @@ module.exports = {
   settle,
   mutedPlayer,
   isOver,
+  resolveGraceMs,
   DEFAULTS,
+  GRACE_DEFAULT_MS,
+  GRACE_MAX_MS,
 };

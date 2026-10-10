@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {loadBracket} = require("./mainStageLifecycle");
 const {tallyJudgeVotes, stalledBattleVerdict} = require("./mainStageJudging");
-const {DEFAULTS: BATTLE_DEFAULTS} = require("./mainStageBattle");
+const {DEFAULTS: BATTLE_DEFAULTS, resolveGraceMs} = require("./mainStageBattle");
 
 /**
  * Main Stage finals - playing a bracket battle and the live judge-panel
@@ -53,6 +53,11 @@ async function startMainStageBattle(auth, data) {
   // Settings resolve outside the transaction (they do their own reads).
   const {getMatchSettings} = require("./matchSettings");
   const settings = await getMatchSettings("tournament");
+  // The interrupt grace is console-tunable from config/tournament (bounds-
+  // checked, falls back to the product default), resolved once at creation and
+  // stamped on the match so both players run the same clock.
+  const tcfg = (await db.collection("config").doc("tournament").get()).data() || {};
+  const graceMs = resolveGraceMs(tcfg.mainStageGraceMs);
   const tRef = db.collection("tournaments").doc(tournamentId);
 
   const matchId = await db.runTransaction(async (tx) => {
@@ -98,7 +103,7 @@ async function startMainStageBattle(auth, data) {
       player2Rating: p2Rating,
       mode: "tournament", // ratable + enters finalize's tournament routing...
       mainStage: {tournamentId, roundIdx, matchIdx}, // ...which routes HERE
-      mainStageConfig: {...BATTLE_DEFAULTS}, // chess-clock timings for the UI
+      mainStageConfig: {...BATTLE_DEFAULTS, graceMs}, // chess-clock timings for the UI
       settings,
       judgeWindowMs: JUDGE_WINDOW_MS,
       status: "pending",

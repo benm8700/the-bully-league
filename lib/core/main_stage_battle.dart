@@ -23,6 +23,15 @@ const int kMainStageTurnMs = 60 * 1000;
 const int kMainStageInterrupts = 2;
 const int kMainStageShotClockMs = 7 * 1000;
 
+/// Grace window before an interrupt takes the floor, so the person being cut
+/// into gets a beat to land their line. 0 = instant (the pure-engine default,
+/// mirroring the JS DEFAULTS, which the existing tests assert). The real battle
+/// runs the server-stamped value (product default 1.5s, console-tunable); the
+/// service layer falls back to [kMainStageGraceDefaultMs] if the stamp is
+/// missing.
+const int kMainStageGraceMs = 0;
+const int kMainStageGraceDefaultMs = 1500;
+
 enum MsEvent { open, startTalking, yield, interrupt, endEarly, tick }
 
 enum MsStatus { pending, live, ended }
@@ -32,10 +41,12 @@ class MainStageBattleConfig {
     this.turnMs = kMainStageTurnMs,
     this.interrupts = kMainStageInterrupts,
     this.shotClockMs = kMainStageShotClockMs,
+    this.graceMs = kMainStageGraceMs,
   });
   final int turnMs;
   final int interrupts;
   final int shotClockMs;
+  final int graceMs;
 }
 
 class MainStageBattleState {
@@ -67,6 +78,8 @@ class MainStageBattleState {
   bool talking = false; // has the floor-holder started talking (shot-clock)
   int? floorTakenMs;
   int? lastMs; // when the floor-holder's clock last settled
+  String? pendingBy; // an interrupt committed, in its grace window (who cut in)
+  int? pendingAtMs; // when that interrupt was fired
   MsStatus status = MsStatus.pending;
   String? endReason;
 
@@ -80,16 +93,22 @@ class MainStageBattleState {
     s.talking = talking;
     s.floorTakenMs = floorTakenMs;
     s.lastMs = lastMs;
+    s.pendingBy = pendingBy;
+    s.pendingAtMs = pendingAtMs;
     s.status = status;
     s.endReason = endReason;
     return s;
   }
 
+  // Any floor change cancels/consumes a pending interrupt - the universal rule
+  // that keeps the pending state from surviving a floor it no longer describes.
   void _takeFloor(String p, int atMs) {
     floor = p;
     talking = false;
     floorTakenMs = atMs;
     lastMs = atMs;
+    pendingBy = null;
+    pendingAtMs = null;
   }
 
   void _settle(int atMs) {
@@ -121,6 +140,7 @@ class MainStageBattleState {
           'turnMs': config.turnMs,
           'interrupts': config.interrupts,
           'shotClockMs': config.shotClockMs,
+          'graceMs': config.graceMs,
         },
         'remaining': remaining,
         'steals': steals,
@@ -128,6 +148,8 @@ class MainStageBattleState {
         'talking': talking,
         'floorTakenMs': floorTakenMs,
         'lastMs': lastMs,
+        'pendingBy': pendingBy,
+        'pendingAtMs': pendingAtMs,
         'status': status.name,
         'endReason': endReason,
       };
@@ -144,6 +166,7 @@ class MainStageBattleState {
         interrupts: (cfg['interrupts'] as num?)?.toInt() ?? kMainStageInterrupts,
         shotClockMs:
             (cfg['shotClockMs'] as num?)?.toInt() ?? kMainStageShotClockMs,
+        graceMs: (cfg['graceMs'] as num?)?.toInt() ?? kMainStageGraceMs,
       ),
     );
     (m['remaining'] as Map).forEach((k, v) {
@@ -156,6 +179,8 @@ class MainStageBattleState {
     s.talking = m['talking'] == true;
     s.floorTakenMs = (m['floorTakenMs'] as num?)?.toInt();
     s.lastMs = (m['lastMs'] as num?)?.toInt();
+    s.pendingBy = m['pendingBy'] as String?;
+    s.pendingAtMs = (m['pendingAtMs'] as num?)?.toInt();
     s.status = MsStatus.values.byName((m['status'] as String?) ?? 'pending');
     s.endReason = m['endReason'] as String?;
     return s;
@@ -172,6 +197,25 @@ class MainStageBattleState {
     final s = _clone();
     if (s.status == MsStatus.live) s._settle(atMs);
     if (s.status == MsStatus.ended) return s;
+
+    // Resolve a pending interrupt: once the grace elapses the interrupter takes
+    // the floor. If the floor already moved on its own (_takeFloor clears
+    // pending) this never fires. Runs before the event so a live `tick` lands
+    // the hand-off. Mirrors mainStageBattle.js.
+    if (s.pendingBy != null && s.status == MsStatus.live) {
+      final target = s._other(s.pendingBy!);
+      if (s.floor != target) {
+        s.pendingBy = null;
+        s.pendingAtMs = null;
+      } else if (atMs - s.pendingAtMs! >= s.config.graceMs) {
+        if ((s.remaining[s.pendingBy] ?? 0) > 0) {
+          s._takeFloor(s.pendingBy!, atMs); // cut in (clears pending)
+        } else {
+          s.pendingBy = null;
+          s.pendingAtMs = null;
+        }
+      }
+    }
 
     switch (type) {
       case MsEvent.open:
@@ -206,8 +250,16 @@ class MainStageBattleState {
         if (s.floor != opp) return s; // can only cut in on the holder
         if ((s.steals[by] ?? 0) <= 0) return s; // out of steals
         if ((s.remaining[by] ?? 0) <= 0) return s; // no time to take the floor
-        s.steals[by] = s.steals[by]! - 1;
-        s._takeFloor(by, atMs);
+        if (s.pendingBy != null) return s; // an interrupt is already winding up
+        s.steals[by] = s.steals[by]! - 1; // token spent the instant you commit
+        if (s.config.graceMs > 0) {
+          // Commit, but let the holder land their line - the floor passes when
+          // the grace elapses. The UI flashes + buzzes the holder meanwhile.
+          s.pendingBy = by;
+          s.pendingAtMs = atMs;
+        } else {
+          s._takeFloor(by, atMs); // graceMs 0 -> instant steal
+        }
         return s;
 
       case MsEvent.endEarly:

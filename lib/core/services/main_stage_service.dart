@@ -3,6 +3,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../main_stage_battle.dart' show kMainStageGraceDefaultMs;
+
 /// Where the viewer stands in a Main Stage (weekly finals) tournament. Computed
 /// purely from the tournament document + the viewer's uid, so the screen can
 /// render the right state without a round-trip. Mirrors the server lifecycle in
@@ -242,6 +244,7 @@ class MainStageService {
       turnMs: (cfg['turnMs'] as num?)?.toInt() ?? 60000,
       interrupts: (cfg['interrupts'] as num?)?.toInt() ?? 2,
       shotClockMs: (cfg['shotClockMs'] as num?)?.toInt() ?? 7000,
+      graceMs: (cfg['graceMs'] as num?)?.toInt() ?? kMainStageGraceDefaultMs,
     );
   }
 
@@ -285,6 +288,7 @@ class MainStageBattlePairing {
     required this.turnMs,
     required this.interrupts,
     required this.shotClockMs,
+    required this.graceMs,
   });
 
   final String matchId;
@@ -294,6 +298,7 @@ class MainStageBattlePairing {
   final int turnMs;
   final int interrupts;
   final int shotClockMs;
+  final int graceMs; // interrupt grace window (ms); 0 = instant
 
   bool get isHost => agoraUid == 1;
 }

@@ -168,4 +168,61 @@ void main() {
     expect(s0.remaining['a'], before); // original untouched
     expect(s0.floor, 'a');
   });
+
+  // --- interrupt grace window (mirrors the JS grace tests) ---
+  group('interrupt grace', () {
+    MainStageBattleState openGrace(int graceMs) =>
+        MainStageBattleState.create(['a', 'b'],
+                config: MainStageBattleConfig(graceMs: graceMs))
+            .reduce(MsEvent.open, by: 'a', atMs: 0)
+            .reduce(MsEvent.startTalking, by: 'a', atMs: 0);
+
+    test('an interrupt commits (spends the token) but waits out the grace', () {
+      final s = openGrace(1500).reduce(MsEvent.interrupt, by: 'b', atMs: 3000);
+      expect(s.floor, 'a'); // a keeps the floor during the beat
+      expect(s.pendingBy, 'b');
+      expect(s.steals['b'], kMainStageInterrupts - 1);
+      expect(s.mutedPlayer, 'b');
+    });
+
+    test('the floor passes once the grace elapses', () {
+      var s = openGrace(1500).reduce(MsEvent.interrupt, by: 'b', atMs: 3000);
+      s = s.reduce(MsEvent.tick, atMs: 4000); // mid-grace
+      expect(s.floor, 'a');
+      s = s.reduce(MsEvent.tick, atMs: 4600); // grace up
+      expect(s.floor, 'b');
+      expect(s.pendingBy, isNull);
+      expect(s.remaining['a'], kMainStageTurnMs - 4600); // billed to the cut
+    });
+
+    test('yielding during the grace hands straight to the interrupter', () {
+      var s = openGrace(1500).reduce(MsEvent.interrupt, by: 'b', atMs: 2000);
+      s = s.reduce(MsEvent.yield, by: 'a', atMs: 2500);
+      expect(s.floor, 'b');
+      expect(s.pendingBy, isNull);
+      expect(s.steals['b'], kMainStageInterrupts - 1);
+    });
+
+    test('a second interrupt while one is winding up is a no-op', () {
+      var s = openGrace(1500).reduce(MsEvent.interrupt, by: 'b', atMs: 1000);
+      s = s.reduce(MsEvent.interrupt, by: 'b', atMs: 1200);
+      expect(s.pendingBy, 'b');
+      expect(s.steals['b'], kMainStageInterrupts - 1); // no double-spend
+      expect(s.floor, 'a');
+    });
+
+    test('graceMs 0 interrupts instantly (engine default)', () {
+      final s = openGrace(0).reduce(MsEvent.interrupt, by: 'b', atMs: 3000);
+      expect(s.floor, 'b');
+      expect(s.pendingBy, isNull);
+    });
+
+    test('pendingBy round-trips through toMap/fromMap', () {
+      final s = openGrace(1500).reduce(MsEvent.interrupt, by: 'b', atMs: 3000);
+      final r = MainStageBattleState.fromMap(s.toMap());
+      expect(r.pendingBy, 'b');
+      expect(r.pendingAtMs, 3000);
+      expect(r.config.graceMs, 1500);
+    });
+  });
 }

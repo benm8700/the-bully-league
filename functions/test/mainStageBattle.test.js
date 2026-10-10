@@ -4,6 +4,9 @@ const {
   reduce,
   mutedPlayer,
   isOver,
+  resolveGraceMs,
+  GRACE_DEFAULT_MS,
+  GRACE_MAX_MS,
 } = require("../mainStageBattle");
 
 let passed = 0;
@@ -185,6 +188,90 @@ check("only the floor-holder can endEarly", () => {
 
 check("createBattle refuses two of the same player", () => {
   assert.throws(() => createBattle(["a", "a"]));
+});
+
+// --- interrupt grace window (the "finish your line" beat) ---
+
+check("with a grace, an interrupt commits but does NOT take the floor yet",
+    () => {
+      const s = run(createBattle(["a", "b"], {graceMs: 1500}), [
+        ev("open", "a", 0), ev("startTalking", "a", 0),
+        ev("interrupt", "b", 3000),
+      ]);
+      assert.strictEqual(s.floor, "a", "a keeps the floor during the grace");
+      assert.strictEqual(s.pendingBy, "b", "b's cut-in is winding up");
+      assert.strictEqual(s.steals.b, 1, "the token is spent on commit");
+      assert.strictEqual(mutedPlayer(s), "b", "b is still muted mid-grace");
+    });
+
+check("the floor passes only once the grace elapses; the holder is billed " +
+    "for the whole beat", () => {
+  let s = run(createBattle(["a", "b"], {graceMs: 1500}), [
+    ev("open", "a", 0), ev("startTalking", "a", 0), ev("interrupt", "b", 3000),
+  ]);
+  s = reduce(s, ev("tick", null, 4000)); // 1000ms into the grace (< 1500)
+  assert.strictEqual(s.floor, "a", "still a's floor mid-grace");
+  assert.strictEqual(s.pendingBy, "b");
+  s = reduce(s, ev("tick", null, 4600)); // 1600ms in (>= 1500)
+  assert.strictEqual(s.floor, "b", "b cuts in once the grace is up");
+  assert.strictEqual(s.pendingBy, null);
+  assert.strictEqual(s.remaining.a, 60000 - 4600, "a talked right up to the cut");
+});
+
+check("yielding during the grace hands straight to the interrupter", () => {
+  const s = run(createBattle(["a", "b"], {graceMs: 1500}), [
+    ev("open", "a", 0), ev("startTalking", "a", 0),
+    ev("interrupt", "b", 2000),
+    ev("yield", "a", 2500), // a bows out before the beat is up
+  ]);
+  assert.strictEqual(s.floor, "b");
+  assert.strictEqual(s.pendingBy, null, "pending cleared when the floor moved");
+  assert.strictEqual(s.steals.b, 1, "b still only spent the one token");
+});
+
+check("the holder running out mid-grace hands to the interrupter, no double-" +
+    "take", () => {
+  const s = run(createBattle(["a", "b"], {graceMs: 5000, turnMs: 3000}), [
+    ev("open", "a", 0), ev("startTalking", "a", 0),
+    ev("interrupt", "b", 1000), // pending, grace 5s
+    ev("tick", null, 4000), // a's 3s are gone -> settle passes the floor to b
+  ]);
+  assert.strictEqual(s.remaining.a, 0);
+  assert.strictEqual(s.floor, "b", "a ran out, so b holds");
+  assert.strictEqual(s.pendingBy, null, "pending consumed, not applied twice");
+  assert.strictEqual(s.steals.b, 1);
+});
+
+check("a second interrupt while one is winding up is a no-op (no double-spend)",
+    () => {
+      const s = run(createBattle(["a", "b"], {graceMs: 1500}), [
+        ev("open", "a", 0), ev("startTalking", "a", 0),
+        ev("interrupt", "b", 1000),
+        ev("interrupt", "b", 1200), // already pending
+      ]);
+      assert.strictEqual(s.pendingBy, "b");
+      assert.strictEqual(s.steals.b, 1, "no second token burned");
+      assert.strictEqual(s.floor, "a");
+    });
+
+check("graceMs 0 interrupts instantly (the engine default, backwards compat)",
+    () => {
+      const s = run(createBattle(["a", "b"], {graceMs: 0}), [
+        ev("open", "a", 0), ev("startTalking", "a", 0),
+        ev("interrupt", "b", 3000),
+      ]);
+      assert.strictEqual(s.floor, "b");
+      assert.strictEqual(s.pendingBy, null);
+    });
+
+check("resolveGraceMs clamps a console value to safe bounds", () => {
+  assert.strictEqual(resolveGraceMs(undefined), GRACE_DEFAULT_MS);
+  assert.strictEqual(resolveGraceMs("nonsense"), GRACE_DEFAULT_MS);
+  assert.strictEqual(resolveGraceMs(-1), GRACE_DEFAULT_MS);
+  assert.strictEqual(resolveGraceMs(GRACE_MAX_MS + 1), GRACE_DEFAULT_MS);
+  assert.strictEqual(resolveGraceMs(0), 0, "0 is valid - means instant");
+  assert.strictEqual(resolveGraceMs(1500), 1500);
+  assert.strictEqual(resolveGraceMs(2000.9), 2000, "truncated to an int");
 });
 
 console.log(`\n${passed} passed`);
