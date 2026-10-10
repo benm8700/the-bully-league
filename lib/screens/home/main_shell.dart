@@ -4,6 +4,7 @@ import '../../widgets/badges/badge_popup.dart';
 import '../../widgets/fame_milestone_popup.dart';
 import '../../widgets/rank_change_popup.dart';
 import '../../widgets/service_status_banner.dart';
+import '../../widgets/tournament_finale_popup.dart';
 // WindowLiveBar import removed with the live-bar usage (2026-09-14); restore
 // both together to bring the Sixes and Sevens top cue back.
 import '../leaderboard/leaderboard_screen.dart';
@@ -46,9 +47,12 @@ class _MainShellState extends State<MainShell> {
     // put one on.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      // Sequential so the popups never stack on top of each other. Rank
-      // first (the primary status moment), then badges, then fame.
-      await RankChangePopup.maybeShow(context);
+      // Sequential so the popups never stack on top of each other. The
+      // tournament finale leads - winning (or losing) the weekly Main Stage is
+      // the biggest moment the app has, so it is shown before the routine
+      // rank/badge/fame updates. Then rank, badges, fame.
+      await TournamentFinalePopup.maybeShow(context);
+      if (mounted) await RankChangePopup.maybeShow(context);
       if (mounted) await BadgePopup.maybeShow(context);
       if (mounted) await FameMilestonePopup.maybeShow(context);
     });

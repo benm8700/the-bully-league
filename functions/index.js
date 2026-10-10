@@ -1287,6 +1287,13 @@ exports.getPendingRankChange = onCall((request) => {
   return getPendingRankChange(request.auth);
 });
 
+// The Main Stage finale celebration (champion / runner-up), stamped by the
+// onTournamentCompleted trigger and returned once here, then cleared.
+exports.getPendingTournamentFinale = onCall((request) => {
+  const {getPendingTournamentFinale} = require("./mainStageFinale");
+  return getPendingTournamentFinale(request.auth);
+});
+
 /**
  * The Laugh Meter: rank title plus a gauge filling toward the next tier.
  *

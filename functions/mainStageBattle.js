@@ -93,6 +93,8 @@ function settle(s, atMs) {
  *   startTalking - the floor-holder began speaking (cancels the shot-clock)
  *   yield        - the floor-holder passes the mic (free, no steal)
  *   interrupt    - `by` steals the floor from the opponent (costs a token)
+ *   endEarly     - the floor-holder ends the battle when the opponent is out of
+ *                  time (skips draining a banked clock in dead air)
  *   tick         - time passes; evaluates the shot-clock and the end condition
  * Returns a new state; the input is never mutated.
  */
@@ -131,6 +133,20 @@ function reduce(state, ev) {
       if (s.remaining[ev.by] <= 0) return s; // no time to take the floor with
       s.steals[ev.by] -= 1;
       takeFloor(s, ev.by, ev.atMs);
+      return s;
+    }
+
+    case "endEarly": {
+      // "I'm done" - the floor-holder ends the battle instead of draining a
+      // banked clock in dead air. Only valid when the OPPONENT is already out
+      // of time (otherwise they still deserve their turn - yield passes the
+      // floor instead). Nothing is conceded: the holder's clock would drain to
+      // zero and end the battle anyway, so this just skips the dead air.
+      if (s.floor !== ev.by) return s;
+      if (s.remaining[other(s, ev.by)] > 0) return s;
+      s.status = "ended";
+      s.endReason = "done";
+      s.floor = null;
       return s;
     }
 

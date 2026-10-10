@@ -145,6 +145,44 @@ check("only the floor-holder can yield", () => {
   assert.strictEqual(s.floor, "a", "a non-holder yield is a no-op");
 });
 
+check("endEarly ends the battle when the opponent is already out of time", () => {
+  // a runs b out of time, then a holds the floor with banked time and nothing
+  // to say - the dead-air case. endEarly lets a end it rather than draining.
+  const mid = run(createBattle(["a", "b"], {turnMs: 5000}), [
+    ev("open", "b", 0), ev("startTalking", "b", 0),
+    ev("tick", null, 6000), // b spent -> floor passes to a, a still has time
+  ]);
+  assert.strictEqual(mid.remaining.b, 0);
+  assert.strictEqual(mid.floor, "a");
+  assert.strictEqual(mid.status, "live", "a could still talk out the clock");
+
+  const end = reduce(mid, ev("endEarly", "a", 7000));
+  assert.strictEqual(end.status, "ended");
+  assert.strictEqual(end.endReason, "done");
+  assert.strictEqual(end.floor, null);
+  assert.ok(isOver(end));
+  assert.ok(end.remaining.a > 0, "a's banked time was not forfeited to anyone");
+});
+
+check("endEarly is refused while the opponent still has time (use yield)", () => {
+  // a must not be able to cut b out of a turn b has not had.
+  const s = run(createBattle(["a", "b"]), [
+    ev("open", "a", 0), ev("startTalking", "a", 0),
+    ev("endEarly", "a", 3000),
+  ]);
+  assert.strictEqual(s.status, "live", "both still had time - no end");
+  assert.strictEqual(s.floor, "a");
+});
+
+check("only the floor-holder can endEarly", () => {
+  const mid = run(createBattle(["a", "b"], {turnMs: 5000}), [
+    ev("open", "b", 0), ev("startTalking", "b", 0), ev("tick", null, 6000),
+  ]);
+  assert.strictEqual(mid.floor, "a");
+  const s = reduce(mid, ev("endEarly", "b", 7000)); // b has no floor, no time
+  assert.strictEqual(s.status, "live", "a non-holder endEarly is a no-op");
+});
+
 check("createBattle refuses two of the same player", () => {
   assert.throws(() => createBattle(["a", "a"]));
 });

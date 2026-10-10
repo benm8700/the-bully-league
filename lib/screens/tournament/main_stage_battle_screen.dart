@@ -140,6 +140,8 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
         return MsEvent.yield;
       case 'interrupt':
         return MsEvent.interrupt;
+      case 'endEarly':
+        return MsEvent.endEarly;
       default:
         return null;
     }
@@ -315,9 +317,46 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen> {
   Widget _controls(MainStageBattleState b) {
     final iHoldFloor = b.floor == _myUid;
     final oppHoldsFloor = b.floor == _oppUid;
+    final oppOutOfTime = (b.remaining[_oppUid] ?? 0) == 0;
     final canInterrupt = oppHoldsFloor &&
         (b.steals[_myUid] ?? 0) > 0 &&
         (b.remaining[_myUid] ?? 0) > 0;
+
+    // Dead-air escape: you hold the floor, your opponent is spent, and you have
+    // nothing left to say. End it now rather than draining a banked clock in
+    // silence — nothing is forfeited, the battle would end when your clock ran
+    // out anyway. (Keep talking by simply not pressing it.)
+    if (iHoldFloor && oppOutOfTime) {
+      return Positioned(
+        left: 16,
+        right: 16,
+        bottom: 24,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "They're out of time — the stage is yours. Land one more, or "
+              'end it.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white60, fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => _intent(MsEvent.endEarly),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 54),
+                  backgroundColor: context.palette.reward,
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text("I'm done — end the battle"),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Positioned(
       left: 16,
       right: 16,

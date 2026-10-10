@@ -50,4 +50,16 @@ void main() {
     final earned = resolveEarnedIds({'tournamentWins': 2});
     expect(earned, contains('tournament_champion'));
   });
+
+  test('the Runner-Up award is server-only, not client-injectable', () {
+    final injected = resolveEarnedIds({
+      'badges': {
+        'earned': ['tournament_runner_up'],
+      },
+    });
+    expect(injected, isNot(contains('tournament_runner_up')));
+    // ...but a real runner-up count earns it.
+    final earned = resolveEarnedIds({'tournamentRunnerUps': 1});
+    expect(earned, contains('tournament_runner_up'));
+  });
 }

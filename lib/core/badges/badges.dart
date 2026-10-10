@@ -27,6 +27,7 @@ enum BadgeMetric {
   voteStreakDays,
   votesCast,
   tournamentWins,
+  tournamentRunnerUps,
   topFire,
   topClever,
   topBoring,
@@ -98,6 +99,7 @@ const Set<String> kEmojiAwardIds = {
 const Set<String> kServerAwardIds = {
   ...kEmojiAwardIds,
   'tournament_champion',
+  'tournament_runner_up',
 };
 
 /// The V1 badge catalogue, in a stable display order.
@@ -235,6 +237,21 @@ const List<BadgeDef> kBadges = [
     prestige: 100,
     emoji: '🏆',
   ),
+  // Runner-up - a PERMANENT award for reaching a tournament FINAL and losing it
+  // (the Main Stage weekly finals). Earned-and-kept off the server-set
+  // `tournamentRunnerUps` counter. Second place is a real achievement - you
+  // out-fought everyone but one - so it is a silver 🥈 medallion, below the
+  // gold Champion but clearly an honour, not a wall-of-shame mark.
+  BadgeDef(
+    id: 'tournament_runner_up',
+    title: 'Runner-Up',
+    earnedDesc: 'Reached a tournament final',
+    lockedHint: 'Reach a tournament final',
+    metric: BadgeMetric.tournamentRunnerUps,
+    threshold: 1,
+    prestige: 85,
+    emoji: '🥈',
+  ),
   // Emoji superlative awards - permanent "ever been #1 in the whole league for
   // this emoji". Earned-and-kept via the server-set emojiTopAwards flag. Two to
   // chase (🔥/🧠), two worn for self-aware comedy (🥱/💩).
@@ -305,6 +322,7 @@ class BadgeStats {
     required this.voteStreakDays,
     this.votesCast = 0,
     this.tournamentWins = 0,
+    this.tournamentRunnerUps = 0,
     this.topFire = false,
     this.topClever = false,
     this.topBoring = false,
@@ -317,6 +335,7 @@ class BadgeStats {
   final int voteStreakDays;
   final int votesCast;
   final int tournamentWins;
+  final int tournamentRunnerUps;
 
   /// The permanent "ever been #1 in this emoji" award flags, from the
   /// server-set `emojiTopAwards` map.
@@ -343,6 +362,7 @@ class BadgeStats {
       voteStreakDays: streakDays,
       votesCast: (u['votesCast'] as num?)?.toInt() ?? 0,
       tournamentWins: (u['tournamentWins'] as num?)?.toInt() ?? 0,
+      tournamentRunnerUps: (u['tournamentRunnerUps'] as num?)?.toInt() ?? 0,
       topFire: flag('fire'),
       topClever: flag('clever'),
       topBoring: flag('boring'),
@@ -357,6 +377,7 @@ class BadgeStats {
         BadgeMetric.voteStreakDays => voteStreakDays,
         BadgeMetric.votesCast => votesCast,
         BadgeMetric.tournamentWins => tournamentWins,
+        BadgeMetric.tournamentRunnerUps => tournamentRunnerUps,
         BadgeMetric.topFire => topFire ? 1 : 0,
         BadgeMetric.topClever => topClever ? 1 : 0,
         BadgeMetric.topBoring => topBoring ? 1 : 0,

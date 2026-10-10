@@ -152,6 +152,10 @@ exports.onTournamentCompleted = onDocumentUpdated(
           .catch((err) => console.error(`win record ${id}:`, err.message));
       await awardBeltForTournament(db, id, after)
           .catch((err) => console.error(`belt award ${id}:`, err.message));
+      // The Main Stage finale celebration (winner + runner-up popups and the
+      // runner-up badge). No-op for every non-mainstage format. Best-effort.
+      await require("./mainStageFinale").recordMainStageFinale(db, id, after)
+          .catch((err) => console.error(`finale record ${id}:`, err.message));
       // Prizes (points auto-award, non-cash recorded for fulfillment). Also
       // best-effort and independent - see prizes.js.
       await require("./prizes").awardPrizeForTournament(db, id, after)

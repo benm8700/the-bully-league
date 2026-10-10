@@ -51,7 +51,7 @@ service cloud.firestore {
           'takedowns', 'lastNotifiedRankTitle', 'lastSeenRankTitle',
           'dailyReward', 'followerCount', 'lastSeenFameMilestone',
           'emojiCounts', 'votesCast', 'emojiTopAwards', 'emojiScrub',
-          'tournamentWins',
+          'tournamentWins', 'tournamentRunnerUps', 'pendingTournamentFinale',
         ]);
 
       // Uses .get(field, default) rather than direct field access - a
@@ -185,6 +185,18 @@ service cloud.firestore {
         // it could hand itself the badge without ever winning.
         request.resource.data.get('tournamentWins', null) ==
           resource.data.get('tournamentWins', null) &&
+        // Lifetime tournament finals LOST, incremented only by the
+        // onTournamentCompleted trigger (Admin SDK) when a tournament's final
+        // crowns someone else. Drives the permanent "Runner-Up" award badge, so
+        // a client able to write it could hand itself the silver without ever
+        // reaching a final.
+        request.resource.data.get('tournamentRunnerUps', null) ==
+          resource.data.get('tournamentRunnerUps', null) &&
+        // The one-shot "you won / you came second" finale celebration, written
+        // by the same trigger and CLEARED by getPendingTournamentFinale once
+        // shown. Server-only so a client cannot summon a fake victory popup.
+        request.resource.data.get('pendingTournamentFinale', null) ==
+          resource.data.get('pendingTournamentFinale', null) &&
         // Per-player emoji ratings (🔥/🧠/🥱/💩), tallied only by castVote via
         // the Admin SDK as ballots come in. These are a player's public
         // identity - profile flair, badges, the Hottest board, their

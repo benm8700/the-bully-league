@@ -23,7 +23,7 @@ const int kMainStageTurnMs = 60 * 1000;
 const int kMainStageInterrupts = 2;
 const int kMainStageShotClockMs = 7 * 1000;
 
-enum MsEvent { open, startTalking, yield, interrupt, tick }
+enum MsEvent { open, startTalking, yield, interrupt, endEarly, tick }
 
 enum MsStatus { pending, live, ended }
 
@@ -208,6 +208,20 @@ class MainStageBattleState {
         if ((s.remaining[by] ?? 0) <= 0) return s; // no time to take the floor
         s.steals[by] = s.steals[by]! - 1;
         s._takeFloor(by, atMs);
+        return s;
+
+      case MsEvent.endEarly:
+        // "I'm done" - the floor-holder ends the battle instead of draining a
+        // banked clock in dead air. Only valid when the OPPONENT is already out
+        // of time (otherwise they still deserve their turn - use yield to pass
+        // the floor). This is the "let the last player end before his time is
+        // up" escape: nothing is conceded, since the holder's clock would drain
+        // to zero and end the battle anyway.
+        if (by == null || s.floor != by) return s;
+        if (s.remaining[s._other(by)]! > 0) return s;
+        s.status = MsStatus.ended;
+        s.endReason = 'done';
+        s.floor = null;
         return s;
 
       case MsEvent.tick:

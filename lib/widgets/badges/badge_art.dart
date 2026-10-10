@@ -35,8 +35,10 @@ class BadgeArt extends StatelessWidget {
         BadgeMetric.voteStreakDays => Icons.gavel,
         BadgeMetric.votesCast => Icons.balance,
         // Never reached for glyph-medallion badges (emoji awards + the 🏆
-        // champion render their glyph), but the switch must be exhaustive.
+        // champion / 🥈 runner-up render their glyph), but the switch must be
+        // exhaustive.
         BadgeMetric.tournamentWins ||
+        BadgeMetric.tournamentRunnerUps ||
         BadgeMetric.topFire ||
         BadgeMetric.topClever ||
         BadgeMetric.topBoring ||
@@ -73,30 +75,34 @@ class BadgeArt extends StatelessWidget {
     );
   }
 
-  /// A medallion with the award's glyph. Honours (🔥/🧠 and the 🏆 champion)
-  /// get the gold disc; negatives (🥱/💩) get a tarnished grey disc so a 💩
-  /// trophy never reads as a gold honour - matching the emoji-badge medals.
+  /// A medallion with the award's glyph, in one of three finishes:
+  ///  - GOLD for honours (🔥/🧠 and the 🏆 champion),
+  ///  - SILVER for the 🥈 runner-up (an honour, clearly below gold),
+  ///  - TARNISHED grey for the negatives (🥱/💩/🚩), so a 💩 trophy never reads
+  ///    as a gold honour - matching the emoji-badge medals.
   Widget _emojiMedallion() {
-    final positive =
-        def.emoji == '🔥' || def.emoji == '🧠' || def.emoji == '🏆';
-    final accent =
-        positive ? const Color(0xFFF4C838) : const Color(0xFF9198A3);
+    final gold = def.emoji == '🔥' || def.emoji == '🧠' || def.emoji == '🏆';
+    final silver = def.emoji == '🥈';
+    final accent = gold
+        ? const Color(0xFFF4C838)
+        : silver
+            ? const Color(0xFFC9D2DC)
+            : const Color(0xFF9198A3);
+    final disc = gold
+        ? const [Color(0xFF3A2F14), Color(0xFF1A1508)]
+        : silver
+            ? const [Color(0xFF2E333B), Color(0xFF14171B)]
+            : const [Color(0xFF2A2C30), Color(0xFF131416)];
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: positive
-            ? const RadialGradient(
-                center: Alignment(-0.3, -0.4),
-                radius: 0.95,
-                colors: [Color(0xFF3A2F14), Color(0xFF1A1508)],
-              )
-            : const RadialGradient(
-                center: Alignment(-0.3, -0.4),
-                radius: 0.95,
-                colors: [Color(0xFF2A2C30), Color(0xFF131416)],
-              ),
+        gradient: RadialGradient(
+          center: const Alignment(-0.3, -0.4),
+          radius: 0.95,
+          colors: disc,
+        ),
         border: Border.all(color: accent.withValues(alpha: 0.85), width: 2),
         boxShadow: earned
             ? [BoxShadow(color: accent.withValues(alpha: 0.30), blurRadius: 10)]
