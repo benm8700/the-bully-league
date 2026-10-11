@@ -4498,6 +4498,27 @@ games) are tunable placeholders per the economy-advisor-review discipline.
   patterns; the on-phone APK predates it). The /admin UI ships with the website
   (developer pushes/deploys); its happy path is browser-unverified like the rest
   of /admin.
+  - **REVISED SAME DAY (2026-10-11) after a live run on the dashboard:** the
+    REST editorsChoice action was replaced by **two separate Cloud Functions,
+    `featureBattle` and `publishBattle`** (admin-only, called from the dashboard
+    client via Firebase callables), because publishing and featuring are
+    different-scope actions and deserve separate buttons (publish many clips for
+    the feed; feature a curated few; not every featured battle is published).
+    `publishBattle` reuses the real `publishHighlight` gate (objection window +
+    no-objection + a render must exist) - which the web route can't, since it
+    can't safely import firebase-admin/storage on Vercel. Featuring no longer
+    auto-publishes; the two stay in sync (publish/unpublish refreshes a featured
+    card's clipUrl, so either order is fine, no stale spotlight). The dashboard
+    gained: per-battle status chips (no reel yet / reel ready / published, plus
+    ⭐ featured), Publish/Unpublish + Feature/Remove button pairs, an inline ▶
+    clip **preview** (published clips only - public URL, no signing), short
+    #id + date/time so identical rematches are distinguishable, and `cache:
+    no-store` so an action visibly updates. Each moderation queue also gained a
+    **"Recently handled"** archive (ordered by review.at). All verified
+    end-to-end against the deployed callables (unpublish clears the featured
+    clip, publish re-attaches, unfeature removes, re-feature-while-published
+    attaches) and device-verified on the Moto (featured ▶ card plays the real
+    watermarked clip). There is finally a UI to publish a clip (was script-only).
 - **MAIN STAGE RULES EXPLAINER - BUILT (2026-10-11).** The chess-clock format is
   finals-ONLY (the everyday `RulesScreen`/tutorial correctly cover the normal
   3x15s alternating format), so `MainStageRulesScreen`
