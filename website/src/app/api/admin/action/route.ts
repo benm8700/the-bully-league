@@ -141,72 +141,10 @@ export async function POST(request: Request) {
         return Response.json({ ok: true, id, status });
       }
 
-      case "editorsChoice": {
-        // Feature a battle in the Home spotlight (the founder's Editor's
-        // Choice). Denormalises the display fields so the app reads one cheap
-        // `featured` listener; grants both performers the permanent Editor's
-        // Choice badge ONCE (the first time THIS match is featured - a
-        // remove+re-add can re-credit, which is harmless since the counter is
-        // invisible and the badge threshold is 1).
-        const matchId = String(body.matchId ?? "");
-        if (!matchId) return bad("matchId required");
-        const matchSnap = await db.collection("matches").doc(matchId).get();
-        if (!matchSnap.exists) return bad("no such match");
-        const m = matchSnap.data() ?? {};
-        const p1 = String(m.player1Id ?? "");
-        const p2 = String(m.player2Id ?? "");
-        if (!p1 || !p2) return bad("match has no players");
-        const users = db.collection("users");
-        const [u1, u2] = await Promise.all([users.doc(p1).get(), users.doc(p2).get()]);
-        const nameOf = (s: FirebaseFirestore.DocumentSnapshot) =>
-          String(s.data()?.username ?? "Unknown");
-        const hl = (m.highlight ?? {}) as Record<string, unknown>;
-        const pub = (hl.publicUrls ?? {}) as Record<string, string>;
-        const clipUrl =
-          hl.published === true ? (pub.vertical ?? pub.landscape ?? null) : null;
-        const featuredRef = db.collection("featured").doc(matchId);
-        await db.runTransaction(async (tx) => {
-          const f = await tx.get(featuredRef);
-          const firstTime = !f.exists;
-          tx.set(
-            featuredRef,
-            {
-              matchId,
-              player1Id: p1,
-              player2Id: p2,
-              player1Name: nameOf(u1),
-              player2Name: nameOf(u2),
-              clipUrl: clipUrl ?? null,
-              pickedBy: admin.uid,
-              pickedAt: FieldValue.serverTimestamp(),
-            },
-            { merge: true },
-          );
-          if (firstTime) {
-            if (u1.exists) {
-              tx.update(users.doc(p1), {
-                editorsChoicePicks: FieldValue.increment(1),
-              });
-            }
-            if (u2.exists) {
-              tx.update(users.doc(p2), {
-                editorsChoicePicks: FieldValue.increment(1),
-              });
-            }
-          }
-        });
-        return Response.json({ ok: true, matchId, clip: clipUrl != null });
-      }
-
-      case "removeEditorsChoice": {
-        // Pull a battle from the spotlight. The performers KEEP the badge -
-        // being picked happened, so it is earned-and-kept; only the counter is
-        // left alone (never decremented).
-        const matchId = String(body.matchId ?? "");
-        if (!matchId) return bad("matchId required");
-        await db.collection("featured").doc(matchId).delete();
-        return Response.json({ ok: true, matchId });
-      }
+      // Editor's Choice feature/publish moved to the featureBattle /
+      // publishBattle Cloud Functions (called from the dashboard client) so
+      // featuring can reuse the real publish gate - which the web route can't,
+      // since it can't safely import firebase-admin/storage on Vercel.
 
       default:
         return bad(`unknown action: ${type}`);

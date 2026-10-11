@@ -1,6 +1,8 @@
 "use client";
 
 import { useAuth } from "@/lib/AuthProvider";
+import { functions } from "@/lib/firebaseClient";
+import { httpsCallable } from "firebase/functions";
 import { useCallback, useEffect, useState } from "react";
 import type { User } from "firebase/auth";
 import Link from "next/link";
@@ -35,6 +37,7 @@ type BattleItem = {
   player2Name: string;
   completedAtMs: number | null;
   featured: boolean;
+  rendered: boolean;
   hasClip: boolean;
   clipUrl: string | null;
 };
@@ -149,6 +152,24 @@ export default function AdminPage() {
     [user, loadMetrics],
   );
 
+  // Calls a Firebase callable (Editor's Choice feature/publish) as the signed-in
+  // admin - the callable enforces requireAdmin and reuses the real publish gate.
+  const callFn = useCallback(
+    async (name: string, data: Record<string, unknown>, label: string) => {
+      if (!user) return;
+      setNote(`${label}…`);
+      try {
+        const res = await httpsCallable(functions, name)(data);
+        const d = (res.data ?? {}) as Record<string, unknown>;
+        setNote(d.note ? `${label}: done — ${d.note}` : `${label}: done`);
+      } catch (e) {
+        setNote(`${label}: ${(e as Error).message}`);
+      }
+      await loadMetrics();
+    },
+    [user, loadMetrics],
+  );
+
   if (gate === "checking" || loading) {
     return <Shell><p className="text-zinc-400">Checking access…</p></Shell>;
   }
@@ -239,7 +260,7 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <EditorsChoice metrics={metrics} act={act} />
+          <EditorsChoice metrics={metrics} callFn={callFn} />
           <Prizes metrics={metrics} act={act} />
           <Queues metrics={metrics} act={act} />
           <UserSearch user={user!} act={act} />
@@ -292,7 +313,7 @@ function prizeAge(wonAtMs: number | null): string {
   return `won ${d.toLocaleDateString()} · ${ago}`;
 }
 
-function EditorsChoice({ metrics, act }: { metrics: Metrics; act: (p: Record<string, unknown>, l: string) => void }) {
+function EditorsChoice({ metrics, callFn }: { metrics: Metrics; callFn: (name: string, data: Record<string, unknown>, label: string) => void }) {
   const items = metrics.recentBattles ?? [];
   const featuredCount = items.filter((b) => b.featured).length;
   const [preview, setPreview] = useState<string | null>(null);
@@ -302,10 +323,11 @@ function EditorsChoice({ metrics, act }: { metrics: Metrics; act: (p: Record<str
         Editor&apos;s Choice <span className="text-zinc-500">({featuredCount} featured)</span>
       </h2>
       <p className="mb-2 text-xs text-zinc-600">
-        Feature a battle in the Home spotlight — both roasters earn the ⭐ badge.
-        Hit <span className="text-zinc-400">Preview</span> to watch the clip first.
-        A battle needs a published clip to be playable in the app; &ldquo;no clip
-        yet&rdquo; features as a plain spotlight.
+        Two separate actions. <span className="text-green-300">Publish</span> makes
+        a clip public/playable (allowed once the ~24h objection window has closed).{" "}
+        <span className="text-amber-300">Feature</span> spotlights the battle on
+        Home and earns both roasters the ⭐ badge. A featured battle plays its clip
+        only if it&apos;s also published — publish in either order, it stays in sync.
       </p>
       {items.length === 0 ? (
         <p className="text-xs text-zinc-600">No recent battles.</p>
@@ -317,15 +339,17 @@ function EditorsChoice({ metrics, act }: { metrics: Metrics; act: (p: Record<str
                 <span className="font-semibold text-white">{b.player1Name} vs {b.player2Name}</span>
                 <span className="font-mono text-xs text-zinc-600">#{b.id.slice(-6)}</span>
                 {b.featured && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">⭐ featured</span>}
-                {b.clipUrl ? (
-                  <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">clip</span>
+                {b.hasClip ? (
+                  <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">published</span>
+                ) : b.rendered ? (
+                  <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-300">reel ready</span>
                 ) : (
-                  <span className="rounded bg-zinc-700/40 px-1.5 py-0.5 text-xs text-zinc-500">no clip yet</span>
+                  <span className="rounded bg-zinc-700/40 px-1.5 py-0.5 text-xs text-zinc-500">no reel yet</span>
                 )}
                 <span className="text-xs text-zinc-500">
                   {b.completedAtMs ? new Date(b.completedAtMs).toLocaleString() : ""}
                 </span>
-                <div className="ml-auto flex gap-2">
+                <div className="ml-auto flex flex-wrap gap-2">
                   {b.clipUrl && (
                     <button
                       onClick={() => setPreview(preview === b.id ? null : b.id)}
@@ -334,12 +358,21 @@ function EditorsChoice({ metrics, act }: { metrics: Metrics; act: (p: Record<str
                       {preview === b.id ? "Hide" : "▶ Preview"}
                     </button>
                   )}
+                  {b.hasClip ? (
+                    <button onClick={() => callFn("publishBattle", { matchId: b.id, published: false }, "Unpublished")} className="rounded border border-green-700/60 px-2 py-1 text-xs text-green-300 hover:bg-green-900/20">
+                      Unpublish
+                    </button>
+                  ) : b.rendered ? (
+                    <button onClick={() => callFn("publishBattle", { matchId: b.id, published: true }, "Published")} className="rounded bg-green-600/80 px-2 py-1 text-xs text-white hover:bg-green-600">
+                      Publish
+                    </button>
+                  ) : null}
                   {b.featured ? (
-                    <button onClick={() => act({ type: "removeEditorsChoice", matchId: b.id }, "Unfeatured")} className="rounded bg-zinc-700/80 px-2 py-1 text-xs text-white hover:bg-zinc-700">
+                    <button onClick={() => callFn("featureBattle", { matchId: b.id, feature: false }, "Unfeatured")} className="rounded bg-zinc-700/80 px-2 py-1 text-xs text-white hover:bg-zinc-700">
                       Remove
                     </button>
                   ) : (
-                    <button onClick={() => act({ type: "editorsChoice", matchId: b.id }, "Featured")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600">
+                    <button onClick={() => callFn("featureBattle", { matchId: b.id, feature: true }, "Featured")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600">
                       Feature
                     </button>
                   )}

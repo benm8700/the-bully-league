@@ -1121,6 +1121,33 @@ exports.publishHighlight = onCall(async (request) => {
   return publish ? publishHighlight(matchId) : unpublishHighlight(matchId);
 });
 
+/**
+ * Editor's Choice: add/remove a battle from the Home spotlight. Admin-only,
+ * called from the /admin dashboard. Does NOT publish - that is the separate
+ * featureBattle/publishBattle split. See functions/editorsChoice.js.
+ */
+exports.featureBattle = onCall(async (request) => {
+  await requireAdmin(request.auth);
+  const {featureBattle} = require("./editorsChoice");
+  const matchId = request.data?.matchId;
+  if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
+  const feature = request.data?.feature !== false;
+  return featureBattle(matchId, request.auth.uid, feature);
+});
+
+/**
+ * Publish (or un-publish) a battle's clip through the real publish gate, and
+ * keep any featured card in sync. Admin-only, called from the /admin dashboard.
+ */
+exports.publishBattle = onCall(async (request) => {
+  await requireAdmin(request.auth);
+  const {publishBattle} = require("./editorsChoice");
+  const matchId = request.data?.matchId;
+  if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
+  const published = request.data?.published !== false;
+  return publishBattle(matchId, published);
+});
+
 exports.deleteMyAccount = onCall({timeoutSeconds: 300}, async (request) => {
   const {deleteAccount} = require("./accountDeletion");
   return deleteAccount(request.auth);

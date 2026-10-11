@@ -106,7 +106,8 @@ type BattleItem = {
   player2Name: string;
   completedAtMs: number | null;
   featured: boolean;
-  hasClip: boolean;
+  rendered: boolean; // an edit reel exists in Storage -> the clip CAN be published
+  hasClip: boolean; // published -> playable
   // A public, playable URL when the highlight is published (so the dashboard can
   // preview it before featuring). Null when unpublished - previewing an
   // unpublished render needs a signed URL, deliberately not done here to keep
@@ -133,6 +134,7 @@ async function recentBattles(): Promise<BattleItem[]> {
       const x = d.data();
       const h = (x.highlight as Record<string, unknown> | undefined) ?? {};
       const pub = (h.publicUrls as Record<string, string> | undefined) ?? {};
+      const rends = (h.renditions as Record<string, unknown> | undefined) ?? {};
       const published = h.published === true;
       return {
         id: d.id,
@@ -142,6 +144,7 @@ async function recentBattles(): Promise<BattleItem[]> {
         mode: x.mode,
         completedAtMs: tsToMs(x.completedAt),
         published,
+        rendered: Object.keys(rends).length > 0,
         clipUrl: published ? (pub.landscape ?? pub.vertical ?? null) : null,
       };
     })
@@ -164,6 +167,7 @@ async function recentBattles(): Promise<BattleItem[]> {
     player2Name: nameByUid.get(r.p2) ?? "Unknown",
     completedAtMs: r.completedAtMs,
     featured: featuredIds.has(r.id),
+    rendered: r.rendered,
     hasClip: r.published,
     clipUrl: r.clipUrl,
   }));
