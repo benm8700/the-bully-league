@@ -2,11 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/abilities_service.dart';
 
-/// Icon per ability id (new abilities fall back to a bolt).
-IconData _iconFor(String id) {
+/// Icon per ability id (placeholder Material glyphs; illustrated art later).
+/// Shared by the loadout panel and the deploy bar so an ability looks the same
+/// wherever it appears.
+IconData abilityIcon(String id) {
   switch (id) {
     case 'interrupt':
       return Icons.front_hand;
+    case 'tomato':
+      return Icons.sports_baseball;
+    case 'extend':
+      return Icons.more_time;
+    case 'goFirst':
+      return Icons.flag;
     default:
       return Icons.flash_on;
   }
@@ -78,8 +86,11 @@ class _AbilityDeployBarState extends State<AbilityDeployBar> {
   Widget build(BuildContext context) {
     final l = _loadout;
     if (l == null || !l.enabled) return const SizedBox.shrink();
-    final deployable =
-        l.abilities.where((a) => (_remaining[a.id] ?? 0) > 0).toList();
+    // Only bar-deployed abilities (tomato/extend) belong here. Interrupt is
+    // deployed from the chess-clock controls; go-first is decided pre-match.
+    final deployable = l.abilities
+        .where((a) => a.deploy == 'bar' && (_remaining[a.id] ?? 0) > 0)
+        .toList();
     if (deployable.isEmpty) return const SizedBox.shrink();
 
     return Column(
@@ -124,7 +135,7 @@ class _DeployButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(_iconFor(ability.id), color: scheme.primary, size: 20),
+              Icon(abilityIcon(ability.id), color: scheme.primary, size: 20),
               const SizedBox(width: 8),
               Text(
                 ability.name,

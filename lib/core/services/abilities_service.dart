@@ -86,6 +86,7 @@ class AbilityOption {
     required this.id,
     required this.name,
     required this.description,
+    required this.deploy,
     required this.cost,
     required this.free,
     required this.bought,
@@ -97,6 +98,11 @@ class AbilityOption {
   final String id;
   final String name;
   final String description;
+
+  /// Where the ability is used: "controls" (the chess-clock Interrupt button),
+  /// "bar" (the mid-match tap-to-deploy bar), or "prematch" (decided at battle
+  /// start from the loadout, e.g. go-first). Drives which surface shows it.
+  final String deploy;
 
   /// Points per extra one beyond the free allowance.
   final int cost;
@@ -122,6 +128,7 @@ class AbilityOption {
         id: m['id']?.toString() ?? '',
         name: m['name']?.toString() ?? '',
         description: m['description']?.toString() ?? '',
+        deploy: m['deploy']?.toString() ?? 'bar',
         cost: _asInt(m['cost']),
         free: _asInt(m['free']),
         bought: _asInt(m['bought']),

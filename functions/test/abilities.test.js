@@ -1,6 +1,6 @@
 const assert = require("assert");
 const {
-  resolveAbilityConfig, purchasePlan, freeAllowance, DEFAULTS,
+  resolveAbilityConfig, purchasePlan, freeAllowance, DEFAULTS, ABILITY_CATALOG,
 } = require("../abilities");
 
 let passed = 0;
@@ -17,6 +17,20 @@ check("config falls back to defaults when empty", () => {
   assert.strictEqual(c.interrupt.cost, DEFAULTS.interrupt.cost);
   assert.strictEqual(c.interrupt.subFree, DEFAULTS.interrupt.subFree);
   assert.strictEqual(c.interrupt.maxPerMatch, DEFAULTS.interrupt.maxPerMatch);
+});
+
+check("every catalog ability resolves config + has a deploy surface", () => {
+  const c = resolveAbilityConfig(undefined);
+  const ids = Object.keys(ABILITY_CATALOG);
+  assert.deepStrictEqual(ids.sort(),
+      ["extend", "goFirst", "interrupt", "tomato"].sort());
+  for (const id of ids) {
+    assert.ok(c[id], `${id} resolves`);
+    assert.strictEqual(typeof c[id].cost, "number");
+    assert.ok(["controls", "bar", "prematch"].includes(ABILITY_CATALOG[id].deploy),
+        `${id} has a valid deploy surface`);
+  }
+  assert.strictEqual(c.goFirst.maxPerMatch, 1, "go-first is one-per-match");
 });
 
 check("config overrides are applied and bounds-checked", () => {

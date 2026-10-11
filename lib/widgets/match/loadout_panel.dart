@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/abilities_service.dart';
+import 'ability_deploy_bar.dart' show abilityIcon;
 
 /// The pre-match LOADOUT (CLAUDE.md's abilities/power-ups, 2026-10-11).
 ///
@@ -131,6 +132,8 @@ class _AbilityRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          Icon(abilityIcon(ability.id), size: 22, color: scheme.primary),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

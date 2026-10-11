@@ -27,22 +27,49 @@ const {isSubscriber, isInTrial, readMonetizationConfig} = require("./entitlement
  * own (the opponent's is a surprise).
  */
 
-// V1 ships Interrupt. Add tomato / extra-time / interrupt-block / ... as new
-// catalog + config entries; the economy below needs no change.
+// The catalog. `deploy` says WHERE the ability is used, so the client knows
+// which surface shows it: "controls" = the chess-clock Interrupt button;
+// "bar" = the mid-match tap-to-deploy bar (tomato/extend); "prematch" = decided
+// at battle start from the loadout (go-first), never tapped mid-match. Adding a
+// new entry here (plus a DEFAULTS row) wires it through the whole economy -
+// resolveAbilityConfig / boughtOf / getLoadout all iterate the catalog.
 const ABILITY_CATALOG = {
   interrupt: {
     id: "interrupt",
     name: "Interrupt",
     description:
-      "Cut into your opponent's turn and steal the floor to throw them off.",
+      "Cut into your opponent while they hold the floor and steal it.",
+    deploy: "controls",
+  },
+  tomato: {
+    id: "tomato",
+    name: "Tomato",
+    description: "Splat a tomato across your opponent's screen to rattle them.",
+    deploy: "bar",
+  },
+  extend: {
+    id: "extend",
+    name: "+5 Seconds",
+    description:
+      "Add 5 seconds to your clock - even to buy time against an interrupt.",
+    deploy: "bar",
+  },
+  goFirst: {
+    id: "goFirst",
+    name: "Go First",
+    description: "Take the floor first. If you both bring it, it's a coin flip.",
+    deploy: "prematch",
   },
 };
 
 // Per-ability economy defaults, overridable per field from config/abilities.
-// PLACEHOLDERS (advisor review): interrupt is deliberately expensive so a shot
-// at the prize nudges people toward subscribing.
+// PLACEHOLDERS (advisor review): interrupt is the priciest (biggest edge);
+// go-first is capped at one (you either lead or you don't).
 const DEFAULTS = {
   interrupt: {cost: 500, subFree: 1, maxPerMatch: 3, enabled: true},
+  tomato: {cost: 150, subFree: 2, maxPerMatch: 5, enabled: true},
+  extend: {cost: 250, subFree: 1, maxPerMatch: 3, enabled: true},
+  goFirst: {cost: 300, subFree: 1, maxPerMatch: 1, enabled: true},
 };
 const ABILITY_FALLBACK = {cost: 500, subFree: 0, maxPerMatch: 3, enabled: true};
 
@@ -152,7 +179,7 @@ async function getLoadout(auth, data) {
         const free = freeAllowance(user, nowMs, c, mon.trialDays);
         const b = bought[a.id];
         return {
-          id: a.id, name: a.name, description: a.description,
+          id: a.id, name: a.name, description: a.description, deploy: a.deploy,
           cost: c.cost, free, bought: b, total: free + b, max: c.maxPerMatch,
           canBuy: free + b < c.maxPerMatch && balance >= c.cost,
         };
