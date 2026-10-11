@@ -75,9 +75,27 @@ async function publishOnlineCount() {
 
   const counts = countQueue(queuesByMode, Date.now());
   const committed = await countCommitments();
-  await getFirestore().collection("stats").doc("presence").set({
+
+  // Heartbeat + uptime for the admin dashboard's ONLINE/OFFLINE status. This
+  // job runs every minute, so a FRESH heartbeatMs means the backend's
+  // scheduled jobs are alive; a stale one means the scheduler (or Firestore,
+  // or the functions runtime) has stopped - i.e. the backend is down.
+  // upSinceMs tracks continuous uptime: if the previous beat was recent the
+  // service has been up the whole time; a large gap means it had gone down and
+  // just recovered, so uptime restarts now.
+  const fdb = getFirestore();
+  const now = Date.now();
+  const prev = (await fdb.collection("stats").doc("presence").get()).data() || {};
+  const priorBeat = Number(prev.heartbeatMs) || 0;
+  const UPTIME_GAP_MS = 3 * 60 * 1000; // >3 missed ticks = it had gone down
+  const continuous = priorBeat > 0 && now - priorBeat <= UPTIME_GAP_MS;
+  const upSinceMs = continuous ? (Number(prev.upSinceMs) || now) : now;
+
+  await fdb.collection("stats").doc("presence").set({
     ...counts,
     ...committed,
+    heartbeatMs: now,
+    upSinceMs,
     updatedAt: FieldValue.serverTimestamp(),
   });
   return {...counts, ...committed};

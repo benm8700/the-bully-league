@@ -119,22 +119,31 @@ async function previewClip(matchId) {
   const snap = await db.collection("matches").doc(matchId).get();
   if (!snap.exists) throw new HttpsError("not-found", "Match not found.");
   const hl = (snap.data() || {}).highlight || {};
-  if (hl.published === true) {
-    const pub = clipFromPublicUrls(hl.publicUrls);
-    if (pub) return {url: pub};
-  }
+  const published = hl.published === true;
+  const pub = hl.publicUrls || {};
   const rends = hl.renditions || {};
-  const path = (rends.landscape && rends.landscape.path) ||
-    (rends.vertical && rends.vertical.path);
-  if (!path) {
+  // Both renditions, so the dashboard can toggle landscape (side-by-side, the
+  // website cut) vs vertical (stacked, the in-app / TikTok cut) with no refetch.
+  async function urlFor(name) {
+    if (published && pub[name]) return pub[name];
+    const rend = rends[name];
+    if (rend && rend.path) {
+      const [url] = await getStorage().bucket().file(rend.path).getSignedUrl({
+        action: "read",
+        expires: Date.now() + PREVIEW_TTL_MS,
+      });
+      return url;
+    }
+    return null;
+  }
+  const [landscape, vertical] = await Promise.all([
+    urlFor("landscape"), urlFor("vertical"),
+  ]);
+  if (!landscape && !vertical) {
     throw new HttpsError("failed-precondition",
         "No rendered clip to preview yet.");
   }
-  const [url] = await getStorage().bucket().file(path).getSignedUrl({
-    action: "read",
-    expires: Date.now() + PREVIEW_TTL_MS,
-  });
-  return {url};
+  return {landscape, vertical};
 }
 
 module.exports = {featureBattle, publishBattle, previewClip};

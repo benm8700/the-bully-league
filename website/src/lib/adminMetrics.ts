@@ -340,6 +340,17 @@ export async function collectMetrics() {
       committedTonight:
         (presence as Record<string, unknown> | null)?.committedTonight ?? null,
     },
+    // Backend health from the once-a-minute presence heartbeat: a fresh beat
+    // means the scheduled jobs (and Firestore + the functions runtime) are
+    // alive; a stale one means the backend is down. upSinceMs = continuous
+    // uptime start.
+    health: (() => {
+      const p = presence as Record<string, unknown> | null;
+      const lastBeatMs = Number(p?.heartbeatMs) || null;
+      const upSinceMs = Number(p?.upSinceMs) || null;
+      const online = lastBeatMs != null && now - lastBeatMs < 4 * 60 * 1000;
+      return { online, lastBeatMs, upSinceMs };
+    })(),
     signups: { last24h: signupsToday, last7d: signups7d },
     battles: {
       last24h: battlesToday,

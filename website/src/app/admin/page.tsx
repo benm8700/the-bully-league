@@ -16,6 +16,7 @@ type Metrics = {
   generatedAt: number;
   users: { total: number | null; subscribers: number | null; banned: number | null; flagged: number | null };
   online: { total: number | null; committedTonight: number | null };
+  health: { online: boolean; lastBeatMs: number | null; upSinceMs: number | null };
   signups: { last24h: number | null; last7d: number | null };
   battles: { last24h: number | null; last7d: number | null; total: number | null; publishedClips: number | null };
   votes: { last24h: number | null };
@@ -116,6 +117,7 @@ export default function AdminPage() {
   // `busy` is the reactive mirror used to grey out the buttons.
   const inFlight = useRef(false);
   const [busy, setBusy] = useState(false);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   const loadMetrics = useCallback(async () => {
     if (!user) return;
@@ -141,6 +143,18 @@ export default function AdminPage() {
       }
     })();
   }, [user, loading, loadMetrics]);
+
+  // Keep the status bar live: tick a clock every second (for the uptime
+  // duration) and refresh metrics every 60s (so ONLINE/OFFLINE stays current).
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => {
+    if (gate !== "admin") return;
+    const t = setInterval(() => loadMetrics(), 60000);
+    return () => clearInterval(t);
+  }, [gate, loadMetrics]);
 
   const act = useCallback(
     async (payload: Record<string, unknown>, label: string) => {
@@ -223,6 +237,8 @@ export default function AdminPage() {
         </button>
       </div>
 
+      {metrics && <StatusBar health={metrics.health} now={nowTick} />}
+
       {note && (
         <div className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
           {note}
@@ -287,6 +303,39 @@ export default function AdminPage() {
   );
 }
 
+function fmtDuration(ms: number): string {
+  let s = Math.floor((Number.isFinite(ms) && ms > 0 ? ms : 0) / 1000);
+  const d = Math.floor(s / 86400); s -= d * 86400;
+  const h = Math.floor(s / 3600); s -= h * 3600;
+  const m = Math.floor(s / 60); s -= m * 60;
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+// The big, unmissable backend ONLINE/OFFLINE banner. Driven by the once-a-minute
+// presence heartbeat (see functions/presence.js): fresh beat = up, stale = down.
+function StatusBar({ health, now }: { health: Metrics["health"]; now: number }) {
+  const online = health.online;
+  const sinceMs = online ? health.upSinceMs : health.lastBeatMs;
+  const dur = sinceMs ? fmtDuration(now - sinceMs) : null;
+  return (
+    <div className={`mb-6 flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 ${online ? "border-green-500/60 bg-green-500/15" : "border-red-500/60 bg-red-500/15"}`}>
+      <span className={`inline-block h-3.5 w-3.5 rounded-full ${online ? "bg-green-400 animate-pulse" : "bg-red-500"}`} />
+      <span className={`text-lg font-extrabold tracking-wide ${online ? "text-green-300" : "text-red-300"}`}>
+        {online ? "APP ONLINE" : "APP OFFLINE"}
+      </span>
+      {dur && (
+        <span className="text-sm text-zinc-200">{online ? `up for ${dur}` : `down for ${dur}`}</span>
+      )}
+      {!online && (
+        <span className="ml-auto text-xs text-red-200/80">backend heartbeat is stale — scheduled jobs may be down</span>
+      )}
+    </div>
+  );
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-4 py-10">{children}</main>
@@ -333,18 +382,20 @@ function prizeAge(wonAtMs: number | null): string {
 function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (name: string, data: Record<string, unknown>, label: string) => void; busy: boolean }) {
   const items = metrics.recentBattles ?? [];
   const featuredCount = items.filter((b) => b.featured).length;
-  const [preview, setPreview] = useState<{ id: string; url: string } | null>(null);
+  const [preview, setPreview] = useState<{ id: string; urls: { landscape: string | null; vertical: string | null } } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<"landscape" | "vertical">("landscape");
   async function openPreview(b: BattleItem) {
     if (preview?.id === b.id) { setPreview(null); return; }
-    // Published clips have a direct public URL; unpublished reels get a
-    // short-lived signed URL from the previewClip callable, on demand.
-    if (b.clipUrl) { setPreview({ id: b.id, url: b.clipUrl }); return; }
+    // previewClip returns BOTH renditions (public URLs when published, signed
+    // URLs otherwise), so the landscape/vertical toggle switches with no refetch.
     setLoadingPreview(b.id);
     try {
       const res = await httpsCallable(functions, "previewClip")({ matchId: b.id });
-      const url = (res.data as { url?: string })?.url;
-      if (url) setPreview({ id: b.id, url });
+      const d = (res.data ?? {}) as { landscape?: string | null; vertical?: string | null };
+      if (d.landscape || d.vertical) {
+        setPreview({ id: b.id, urls: { landscape: d.landscape ?? null, vertical: d.vertical ?? null } });
+      }
     } catch {
       // preview unavailable - leave it closed
     }
@@ -413,12 +464,38 @@ function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (n
                 </div>
               </div>
               {preview?.id === b.id && (
-                <video
-                  src={preview.url}
-                  controls
-                  autoPlay
-                  className="mt-3 w-full max-w-md rounded border border-zinc-800 bg-black"
-                />
+                <div className="mt-3">
+                  <div className="mb-2 inline-flex overflow-hidden rounded border border-zinc-700 text-xs">
+                    <button
+                      disabled={!preview.urls.landscape}
+                      onClick={() => setPreviewMode("landscape")}
+                      className={`px-2.5 py-1 ${previewMode === "landscape" ? "bg-zinc-200 text-black" : "text-zinc-300 hover:bg-zinc-800"} disabled:opacity-40`}
+                    >
+                      Landscape <span className="text-[10px] opacity-70">(website)</span>
+                    </button>
+                    <button
+                      disabled={!preview.urls.vertical}
+                      onClick={() => setPreviewMode("vertical")}
+                      className={`px-2.5 py-1 ${previewMode === "vertical" ? "bg-zinc-200 text-black" : "text-zinc-300 hover:bg-zinc-800"} disabled:opacity-40`}
+                    >
+                      Vertical <span className="text-[10px] opacity-70">(in-app)</span>
+                    </button>
+                  </div>
+                  {(() => {
+                    const url = preview.urls[previewMode] ?? preview.urls.landscape ?? preview.urls.vertical;
+                    return url ? (
+                      <video
+                        key={url}
+                        src={url}
+                        controls
+                        autoPlay
+                        className={previewMode === "vertical"
+                          ? "block max-h-[70vh] rounded border border-zinc-800 bg-black"
+                          : "w-full max-w-md rounded border border-zinc-800 bg-black"}
+                      />
+                    ) : null;
+                  })()}
+                </div>
               )}
             </div>
           ))}
