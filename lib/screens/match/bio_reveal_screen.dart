@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../widgets/belt_flair.dart';
 import '../../widgets/looping_video.dart';
+import '../../widgets/match/loadout_panel.dart';
 import 'match_screen.dart';
 import 'matchmaking_screen.dart';
 
@@ -372,6 +373,10 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
                   ))
                 else
                   ..._buildProfileFields(profile),
+                // Pre-match loadout: bring power-ups to throw the opponent off.
+                // Self-hides when abilities are switched off in config (the
+                // default today) - safe to always mount.
+                LoadoutPanel(matchId: widget.pairing.matchId),
               ],
             ),
           ),

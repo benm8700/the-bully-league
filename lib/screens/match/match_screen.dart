@@ -15,6 +15,7 @@ import '../../core/services/capture_quality.dart';
 import '../../core/services/video_call_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../core/services/yuv_to_jpeg.dart';
+import '../../widgets/match/ability_deploy_bar.dart';
 import '../vote/my_battles_screen.dart';
 import '../vote/vote_queue_screen.dart';
 
@@ -774,7 +775,36 @@ class _MatchScreenState extends State<MatchScreen> {
         if (_phase == _Phase.warmup) _buildWarmupOverlay(),
         if (_phase == _Phase.countdown) _buildCountdownOverlay(),
         if (_phase == _Phase.turn) _buildTurnOverlay(),
+        // Tap-to-deploy power-ups. Bottom-LEFT so it clears the self-view PiP
+        // (bottom-right) and the centred "End My Turn" button. Shown only in
+        // live battle beats; self-hides when abilities are off or none were
+        // brought.
+        if (_phase == _Phase.turn ||
+            _phase == _Phase.countdown ||
+            _phase == _Phase.warmup)
+          Positioned(
+            left: 16,
+            bottom: 16 + MediaQuery.of(context).padding.bottom,
+            child: AbilityDeployBar(
+              matchId: widget.pairing.matchId,
+              onDeploy: _onDeployAbility,
+            ),
+          ),
       ],
+    );
+  }
+
+  /// A power-up was deployed. For now this just confirms the tap - the actual
+  /// in-match EFFECT (interrupt = steal the opponent's turn) is format-specific
+  /// and held for the round-times decision, then wired in here (CLAUDE.md's
+  /// abilities build, step 3).
+  void _onDeployAbility(String abilityId) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(milliseconds: 1200),
+        content: Text('Interrupt armed'),
+      ),
     );
   }
 
