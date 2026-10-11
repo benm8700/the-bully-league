@@ -20,7 +20,7 @@ const {pacificNow, pacificWallClockToUtcMs} = require("./eventWindow");
 const DEFAULT_MIN_GAMES = 5;
 
 // Modes that do NOT move the competitive ladder, so they never count toward
-// qualifying. Everything else - ranked, tournament, climb, swiss, elite - is
+// qualifying. Everything else - ranked, tournament, climb, swiss - is
 // real ladder play and DOES count, which is how a strong Main Stage run feeds
 // next week's qualifying per the decision record. A denylist (not an
 // allowlist) so a future ladder-moving mode is included by default rather than
