@@ -1,5 +1,8 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getStorage} = require("firebase-admin/storage");
 const {HttpsError} = require("firebase-functions/v2/https");
+
+const PREVIEW_TTL_MS = 6 * 60 * 60 * 1000; // 6h signed-url lifetime
 
 /**
  * Editor's Choice - the founder's two SEPARATE admin actions on a battle:
@@ -105,4 +108,33 @@ async function publishBattle(matchId, published) {
   return result;
 }
 
-module.exports = {featureBattle, publishBattle};
+/**
+ * A short-lived URL so the dashboard can PREVIEW a clip before publishing it -
+ * published or not. A published clip already has a permanent public URL; an
+ * unpublished render is signed on demand (same approach as the in-app feed's
+ * clipUrl). Admin-only, so serving an unreviewed render here is fine.
+ */
+async function previewClip(matchId) {
+  const db = getFirestore();
+  const snap = await db.collection("matches").doc(matchId).get();
+  if (!snap.exists) throw new HttpsError("not-found", "Match not found.");
+  const hl = (snap.data() || {}).highlight || {};
+  if (hl.published === true) {
+    const pub = clipFromPublicUrls(hl.publicUrls);
+    if (pub) return {url: pub};
+  }
+  const rends = hl.renditions || {};
+  const path = (rends.landscape && rends.landscape.path) ||
+    (rends.vertical && rends.vertical.path);
+  if (!path) {
+    throw new HttpsError("failed-precondition",
+        "No rendered clip to preview yet.");
+  }
+  const [url] = await getStorage().bucket().file(path).getSignedUrl({
+    action: "read",
+    expires: Date.now() + PREVIEW_TTL_MS,
+  });
+  return {url};
+}
+
+module.exports = {featureBattle, publishBattle, previewClip};

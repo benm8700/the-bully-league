@@ -1148,6 +1148,16 @@ exports.publishBattle = onCall(async (request) => {
   return publishBattle(matchId, published);
 });
 
+/** A signed preview URL for a battle's clip (published or not) - lets the admin
+ * watch a reel before deciding to publish/feature it. Admin-only. */
+exports.previewClip = onCall(async (request) => {
+  await requireAdmin(request.auth);
+  const {previewClip} = require("./editorsChoice");
+  const matchId = request.data?.matchId;
+  if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
+  return previewClip(matchId);
+});
+
 exports.deleteMyAccount = onCall({timeoutSeconds: 300}, async (request) => {
   const {deleteAccount} = require("./accountDeletion");
   return deleteAccount(request.auth);

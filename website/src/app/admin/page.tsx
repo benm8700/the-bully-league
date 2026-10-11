@@ -113,7 +113,9 @@ export default function AdminPage() {
   const [note, setNote] = useState<string>("");
   // Guards against an action firing again while one is in flight (double-clicks
   // when the result isn't instantly visible) - which could double-post/grant.
+  // `busy` is the reactive mirror used to grey out the buttons.
   const inFlight = useRef(false);
+  const [busy, setBusy] = useState(false);
 
   const loadMetrics = useCallback(async () => {
     if (!user) return;
@@ -144,6 +146,7 @@ export default function AdminPage() {
     async (payload: Record<string, unknown>, label: string) => {
       if (!user || inFlight.current) return;
       inFlight.current = true;
+      setBusy(true);
       setNote(`${label}…`);
       try {
         const res = await authed(user, "/api/admin/action", {
@@ -155,6 +158,7 @@ export default function AdminPage() {
         await loadMetrics();
       } finally {
         inFlight.current = false;
+        setBusy(false);
       }
     },
     [user, loadMetrics],
@@ -166,6 +170,7 @@ export default function AdminPage() {
     async (name: string, data: Record<string, unknown>, label: string) => {
       if (!user || inFlight.current) return;
       inFlight.current = true;
+      setBusy(true);
       setNote(`${label}…`);
       try {
         const res = await httpsCallable(functions, name)(data);
@@ -176,6 +181,7 @@ export default function AdminPage() {
       } finally {
         await loadMetrics();
         inFlight.current = false;
+        setBusy(false);
       }
     },
     [user, loadMetrics],
@@ -261,19 +267,19 @@ export default function AdminPage() {
               <Toggle
                 label="Tournament system"
                 on={metrics.config.tournamentEnabled}
-                onClick={() => act({ type: "setConfigFlag", doc: "tournament", enabled: !metrics.config.tournamentEnabled }, "Tournament flag")}
+                onClick={() => { const on = !metrics.config.tournamentEnabled; if (confirm(`Turn the tournament system ${on ? "ON" : "OFF"} for all users?`)) act({ type: "setConfigFlag", doc: "tournament", enabled: on }, "Tournament flag"); }}
               />
               <Toggle
                 label="Monetization"
                 on={metrics.config.monetizationEnabled}
-                onClick={() => act({ type: "setConfigFlag", doc: "monetization", enabled: !metrics.config.monetizationEnabled }, "Monetization flag")}
+                onClick={() => { const on = !metrics.config.monetizationEnabled; if (confirm(`Turn monetization ${on ? "ON" : "OFF"} for all users?`)) act({ type: "setConfigFlag", doc: "monetization", enabled: on }, "Monetization flag"); }}
               />
             </div>
           </div>
 
-          <EditorsChoice metrics={metrics} callFn={callFn} />
+          <EditorsChoice metrics={metrics} callFn={callFn} busy={busy} />
           <Prizes metrics={metrics} act={act} />
-          <Queues metrics={metrics} act={act} />
+          <Queues metrics={metrics} act={act} busy={busy} />
           <UserSearch user={user!} act={act} />
         </>
       )}
@@ -324,10 +330,26 @@ function prizeAge(wonAtMs: number | null): string {
   return `won ${d.toLocaleDateString()} · ${ago}`;
 }
 
-function EditorsChoice({ metrics, callFn }: { metrics: Metrics; callFn: (name: string, data: Record<string, unknown>, label: string) => void }) {
+function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (name: string, data: Record<string, unknown>, label: string) => void; busy: boolean }) {
   const items = metrics.recentBattles ?? [];
   const featuredCount = items.filter((b) => b.featured).length;
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ id: string; url: string } | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState<string | null>(null);
+  async function openPreview(b: BattleItem) {
+    if (preview?.id === b.id) { setPreview(null); return; }
+    // Published clips have a direct public URL; unpublished reels get a
+    // short-lived signed URL from the previewClip callable, on demand.
+    if (b.clipUrl) { setPreview({ id: b.id, url: b.clipUrl }); return; }
+    setLoadingPreview(b.id);
+    try {
+      const res = await httpsCallable(functions, "previewClip")({ matchId: b.id });
+      const url = (res.data as { url?: string })?.url;
+      if (url) setPreview({ id: b.id, url });
+    } catch {
+      // preview unavailable - leave it closed
+    }
+    setLoadingPreview(null);
+  }
   return (
     <div className="mb-8">
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
@@ -361,37 +383,38 @@ function EditorsChoice({ metrics, callFn }: { metrics: Metrics; callFn: (name: s
                   {b.completedAtMs ? new Date(b.completedAtMs).toLocaleString() : ""}
                 </span>
                 <div className="ml-auto flex flex-wrap gap-2">
-                  {b.clipUrl && (
+                  {(b.rendered || b.clipUrl) && (
                     <button
-                      onClick={() => setPreview(preview === b.id ? null : b.id)}
-                      className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800"
+                      onClick={() => openPreview(b)}
+                      disabled={loadingPreview === b.id}
+                      className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
                     >
-                      {preview === b.id ? "Hide" : "▶ Preview"}
+                      {loadingPreview === b.id ? "…" : preview?.id === b.id ? "Hide" : "▶ Preview"}
                     </button>
                   )}
                   {b.hasClip ? (
-                    <button onClick={() => callFn("publishBattle", { matchId: b.id, published: false }, "Unpublished")} className="rounded border border-green-700/60 px-2 py-1 text-xs text-green-300 hover:bg-green-900/20">
+                    <button disabled={busy} onClick={() => { if (confirm("Unpublish this clip? It stops playing everywhere it's public (the website feed, any shared link) and both players are notified it came down.")) callFn("publishBattle", { matchId: b.id, published: false }, "Unpublished"); }} className="rounded border border-green-700/60 px-2 py-1 text-xs text-green-300 hover:bg-green-900/20 disabled:opacity-50">
                       Unpublish
                     </button>
                   ) : b.rendered ? (
-                    <button onClick={() => callFn("publishBattle", { matchId: b.id, published: true }, "Published")} className="rounded bg-green-600/80 px-2 py-1 text-xs text-white hover:bg-green-600">
+                    <button disabled={busy} onClick={() => callFn("publishBattle", { matchId: b.id, published: true }, "Published")} className="rounded bg-green-600/80 px-2 py-1 text-xs text-white hover:bg-green-600 disabled:opacity-50">
                       Publish
                     </button>
                   ) : null}
                   {b.featured ? (
-                    <button onClick={() => callFn("featureBattle", { matchId: b.id, feature: false }, "Unfeatured")} className="rounded bg-zinc-700/80 px-2 py-1 text-xs text-white hover:bg-zinc-700">
+                    <button disabled={busy} onClick={() => callFn("featureBattle", { matchId: b.id, feature: false }, "Unfeatured")} className="rounded bg-zinc-700/80 px-2 py-1 text-xs text-white hover:bg-zinc-700 disabled:opacity-50">
                       Remove
                     </button>
                   ) : (
-                    <button onClick={() => callFn("featureBattle", { matchId: b.id, feature: true }, "Featured")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600">
+                    <button disabled={busy} onClick={() => callFn("featureBattle", { matchId: b.id, feature: true }, "Featured")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600 disabled:opacity-50">
                       Feature
                     </button>
                   )}
                 </div>
               </div>
-              {preview === b.id && b.clipUrl && (
+              {preview?.id === b.id && (
                 <video
-                  src={b.clipUrl}
+                  src={preview.url}
                   controls
                   autoPlay
                   className="mt-3 w-full max-w-md rounded border border-zinc-800 bg-black"
@@ -469,7 +492,7 @@ function Diag({ d }: { d: Record<string, unknown> }) {
   );
 }
 
-function Queues({ metrics, act }: { metrics: Metrics; act: (p: Record<string, unknown>, l: string) => void }) {
+function Queues({ metrics, act, busy }: { metrics: Metrics; act: (p: Record<string, unknown>, l: string) => void; busy: boolean }) {
   const blocks: { title: string; items: QueueItem[]; type: string; handled: HandledItem[] }[] = [
     { title: "Reports", items: metrics.queues.reports, type: "reviewReport", handled: metrics.handled.reports },
     { title: "Support", items: metrics.queues.support, type: "resolveSupport", handled: metrics.handled.support },
@@ -491,8 +514,8 @@ function Queues({ metrics, act }: { metrics: Metrics; act: (p: Record<string, un
                   {it.diagnostics && <Diag d={it.diagnostics} />}
                   {it.createdAt && <div className="mt-1 text-[10px] text-zinc-600">{new Date(it.createdAt).toLocaleString()}</div>}
                   <div className="mt-2 flex gap-2">
-                    <button onClick={() => act({ type: b.type, id: it.id, status: "reviewed" }, `${b.title} reviewed`)} className="rounded bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700">Reviewed</button>
-                    <button onClick={() => act({ type: b.type, id: it.id, status: "actioned" }, `${b.title} actioned`)} className="rounded bg-amber-600/80 px-2 py-1 text-white hover:bg-amber-600">Actioned</button>
+                    <button disabled={busy} onClick={() => act({ type: b.type, id: it.id, status: "reviewed" }, `${b.title} reviewed`)} className="rounded bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50">Reviewed</button>
+                    <button disabled={busy} onClick={() => act({ type: b.type, id: it.id, status: "actioned" }, `${b.title} actioned`)} className="rounded bg-amber-600/80 px-2 py-1 text-white hover:bg-amber-600 disabled:opacity-50">Actioned</button>
                   </div>
                 </li>
               ))}
@@ -565,7 +588,7 @@ function UserSearch({ user, act }: { user: User; act: (p: Record<string, unknown
               {u.accountStatus === "banned" ? (
                 <Btn onClick={() => act({ type: "setAccountStatus", uid: u.uid, status: "active" }, "Unban")}>Unban</Btn>
               ) : (
-                <Btn danger onClick={() => act({ type: "setAccountStatus", uid: u.uid, status: "banned" }, "Ban")}>Ban</Btn>
+                <Btn danger onClick={() => { if (confirm(`Ban ${u.username ?? u.uid}? They'll be blocked from the app immediately.`)) act({ type: "setAccountStatus", uid: u.uid, status: "banned" }, "Ban"); }}>Ban</Btn>
               )}
               <Btn onClick={() => act({ type: "setAccountStatus", uid: u.uid, status: "flagged" }, "Flag")}>Flag</Btn>
               <Btn onClick={() => act({ type: "compAccess", uid: u.uid, days: 30 }, "Comp 30d")}>Comp 30d</Btn>
