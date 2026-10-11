@@ -999,6 +999,41 @@ Raised by the developer: what protects someone who is unhappy that their match f
     - **Verified by running the real sweep against real Firestore**: an open round is announced to both players and marked on the bracket, a second sweep says nothing, near the deadline only the absentee is warned, nobody is chased once both have checked in, and closed or decided rounds send nothing. **7 live checks plus 15 local tests.**
 
 ## Problems To Solve Later (Backlog — flagged during planning, not yet designed)
+- **SEAMLESS / AUTOMATIC POSTING OF CLIPS TO SOCIALS — NEW, flagged to build
+  later (2026-10-11, developer's explicit ask to track).** The developer wants a
+  seamless way to post — and eventually AUTO-post — published highlight clips to
+  socials (TikTok is the primary channel, with Instagram Reels + YouTube Shorts
+  cross-posted, per the Distribution decision). TODAY this does NOT exist:
+  `publishBattle` / the /admin Publish button only make a clip public on our OWN
+  surfaces (the website discovery feed, downloads, the Home Featured spotlight) —
+  getting a clip onto socials is still a manual, out-of-app step. It builds
+  directly on what's already here: the render pipeline produces the vertical 9:16
+  cut with burned-in captions + the "THE BULLY LEAGUE" watermark (exactly what
+  short-form socials want), and the /admin Publish action is the natural
+  trigger/approval point to hang this off.
+  - **NON-NEGOTIABLE CONSTRAINT, already decided: a HUMAN platform-policy review
+    gate must sit in front of any social post.** External platforms enforce
+    stricter rules than this app's free-speech policy, so a clip that's fine
+    in-app can get the marketing account restricted/struck/banned — which would
+    lose the primary distribution channel to a joke. So "automatic" means
+    **auto-post AFTER approval, never un-reviewed** (see Auto-Editing for
+    Highlights → "Platform-policy screening" + "Human review before public
+    posting"). The founder-led-commercial and comedian-promo guardrails
+    (consent + disclosure) also apply to anything posted as the app's own
+    marketing.
+  - **Likely approach (not chosen):** each platform's posting API — TikTok
+    Content Posting API, Instagram Graph API (Reels), YouTube Data API — each
+    needing its own app registration, OAuth to the marketing account, and (TikTok
+    especially) posting-API approval; or a third-party social scheduler as a
+    stopgap. Marketing-account tokens/secrets go in server config, never the
+    client (same pattern as every other secret).
+  - **Open / not designed:** fully-automatic vs one-click-post-after-review; a
+    posting queue + schedule (ties naturally to the "morning-after artifact"
+    recap idea — last night's top roast posted with the Sixes/Daily-Gauntlet
+    caption); per-platform caption/hashtag templating; tracking which clips were
+    posted where (so nothing double-posts); and which platforms to wire first
+    (TikTok first per Distribution). Capture for now; design when there's real
+    content worth posting and a marketing push is near.
 - **INTERRUPTS IN REGULAR ROAST-A-STRANGER / QUALIFIER MATCHES, GATED BY POINTS —
   NEW IDEA (2026-10-10, developer).** The Main Stage chess-clock "interrupt"
   mechanic (cut in on the person holding the floor; see the Tournament model
