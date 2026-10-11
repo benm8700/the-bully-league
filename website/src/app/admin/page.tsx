@@ -3,7 +3,7 @@
 import { useAuth } from "@/lib/AuthProvider";
 import { functions } from "@/lib/firebaseClient";
 import { httpsCallable } from "firebase/functions";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { User } from "firebase/auth";
 import Link from "next/link";
 
@@ -111,6 +111,9 @@ export default function AdminPage() {
   );
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [note, setNote] = useState<string>("");
+  // Guards against an action firing again while one is in flight (double-clicks
+  // when the result isn't instantly visible) - which could double-post/grant.
+  const inFlight = useRef(false);
 
   const loadMetrics = useCallback(async () => {
     if (!user) return;
@@ -139,15 +142,20 @@ export default function AdminPage() {
 
   const act = useCallback(
     async (payload: Record<string, unknown>, label: string) => {
-      if (!user) return;
+      if (!user || inFlight.current) return;
+      inFlight.current = true;
       setNote(`${label}…`);
-      const res = await authed(user, "/api/admin/action", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json().catch(() => ({}));
-      setNote(res.ok ? `${label}: done` : `${label}: ${data.error ?? res.status}`);
-      await loadMetrics();
+      try {
+        const res = await authed(user, "/api/admin/action", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        setNote(res.ok ? `${label}: done` : `${label}: ${data.error ?? res.status}`);
+        await loadMetrics();
+      } finally {
+        inFlight.current = false;
+      }
     },
     [user, loadMetrics],
   );
@@ -156,7 +164,8 @@ export default function AdminPage() {
   // admin - the callable enforces requireAdmin and reuses the real publish gate.
   const callFn = useCallback(
     async (name: string, data: Record<string, unknown>, label: string) => {
-      if (!user) return;
+      if (!user || inFlight.current) return;
+      inFlight.current = true;
       setNote(`${label}…`);
       try {
         const res = await httpsCallable(functions, name)(data);
@@ -164,8 +173,10 @@ export default function AdminPage() {
         setNote(d.note ? `${label}: done — ${d.note}` : `${label}: done`);
       } catch (e) {
         setNote(`${label}: ${(e as Error).message}`);
+      } finally {
+        await loadMetrics();
+        inFlight.current = false;
       }
-      await loadMetrics();
     },
     [user, loadMetrics],
   );
@@ -178,7 +189,7 @@ export default function AdminPage() {
       <Shell>
         <p className="text-zinc-300">
           Sign in as an admin to view the command center.{" "}
-          <Link href="/login" className="text-amber-400 underline">Sign in</Link>
+          <Link href="/login?next=/admin" className="text-amber-400 underline">Sign in</Link>
         </p>
       </Shell>
     );

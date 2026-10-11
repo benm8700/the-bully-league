@@ -23,7 +23,10 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push("/");
+      // Return to where the user came from (e.g. /admin), defaulting to home.
+      // Only honour relative paths, so `?next=` can't open-redirect elsewhere.
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
     } catch {
       setError("Invalid email or password.");
     } finally {

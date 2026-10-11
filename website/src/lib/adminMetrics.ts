@@ -118,10 +118,39 @@ type BattleItem = {
 
 const RECORDED_MODES = new Set(["ranked", "tournament", "friend", "elite"]);
 
-// Recent completed battles, so the founder can feature one as Editor's Choice
-// straight from the dashboard (no need to know a matchId). orderBy(completedAt)
-// is single-field - no composite index - and naturally returns only finished
-// matches (pending ones have no completedAt, so the orderBy drops them).
+type MatchRow = {
+  id: string;
+  p1: string;
+  p2: string;
+  completedAtMs: number | null;
+  published: boolean;
+  rendered: boolean;
+  clipUrl: string | null;
+  featName1?: string; // fallback names from the featured doc if the match is gone
+  featName2?: string;
+};
+
+function rowFromMatch(id: string, x: Record<string, unknown>): MatchRow {
+  const h = (x.highlight as Record<string, unknown> | undefined) ?? {};
+  const pub = (h.publicUrls as Record<string, string> | undefined) ?? {};
+  const rends = (h.renditions as Record<string, unknown> | undefined) ?? {};
+  const published = h.published === true;
+  return {
+    id,
+    p1: String(x.player1Id ?? ""),
+    p2: String(x.player2Id ?? ""),
+    completedAtMs: tsToMs(x.completedAt),
+    published,
+    rendered: Object.keys(rends).length > 0,
+    clipUrl: published ? (pub.landscape ?? pub.vertical ?? null) : null,
+  };
+}
+
+// Battles the founder can act on in the Editor's Choice panel: the 20 most
+// recent completed battles, PLUS every currently-featured battle (even if it's
+// aged out of the recent window, or its match was deleted) so a featured battle
+// can always be un-featured. orderBy(completedAt) is single-field (no composite
+// index) and drops pending matches (they have no completedAt).
 async function recentBattles(): Promise<BattleItem[]> {
   const db = getAdminFirestore();
   const [snap, featuredSnap] = await Promise.all([
@@ -129,29 +158,49 @@ async function recentBattles(): Promise<BattleItem[]> {
     db.collection("featured").get(),
   ]);
   const featuredIds = new Set(featuredSnap.docs.map((d) => d.id));
-  const rows = snap.docs
-    .map((d) => {
-      const x = d.data();
-      const h = (x.highlight as Record<string, unknown> | undefined) ?? {};
-      const pub = (h.publicUrls as Record<string, string> | undefined) ?? {};
-      const rends = (h.renditions as Record<string, unknown> | undefined) ?? {};
-      const published = h.published === true;
-      return {
-        id: d.id,
-        p1: String(x.player1Id ?? ""),
-        p2: String(x.player2Id ?? ""),
-        status: x.status,
-        mode: x.mode,
-        completedAtMs: tsToMs(x.completedAt),
-        published,
-        rendered: Object.keys(rends).length > 0,
-        clipUrl: published ? (pub.landscape ?? pub.vertical ?? null) : null,
-      };
-    })
-    .filter((r) => r.status === "completed" && RECORDED_MODES.has(r.mode));
-  const uids = [
-    ...new Set(rows.flatMap((r) => [r.p1, r.p2]).filter(Boolean)),
-  ];
+  const featById = new Map(featuredSnap.docs.map((d) => [d.id, d.data()]));
+
+  const recentRows = snap.docs
+    .filter(
+      (d) =>
+        d.data().status === "completed" && RECORDED_MODES.has(d.data().mode),
+    )
+    .map((d) => rowFromMatch(d.id, d.data()));
+  const recentIds = new Set(recentRows.map((r) => r.id));
+
+  const missing = [...featuredIds].filter((id) => !recentIds.has(id));
+  const extraRows: MatchRow[] = [];
+  if (missing.length) {
+    const mdocs = await db.getAll(
+      ...missing.map((id) => db.collection("matches").doc(id)),
+    );
+    for (const md of mdocs) {
+      const feat =
+        (featById.get(md.id) as Record<string, unknown> | undefined) ?? {};
+      if (md.exists) {
+        const r = rowFromMatch(md.id, md.data() as Record<string, unknown>);
+        r.featName1 = String(feat.player1Name ?? "");
+        r.featName2 = String(feat.player2Name ?? "");
+        extraRows.push(r);
+      } else {
+        // Match deleted but still featured - keep it removable.
+        extraRows.push({
+          id: md.id,
+          p1: "",
+          p2: "",
+          completedAtMs: null,
+          published: false,
+          rendered: false,
+          clipUrl: (feat.clipUrl as string | undefined) ?? null,
+          featName1: String(feat.player1Name ?? "Unknown"),
+          featName2: String(feat.player2Name ?? "Unknown"),
+        });
+      }
+    }
+  }
+
+  const rows = [...extraRows, ...recentRows]; // featured-first, so always visible
+  const uids = [...new Set(rows.flatMap((r) => [r.p1, r.p2]).filter(Boolean))];
   const nameByUid = new Map<string, string>();
   if (uids.length) {
     const docs = await db.getAll(
@@ -163,8 +212,8 @@ async function recentBattles(): Promise<BattleItem[]> {
   }
   return rows.map((r) => ({
     id: r.id,
-    player1Name: nameByUid.get(r.p1) ?? "Unknown",
-    player2Name: nameByUid.get(r.p2) ?? "Unknown",
+    player1Name: (r.p1 && nameByUid.get(r.p1)) || r.featName1 || "Unknown",
+    player2Name: (r.p2 && nameByUid.get(r.p2)) || r.featName2 || "Unknown",
     completedAtMs: r.completedAtMs,
     featured: featuredIds.has(r.id),
     rendered: r.rendered,
