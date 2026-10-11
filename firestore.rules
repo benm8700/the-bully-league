@@ -356,6 +356,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Per-match ability loadout - the power-ups a player brought to a regular/
+    // qualifier match. Each player reads only their OWN (the opponent's loadout
+    // is a surprise); written only by purchaseAbility (Admin SDK, bypasses rules).
+    match /matchLoadouts/{matchId}/players/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     // Non-cash prize fulfillment records (winner + prize + wonAtMs + the
     // winner's submitted shipping details). A winner may READ their own record
     // (to see status), and that's all - the shipping PII is otherwise private.

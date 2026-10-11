@@ -1158,6 +1158,17 @@ exports.previewClip = onCall(async (request) => {
   return previewClip(matchId);
 });
 
+/** Match abilities (power-ups) for regular/qualifier play - the pre-match
+ * loadout a participant sees, and buying one with points. See abilities.js. */
+exports.getLoadout = onCall(async (request) => {
+  const {getLoadout} = require("./abilities");
+  return getLoadout(request.auth, request.data);
+});
+exports.purchaseAbility = onCall(async (request) => {
+  const {purchaseAbility} = require("./abilities");
+  return purchaseAbility(request.auth, request.data);
+});
+
 exports.deleteMyAccount = onCall({timeoutSeconds: 300}, async (request) => {
   const {deleteAccount} = require("./accountDeletion");
   return deleteAccount(request.auth);
