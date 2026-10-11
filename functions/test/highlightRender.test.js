@@ -183,6 +183,42 @@ test("a single video segment renders without a concat filter", () => {
   assert.ok(!/concat=/.test(graph), "a single segment needs no concat filter");
 });
 
+test("a video GAP is filled with black so the picture stays aligned", () => {
+  // A player can lose their camera mid-match (disconnect / backgrounded /
+  // screen locked). The video then has a hole; without filling it the picture
+  // drifts early - both players appear to talk at once. Durations come from the
+  // playlist in production, set here.
+  const timeline = buildTimeline([
+    seg("1", "video", "20260813234113000"), // t0
+    seg("1", "video", "20260813234138000"), // +25s
+    seg("1", "audio", "20260813234113000"),
+  ]);
+  const vids = timeline.segments.filter((s) => s.kind === "video");
+  vids[0].durationMs = 10000; // seg1 ends at 10s; seg2 at 25s -> a 15s hole
+  vids[1].durationMs = 10000;
+  const args = buildFfmpegArgs(timeline, "/tmp/work", "/tmp/out.mp4");
+  const graph = args[args.indexOf("-filter_complex") + 1];
+  assert.ok(/color=c=black:[^[]*d=15\.000/.test(graph),
+      "the 15s hole must be filled with 15s of black");
+  assert.ok(/concat=n=3:v=1:a=0/.test(graph),
+      "black is concatenated between the two real segments");
+});
+
+test("contiguous video segments get no black filler even with durations", () => {
+  const timeline = buildTimeline([
+    seg("1", "video", "20260813234113000"),
+    seg("1", "video", "20260813234123000"), // +10s, exactly when seg1 ends
+    seg("1", "audio", "20260813234113000"),
+  ]);
+  const vids = timeline.segments.filter((s) => s.kind === "video");
+  vids[0].durationMs = 10000;
+  vids[1].durationMs = 10000;
+  const args = buildFfmpegArgs(timeline, "/tmp/work", "/tmp/out.mp4");
+  const graph = args[args.indexOf("-filter_complex") + 1];
+  assert.ok(!/color=c=black/.test(graph), "no hole -> no black filler");
+  assert.ok(/concat=n=2:v=1:a=0/.test(graph), "just the two segments");
+});
+
 test("truncated segments are dropped when sizes are supplied", () => {
   // A few-millisecond trailing fragment can be undecodable and abort the
   // entire render; one unusable scrap must not cost the whole clip.

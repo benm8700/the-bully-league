@@ -178,6 +178,36 @@ function sumExtinfSeconds(playlistText) {
 }
 
 /**
+ * Maps each segment's basename to its duration (ms) from an HLS playlist's
+ * #EXTINF lines. Used to detect GAPS in a player's video track: a gap means
+ * the next segment starts later than the previous one ended, so the stream
+ * dropped out (disconnect / backgrounded / screen-locked). Returns a Map so a
+ * caller can look up a segment it actually has.
+ */
+function parsePlaylistDurations(playlistText) {
+  const out = new Map();
+  let pending = null;
+  for (const line of String(playlistText ?? "").split(/\r?\n/)) {
+    const m = line.match(/^#EXTINF:\s*([0-9.]+)/);
+    if (m) {
+      const n = Number(m[1]);
+      pending = Number.isFinite(n) ? n : null;
+      continue;
+    }
+    const uri = line.trim();
+    if (pending != null && uri && !uri.startsWith("#")) {
+      out.set(uri.split("/").pop(), Math.round(pending * 1000));
+      pending = null;
+    }
+  }
+  return out;
+}
+
+// A hole larger than this between two consecutive video segments is treated as
+// a real dropout to be filled with black, not segment-boundary jitter.
+const VIDEO_GAP_THRESHOLD_MS = 500;
+
+/**
  * Turns a flat list of recorded files into a time-aligned plan.
  *
  * `t0` is the earliest moment any track started; every offset below is
@@ -261,21 +291,42 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
     // concat inputs are uniform; tpad then positions the whole track at the
     // first segment's offset, which aligns with the audio (both measured
     // from the same t0).
-    const scaled = [];
-    for (const seg of videoSegs) {
+    // Build the track in order, inserting a black clip wherever the stream
+    // dropped out (a GAP). Video was previously assumed contiguous, but a
+    // player can lose their camera mid-match (disconnect / backgrounded /
+    // screen locked); without filling the hole, everything after it plays
+    // early and their picture drifts out of sync - visible as both players
+    // appearing to talk at once. `durationMs` comes from the playlist; without
+    // it, we fall back to the old contiguous concat. format=yuv420p on both the
+    // segments and the black keeps the concat inputs uniform.
+    const parts = [];
+    for (let i = 0; i < videoSegs.length; i++) {
+      const seg = videoSegs[i];
+      if (i > 0 && videoSegs[i - 1].durationMs != null) {
+        const prev = videoSegs[i - 1];
+        const gapMs = seg.offsetMs - (prev.offsetMs + prev.durationMs);
+        if (gapMs > VIDEO_GAP_THRESHOLD_MS) {
+          const glabel = `[gap${uid}_${i}]`;
+          filters.push(
+              `color=c=black:s=${tile.width}x${tile.height}:r=${OUTPUT_FPS}:` +
+            `d=${(gapMs / 1000).toFixed(3)},format=yuv420p,setsar=1${glabel}`,
+          );
+          parts.push(glabel);
+        }
+      }
       const index = inputIndex++;
       inputs.push("-i", path.join(localDir, seg.path.split("/").pop()));
       filters.push(
           `[${index}:v]scale=${tile.width}:${tile.height}:force_original_aspect_ratio=increase,` +
-        `crop=${tile.width}:${tile.height},setsar=1,fps=${OUTPUT_FPS}[vp${uid}_${index}]`,
+        `crop=${tile.width}:${tile.height},setsar=1,fps=${OUTPUT_FPS},format=yuv420p[vp${uid}_${index}]`,
       );
-      scaled.push(`[vp${uid}_${index}]`);
+      parts.push(`[vp${uid}_${index}]`);
     }
     const pad = (videoSegs[0].offsetMs / 1000).toFixed(3);
-    if (scaled.length === 1) {
-      filters.push(`${scaled[0]}tpad=start_duration=${pad}:color=black[v${uid}]`);
+    if (parts.length === 1) {
+      filters.push(`${parts[0]}tpad=start_duration=${pad}:color=black[v${uid}]`);
     } else {
-      filters.push(`${scaled.join("")}concat=n=${scaled.length}:v=1:a=0[vc${uid}]`);
+      filters.push(`${parts.join("")}concat=n=${parts.length}:v=1:a=0[vc${uid}]`);
       filters.push(`[vc${uid}]tpad=start_duration=${pad}:color=black[v${uid}]`);
     }
     videoLabels.push(`[v${uid}]`);
@@ -448,6 +499,33 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
     await Promise.all(objects.map((o) =>
       bucket.file(o.name).download({destination: path.join(workDir, o.name.split("/").pop())}),
     ));
+
+    // A player's VIDEO can drop out mid-match (disconnect / app backgrounded /
+    // screen locked), leaving a hole between segments. Audio gaps were already
+    // handled per-segment, but video gaps were not - the segments were
+    // concatenated contiguously, so everything after a hole played early and
+    // that player's picture drifted out of sync. Read each video playlist's
+    // per-segment durations so buildFfmpegArgs can detect the holes and fill
+    // them with black. Best-effort: without durations it falls back to the old
+    // contiguous behaviour.
+    for (const uid of timeline.uids) {
+      const plObj = objects.find((o) => o.name.endsWith(".m3u8") &&
+          o.name.includes(`__uid_s_${uid}__uid_e_video`));
+      if (!plObj) continue;
+      try {
+        const text = await fs.readFile(
+            path.join(workDir, plObj.name.split("/").pop()), "utf8");
+        const durByName = parsePlaylistDurations(text);
+        for (const s of timeline.segments) {
+          if (s.uid === uid && s.kind === "video") {
+            const d = durByName.get(s.path.split("/").pop());
+            if (d != null) s.durationMs = d;
+          }
+        }
+      } catch (e) {
+        warnings.push(`could not read video playlist for player ${uid}`);
+      }
+    }
 
     const ffmpegPath = require("ffmpeg-static");
 
