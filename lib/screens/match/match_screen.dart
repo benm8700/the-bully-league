@@ -4,10 +4,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 
 import 'package:provider/provider.dart';
 
+import '../../core/main_stage_battle.dart';
 import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
 import '../../core/services/matchmaking_service.dart';
@@ -15,6 +17,7 @@ import '../../core/services/capture_quality.dart';
 import '../../core/services/video_call_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../core/services/yuv_to_jpeg.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/match/ability_deploy_bar.dart';
 import '../vote/my_battles_screen.dart';
 import '../vote/vote_queue_screen.dart';
@@ -47,19 +50,28 @@ class MatchScreen extends StatefulWidget {
   State<MatchScreen> createState() => _MatchScreenState();
 }
 
-enum _Phase { waitingForOpponent, warmup, countdown, turn, verdict }
+// A regular battle now runs the chess-clock format (2026-10-11): a short
+// warmup, then the MainStageBattleState engine scaled to 30s each, yield-only
+// at the amateur tier (interrupts come from the paid loadout). waitingForOpponent
+// -> warmup -> battle -> verdict.
+enum _Phase { waitingForOpponent, warmup, battle, verdict }
 
-class _MatchScreenState extends State<MatchScreen> {
+class _MatchScreenState extends State<MatchScreen>
+    with SingleTickerProviderStateMixin {
   // Timings come from the pairing, which carries what the server resolved
   // and stamped onto the match document at pairing time - so both players
-  // run identical numbers and the developer can retune round count/length
-  // live without shipping a new app version (CLAUDE.md's explicit
-  // requirement). See functions/matchSettings.js.
+  // run identical numbers and the developer can retune the format live
+  // without shipping a new app version. See functions/matchSettings.js.
   MatchSettings get _settings => widget.pairing.settings;
-  int get _roundLengthSeconds => _settings.roundLengthSeconds;
-  int get _countdownSeconds => _settings.countdownSeconds;
   int get _warmupSeconds => _settings.warmupSeconds;
-  int get _totalTurns => _settings.totalTurns;
+
+  /// The chess-clock config, from the stamped settings so both devices agree.
+  MainStageBattleConfig get _battleConfig => MainStageBattleConfig(
+        turnMs: _settings.turnSeconds * 1000,
+        interrupts: _settings.interrupts,
+        shotClockMs: _settings.shotClockSeconds * 1000,
+        graceMs: _settings.graceMs,
+      );
 
   late final VideoCallService _videoCallService;
   late final VisualModerationService _moderationService;
@@ -68,24 +80,12 @@ class _MatchScreenState extends State<MatchScreen> {
   String? _error;
 
   bool? _isHost;
-  int? _myUid;
-  int? _opponentUid;
 
-  /// HOST-ONLY per-round clip windows. Recording starts at host election,
-  /// so [_recordingStartMs] (device wall-clock) is the clip's origin on the
-  /// host's own clock; every turn's start/end is measured from it, giving
-  /// offsets into the final clip. Paired into per-round windows and sent
-  /// with completeMatch, they let the Best Rounds board play ONLY the
-  /// voted-best round rather than the whole battle. Only the host drives
-  /// the timer, so only the host captures these; the guest sends nothing.
-  int? _recordingStartMs;
-  final List<Map<String, int>> _turnSpans = [];
   StreamSubscription<Map<String, dynamic>>? _msgSub;
   StreamSubscription<RawVideoFrame>? _frameSampleSub;
   StreamSubscription<RawVideoFrame>? _localFrameSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _matchDocSub;
   final CaptureQualityMonitor _quality = CaptureQualityMonitor();
-  Completer<void>? _earlyEndCompleter;
   bool _processingFrame = false;
 
   // Content-violation state (Build Order step 9a's live-video half) - set
@@ -100,21 +100,39 @@ class _MatchScreenState extends State<MatchScreen> {
   bool _violationIAmReporter = false;
 
   _Phase _phase = _Phase.waitingForOpponent;
-  int _turnIndex = 0;
-  int? _activeUid;
-  int _secondsRemaining = 0;
-  Timer? _ticker;
+  int _secondsRemaining = 0; // warmup countdown only
+  Timer? _ticker; // warmup countdown only
   bool _matchCompleted = false;
   bool _completeRequested = false;
   String? _matchSaveError;
+
+  // The chess-clock battle. The host owns the engine and drives it on a
+  // ~300ms tick, broadcasting the whole state; the guest renders it and sends
+  // yield/interrupt intents back. Mirrors MainStageBattleScreen.
+  MainStageBattleState? _battle;
+  Timer? _battleTick;
+  bool _engineStarted = false;
+
+  // Interrupt grace cue: the floor-holder's clock flashes red + buzzes while a
+  // steal is winding up. Harmless when interrupts are off (nothing fires it).
+  late final AnimationController _pulse;
+  bool _beingInterrupted = false;
 
   /// Known from the pairing itself now, rather than exchanged
   /// peer-to-peer over the data channel after joining.
   String get _opponentFirebaseUid => widget.pairing.opponentId;
 
+  /// The engine is keyed by Firebase uid (like MainStageBattleScreen), so the
+  /// floor/mic logic uses these rather than the Agora uids (which only decide
+  /// who hosts).
+  String get _myFirebaseUid => FirebaseAuth.instance.currentUser?.uid ?? '';
+  int get _nowMs => DateTime.now().millisecondsSinceEpoch;
+
   @override
   void initState() {
     super.initState();
+    _pulse = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 450));
     _videoCallService = AgoraVideoCallService();
     // Read before any async gap - see the note on this pattern in
     // ProfileScreen._addPhoto.
@@ -264,6 +282,7 @@ class _MatchScreenState extends State<MatchScreen> {
     _violationEnded = true;
     _violationIAmReporter = iAmReporter;
     _ticker?.cancel();
+    _battleTick?.cancel();
 
     if (iAmReporter) {
       final myFirebaseUid = FirebaseAuth.instance.currentUser?.uid;
@@ -319,12 +338,10 @@ class _MatchScreenState extends State<MatchScreen> {
     final oppUid = _videoCallService.remoteUid.value;
     if (myUid == null || oppUid == null) return;
 
-    _myUid = myUid;
-    _opponentUid = oppUid;
-    // Host election still uses the Agora-assigned uids - it decides which
-    // device drives the turn timer, which is unrelated to Firebase
-    // identity. The 'identity' handshake this used to send is gone: both
-    // players' Firebase uids come from the pairing now.
+    // Host election uses the Agora-assigned uids - it decides which device
+    // drives the chess-clock engine, which is unrelated to Firebase identity
+    // (the engine itself is keyed by Firebase uid). Deterministic: the lower
+    // uid (player1) hosts.
     _isHost = myUid < oppUid;
     if (_isHost!) {
       // Started here rather than at pairing because host election is the
@@ -333,32 +350,58 @@ class _MatchScreenState extends State<MatchScreen> {
       // still finishing their bio reveal, and Agora bills by duration.
       // Only the host asks, so the two devices don't race; the backend
       // treats a duplicate as a no-op anyway. Exhibition matches are
-      // declined server-side (CLAUDE.md's recording scope decision).
-      // The clip's origin on the host's clock: turn offsets below are
-      // measured from here so they line up with the recorded clip.
-      _recordingStartMs = DateTime.now().millisecondsSinceEpoch;
+      // declined server-side (CLAUDE.md's recording scope decision). No round
+      // boundaries are captured - the chess-clock battle has no rounds, so the
+      // highlight renders full-length.
       unawaited(_matchmakingService.startRecording(widget.pairing.matchId));
       unawaited(_runHostSequence());
     }
   }
 
   void _onMessage(Map<String, dynamic> message) {
-    switch (message['type']) {
-      case 'earlyEnd':
-        _earlyEndCompleter?.complete();
-      case 'matchEndedViolation':
-        // The OTHER device detected a violation in what it saw of MY
-        // stream and already auto-filed a report - this side doesn't
-        // file a second one (iAmReporter: false), just ends the match.
-        unawaited(_handleContentViolation('Reported by the other participant.', iAmReporter: false));
-      case 'state':
-        final phase = _Phase.values.byName(message['phase'] as String);
-        _applyState(
-          phase: phase,
-          turnIndex: message['turnIndex'] as int,
-          activeUid: message['activeUid'] as int?,
-          duration: message['duration'] as int,
-        );
+    // The violation and warmup messages use 'type'; the chess-clock engine
+    // uses 't' (ms_state host->guest, ms_intent guest->host), matching
+    // MainStageBattleScreen's wire format.
+    if (message['type'] == 'matchEndedViolation') {
+      // The OTHER device detected a violation in what it saw of MY stream and
+      // already auto-filed a report - this side doesn't file a second one
+      // (iAmReporter: false), just ends the match.
+      unawaited(_handleContentViolation(
+          'Reported by the other participant.', iAmReporter: false));
+      return;
+    }
+    if (message['type'] == 'warmup') {
+      // Host-broadcast opening beat. The guest mirrors the warmup countdown;
+      // the first ms_state that follows flips both sides into the battle.
+      _enterWarmup((message['duration'] as num?)?.toInt() ?? _warmupSeconds);
+      return;
+    }
+    final t = message['t'];
+    if (t == 'ms_state' && _isHost != true) {
+      final s = message['s'];
+      if (s is Map) {
+        _battle = MainStageBattleState.fromMap(Map<String, dynamic>.from(s));
+        if (_phase != _Phase.battle && !_battle!.isOver) {
+          setState(() => _phase = _Phase.battle);
+        }
+        _afterBattleState(broadcast: false);
+      }
+    } else if (t == 'ms_intent' && _isHost == true) {
+      final ev = _eventFromName(message['ev'] as String?);
+      if (ev != null) _hostApply(ev, by: message['by'] as String?);
+    }
+  }
+
+  MsEvent? _eventFromName(String? n) {
+    switch (n) {
+      case 'yield':
+        return MsEvent.yield;
+      case 'interrupt':
+        return MsEvent.interrupt;
+      case 'endEarly':
+        return MsEvent.endEarly;
+      default:
+        return null;
     }
   }
 
@@ -377,54 +420,122 @@ class _MatchScreenState extends State<MatchScreen> {
     return sum.isEven;
   }
 
-  /// The Agora uid that roasts first, or null before host election has set
-  /// the two uids. The lower uid is the host (player1); the flip decides
-  /// whether the lower or higher uid leads. Identical on both devices.
-  int? _firstUid() {
-    if (_myUid == null || _opponentUid == null) return null;
-    final lower = _myUid! < _opponentUid! ? _myUid! : _opponentUid!;
-    final higher = _myUid! < _opponentUid! ? _opponentUid! : _myUid!;
-    return _hostGoesFirst() ? lower : higher;
-  }
+  /// Whether THIS device takes the floor first (for the warmup indicator).
+  /// The coin flip picks the HOST to lead or not; the host device leads when
+  /// hostGoesFirst, the guest leads when it doesn't - so each side is "first"
+  /// exactly when its host-ness matches the flip. Identical maths both sides.
+  bool get _iGoFirst => _isHost != null && (_isHost! == _hostGoesFirst());
 
-  /// Whether THIS device roasts first this match (for the warmup indicator).
-  bool get _iGoFirst => _firstUid() != null && _firstUid() == _myUid;
-
+  /// HOST: the opening warmup beat, then open the chess-clock engine and drive
+  /// it. The warmup is a fixed shared beat (both mics open) inside the recorded
+  /// channel - pre-fight banter/staredown, captured and shown to spectators.
   Future<void> _runHostSequence() async {
-    // The Warmup Round: the first live beat of the battle, both mics OPEN
-    // (unlike the turns), for open banter / a staredown before round 1. It
-    // is inside the recorded battle channel, so it costs ~1 extra
-    // participant-minute and is captured + shown to spectators as pre-fight
-    // hype. Skipped only if the config sets it to 0. No active player and no
-    // early-end: it is a fixed shared beat.
     if (_warmupSeconds > 0 && !_violationEnded) {
-      await _hostAdvance(
-        phase: _Phase.warmup,
-        turnIndex: -1,
-        activeUid: null,
-        duration: _warmupSeconds,
-      );
+      await _videoCallService.sendMatchMessage(
+          {'type': 'warmup', 'duration': _warmupSeconds});
+      _enterWarmup(_warmupSeconds);
+      await Future<void>.delayed(Duration(seconds: _warmupSeconds));
     }
-    // Coin-flipped leader (see _hostGoesFirst); the chosen player takes the
-    // first turn of every round. On the host, _myUid is the lower uid.
-    final firstUid = _hostGoesFirst() ? _myUid! : _opponentUid!;
-    final secondUid = _hostGoesFirst() ? _opponentUid! : _myUid!;
-    for (var i = 0; i < _totalTurns; i++) {
-      if (_violationEnded) return;
-      final activeUid = (i.isEven) ? firstUid : secondUid;
-      await _hostAdvance(phase: _Phase.countdown, turnIndex: i, activeUid: activeUid, duration: _countdownSeconds);
-      if (_violationEnded) return;
-      await _hostAdvance(
-        phase: _Phase.turn,
-        turnIndex: i,
-        activeUid: activeUid,
-        duration: _roundLengthSeconds,
-        allowEarlyEnd: true,
-      );
-    }
-    if (_violationEnded) return;
-    await _hostAdvance(phase: _Phase.verdict, turnIndex: _totalTurns, activeUid: null, duration: 0);
+    if (_violationEnded || !mounted) return;
+    _openEngine();
   }
+
+  /// HOST: open the chess-clock engine and start the authoritative tick. The
+  /// coin-flipped leader (by Firebase uid) takes the floor first.
+  void _openEngine() {
+    if (_engineStarted) return;
+    _engineStarted = true;
+    final firstFloor = _hostGoesFirst() ? _myFirebaseUid : _oppFirebaseUid;
+    var b = MainStageBattleState.create(
+      [_myFirebaseUid, _oppFirebaseUid],
+      config: _battleConfig,
+    );
+    b = b.reduce(MsEvent.open, by: firstFloor, atMs: _nowMs);
+    _battle = b;
+    if (mounted) setState(() => _phase = _Phase.battle);
+    _afterBattleState(broadcast: true);
+    _battleTick = Timer.periodic(const Duration(milliseconds: 300), (_) {
+      if (_battle == null || _battle!.isOver || _violationEnded) return;
+      _hostApply(MsEvent.tick);
+    });
+  }
+
+  /// HOST: apply an event, auto-start the holder's talk clock (V1 keeps talk
+  /// auto-started; voice-driven start is a later refinement), then broadcast.
+  void _hostApply(MsEvent ev, {String? by}) {
+    if (_isHost != true || _battle == null) return;
+    var b = _battle!.reduce(ev, by: by, atMs: _nowMs);
+    if (b.floor != null && !b.talking) {
+      b = b.reduce(MsEvent.startTalking, by: b.floor, atMs: _nowMs);
+    }
+    _battle = b;
+    _afterBattleState(broadcast: true);
+  }
+
+  /// Push an intent: the host applies it; the guest sends it to the host (the
+  /// authority). The engine re-checks validity either way.
+  void _intent(MsEvent ev) {
+    if (_battle == null || _battle!.isOver || _violationEnded) return;
+    if (_isHost == true) {
+      _hostApply(ev, by: _myFirebaseUid);
+    } else {
+      _videoCallService
+          .sendMatchMessage({'t': 'ms_intent', 'ev': ev.name, 'by': _myFirebaseUid});
+    }
+  }
+
+  /// Common reaction to any new battle state: one speaker at a time (mute me
+  /// unless I hold the floor), repaint, broadcast if host, settle on end.
+  void _afterBattleState({required bool broadcast}) {
+    final b = _battle;
+    if (b == null) return;
+    _videoCallService.muteLocalAudio(b.mutedPlayer == _myFirebaseUid);
+    if (broadcast && _isHost == true) {
+      _videoCallService.sendMatchMessage({'t': 'ms_state', 's': b.toMap()});
+    }
+    _driveInterruptCue(b);
+    if (mounted) setState(() {});
+    if (b.isOver) {
+      _battleTick?.cancel();
+      _goToVerdict();
+    }
+  }
+
+  /// Flash + buzz the floor-holder's clock while an interrupt is winding up.
+  /// The haptic fires once, only on MY device, only when I'm the one being
+  /// cut into. No-op when interrupts are off (nothing ever pends).
+  void _driveInterruptCue(MainStageBattleState b) {
+    final pending = b.pendingBy != null && b.status == MsStatus.live;
+    if (pending && !_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    } else if (!pending && _pulse.isAnimating) {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+    final iAmTarget =
+        pending && b.pendingBy == _oppFirebaseUid && b.floor == _myFirebaseUid;
+    if (iAmTarget && !_beingInterrupted) {
+      _beingInterrupted = true;
+      HapticFeedback.heavyImpact();
+    } else if (!iAmTarget && _beingInterrupted) {
+      _beingInterrupted = false;
+    }
+  }
+
+  /// Enter the warmup phase (both mics open) with a cosmetic countdown. Shared
+  /// by the host (who then waits it out) and the guest (mirroring the host's
+  /// broadcast); the first ms_state afterwards flips both into the battle.
+  void _enterWarmup(int seconds) {
+    if (!mounted || _phase == _Phase.battle || _phase == _Phase.verdict) return;
+    setState(() {
+      _phase = _Phase.warmup;
+      _secondsRemaining = seconds;
+    });
+    _videoCallService.muteLocalAudio(false);
+    _startWarmupTicker(seconds);
+  }
+
+  String get _oppFirebaseUid => _opponentFirebaseUid;
 
   /// Flips the already-existing match document from "pending" to
   /// "completed", which is what admits it to the 24h voting window and,
@@ -441,10 +552,11 @@ class _MatchScreenState extends State<MatchScreen> {
       // Sent with the settle rather than written separately, since the
       // client cannot write the match document at all - and sent from
       // BOTH devices, because each only knows about its own capture.
+      // No round boundaries - a chess-clock battle has no rounds, so the
+      // highlight renders full-length.
       await _matchmakingService.completeMatch(
         widget.pairing.matchId,
         quality: _quality.summary,
-        roundBoundaries: _roundBoundaries(),
       );
       if (mounted) setState(() => _matchCompleted = true);
     } catch (e) {
@@ -453,156 +565,40 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   /// The match document reached a terminal status server-side. If we haven't
-  /// already ended (either the data channel delivered the verdict, or a
-  /// content violation ended us), force the verdict now - this is what
-  /// rescues a guest stranded on a mid-match turn because the host's final
-  /// state message was lost. [_applyState] mutes, leaves the channel and
-  /// calls [_completeMatch] (idempotent server-side), exactly as the normal
-  /// verdict transition does.
+  /// already ended (the engine's final state landed, or a content violation
+  /// ended us), force the verdict now - this rescues a guest stranded mid-
+  /// battle because the host's final state message was lost. [_goToVerdict]
+  /// mutes, leaves the channel and settles (idempotent), exactly as the normal
+  /// end-of-battle transition does.
   void _onMatchDoc(DocumentSnapshot<Map<String, dynamic>> snap) {
     if (!mounted) return;
     final status = snap.data()?['status'] as String?;
     const terminal = {'completed', 'abandoned', 'disqualified'};
     if (status == null || !terminal.contains(status)) return;
     if (_phase == _Phase.verdict || _violationEnded) return;
-    _applyState(
-      phase: _Phase.verdict,
-      turnIndex: _totalTurns,
-      activeUid: null,
-      duration: 0,
-    );
+    _goToVerdict();
   }
 
-  /// HOST-ONLY: pair the captured turn spans into per-round clip windows.
-  /// A round is two consecutive turns (player 1 then player 2), so round R
-  /// runs from turn 2R's start to turn 2R+1's end. Returns null for the
-  /// guest (no capture) or an incomplete one.
-  ///
-  /// A small LEAD-IN/LEAD-OUT buffer absorbs the gap between when the host
-  /// asked to record and when Agora actually began capturing (the clip's
-  /// true origin sits a beat later than [_recordingStartMs]), plus a little
-  /// context - better to show a hair extra than to clip the start of the
-  /// round. The exact buffer wants tuning against real recorded footage;
-  /// the whole caption/trim/render path has never run on real speech.
-  List<Map<String, int>>? _roundBoundaries() {
-    if (_isHost != true || _turnSpans.isEmpty) return null;
-    const leadInMs = 1500;
-    const leadOutMs = 800;
-    final byTurn = {for (final s in _turnSpans) s['turn']!: s};
-    final out = <Map<String, int>>[];
-    final rounds = _turnSpans.length ~/ 2;
-    for (var r = 0; r < rounds; r++) {
-      final a = byTurn[2 * r];
-      final b = byTurn[2 * r + 1];
-      if (a == null || b == null) continue;
-      final start = (a['start']! - leadInMs).clamp(0, 1 << 30);
-      final end = b['end']! + leadOutMs;
-      if (end <= start) continue;
-      out.add({'round': r, 'startMs': start, 'endMs': end});
-    }
-    return out.isEmpty ? null : out;
+  /// The battle is over (both clocks drained, or ended early). Mute, leave the
+  /// channel (an idle channel bills and would relay cross-talk on the "Match
+  /// complete!" screen), and settle. Both devices run this - the engine's
+  /// final state reaches both, and the match-doc backstop covers a dropped
+  /// message - and it is idempotent (guarded by the phase, and completeMatch
+  /// is a server-side no-op the second time).
+  void _goToVerdict() {
+    if (_phase == _Phase.verdict || _violationEnded) return;
+    _ticker?.cancel();
+    _battleTick?.cancel();
+    if (mounted) setState(() => _phase = _Phase.verdict);
+    _videoCallService.muteLocalAudio(true);
+    unawaited(_videoCallService.leaveChannel());
+    unawaited(_completeMatch());
   }
 
-  Future<void> _hostAdvance({
-    required _Phase phase,
-    required int turnIndex,
-    required int? activeUid,
-    required int duration,
-    bool allowEarlyEnd = false,
-  }) async {
-    final message = {
-      'type': 'state',
-      'phase': phase.name,
-      'turnIndex': turnIndex,
-      'activeUid': activeUid,
-      'duration': duration,
-    };
-    // On the VERDICT, _applyState leaves the Agora channel - so broadcast the
-    // final state to the guest BEFORE tearing the channel down, otherwise the
-    // host leaves (racing the unawaited leaveChannel) before the send goes
-    // out and the guest never learns the match ended, hanging forever on
-    // "Waiting for opponent...". For every other phase, apply-then-send keeps
-    // the host a hair ahead of the guest, exactly as before.
-    if (phase == _Phase.verdict) {
-      await _videoCallService.sendMatchMessage(message);
-      _applyState(phase: phase, turnIndex: turnIndex, activeUid: activeUid, duration: duration);
-    } else {
-      _applyState(phase: phase, turnIndex: turnIndex, activeUid: activeUid, duration: duration);
-      await _videoCallService.sendMatchMessage(message);
-    }
-
-    if (duration == 0) return;
-    // Capture the actual [start,end] of each TURN (offsets into the clip),
-    // so a round's window can be built from its two turns. Only turns are
-    // captured - the countdown/warmup are not part of a "round".
-    final isTurn = phase == _Phase.turn && _recordingStartMs != null;
-    final startMs = isTurn
-        ? DateTime.now().millisecondsSinceEpoch - _recordingStartMs!
-        : 0;
-    if (allowEarlyEnd) {
-      _earlyEndCompleter = Completer<void>();
-      await Future.any([Future.delayed(Duration(seconds: duration)), _earlyEndCompleter!.future]);
-    } else {
-      await Future.delayed(Duration(seconds: duration));
-    }
-    if (isTurn) {
-      _turnSpans.add({
-        'turn': turnIndex,
-        'start': startMs,
-        'end': DateTime.now().millisecondsSinceEpoch - _recordingStartMs!,
-      });
-    }
-  }
-
-  void _applyState({
-    required _Phase phase,
-    required int turnIndex,
-    required int? activeUid,
-    required int duration,
-  }) {
-    if (!mounted) return;
-    setState(() {
-      _phase = phase;
-      _turnIndex = turnIndex;
-      _activeUid = activeUid;
-      _secondsRemaining = duration;
-    });
-    _startTicker(duration);
-
-    switch (phase) {
-      case _Phase.warmup:
-        // Both mics open - the one beat where the two players talk freely.
-        _videoCallService.muteLocalAudio(false);
-      case _Phase.turn:
-      case _Phase.countdown:
-        // Pre-warm the upcoming speaker's mic during the "get ready"
-        // countdown so Agora's audio stream is already flowing when the turn
-        // (and its recording window) begins. Unmuting at the exact turn start
-        // left the stream to spin up while the player was already talking,
-        // which clipped the first word off that round's recording. The
-        // countdown carries the SAME activeUid as the turn that follows, so
-        // the opponent stays muted throughout - only the person about to
-        // speak goes live early, during their own "get ready".
-        _videoCallService.muteLocalAudio(activeUid != _myUid);
-      case _Phase.verdict:
-        // The match is over. Mute AND leave the channel so audio does not
-        // keep relaying between the two phones on the "Match complete!"
-        // screen, and so an idle channel is not billed. The old behaviour
-        // left both mics open (for a verdict reveal that does not exist
-        // yet), which is what caused live cross-talk after the match ended.
-        _videoCallService.muteLocalAudio(true);
-        unawaited(_videoCallService.leaveChannel());
-        // BOTH devices settle the match, not just the host - the call is
-        // idempotent server-side (the second one returns alreadySettled),
-        // and this way a host that crashes right at the verdict doesn't
-        // leave the match stuck "pending" until the hourly sweep.
-        unawaited(_completeMatch());
-      case _Phase.waitingForOpponent:
-        _videoCallService.muteLocalAudio(true);
-    }
-  }
-
-  void _startTicker(int seconds) {
+  /// A cosmetic 1s countdown for the warmup banner only - the battle clock is
+  /// the engine's. The host's real warmup length is its Future.delayed; this
+  /// just animates the number.
+  void _startWarmupTicker(int seconds) {
     _ticker?.cancel();
     if (seconds <= 0) return;
     _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -615,18 +611,11 @@ class _MatchScreenState extends State<MatchScreen> {
     });
   }
 
-  void _onEndTurnPressed() {
-    if (_activeUid != _myUid) return;
-    if (_isHost == true) {
-      _earlyEndCompleter?.complete();
-    } else {
-      _videoCallService.sendMatchMessage({'type': 'earlyEnd'});
-    }
-  }
-
   @override
   void dispose() {
     _ticker?.cancel();
+    _battleTick?.cancel();
+    _pulse.dispose();
     _msgSub?.cancel();
     _matchDocSub?.cancel();
     _frameSampleSub?.cancel();
@@ -751,6 +740,7 @@ class _MatchScreenState extends State<MatchScreen> {
     if (_phase == _Phase.verdict) {
       return _buildVerdictUi();
     }
+    final inBattle = _phase == _Phase.battle && _battle != null;
 
     return Stack(
       fit: StackFit.expand,
@@ -764,7 +754,9 @@ class _MatchScreenState extends State<MatchScreen> {
             ),
         Positioned(
           right: 16,
-          bottom: 16,
+          // Lift the self-view above the chess-clock controls during the
+          // battle so it never sits under the Yield button.
+          bottom: inBattle ? 120 : 16,
           width: 100,
           height: 140,
           child: ClipRRect(
@@ -773,18 +765,14 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
         ),
         if (_phase == _Phase.warmup) _buildWarmupOverlay(),
-        if (_phase == _Phase.countdown) _buildCountdownOverlay(),
-        if (_phase == _Phase.turn) _buildTurnOverlay(),
-        // Tap-to-deploy power-ups. Bottom-LEFT so it clears the self-view PiP
-        // (bottom-right) and the centred "End My Turn" button. Shown only in
-        // live battle beats; self-hides when abilities are off or none were
-        // brought.
-        if (_phase == _Phase.turn ||
-            _phase == _Phase.countdown ||
-            _phase == _Phase.warmup)
+        if (inBattle) ..._buildBattleOverlay(_battle!),
+        // Tap-to-deploy power-ups (tomato/extend). Interrupt is deployed from
+        // the chess-clock controls themselves, not here. Sits just above the
+        // controls; self-hides when abilities are off or none were brought.
+        if (_phase == _Phase.warmup || inBattle)
           Positioned(
             left: 16,
-            bottom: 16 + MediaQuery.of(context).padding.bottom,
+            bottom: (inBattle ? 92 : 16) + MediaQuery.of(context).padding.bottom,
             child: AbilityDeployBar(
               matchId: widget.pairing.matchId,
               onDeploy: _onDeployAbility,
@@ -794,16 +782,16 @@ class _MatchScreenState extends State<MatchScreen> {
     );
   }
 
-  /// A power-up was deployed. For now this just confirms the tap - the actual
-  /// in-match EFFECT (interrupt = steal the opponent's turn) is format-specific
-  /// and held for the round-times decision, then wired in here (CLAUDE.md's
-  /// abilities build, step 3).
+  /// A power-up was deployed from the tap-to-deploy bar. The in-match EFFECT
+  /// (tomato splat, +5s extend) is format-specific and wired into the chess-
+  /// clock battle as part of the abilities-effects build; for now this confirms
+  /// the tap. (Interrupt is deployed from the controls, not here.)
   void _onDeployAbility(String abilityId) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        duration: Duration(milliseconds: 1200),
-        content: Text('Interrupt armed'),
+      SnackBar(
+        duration: const Duration(milliseconds: 1200),
+        content: Text('$abilityId deployed'),
       ),
     );
   }
@@ -847,11 +835,10 @@ class _MatchScreenState extends State<MatchScreen> {
                 'Both mics are open - loosen up',
                 style: TextStyle(color: Colors.white70, fontSize: 13),
               ),
-              // Who leads off, surfaced during the warmup so the first roaster
-              // knows to be ready before round 1 starts (coin-flipped, so it
-              // is not always the same player). Only shown once host election
-              // has set the uids.
-              if (_firstUid() != null) ...[
+              // Who takes the floor first, surfaced during the warmup so that
+              // roaster knows to be ready (coin-flipped, not always the same
+              // player). Only shown once host election has resolved who leads.
+              if (_isHost != null) ...[
                 const SizedBox(height: 8),
                 Text(
                   _iGoFirst ? "You're up first" : 'Opponent goes first',
@@ -871,83 +858,177 @@ class _MatchScreenState extends State<MatchScreen> {
     );
   }
 
-  Widget _buildCountdownOverlay() {
-    final isMe = _activeUid == _myUid;
-    // Shadows so the text stays legible over a live - possibly bright - video
-    // feed now that we only dim rather than black it out.
-    const shadows = [
-      Shadow(blurRadius: 12, color: Colors.black),
-      Shadow(blurRadius: 24, color: Colors.black),
-    ];
-    return ColoredBox(
-      // A light dim, NOT a blackout: keep the opponent visible during the
-      // get-ready beat so you can still size them up (developer's call,
-      // 2026-09-17). Blacking the feed out threw away a chance to look at
-      // your opponent.
-      color: Colors.black.withValues(alpha: 0.35),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+  /// The chess-clock battle overlay: two clock chips at the top, the
+  /// yield/interrupt controls at the bottom. Adapted from
+  /// MainStageBattleScreen; "You"/"Them" keyed by Firebase uid.
+  List<Widget> _buildBattleOverlay(MainStageBattleState b) {
+    return [_clocks(b), if (!b.isOver) _controls(b)];
+  }
+
+  String _fmt(int ms) {
+    final s = (ms / 1000).ceil();
+    final m = s ~/ 60;
+    final r = s % 60;
+    return '$m:${r.toString().padLeft(2, '0')}';
+  }
+
+  Widget _clocks(MainStageBattleState b) {
+    // The clock of whoever is being cut into flashes red (on both screens).
+    final target = b.pendingBy == null
+        ? null
+        : (b.pendingBy == _myFirebaseUid ? _oppFirebaseUid : _myFirebaseUid);
+    return Positioned(
+      top: 12,
+      left: 12,
+      right: 12,
+      child: AnimatedBuilder(
+        animation: _pulse,
+        builder: (context, _) => Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              isMe ? 'Your turn coming up' : "Opponent's turn coming up",
-              style: const TextStyle(
-                  color: Colors.white, fontSize: 22, shadows: shadows),
-            ),
-            const SizedBox(height: 16),
-            // A "Get ready" message rather than a ticking number - the
-            // developer's call (2026-09-16): the countdown still lasts the
-            // configured time and then the turn starts, but the number felt
-            // unnecessary.
-            const Text(
-              'Get ready',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 40,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1,
-                shadows: shadows,
-              ),
-            ),
+            _clockChip('You', b.remaining[_myFirebaseUid] ?? 0,
+                b.floor == _myFirebaseUid, b.steals[_myFirebaseUid] ?? 0,
+                flash: target == _myFirebaseUid),
+            _clockChip('Them', b.remaining[_oppFirebaseUid] ?? 0,
+                b.floor == _oppFirebaseUid, b.steals[_oppFirebaseUid] ?? 0,
+                flash: target == _oppFirebaseUid),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTurnOverlay() {
-    final isMe = _activeUid == _myUid;
-    return Stack(
-      children: [
-        // Small, unobtrusive timer per CLAUDE.md's in-turn countdown requirement.
-        Positioned(
-          top: 12,
-          left: 12,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              'Round ${(_turnIndex ~/ 2) + 1} · $_secondsRemaining s',
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-            ),
-          ),
+  Widget _clockChip(String label, int ms, bool onFloor, int steals,
+      {bool flash = false}) {
+    final gold = context.palette.reward;
+    const hotRed = Color(0xFFFF2D3A);
+    final t = flash ? Curves.easeInOut.transform(_pulse.value) : 0.0;
+    final baseBorder = onFloor ? gold : Colors.white24;
+    final totalSteals = _settings.interrupts;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: onFloor ? gold.withValues(alpha: 0.9) : Colors.black54,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: flash ? Color.lerp(baseBorder, hotRed, 0.4 + 0.6 * t)! : baseBorder,
+          width: flash ? 2.5 : (onFloor ? 2 : 1),
         ),
-        if (isMe)
-          Positioned(
-            bottom: 180,
-            left: 0,
-            right: 0,
-            child: Center(
+        boxShadow: flash
+            ? [
+                BoxShadow(
+                  color: hotRed.withValues(alpha: 0.25 + 0.45 * t),
+                  blurRadius: 8 + 12 * t,
+                  spreadRadius: 1 + 2 * t,
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        children: [
+          Text(label,
+              style: TextStyle(
+                  color: onFloor ? Colors.black : Colors.white70,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700)),
+          Text(_fmt(ms),
+              style: TextStyle(
+                  color: onFloor ? Colors.black : Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900)),
+          // Interrupt pips only when interrupts are in play (loadout granted
+          // some). Yield-only battles show no pip row.
+          if (totalSteals > 0 || steals > 0)
+            Text('${'●' * steals}${'○' * (totalSteals - steals).clamp(0, 99)}',
+                style: TextStyle(
+                    color: onFloor ? Colors.black87 : Colors.white54,
+                    fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _controls(MainStageBattleState b) {
+    final iHoldFloor = b.floor == _myFirebaseUid;
+    final oppHoldsFloor = b.floor == _oppFirebaseUid;
+    final oppOutOfTime = (b.remaining[_oppFirebaseUid] ?? 0) == 0;
+    final iAmInterrupting = b.pendingBy == _myFirebaseUid;
+    final canInterrupt = oppHoldsFloor &&
+        (b.steals[_myFirebaseUid] ?? 0) > 0 &&
+        (b.remaining[_myFirebaseUid] ?? 0) > 0 &&
+        b.pendingBy == null;
+
+    // Dead-air escape: you hold the floor, your opponent is spent, nothing left
+    // to say. End it rather than draining a banked clock in silence - nothing
+    // is forfeited, the battle would end when your clock ran out anyway.
+    if (iHoldFloor && oppOutOfTime) {
+      return Positioned(
+        left: 16,
+        right: 16,
+        bottom: 24 + MediaQuery.of(context).padding.bottom,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "They're out of time - the floor is yours. Land one more, or end it.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white60, fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
               child: FilledButton(
-                onPressed: _onEndTurnPressed,
-                child: const Text('End My Turn'),
+                onPressed: () => _intent(MsEvent.endEarly),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 54),
+                  backgroundColor: context.palette.reward,
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text("I'm done - end the battle"),
               ),
             ),
+          ],
+        ),
+      );
+    }
+    // Interrupt only appears when the player actually has steals (loadout);
+    // the amateur base is yield-only, so most battles show Yield alone.
+    final showInterrupt = (b.steals[_myFirebaseUid] ?? 0) > 0 || iAmInterrupting;
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 24 + MediaQuery.of(context).padding.bottom,
+      child: Row(
+        children: [
+          Expanded(
+            child: FilledButton(
+              onPressed: iHoldFloor ? () => _intent(MsEvent.yield) : null,
+              style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 54),
+                  backgroundColor: Colors.white24),
+              child: const Text('Yield'),
+            ),
           ),
-      ],
+          if (showInterrupt) ...[
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                onPressed: canInterrupt ? () => _intent(MsEvent.interrupt) : null,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 54),
+                  backgroundColor: iAmInterrupting
+                      ? context.palette.reward
+                      : context.palette.live,
+                  foregroundColor: iAmInterrupting ? Colors.black : null,
+                ),
+                child: Text(iAmInterrupting
+                    ? 'Cutting in...'
+                    : 'Interrupt (${b.steals[_myFirebaseUid] ?? 0})'),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

@@ -38,6 +38,20 @@ const DEFAULTS = {
   // banter/staredown before round 1 (recorded, spectator-visible). Stamped
   // on the match so both players run the same clock. 0 disables it.
   warmupSeconds: 20,
+  // CHESS-CLOCK FORMAT (2026-10-11): regular battles now run the same
+  // chess-clock-with-floor format as the Main Stage finals, scaled down for
+  // the amateur tier. chessClock 1 = on (the current format for every battle
+  // MatchScreen runs); 0 would restore nothing here - the old 3x15 turn loop
+  // is gone, this flag is the kill-switch/future-proofing. turnSeconds is each
+  // player's banked talk clock (30s regular vs the finals' 60s); interrupts is
+  // the BASE steal count (0 - yield-only; interrupts come from the paid
+  // loadout, which adds per-player); shotClockSeconds bounces an idle floor;
+  // graceMs lets an interrupted player land their line before the floor passes.
+  chessClock: 1,
+  turnSeconds: 30,
+  interrupts: 0,
+  shotClockSeconds: 7,
+  graceMs: 1500,
   /**
    * Vote weight at which a result counts for full rating movement (see
    * voteConfidence in rating.js).
@@ -76,6 +90,15 @@ const LIMITS = {
   // 0 disables the warmup; capped so a console typo can't strand two people
   // staring at each other for minutes before the battle starts.
   warmupSeconds: {min: 0, max: 120},
+  chessClock: {min: 0, max: 1},
+  // Each player's banked talk clock. Regular is 30s; the ceiling leaves room
+  // to retune up toward the finals' 60s from the console.
+  turnSeconds: {min: 10, max: 180},
+  // Base steal count. 0 = yield-only; the paid loadout adds interrupts
+  // per-player on top, so this stays 0 for the amateur tier.
+  interrupts: {min: 0, max: 10},
+  shotClockSeconds: {min: 2, max: 30},
+  graceMs: {min: 0, max: 10000},
   // At least 1 (0 would make every result count for nothing), and capped
   // well above any plausible per-match vote count so it can grow with the
   // platform without needing a code change.
@@ -105,6 +128,14 @@ function resolveSettings(doc, mode) {
     const fallback = sanitize(field, base[field], DEFAULTS[field]);
     resolved[field] = sanitize(field, perMode[field], fallback);
   }
+  // A chess-clock battle is ONE back-and-forth, not a series of rounds, so it
+  // is judged by a single "who won" vote. Forcing roundCount to 1 makes the
+  // existing per-round vote/finalize machinery produce exactly that (one round
+  // = the match winner) with no change to castVote or finalize - the whole
+  // reason the chess-clock format needed no voting rewrite. roundLength/
+  // countdown become unused by the chess-clock MatchScreen but are left intact
+  // for any legacy/non-chess-clock path.
+  if (resolved.chessClock === 1) resolved.roundCount = 1;
   return resolved;
 }
 

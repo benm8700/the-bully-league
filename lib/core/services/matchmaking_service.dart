@@ -15,11 +15,16 @@ import 'package:flutter/foundation.dart';
 /// copy of the same values.
 class MatchSettings {
   const MatchSettings({
-    this.roundCount = 3,
+    this.roundCount = 1,
     this.roundLengthSeconds = 15,
     this.countdownSeconds = 5,
     this.bioRevealSeconds = 60,
     this.warmupSeconds = 20,
+    this.chessClock = true,
+    this.turnSeconds = 30,
+    this.interrupts = 0,
+    this.shotClockSeconds = 7,
+    this.graceMs = 1500,
   });
 
   final int roundCount;
@@ -32,7 +37,20 @@ class MatchSettings {
   /// stamped on the match so both players run the same clock.
   final int warmupSeconds;
 
-  /// Total turns in a match - each round gives both players one turn.
+  /// CHESS-CLOCK FORMAT (2026-10-11): a regular battle is now the same
+  /// chess-clock-with-floor format as the Main Stage, scaled down. When true
+  /// (the default), [turnSeconds] is each player's banked talk clock, the floor
+  /// passes on a free yield or when the clock bounces on the shot-clock, and
+  /// the match is a single "who won" vote (roundCount 1). [interrupts] is the
+  /// BASE steal count (0 - yield-only); the paid loadout adds interrupts.
+  final bool chessClock;
+  final int turnSeconds;
+  final int interrupts;
+  final int shotClockSeconds;
+  final int graceMs;
+
+  /// Total turns in a match - each round gives both players one turn. Legacy
+  /// (the old round-loop format); unused by the chess-clock battle.
   int get totalTurns => roundCount * 2;
 
   factory MatchSettings.fromMap(Map<String, dynamic>? map) {
@@ -45,6 +63,13 @@ class MatchSettings {
       countdownSeconds: read('countdownSeconds', fallback.countdownSeconds),
       bioRevealSeconds: read('bioRevealSeconds', fallback.bioRevealSeconds),
       warmupSeconds: read('warmupSeconds', fallback.warmupSeconds),
+      // Absent (a match stamped before this shipped) -> chess-clock on, since
+      // that is the only format MatchScreen runs now.
+      chessClock: map['chessClock'] == null ? true : read('chessClock', 1) == 1,
+      turnSeconds: read('turnSeconds', fallback.turnSeconds),
+      interrupts: read('interrupts', fallback.interrupts),
+      shotClockSeconds: read('shotClockSeconds', fallback.shotClockSeconds),
+      graceMs: read('graceMs', fallback.graceMs),
     );
   }
 }
