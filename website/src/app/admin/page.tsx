@@ -26,6 +26,7 @@ type Metrics = {
   };
   prizes: PrizeItem[];
   recentBattles: BattleItem[];
+  handled: { reports: HandledItem[]; support: HandledItem[]; appeals: HandledItem[] };
 };
 
 type BattleItem = {
@@ -35,6 +36,15 @@ type BattleItem = {
   completedAtMs: number | null;
   featured: boolean;
   hasClip: boolean;
+  clipUrl: string | null;
+};
+
+type HandledItem = {
+  id: string;
+  collection: string;
+  label: string;
+  status: string;
+  reviewedAtMs: number | null;
 };
 
 type PrizeItem = {
@@ -77,6 +87,9 @@ async function authed(user: User, path: string, init?: RequestInit) {
   const token = await user.getIdToken();
   return fetch(path, {
     ...init,
+    // Admin data must never be stale - after an action the UI re-fetches to
+    // reflect it, and a cached GET would make the change look like it failed.
+    cache: "no-store",
     headers: {
       ...(init?.headers ?? {}),
       Authorization: `Bearer ${token}`,
@@ -282,39 +295,64 @@ function prizeAge(wonAtMs: number | null): string {
 function EditorsChoice({ metrics, act }: { metrics: Metrics; act: (p: Record<string, unknown>, l: string) => void }) {
   const items = metrics.recentBattles ?? [];
   const featuredCount = items.filter((b) => b.featured).length;
+  const [preview, setPreview] = useState<string | null>(null);
   return (
     <div className="mb-8">
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
         Editor&apos;s Choice <span className="text-zinc-500">({featuredCount} featured)</span>
       </h2>
       <p className="mb-2 text-xs text-zinc-600">
-        Feature a battle in the Home spotlight. Both roasters earn the ⭐ Editor&apos;s Choice badge.
+        Feature a battle in the Home spotlight — both roasters earn the ⭐ badge.
+        Hit <span className="text-zinc-400">Preview</span> to watch the clip first.
+        A battle needs a published clip to be playable in the app; &ldquo;no clip
+        yet&rdquo; features as a plain spotlight.
       </p>
       {items.length === 0 ? (
         <p className="text-xs text-zinc-600">No recent battles.</p>
       ) : (
         <div className="space-y-2">
           {items.map((b) => (
-            <div key={b.id} className={`flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm ${b.featured ? "border-amber-500/50 bg-amber-500/10" : "border-zinc-800 bg-zinc-900/60"}`}>
-              <span className="font-semibold text-white">{b.player1Name} vs {b.player2Name}</span>
-              {b.featured && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">⭐ featured</span>}
-              {b.hasClip ? (
-                <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">clip</span>
-              ) : (
-                <span className="rounded bg-zinc-700/40 px-1.5 py-0.5 text-xs text-zinc-500">no clip yet</span>
-              )}
-              <span className="text-xs text-zinc-500">{b.completedAtMs ? new Date(b.completedAtMs).toLocaleDateString() : ""}</span>
-              <div className="ml-auto">
-                {b.featured ? (
-                  <button onClick={() => act({ type: "removeEditorsChoice", matchId: b.id }, "Unfeatured")} className="rounded bg-zinc-700/80 px-2 py-1 text-xs text-white hover:bg-zinc-700">
-                    Remove
-                  </button>
+            <div key={b.id} className={`rounded-lg border p-3 text-sm ${b.featured ? "border-amber-500/50 bg-amber-500/10" : "border-zinc-800 bg-zinc-900/60"}`}>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-white">{b.player1Name} vs {b.player2Name}</span>
+                <span className="font-mono text-xs text-zinc-600">#{b.id.slice(-6)}</span>
+                {b.featured && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">⭐ featured</span>}
+                {b.clipUrl ? (
+                  <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">clip</span>
                 ) : (
-                  <button onClick={() => act({ type: "editorsChoice", matchId: b.id }, "Featured")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600">
-                    Feature
-                  </button>
+                  <span className="rounded bg-zinc-700/40 px-1.5 py-0.5 text-xs text-zinc-500">no clip yet</span>
                 )}
+                <span className="text-xs text-zinc-500">
+                  {b.completedAtMs ? new Date(b.completedAtMs).toLocaleString() : ""}
+                </span>
+                <div className="ml-auto flex gap-2">
+                  {b.clipUrl && (
+                    <button
+                      onClick={() => setPreview(preview === b.id ? null : b.id)}
+                      className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800"
+                    >
+                      {preview === b.id ? "Hide" : "▶ Preview"}
+                    </button>
+                  )}
+                  {b.featured ? (
+                    <button onClick={() => act({ type: "removeEditorsChoice", matchId: b.id }, "Unfeatured")} className="rounded bg-zinc-700/80 px-2 py-1 text-xs text-white hover:bg-zinc-700">
+                      Remove
+                    </button>
+                  ) : (
+                    <button onClick={() => act({ type: "editorsChoice", matchId: b.id }, "Featured")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600">
+                      Feature
+                    </button>
+                  )}
+                </div>
               </div>
+              {preview === b.id && b.clipUrl && (
+                <video
+                  src={b.clipUrl}
+                  controls
+                  autoPlay
+                  className="mt-3 w-full max-w-md rounded border border-zinc-800 bg-black"
+                />
+              )}
             </div>
           ))}
         </div>
@@ -388,10 +426,10 @@ function Diag({ d }: { d: Record<string, unknown> }) {
 }
 
 function Queues({ metrics, act }: { metrics: Metrics; act: (p: Record<string, unknown>, l: string) => void }) {
-  const blocks: { title: string; items: QueueItem[]; type: string }[] = [
-    { title: "Reports", items: metrics.queues.reports, type: "reviewReport" },
-    { title: "Support", items: metrics.queues.support, type: "resolveSupport" },
-    { title: "Ban appeals", items: metrics.queues.appeals, type: "resolveAppeal" },
+  const blocks: { title: string; items: QueueItem[]; type: string; handled: HandledItem[] }[] = [
+    { title: "Reports", items: metrics.queues.reports, type: "reviewReport", handled: metrics.handled.reports },
+    { title: "Support", items: metrics.queues.support, type: "resolveSupport", handled: metrics.handled.support },
+    { title: "Ban appeals", items: metrics.queues.appeals, type: "resolveAppeal", handled: metrics.handled.appeals },
   ];
   return (
     <div className="mb-8 grid gap-4 lg:grid-cols-3">
@@ -415,6 +453,20 @@ function Queues({ metrics, act }: { metrics: Metrics; act: (p: Record<string, un
                 </li>
               ))}
             </ul>
+          )}
+          {b.handled.length > 0 && (
+            <div className="mt-3 border-t border-zinc-800 pt-2">
+              <div className="mb-1 text-[10px] uppercase tracking-wide text-zinc-600">Recently handled</div>
+              <ul className="space-y-1">
+                {b.handled.map((h) => (
+                  <li key={h.id} className="flex items-center gap-2 text-[11px] text-zinc-500">
+                    <span className={`rounded px-1 py-0.5 ${h.status === "actioned" ? "bg-amber-500/15 text-amber-300" : "bg-zinc-700/40 text-zinc-400"}`}>{h.status}</span>
+                    <span className="truncate">{h.label}</span>
+                    {h.reviewedAtMs && <span className="ml-auto whitespace-nowrap text-zinc-600">{new Date(h.reviewedAtMs).toLocaleDateString()}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       ))}

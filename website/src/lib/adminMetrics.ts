@@ -107,6 +107,12 @@ type BattleItem = {
   completedAtMs: number | null;
   featured: boolean;
   hasClip: boolean;
+  // A public, playable URL when the highlight is published (so the dashboard can
+  // preview it before featuring). Null when unpublished - previewing an
+  // unpublished render needs a signed URL, deliberately not done here to keep
+  // the critical metrics route free of extra Admin SDK imports (ESM crashes on
+  // Vercel - see firebaseAdmin.ts).
+  clipUrl: string | null;
 };
 
 const RECORDED_MODES = new Set(["ranked", "tournament", "friend", "elite"]);
@@ -125,6 +131,9 @@ async function recentBattles(): Promise<BattleItem[]> {
   const rows = snap.docs
     .map((d) => {
       const x = d.data();
+      const h = (x.highlight as Record<string, unknown> | undefined) ?? {};
+      const pub = (h.publicUrls as Record<string, string> | undefined) ?? {};
+      const published = h.published === true;
       return {
         id: d.id,
         p1: String(x.player1Id ?? ""),
@@ -132,9 +141,8 @@ async function recentBattles(): Promise<BattleItem[]> {
         status: x.status,
         mode: x.mode,
         completedAtMs: tsToMs(x.completedAt),
-        published:
-          (x.highlight as Record<string, unknown> | undefined)?.published ===
-          true,
+        published,
+        clipUrl: published ? (pub.landscape ?? pub.vertical ?? null) : null,
       };
     })
     .filter((r) => r.status === "completed" && RECORDED_MODES.has(r.mode));
@@ -157,7 +165,42 @@ async function recentBattles(): Promise<BattleItem[]> {
     completedAtMs: r.completedAtMs,
     featured: featuredIds.has(r.id),
     hasClip: r.published,
+    clipUrl: r.clipUrl,
   }));
+}
+
+type HandledItem = {
+  id: string;
+  collection: "reports" | "supportRequests" | "banAppeals";
+  label: string;
+  status: string;
+  reviewedAtMs: number | null;
+};
+
+// Recently-actioned moderation items, so a click doesn't just vanish - the
+// admin can see what they just handled (and undo via the normal flow if needed).
+// Ordered by review.at, which ONLY actioned docs have, so no status filter or
+// composite index is needed.
+async function recentlyHandled(
+  collection: "reports" | "supportRequests" | "banAppeals",
+): Promise<HandledItem[]> {
+  const db = getAdminFirestore();
+  const snap = await db
+    .collection(collection)
+    .orderBy("review.at", "desc")
+    .limit(8)
+    .get();
+  return snap.docs.map((d) => {
+    const x = d.data();
+    const review = (x.review as Record<string, unknown> | undefined) ?? {};
+    return {
+      id: d.id,
+      collection,
+      label: String(x.category ?? x.reason ?? x.detail ?? x.message ?? d.id),
+      status: String(x.status ?? "reviewed"),
+      reviewedAtMs: tsToMs(review.at),
+    } as HandledItem;
+  });
 }
 
 export type AdminMetrics = Awaited<ReturnType<typeof collectMetrics>>;
@@ -195,6 +238,9 @@ export async function collectMetrics() {
     appeals,
     prizes,
     battlesRecent,
+    handledReports,
+    handledSupport,
+    handledAppeals,
   ] = await Promise.all([
     count(users),
     count(users.where("subscription.active", "==", true)),
@@ -228,6 +274,9 @@ export async function collectMetrics() {
     safe(() => recent("banAppeals")),
     safe(() => recentPrizes()),
     safe(() => recentBattles()),
+    safe(() => recentlyHandled("reports")),
+    safe(() => recentlyHandled("supportRequests")),
+    safe(() => recentlyHandled("banAppeals")),
   ]);
 
   return {
@@ -260,5 +309,10 @@ export async function collectMetrics() {
     },
     prizes: (prizes as PrizeItem[] | null) ?? [],
     recentBattles: (battlesRecent as BattleItem[] | null) ?? [],
+    handled: {
+      reports: (handledReports as HandledItem[] | null) ?? [],
+      support: (handledSupport as HandledItem[] | null) ?? [],
+      appeals: (handledAppeals as HandledItem[] | null) ?? [],
+    },
   };
 }
