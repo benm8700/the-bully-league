@@ -33,11 +33,13 @@ class HomeFeatured extends StatelessWidget {
           final p2 = (d['player2Name'] as String?)?.trim();
           if (p1 == null || p1.isEmpty || p2 == null || p2.isEmpty) continue;
           final clipUrl = (d['clipUrl'] as String?)?.trim();
+          final hasClip = clipUrl != null && clipUrl.isNotEmpty;
           final title = '$p1 vs $p2';
           items.add(FeaturedItem(
             title: title,
             subtitle: '⭐ Editor\'s Choice',
-            onTap: (clipUrl != null && clipUrl.isNotEmpty)
+            playable: hasClip,
+            onTap: hasClip
                 ? () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) =>

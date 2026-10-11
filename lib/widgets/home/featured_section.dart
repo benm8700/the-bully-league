@@ -11,12 +11,17 @@ class FeaturedItem {
     this.subtitle,
     this.imageUrl,
     this.onTap,
+    this.playable = false,
   });
 
   final String title;
   final String? subtitle;
   final String? imageUrl;
   final VoidCallback? onTap;
+
+  /// True when this card plays a clip on tap (gets a ▶ badge). A card without
+  /// a clip is a static spotlight and shows no play affordance.
+  final bool playable;
 }
 
 /// The Home "Featured" section - a horizontal row of spotlight cards.
@@ -92,15 +97,38 @@ class _FeaturedCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: item.imageUrl != null
-                    ? Image.network(
-                        item.imageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => const ColoredBox(
-                          color: Color(0xFF201A26),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    item.imageUrl != null
+                        ? Image.network(
+                            item.imageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => const ColoredBox(
+                              color: Color(0xFF201A26),
+                            ),
+                          )
+                        : const ColoredBox(color: Color(0xFF201A26)),
+                    // A ▶ badge marks a card that plays a clip on tap. Clip-less
+                    // spotlights show nothing, so they don't look tappable.
+                    if (item.playable)
+                      Center(
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                width: 1.5),
+                          ),
+                          child: const Icon(Icons.play_arrow_rounded,
+                              color: Colors.white, size: 30),
                         ),
-                      )
-                    : const ColoredBox(color: Color(0xFF201A26)),
+                      ),
+                  ],
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
