@@ -39,6 +39,7 @@ class BadgeArt extends StatelessWidget {
         // exhaustive.
         BadgeMetric.tournamentWins ||
         BadgeMetric.tournamentRunnerUps ||
+        BadgeMetric.editorsChoicePicks ||
         BadgeMetric.topFire ||
         BadgeMetric.topClever ||
         BadgeMetric.topBoring ||
@@ -76,12 +77,15 @@ class BadgeArt extends StatelessWidget {
   }
 
   /// A medallion with the award's glyph, in one of three finishes:
-  ///  - GOLD for honours (🔥/🧠 and the 🏆 champion),
+  ///  - GOLD for honours (🔥/🧠, the 🏆 champion, the ⭐ editor's choice),
   ///  - SILVER for the 🥈 runner-up (an honour, clearly below gold),
   ///  - TARNISHED grey for the negatives (🥱/💩/🚩), so a 💩 trophy never reads
   ///    as a gold honour - matching the emoji-badge medals.
   Widget _emojiMedallion() {
-    final gold = def.emoji == '🔥' || def.emoji == '🧠' || def.emoji == '🏆';
+    final gold = def.emoji == '🔥' ||
+        def.emoji == '🧠' ||
+        def.emoji == '🏆' ||
+        def.emoji == '⭐';
     final silver = def.emoji == '🥈';
     final accent = gold
         ? const Color(0xFFF4C838)

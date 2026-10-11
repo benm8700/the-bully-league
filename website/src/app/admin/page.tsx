@@ -25,6 +25,16 @@ type Metrics = {
     appeals: QueueItem[];
   };
   prizes: PrizeItem[];
+  recentBattles: BattleItem[];
+};
+
+type BattleItem = {
+  id: string;
+  player1Name: string;
+  player2Name: string;
+  completedAtMs: number | null;
+  featured: boolean;
+  hasClip: boolean;
 };
 
 type PrizeItem = {
@@ -216,6 +226,7 @@ export default function AdminPage() {
             </div>
           </div>
 
+          <EditorsChoice metrics={metrics} act={act} />
           <Prizes metrics={metrics} act={act} />
           <Queues metrics={metrics} act={act} />
           <UserSearch user={user!} act={act} />
@@ -266,6 +277,50 @@ function prizeAge(wonAtMs: number | null): string {
   const days = Math.floor((Date.now() - wonAtMs) / 86400000);
   const ago = days <= 0 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`;
   return `won ${d.toLocaleDateString()} · ${ago}`;
+}
+
+function EditorsChoice({ metrics, act }: { metrics: Metrics; act: (p: Record<string, unknown>, l: string) => void }) {
+  const items = metrics.recentBattles ?? [];
+  const featuredCount = items.filter((b) => b.featured).length;
+  return (
+    <div className="mb-8">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+        Editor&apos;s Choice <span className="text-zinc-500">({featuredCount} featured)</span>
+      </h2>
+      <p className="mb-2 text-xs text-zinc-600">
+        Feature a battle in the Home spotlight. Both roasters earn the ⭐ Editor&apos;s Choice badge.
+      </p>
+      {items.length === 0 ? (
+        <p className="text-xs text-zinc-600">No recent battles.</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((b) => (
+            <div key={b.id} className={`flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm ${b.featured ? "border-amber-500/50 bg-amber-500/10" : "border-zinc-800 bg-zinc-900/60"}`}>
+              <span className="font-semibold text-white">{b.player1Name} vs {b.player2Name}</span>
+              {b.featured && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">⭐ featured</span>}
+              {b.hasClip ? (
+                <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">clip</span>
+              ) : (
+                <span className="rounded bg-zinc-700/40 px-1.5 py-0.5 text-xs text-zinc-500">no clip yet</span>
+              )}
+              <span className="text-xs text-zinc-500">{b.completedAtMs ? new Date(b.completedAtMs).toLocaleDateString() : ""}</span>
+              <div className="ml-auto">
+                {b.featured ? (
+                  <button onClick={() => act({ type: "removeEditorsChoice", matchId: b.id }, "Unfeatured")} className="rounded bg-zinc-700/80 px-2 py-1 text-xs text-white hover:bg-zinc-700">
+                    Remove
+                  </button>
+                ) : (
+                  <button onClick={() => act({ type: "editorsChoice", matchId: b.id }, "Featured")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600">
+                    Feature
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Prizes({ metrics, act }: { metrics: Metrics; act: (p: Record<string, unknown>, l: string) => void }) {

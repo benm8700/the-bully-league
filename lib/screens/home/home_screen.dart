@@ -21,7 +21,7 @@ import '../../widgets/home/weekly_standing_banner.dart';
 import '../../widgets/home/hero_mode_card.dart';
 import '../../widgets/home/player_status_card.dart';
 import '../../widgets/home/home_quick_actions.dart';
-import '../../widgets/home/featured_section.dart';
+import '../../widgets/home/home_featured.dart';
 import '../../widgets/event_window_banner.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
@@ -186,11 +186,12 @@ class HomeScreen extends StatelessWidget {
                     // milestone bar moved into the Rewards screen; Home keeps
                     // only the glanceable balance and a way in.
                     if (uid != null) _WalletBarForUser(uid: uid),
-                    // Featured spotlight (promotional/comedian clips). Renders
-                    // NOTHING at launch - there is no real featured content yet
-                    // and an empty section would look broken. Intentionally
-                    // kept; must not be removed. See FeaturedSection.
-                    const FeaturedSection(),
+                    // Featured spotlight - the founder's Editor's Choice picks,
+                    // streamed live from the `featured` collection. Renders
+                    // NOTHING when there are no picks (empty/loading/error), so
+                    // it never leaves a broken-looking gap. See HomeFeatured /
+                    // FeaturedSection.
+                    const HomeFeatured(),
                     const SizedBox(height: 24),
                     // Everything below is navigation rather than the
                     // day's business, and the rule says so without a

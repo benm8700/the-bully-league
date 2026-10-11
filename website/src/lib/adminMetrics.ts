@@ -100,6 +100,66 @@ async function recentPrizes(): Promise<PrizeItem[]> {
     .sort((a, b) => (a.wonAtMs ?? 0) - (b.wonAtMs ?? 0));
 }
 
+type BattleItem = {
+  id: string;
+  player1Name: string;
+  player2Name: string;
+  completedAtMs: number | null;
+  featured: boolean;
+  hasClip: boolean;
+};
+
+const RECORDED_MODES = new Set(["ranked", "tournament", "friend", "elite"]);
+
+// Recent completed battles, so the founder can feature one as Editor's Choice
+// straight from the dashboard (no need to know a matchId). orderBy(completedAt)
+// is single-field - no composite index - and naturally returns only finished
+// matches (pending ones have no completedAt, so the orderBy drops them).
+async function recentBattles(): Promise<BattleItem[]> {
+  const db = getAdminFirestore();
+  const [snap, featuredSnap] = await Promise.all([
+    db.collection("matches").orderBy("completedAt", "desc").limit(20).get(),
+    db.collection("featured").get(),
+  ]);
+  const featuredIds = new Set(featuredSnap.docs.map((d) => d.id));
+  const rows = snap.docs
+    .map((d) => {
+      const x = d.data();
+      return {
+        id: d.id,
+        p1: String(x.player1Id ?? ""),
+        p2: String(x.player2Id ?? ""),
+        status: x.status,
+        mode: x.mode,
+        completedAtMs: tsToMs(x.completedAt),
+        published:
+          (x.highlight as Record<string, unknown> | undefined)?.published ===
+          true,
+      };
+    })
+    .filter((r) => r.status === "completed" && RECORDED_MODES.has(r.mode));
+  const uids = [
+    ...new Set(rows.flatMap((r) => [r.p1, r.p2]).filter(Boolean)),
+  ];
+  const nameByUid = new Map<string, string>();
+  if (uids.length) {
+    const docs = await db.getAll(
+      ...uids.map((u) => db.collection("users").doc(u)),
+    );
+    docs.forEach((d) =>
+      nameByUid.set(d.id, String(d.data()?.username ?? "Unknown")),
+    );
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    player1Name: nameByUid.get(r.p1) ?? "Unknown",
+    player2Name: nameByUid.get(r.p2) ?? "Unknown",
+    completedAtMs: r.completedAtMs,
+    featured: featuredIds.has(r.id),
+    hasClip: r.published,
+  }));
+}
+
 export type AdminMetrics = Awaited<ReturnType<typeof collectMetrics>>;
 
 export async function collectMetrics() {
@@ -134,6 +194,7 @@ export async function collectMetrics() {
     support,
     appeals,
     prizes,
+    battlesRecent,
   ] = await Promise.all([
     count(users),
     count(users.where("subscription.active", "==", true)),
@@ -166,6 +227,7 @@ export async function collectMetrics() {
     safe(() => recent("supportRequests", "status", "open")),
     safe(() => recent("banAppeals")),
     safe(() => recentPrizes()),
+    safe(() => recentBattles()),
   ]);
 
   return {
@@ -197,5 +259,6 @@ export async function collectMetrics() {
       appeals: (appeals as QueueItem[] | null) ?? [],
     },
     prizes: (prizes as PrizeItem[] | null) ?? [],
+    recentBattles: (battlesRecent as BattleItem[] | null) ?? [],
   };
 }

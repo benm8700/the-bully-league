@@ -4468,13 +4468,36 @@ games) are tunable placeholders per the economy-advisor-review discipline.
   the phones. See the backlog note on extending interrupts to regular matches.
 - **STILL NOT built / deferred:** the full **judges'-video-table / broadcast
   desk** (the five judges seeing each other and debating on camera - the lean
-  model has each judge watch the battle + vote, no cross-judge video); the
-  founder "editor's-choice" pick + 50-pick badge; the **Home rework**
-  (ranked-primary + weekly-tournament countdown/qualifying banner). Everything
+  model has each judge watch the battle + vote, no cross-judge video); and the
+  **Home rework** (ranked-primary + weekly-tournament countdown/qualifying
+  banner - a surface the developer wants to redesign themselves). Everything
   stays behind `config/tournament.enabled`. (The pre-match camera/mic check
   before the finals battle IS now wired - consent -> PreMatchScreen
   `mainStageStart` branch, which creates the battle only on ready, so a back-out
   strands nothing.)
+- **FOUNDER "EDITOR'S CHOICE" PICK - BUILT (2026-10-11).** The founder features
+  any completed battle from the **/admin dashboard** -> it lights up the Home
+  **Featured** spotlight (the built-but-empty `FeaturedSection`, now fed live by
+  `HomeFeatured` streaming the `featured` collection), and **both roasters earn
+  a permanent ⭐ "Editor's Choice" badge**. Developer's calls: ANY battle (not
+  finals-only), and a SINGLE badge at first pick (not the "50-pick" the note
+  floated - it's earned-and-kept, threshold 1). NOT a Cloud Function: the
+  /admin action route writes the `featured` doc + increments a server-only
+  `editorsChoicePicks` counter via the Admin SDK (the established admin-writes-
+  in-the-route pattern), guarded so a match isn't double-credited on first
+  feature. The featured doc is denormalised (player names + optional published
+  clip url) so Home reads one cheap listener; a featured card plays the clip
+  when the highlight is published, else it's a spotlight. Remove un-features but
+  KEEPS the badge. `featured` is client-read/server-write; `editorsChoicePicks`
+  is server-only - both live-verified in `rulesAuditChecks.js` (14/14). The
+  /admin page lists recent completed battles with Feature/Remove (so the founder
+  needs no matchId). Badge: `editors_choice` in `kBadges` (gold ⭐ glyph
+  medallion), granted only from the server field (`kServerAwardIds`), pinned by
+  `badges_test.dart`. Analyzer + tsc clean; the in-app badge/Featured UI is not
+  device-verified (mirrors the device-proven glyph-medallion + FeaturedSection
+  patterns; the on-phone APK predates it). The /admin UI ships with the website
+  (developer pushes/deploys); its happy path is browser-unverified like the rest
+  of /admin.
 - **MAIN STAGE RULES EXPLAINER - BUILT (2026-10-11).** The chess-clock format is
   finals-ONLY (the everyday `RulesScreen`/tutorial correctly cover the normal
   3x15s alternating format), so `MainStageRulesScreen`

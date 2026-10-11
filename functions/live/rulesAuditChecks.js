@@ -127,10 +127,35 @@ const made = [UID, NEW];
       ["isAdmin", {booleanValue: true}],
       ["accountStatus", str("banned")],
       ["skipsUsedToday", num(0)],
+      ["editorsChoicePicks", num(50)],
     ]) {
       s = await clientWrite(tok, UID, {[field]: value});
       check(`${field} is refused`, s !== 200, `status ${s}`);
     }
+
+    // --- the featured (Editor's Choice) spotlight collection -----------
+    // Readable by any signed-in client (public showcase), writable by none
+    // (only the /admin dashboard via the Admin SDK, which bypasses rules).
+    console.log("\nthe featured spotlight collection");
+    const FEAT = `ra-feat-${stamp}`;
+    await db.collection("featured").doc(FEAT).set({
+      matchId: FEAT, player1Name: "A", player2Name: "B",
+    });
+    const readFeat = await fetch(`${BASE}/featured/${FEAT}`, {
+      headers: {Authorization: "Bearer " + tok},
+    });
+    check("a signed-in client CAN read a featured doc",
+        readFeat.status === 200, `status ${readFeat.status}`);
+    const writeFeat = await fetch(`${BASE}/featured/${FEAT}` +
+        "?updateMask.fieldPaths=player1Name", {
+      method: "PATCH",
+      headers: {"Content-Type": "application/json",
+        Authorization: "Bearer " + tok},
+      body: JSON.stringify({fields: {player1Name: str("hacked")}}),
+    });
+    check("a client CANNOT write a featured doc", writeFeat.status !== 200,
+        `status ${writeFeat.status} - a client that could would feature itself`);
+    await db.collection("featured").doc(FEAT).delete().catch(() => {});
 
     // --- SEEDING at create, which the update rule cannot undo ----------
     console.log("\nseeding protected fields at SIGNUP");

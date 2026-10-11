@@ -62,4 +62,16 @@ void main() {
     final earned = resolveEarnedIds({'tournamentRunnerUps': 1});
     expect(earned, contains('tournament_runner_up'));
   });
+
+  test('the Editor\'s Choice award is server-only, not client-injectable', () {
+    final injected = resolveEarnedIds({
+      'badges': {
+        'earned': ['editors_choice'],
+      },
+    });
+    expect(injected, isNot(contains('editors_choice')));
+    // ...but a real pick (editorsChoicePicks >= 1) earns it.
+    final earned = resolveEarnedIds({'editorsChoicePicks': 1});
+    expect(earned, contains('editors_choice'));
+  });
 }

@@ -33,6 +33,7 @@ enum BadgeMetric {
   topBoring,
   topTrash,
   topRedFlag,
+  editorsChoicePicks,
 }
 
 /// One badge definition. Tiered badges share a [family] and differ by [level]
@@ -100,6 +101,7 @@ const Set<String> kServerAwardIds = {
   ...kEmojiAwardIds,
   'tournament_champion',
   'tournament_runner_up',
+  'editors_choice',
 };
 
 /// The V1 badge catalogue, in a stable display order.
@@ -255,6 +257,21 @@ const List<BadgeDef> kBadges = [
   // Emoji superlative awards - permanent "ever been #1 in the whole league for
   // this emoji". Earned-and-kept via the server-set emojiTopAwards flag. Two to
   // chase (🔥/🧠), two worn for self-aware comedy (🥱/💩).
+  // Editor's Choice - a PERMANENT award for the house featuring one of your
+  // battles in the Home spotlight (the founder's pick). Earned-and-kept off the
+  // server-set `editorsChoicePicks` counter (incremented only from the /admin
+  // dashboard), so a client can't hand itself the ⭐. A gold honour: being
+  // singled out by the house is a real distinction.
+  BadgeDef(
+    id: 'editors_choice',
+    title: "Editor's Choice",
+    earnedDesc: 'The house featured one of your battles',
+    lockedHint: 'Get a battle featured by the house',
+    metric: BadgeMetric.editorsChoicePicks,
+    threshold: 1,
+    prestige: 72,
+    emoji: '⭐',
+  ),
   BadgeDef(
     id: 'emoji_top_fire',
     title: 'The Inferno',
@@ -323,6 +340,7 @@ class BadgeStats {
     this.votesCast = 0,
     this.tournamentWins = 0,
     this.tournamentRunnerUps = 0,
+    this.editorsChoicePicks = 0,
     this.topFire = false,
     this.topClever = false,
     this.topBoring = false,
@@ -336,6 +354,7 @@ class BadgeStats {
   final int votesCast;
   final int tournamentWins;
   final int tournamentRunnerUps;
+  final int editorsChoicePicks;
 
   /// The permanent "ever been #1 in this emoji" award flags, from the
   /// server-set `emojiTopAwards` map.
@@ -363,6 +382,7 @@ class BadgeStats {
       votesCast: (u['votesCast'] as num?)?.toInt() ?? 0,
       tournamentWins: (u['tournamentWins'] as num?)?.toInt() ?? 0,
       tournamentRunnerUps: (u['tournamentRunnerUps'] as num?)?.toInt() ?? 0,
+      editorsChoicePicks: (u['editorsChoicePicks'] as num?)?.toInt() ?? 0,
       topFire: flag('fire'),
       topClever: flag('clever'),
       topBoring: flag('boring'),
@@ -378,6 +398,7 @@ class BadgeStats {
         BadgeMetric.votesCast => votesCast,
         BadgeMetric.tournamentWins => tournamentWins,
         BadgeMetric.tournamentRunnerUps => tournamentRunnerUps,
+        BadgeMetric.editorsChoicePicks => editorsChoicePicks,
         BadgeMetric.topFire => topFire ? 1 : 0,
         BadgeMetric.topClever => topClever ? 1 : 0,
         BadgeMetric.topBoring => topBoring ? 1 : 0,
