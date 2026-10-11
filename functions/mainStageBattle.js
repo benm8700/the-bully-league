@@ -75,8 +75,8 @@ function createBattle(players, config = {}, seed = {}) {
     const v = seed.stealsByPlayer && seed.stealsByPlayer[p];
     return Number.isFinite(v) ? Math.max(0, Math.trunc(v)) : cfg.interrupts;
   };
-  const extendsOf = (p) => {
-    const v = seed.extendsByPlayer && seed.extendsByPlayer[p];
+  const seededOf = (map, p) => {
+    const v = map && map[p];
     return Number.isFinite(v) ? Math.max(0, Math.trunc(v)) : 0;
   };
   return {
@@ -84,7 +84,12 @@ function createBattle(players, config = {}, seed = {}) {
     config: cfg,
     remaining: {[a]: cfg.turnMs, [b]: cfg.turnMs},
     steals: {[a]: stealsOf(a), [b]: stealsOf(b)},
-    extends: {[a]: extendsOf(a), [b]: extendsOf(b)},
+    // No-grace "instant" interrupt tokens (a separate, pricier loadout ability).
+    instantSteals: {
+      [a]: seededOf(seed.instantStealsByPlayer, a),
+      [b]: seededOf(seed.instantStealsByPlayer, b),
+    },
+    extends: {[a]: seededOf(seed.extendsByPlayer, a), [b]: seededOf(seed.extendsByPlayer, b)},
     floor: null, // who holds the mic
     talking: false, // has the floor-holder started talking (shot-clock)
     floorTakenMs: null,
@@ -105,6 +110,7 @@ function cloneState(state) {
     ...state,
     remaining: {...state.remaining},
     steals: {...state.steals},
+    instantSteals: {...(state.instantSteals || {})},
     extends: {...(state.extends || {})},
   };
 }
@@ -208,9 +214,17 @@ function reduce(state, ev) {
     case "interrupt": {
       const opp = other(s, ev.by);
       if (s.floor !== opp) return s; // can only cut in on the holder
-      if (s.steals[ev.by] <= 0) return s; // out of steals
       if (s.remaining[ev.by] <= 0) return s; // no time to take the floor with
       if (s.pendingBy != null) return s; // an interrupt is already winding up
+      if (ev.instant) {
+        // The "Instant Interrupt" ability: no grace, no flash, no beat - the
+        // floor is yours the instant you commit. Separate (pricier) token pool.
+        if ((s.instantSteals[ev.by] || 0) <= 0) return s;
+        s.instantSteals[ev.by] -= 1;
+        takeFloor(s, ev.by, ev.atMs);
+        return s;
+      }
+      if (s.steals[ev.by] <= 0) return s; // out of (graced) steals
       s.steals[ev.by] -= 1; // the token is spent the instant you commit
       if (s.config.graceMs > 0) {
         // Commit, but let the holder land their line - the floor passes when

@@ -401,7 +401,10 @@ class _MatchScreenState extends State<MatchScreen>
       }
     } else if (t == 'ms_intent' && _isHost == true) {
       final ev = _eventFromName(message['ev'] as String?);
-      if (ev != null) _hostApply(ev, by: message['by'] as String?);
+      if (ev != null) {
+        _hostApply(ev,
+            by: message['by'] as String?, instant: message['instant'] == true);
+      }
     }
   }
 
@@ -468,6 +471,7 @@ class _MatchScreenState extends State<MatchScreen>
     _engineStarted = true;
 
     Map<String, int>? steals;
+    Map<String, int>? instantSteals;
     Map<String, int>? extendsBy;
     var myGoFirst = false;
     var oppGoFirst = false;
@@ -477,6 +481,10 @@ class _MatchScreenState extends State<MatchScreen>
         steals = {
           _myFirebaseUid: ab.count(_myFirebaseUid, 'interrupt'),
           _oppFirebaseUid: ab.count(_oppFirebaseUid, 'interrupt'),
+        };
+        instantSteals = {
+          _myFirebaseUid: ab.count(_myFirebaseUid, 'instantInterrupt'),
+          _oppFirebaseUid: ab.count(_oppFirebaseUid, 'instantInterrupt'),
         };
         extendsBy = {
           _myFirebaseUid: ab.count(_myFirebaseUid, 'extend'),
@@ -505,6 +513,7 @@ class _MatchScreenState extends State<MatchScreen>
       [_myFirebaseUid, _oppFirebaseUid],
       config: _battleConfig,
       stealsByPlayer: steals,
+      instantStealsByPlayer: instantSteals,
       extendsByPlayer: extendsBy,
     );
     b = b.reduce(MsEvent.open, by: firstFloor, atMs: _nowMs);
@@ -519,9 +528,9 @@ class _MatchScreenState extends State<MatchScreen>
 
   /// HOST: apply an event, auto-start the holder's talk clock (V1 keeps talk
   /// auto-started; voice-driven start is a later refinement), then broadcast.
-  void _hostApply(MsEvent ev, {String? by}) {
+  void _hostApply(MsEvent ev, {String? by, bool instant = false}) {
     if (_isHost != true || _battle == null) return;
-    var b = _battle!.reduce(ev, by: by, atMs: _nowMs);
+    var b = _battle!.reduce(ev, by: by, atMs: _nowMs, instant: instant);
     if (b.floor != null && !b.talking) {
       b = b.reduce(MsEvent.startTalking, by: b.floor, atMs: _nowMs);
     }
@@ -530,14 +539,19 @@ class _MatchScreenState extends State<MatchScreen>
   }
 
   /// Push an intent: the host applies it; the guest sends it to the host (the
-  /// authority). The engine re-checks validity either way.
-  void _intent(MsEvent ev) {
+  /// authority). The engine re-checks validity either way. [instant] marks an
+  /// interrupt as the no-grace instant-interrupt ability.
+  void _intent(MsEvent ev, {bool instant = false}) {
     if (_battle == null || _battle!.isOver || _violationEnded) return;
     if (_isHost == true) {
-      _hostApply(ev, by: _myFirebaseUid);
+      _hostApply(ev, by: _myFirebaseUid, instant: instant);
     } else {
-      _videoCallService
-          .sendMatchMessage({'t': 'ms_intent', 'ev': ev.name, 'by': _myFirebaseUid});
+      _videoCallService.sendMatchMessage({
+        't': 'ms_intent',
+        'ev': ev.name,
+        'by': _myFirebaseUid,
+        'instant': instant,
+      });
     }
   }
 
@@ -1083,6 +1097,11 @@ class _MatchScreenState extends State<MatchScreen>
     // Interrupt only appears when the player actually has steals (loadout);
     // the amateur base is yield-only, so most battles show Yield alone.
     final showInterrupt = (b.steals[_myFirebaseUid] ?? 0) > 0 || iAmInterrupting;
+    final instantN = b.instantSteals[_myFirebaseUid] ?? 0;
+    final canInstant = oppHoldsFloor &&
+        instantN > 0 &&
+        (b.remaining[_myFirebaseUid] ?? 0) > 0 &&
+        b.pendingBy == null;
     return Positioned(
       left: 16,
       right: 16,
@@ -1113,6 +1132,21 @@ class _MatchScreenState extends State<MatchScreen>
                 child: Text(iAmInterrupting
                     ? 'Cutting in...'
                     : 'Interrupt (${b.steals[_myFirebaseUid] ?? 0})'),
+              ),
+            ),
+          ],
+          if (instantN > 0) ...[
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                onPressed:
+                    canInstant ? () => _intent(MsEvent.interrupt, instant: true) : null,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 54),
+                  backgroundColor: context.palette.reward,
+                  foregroundColor: Colors.black,
+                ),
+                child: Text('Instant ($instantN)'),
               ),
             ),
           ],

@@ -58,6 +58,7 @@ class MainStageBattleState {
   MainStageBattleState._(this.players, this.config)
       : remaining = {},
         steals = {},
+        instantSteals = {},
         extendTokens = {};
 
   /// A fresh battle between two distinct players.
@@ -70,6 +71,7 @@ class MainStageBattleState {
     List<String> players, {
     MainStageBattleConfig config = const MainStageBattleConfig(),
     Map<String, int>? stealsByPlayer,
+    Map<String, int>? instantStealsByPlayer,
     Map<String, int>? extendsByPlayer,
   }) {
     if (players.length != 2 || players[0] == players[1]) {
@@ -79,6 +81,7 @@ class MainStageBattleState {
     for (final p in players) {
       s.remaining[p] = config.turnMs;
       s.steals[p] = (stealsByPlayer?[p] ?? config.interrupts).clamp(0, 1 << 20);
+      s.instantSteals[p] = (instantStealsByPlayer?[p] ?? 0).clamp(0, 1 << 20);
       s.extendTokens[p] = (extendsByPlayer?[p] ?? 0).clamp(0, 1 << 20);
     }
     return s;
@@ -87,7 +90,8 @@ class MainStageBattleState {
   final List<String> players;
   final MainStageBattleConfig config;
   final Map<String, int> remaining; // ms left per player
-  final Map<String, int> steals; // interrupt tokens left per player
+  final Map<String, int> steals; // graced interrupt tokens left per player
+  final Map<String, int> instantSteals; // no-grace interrupt tokens per player
   final Map<String, int> extendTokens; // +5s tokens left per player
   String? floor; // who holds the mic
   bool talking = false; // has the floor-holder started talking (shot-clock)
@@ -104,6 +108,7 @@ class MainStageBattleState {
     final s = MainStageBattleState._(players, config);
     s.remaining.addAll(remaining);
     s.steals.addAll(steals);
+    s.instantSteals.addAll(instantSteals);
     s.extendTokens.addAll(extendTokens);
     s.floor = floor;
     s.talking = talking;
@@ -160,6 +165,7 @@ class MainStageBattleState {
         },
         'remaining': remaining,
         'steals': steals,
+        'instantSteals': instantSteals,
         'extends': extendTokens,
         'floor': floor,
         'talking': talking,
@@ -192,6 +198,9 @@ class MainStageBattleState {
     (m['steals'] as Map).forEach((k, v) {
       s.steals[k as String] = (v as num).toInt();
     });
+    (m['instantSteals'] as Map?)?.forEach((k, v) {
+      s.instantSteals[k as String] = (v as num).toInt();
+    });
     (m['extends'] as Map?)?.forEach((k, v) {
       s.extendTokens[k as String] = (v as num).toInt();
     });
@@ -213,7 +222,10 @@ class MainStageBattleState {
   bool get isOver => status == MsStatus.ended;
 
   /// Apply one event, returning a NEW state; the input is never mutated.
-  MainStageBattleState reduce(MsEvent type, {String? by, required int atMs}) {
+  /// [instant] (only meaningful for [MsEvent.interrupt]) uses the no-grace
+  /// instant-interrupt token pool instead of the graced one.
+  MainStageBattleState reduce(MsEvent type,
+      {String? by, required int atMs, bool instant = false}) {
     final s = _clone();
     if (s.status == MsStatus.live) s._settle(atMs);
     if (s.status == MsStatus.ended) return s;
@@ -268,9 +280,16 @@ class MainStageBattleState {
         if (by == null) return s;
         final opp = s._other(by);
         if (s.floor != opp) return s; // can only cut in on the holder
-        if ((s.steals[by] ?? 0) <= 0) return s; // out of steals
         if ((s.remaining[by] ?? 0) <= 0) return s; // no time to take the floor
         if (s.pendingBy != null) return s; // an interrupt is already winding up
+        if (instant) {
+          // The "Instant Interrupt" ability: no grace, separate token pool.
+          if ((s.instantSteals[by] ?? 0) <= 0) return s;
+          s.instantSteals[by] = s.instantSteals[by]! - 1;
+          s._takeFloor(by, atMs);
+          return s;
+        }
+        if ((s.steals[by] ?? 0) <= 0) return s; // out of graced steals
         s.steals[by] = s.steals[by]! - 1; // token spent the instant you commit
         if (s.config.graceMs > 0) {
           // Commit, but let the holder land their line - the floor passes when

@@ -345,4 +345,39 @@ check("extend defers an incoming interrupt by 5s (buys time against it)", () => 
   assert.strictEqual(s.floor, "b", "cut-in lands 5s later than it would have");
 });
 
+// --- Instant interrupt (no grace, separate token pool) ---------------------
+
+check("an instant interrupt steals the floor immediately even with a grace set", () => {
+  const s = run(
+      createBattle(["a", "b"], {graceMs: 2000},
+          {stealsByPlayer: {a: 0, b: 0}, instantStealsByPlayer: {b: 1}}), [
+        ev("open", "a", 0), ev("startTalking", "a", 0),
+        {type: "interrupt", by: "b", atMs: 1000, instant: true},
+      ]);
+  assert.strictEqual(s.floor, "b", "floor taken at once, no grace");
+  assert.strictEqual(s.pendingBy, null, "nothing winds up");
+  assert.strictEqual(s.instantSteals.b, 0, "instant token spent");
+  assert.strictEqual(s.steals.b, 0, "graced pool untouched");
+});
+
+check("instant interrupt with no instant tokens is a no-op (graced pool not used)", () => {
+  const s = run(
+      createBattle(["a", "b"], {graceMs: 0},
+          {stealsByPlayer: {b: 2}, instantStealsByPlayer: {b: 0}}), [
+        ev("open", "a", 0),
+        {type: "interrupt", by: "b", atMs: 1000, instant: true},
+      ]);
+  assert.strictEqual(s.floor, "a", "no instant token -> no steal");
+  assert.strictEqual(s.steals.b, 2, "graced tokens NOT spent by an instant attempt");
+});
+
+check("instant tokens round-trip through clone", () => {
+  const s = createBattle(["a", "b"], {}, {instantStealsByPlayer: {a: 1, b: 2}});
+  assert.strictEqual(s.instantSteals.a, 1);
+  assert.strictEqual(s.instantSteals.b, 2);
+  // reduce clones; an unrelated event preserves the pool.
+  const r = reduce(s, ev("open", "a", 0));
+  assert.strictEqual(r.instantSteals.b, 2);
+});
+
 console.log(`\n${passed} passed`);

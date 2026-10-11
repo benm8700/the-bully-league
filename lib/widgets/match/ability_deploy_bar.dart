@@ -9,6 +9,8 @@ IconData abilityIcon(String id) {
   switch (id) {
     case 'interrupt':
       return Icons.front_hand;
+    case 'instantInterrupt':
+      return Icons.bolt;
     case 'tomato':
       return Icons.sports_baseball;
     case 'extend':

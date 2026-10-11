@@ -274,5 +274,26 @@ void main() {
       expect(r.extendTokens['a'], 2);
       expect(r.extendTokens['b'], 1);
     });
+
+    test('instant interrupt steals immediately despite a grace, own pool', () {
+      var s = MainStageBattleState.create(['a', 'b'],
+          config: const MainStageBattleConfig(graceMs: 2000),
+          stealsByPlayer: {'a': 0, 'b': 0},
+          instantStealsByPlayer: {'b': 1});
+      s = s.reduce(MsEvent.open, by: 'a', atMs: 0);
+      s = s.reduce(MsEvent.interrupt, by: 'b', atMs: 1000, instant: true);
+      expect(s.floor, 'b', reason: 'no grace, floor taken at once');
+      expect(s.pendingBy, isNull);
+      expect(s.instantSteals['b'], 0);
+    });
+
+    test('instant interrupt with no instant tokens is a no-op', () {
+      var s = MainStageBattleState.create(['a', 'b'],
+          stealsByPlayer: {'b': 2}, instantStealsByPlayer: {'b': 0});
+      s = s.reduce(MsEvent.open, by: 'a', atMs: 0);
+      s = s.reduce(MsEvent.interrupt, by: 'b', atMs: 1000, instant: true);
+      expect(s.floor, 'a');
+      expect(s.steals['b'], 2, reason: 'graced pool not touched by instant');
+    });
   });
 }

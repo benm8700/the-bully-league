@@ -23,7 +23,7 @@ check("every catalog ability resolves config + has a deploy surface", () => {
   const c = resolveAbilityConfig(undefined);
   const ids = Object.keys(ABILITY_CATALOG);
   assert.deepStrictEqual(ids.sort(),
-      ["extend", "goFirst", "interrupt", "tomato"].sort());
+      ["extend", "goFirst", "instantInterrupt", "interrupt", "tomato"].sort());
   for (const id of ids) {
     assert.ok(c[id], `${id} resolves`);
     assert.strictEqual(typeof c[id].cost, "number");

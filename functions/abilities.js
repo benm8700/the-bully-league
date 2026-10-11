@@ -41,6 +41,13 @@ const ABILITY_CATALOG = {
       "Cut into your opponent while they hold the floor and steal it.",
     deploy: "controls",
   },
+  instantInterrupt: {
+    id: "instantInterrupt",
+    name: "Instant Interrupt",
+    description:
+      "Cut in with NO mercy - steal the floor the instant you tap, no grace.",
+    deploy: "controls",
+  },
   tomato: {
     id: "tomato",
     name: "Tomato",
@@ -67,6 +74,9 @@ const ABILITY_CATALOG = {
 // go-first is capped at one (you either lead or you don't).
 const DEFAULTS = {
   interrupt: {cost: 500, subFree: 1, maxPerMatch: 3, enabled: true},
+  // Deliberately expensive and never free - the no-grace cut is the biggest
+  // edge in the game, so it costs a TON of points and even subscribers buy it.
+  instantInterrupt: {cost: 2000, subFree: 0, maxPerMatch: 1, enabled: true},
   tomato: {cost: 150, subFree: 2, maxPerMatch: 5, enabled: true},
   extend: {cost: 250, subFree: 1, maxPerMatch: 3, enabled: true},
   goFirst: {cost: 300, subFree: 1, maxPerMatch: 1, enabled: true},
