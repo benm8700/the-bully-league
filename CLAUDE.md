@@ -4514,10 +4514,15 @@ games) are tunable placeholders per the economy-advisor-review discipline.
      first for the battlers + tournament, names/panel resolve from Firestore,
      and the live video is a best-effort extra - voting + the live tally always
      work, with a neutral "cast your verdict" panel when there's no video.
-  - **Noted gap (not fixed): a Main Stage battle is NOT recorded.**
-    `MainStageBattleScreen` never starts a cloud recording (unlike `MatchScreen`),
-    so the marquee finals produce no highlight clip. Real follow-up; not a dry-
-    run blocker.
+  - **Recording gap - FIXED (2026-10-11).** `MainStageBattleScreen` now starts
+    a cloud recording when the host engine opens (fire-and-forget
+    `startRecording`, host-only, once - same spot/reasoning as `MatchScreen`).
+    The match is mode "tournament" so the backend records it (RECORDED_MODES)
+    and `completeMatch` - already fired when both clocks hit zero - stops it, so
+    the finals now produce a highlight clip like any tournament match. No round
+    boundaries are sent (the chess-clock format has no fixed rounds), so it
+    renders full-length. Analyzer-clean; not yet verified that a real clip comes
+    out of a finals battle (needs a recorded 2-device Main Stage run).
   - **DRY-RUN STAGING - BUILT + VERIFIED.** `functions/live/primeMainStageDryRun.js`
     stages a live `mainstage` tournament (two named battler accounts as the
     #1-callout semifinal + a one-judge panel + two synthetic bench finalists for

@@ -101,6 +101,14 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
   void _maybeStartHostEngine() {
     if (!_isHost || _engineStarted || _video.remoteUid.value == null) return;
     _engineStarted = true;
+    // Record the finals like any tournament match - the match is mode
+    // "tournament", so the backend records it and completeMatch (fired when
+    // both clocks hit zero) stops it. Host-only and once, at the first moment
+    // both players are provably in the channel (same reasoning as MatchScreen).
+    // Fire-and-forget: a recording failure must never block the marquee
+    // battle. No round boundaries are sent - the chess-clock format has no
+    // fixed rounds, so the highlight renders full-length.
+    unawaited(_matchmaking.startRecording(widget.pairing.matchId));
     final cfg = MainStageBattleConfig(
       turnMs: widget.pairing.turnMs,
       interrupts: widget.pairing.interrupts,
