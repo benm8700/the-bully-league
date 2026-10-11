@@ -4470,17 +4470,24 @@ games) are tunable placeholders per the economy-advisor-review discipline.
   desk** (the five judges seeing each other and debating on camera - the lean
   model has each judge watch the battle + vote, no cross-judge video); the
   founder "editor's-choice" pick + 50-pick badge; the **Home rework**
-  (ranked-primary + weekly-tournament countdown/qualifying banner); and - a
-  content gap flagged 2026-10-10 - **in-app INSTRUCTIONS/RULES explaining the
-  Main Stage battle format to players**: the `RulesScreen` + tutorial describe
-  the normal 3x15s alternating format, but NOTHING tells a finalist how the
-  chess-clock works (banked time, free yield, 2 interrupts that cost a token +
-  start your clock, the 1.5s grace, the shot-clock, end-early). Needs a Main
-  Stage explainer before the tournament launches - a finalist should not meet
-  these rules for the first time live on stage. Everything stays behind
-  `config/tournament.enabled`. (The pre-match camera/mic check before the finals
-  battle IS now wired - consent -> PreMatchScreen `mainStageStart` branch, which
-  creates the battle only on ready, so a back-out strands nothing.)
+  (ranked-primary + weekly-tournament countdown/qualifying banner). Everything
+  stays behind `config/tournament.enabled`. (The pre-match camera/mic check
+  before the finals battle IS now wired - consent -> PreMatchScreen
+  `mainStageStart` branch, which creates the battle only on ready, so a back-out
+  strands nothing.)
+- **MAIN STAGE RULES EXPLAINER - BUILT (2026-10-11).** The chess-clock format is
+  finals-ONLY (the everyday `RulesScreen`/tutorial correctly cover the normal
+  3x15s alternating format), so `MainStageRulesScreen`
+  (`lib/screens/tournament/main_stage_rules_screen.dart`) explains it where
+  finalists actually land: banked clock, free yield, 2 token-costing interrupts,
+  the "they get to finish" grace (red flash + buzz), the shot-clock, end-early,
+  and that the judges still decide. Surfaced from `MainStageScreen` as an
+  always-available AppBar info icon plus inline links at "Play your match" and in
+  the finalist's locked/waiting state - deliberately NOT a forced tutorial.
+  Numbers kept soft ("about a minute", "a beat") since the real timings are
+  tunable config; the mechanics are stated precisely. Analyzer-clean; NOT
+  device-verified (static ListView mirroring the device-proven RulesScreen
+  `_Rule` pattern, and the on-phone APK predates it).
 - **Context (the earlier 2026-10-09 PARK, now lifted):** the player-facing live
   build had been parked pending the developer's advisor + blitzkrieg
   conversations; the developer then directed the lean build to proceed this

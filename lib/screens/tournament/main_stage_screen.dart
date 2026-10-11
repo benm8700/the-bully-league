@@ -8,6 +8,7 @@ import '../match/recording_consent_screen.dart';
 import 'judges_room_screen.dart';
 import 'live_viewer_screen.dart';
 import 'main_stage_callout_screen.dart';
+import 'main_stage_rules_screen.dart';
 
 /// The Main Stage (weekly finals) front door: tells the viewer where they stand
 /// after Wednesday's snapshot - finalist / alternate / judge / nobody - lets
@@ -84,7 +85,20 @@ class _MainStageScreenState extends State<MainStageScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Main Stage')),
+      appBar: AppBar(
+        title: const Text('Main Stage'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline),
+            tooltip: 'How the Main Stage works',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const MainStageRulesScreen(),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: StreamBuilder<MainStageView?>(
         stream: _service.watch(),
         builder: (context, snap) {
@@ -135,6 +149,8 @@ class _MainStageScreenState extends State<MainStageScreen> {
             label: const Text('Play your match'),
             onPressed: _startingBattle ? null : () => _startBattle(v),
           ),
+          const SizedBox(height: 8),
+          Center(child: _rulesLink('New to this? How a Main Stage battle works')),
         ];
       }
       if (v.role == MainStageRole.judge) {
@@ -326,6 +342,9 @@ class _MainStageScreenState extends State<MainStageScreen> {
       widgets.add(_statusPill(Icons.hourglass_top, "You're in the bracket",
           'The #1 seed makes their callout on stage, then the battles begin.',
           gold));
+      widgets.add(const SizedBox(height: 8));
+      widgets.add(Center(
+          child: _rulesLink('Know the rules before you step up')));
     } else if (v.role == MainStageRole.judge) {
       widgets.add(_statusPill(Icons.gavel, "You're judging",
           'Five of you decide the finals. The show starts at 6pm.', gold));
@@ -336,6 +355,16 @@ class _MainStageScreenState extends State<MainStageScreen> {
     }
     return widgets;
   }
+
+  Widget _rulesLink(String label) => TextButton.icon(
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const MainStageRulesScreen(),
+          ),
+        ),
+        icon: const Icon(Icons.help_outline, size: 18),
+        label: Text(label),
+      );
 
   Widget _headline(String s, Color color) => Text(
         s,
