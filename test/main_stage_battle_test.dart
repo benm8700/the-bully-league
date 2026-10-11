@@ -225,4 +225,54 @@ void main() {
       expect(r.config.graceMs, 1500);
     });
   });
+
+  group('loadout seeding + extend (regular matches)', () {
+    test('per-player steals/extends seed; no seed stays symmetric', () {
+      final seeded = MainStageBattleState.create(
+        ['a', 'b'],
+        config: const MainStageBattleConfig(interrupts: 0),
+        stealsByPlayer: {'a': 2, 'b': 0},
+        extendsByPlayer: {'a': 1, 'b': 3},
+      );
+      expect(seeded.steals['a'], 2);
+      expect(seeded.steals['b'], 0);
+      expect(seeded.extendTokens['a'], 1);
+      expect(seeded.extendTokens['b'], 3);
+      final finals = MainStageBattleState.create(['a', 'b']);
+      expect(finals.steals['a'], kMainStageInterrupts);
+      expect(finals.extendTokens['a'], 0);
+    });
+
+    test('extend adds 5s to the holder and spends a token', () {
+      var s = MainStageBattleState.create(['a', 'b'],
+          config: const MainStageBattleConfig(turnMs: 30000),
+          extendsByPlayer: {'a': 1});
+      s = s.reduce(MsEvent.open, by: 'a', atMs: 0);
+      s = s.reduce(MsEvent.extend, by: 'a', atMs: 1000);
+      expect(s.remaining['a'], 34000);
+      expect(s.extendTokens['a'], 0);
+    });
+
+    test('extend defers an incoming interrupt by 5s', () {
+      var s = MainStageBattleState.create(['a', 'b'],
+          config: const MainStageBattleConfig(graceMs: 2000),
+          extendsByPlayer: {'a': 1});
+      s = s.reduce(MsEvent.open, by: 'a', atMs: 0);
+      s = s.reduce(MsEvent.interrupt, by: 'b', atMs: 1000); // grace to 3000
+      s = s.reduce(MsEvent.extend, by: 'a', atMs: 1500); // -> 8000
+      expect(s.pendingBy, 'b');
+      s = s.reduce(MsEvent.tick, atMs: 3200);
+      expect(s.floor, 'a', reason: 'held past the old deadline');
+      s = s.reduce(MsEvent.tick, atMs: 8100);
+      expect(s.floor, 'b', reason: 'cut-in lands 5s later');
+    });
+
+    test('extend/extends round-trip through toMap/fromMap', () {
+      final s = MainStageBattleState.create(['a', 'b'],
+          extendsByPlayer: {'a': 2, 'b': 1});
+      final r = MainStageBattleState.fromMap(s.toMap());
+      expect(r.extendTokens['a'], 2);
+      expect(r.extendTokens['b'], 1);
+    });
+  });
 }

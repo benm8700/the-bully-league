@@ -260,9 +260,53 @@ async function purchaseAbility(auth, data) {
   return result;
 }
 
+/**
+ * Resolve BOTH players' ability counts for a match, server-authoritatively.
+ * The chess-clock battle is host-driven peer-to-peer, and the host needs each
+ * player's real interrupt/extend/go-first counts to seed the engine - but a
+ * player's loadout is server-only (matchLoadouts is closed to client reads), so
+ * the host cannot read the opponent's. This callable does it with the Admin
+ * SDK: a participant asks, and gets the resolved {free+bought} per ability for
+ * both sides. It is the honest-path source of truth for seeding (a modified
+ * host can cheat its own engine regardless - the same limit as all the P2P turn
+ * state; this at least means the counts come from real purchases).
+ */
+async function getMatchAbilities(auth, data) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const matchId = data && data.matchId;
+  if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
+  const db = getFirestore();
+  const m = await requireParticipant(db, matchId, auth.uid);
+  const nowMs = Date.now();
+  const [cfg, mon] = await Promise.all([abilityConfig(db), readMonetizationConfig(db)]);
+  const uids = [m.player1Id, m.player2Id];
+  const [users, loadouts] = await Promise.all([
+    Promise.all(uids.map((u) => db.collection("users").doc(u).get())),
+    Promise.all(uids.map((u) => db.collection("matchLoadouts").doc(matchId)
+        .collection("players").doc(u).get())),
+  ]);
+  const players = {};
+  uids.forEach((uid, i) => {
+    const user = users[i].data() || {};
+    const bought = boughtOf(loadouts[i].data());
+    const counts = {};
+    for (const id of Object.keys(ABILITY_CATALOG)) {
+      if (!cfg.enabled || !cfg[id].enabled) {
+        counts[id] = 0;
+        continue;
+      }
+      const free = freeAllowance(user, nowMs, cfg[id], mon.trialDays);
+      counts[id] = Math.min(free + bought[id], cfg[id].maxPerMatch);
+    }
+    players[uid] = counts;
+  });
+  return {enabled: cfg.enabled, players};
+}
+
 module.exports = {
   getLoadout,
   purchaseAbility,
+  getMatchAbilities,
   resolveAbilityConfig,
   purchasePlan,
   freeAllowance,

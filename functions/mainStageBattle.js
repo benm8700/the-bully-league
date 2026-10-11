@@ -40,6 +40,11 @@ const DEFAULTS = {
 const GRACE_DEFAULT_MS = 1500;
 const GRACE_MAX_MS = 10 * 1000;
 
+// How much the "+5 Seconds" loadout ability (regular matches only) adds to the
+// actor's clock. Used when an `extend` event is applied. The finals never fire
+// extend (no abilities), so this never touches a Main Stage battle.
+const EXTEND_MS = 5 * 1000;
+
 /**
  * Resolve a (console-tunable) interrupt grace to a safe value. Anything
  * non-finite or out of [0, GRACE_MAX_MS] falls back to the product default -
@@ -52,18 +57,34 @@ function resolveGraceMs(raw) {
   return Math.trunc(n);
 }
 
-/** A fresh battle between two distinct players. */
-function createBattle(players, config = {}) {
+/**
+ * A fresh battle between two distinct players.
+ *
+ * `seed` lets a REGULAR match seed per-player steal/extend tokens from each
+ * player's paid loadout (interrupts/extends bought). The finals pass no seed,
+ * so both players get the symmetric `cfg.interrupts` steals and zero extends -
+ * Main Stage is unaffected.
+ */
+function createBattle(players, config = {}, seed = {}) {
   const [a, b] = players;
   if (!a || !b || a === b) {
     throw new Error("createBattle needs two distinct players");
   }
   const cfg = {...DEFAULTS, ...config};
+  const stealsOf = (p) => {
+    const v = seed.stealsByPlayer && seed.stealsByPlayer[p];
+    return Number.isFinite(v) ? Math.max(0, Math.trunc(v)) : cfg.interrupts;
+  };
+  const extendsOf = (p) => {
+    const v = seed.extendsByPlayer && seed.extendsByPlayer[p];
+    return Number.isFinite(v) ? Math.max(0, Math.trunc(v)) : 0;
+  };
   return {
     players: [a, b],
     config: cfg,
     remaining: {[a]: cfg.turnMs, [b]: cfg.turnMs},
-    steals: {[a]: cfg.interrupts, [b]: cfg.interrupts},
+    steals: {[a]: stealsOf(a), [b]: stealsOf(b)},
+    extends: {[a]: extendsOf(a), [b]: extendsOf(b)},
     floor: null, // who holds the mic
     talking: false, // has the floor-holder started talking (shot-clock)
     floorTakenMs: null,
@@ -80,7 +101,12 @@ function other(state, p) {
 }
 
 function cloneState(state) {
-  return {...state, remaining: {...state.remaining}, steals: {...state.steals}};
+  return {
+    ...state,
+    remaining: {...state.remaining},
+    steals: {...state.steals},
+    extends: {...(state.extends || {})},
+  };
 }
 
 /**
@@ -198,6 +224,22 @@ function reduce(state, ev) {
       return s;
     }
 
+    case "extend": {
+      // "+5 Seconds" loadout ability (regular matches). The floor-holder adds
+      // EXTEND_MS to their own clock. If they are being interrupted (a steal is
+      // winding up against them), it ALSO defers the cut-in by the same amount,
+      // so they get the five seconds BEFORE the opponent takes over - the
+      // developer's "extend buys time against an interrupt" rule.
+      if (s.floor !== ev.by) return s; // extend only your own, active turn
+      if ((s.extends[ev.by] || 0) <= 0) return s; // no extend tokens left
+      s.extends[ev.by] -= 1;
+      s.remaining[ev.by] += EXTEND_MS;
+      if (s.pendingBy != null && s.pendingBy === other(s, ev.by)) {
+        s.pendingAtMs += EXTEND_MS;
+      }
+      return s;
+    }
+
     case "endEarly": {
       // "I'm done" - the floor-holder ends the battle instead of draining a
       // banked clock in dead air. Only valid when the OPPONENT is already out
@@ -250,4 +292,5 @@ module.exports = {
   DEFAULTS,
   GRACE_DEFAULT_MS,
   GRACE_MAX_MS,
+  EXTEND_MS,
 };

@@ -274,4 +274,75 @@ check("resolveGraceMs clamps a console value to safe bounds", () => {
   assert.strictEqual(resolveGraceMs(2000.9), 2000, "truncated to an int");
 });
 
+// --- Per-player loadout seeding (regular matches) --------------------------
+
+check("seed overrides steals per player; finals (no seed) stay symmetric", () => {
+  const seeded = createBattle(["a", "b"], {interrupts: 0},
+      {stealsByPlayer: {a: 2, b: 0}, extendsByPlayer: {a: 1, b: 3}});
+  assert.strictEqual(seeded.steals.a, 2);
+  assert.strictEqual(seeded.steals.b, 0, "b brought no interrupts -> yield-only");
+  assert.strictEqual(seeded.extends.a, 1);
+  assert.strictEqual(seeded.extends.b, 3);
+  // No seed: both get cfg.interrupts, zero extends (the Main Stage finals).
+  const finals = createBattle(["a", "b"]);
+  assert.strictEqual(finals.steals.a, 2);
+  assert.strictEqual(finals.steals.b, 2);
+  assert.strictEqual(finals.extends.a, 0);
+});
+
+check("a yield-only player (0 seeded steals) cannot interrupt", () => {
+  const s = run(
+      createBattle(["a", "b"], {graceMs: 0}, {stealsByPlayer: {a: 0, b: 0}}), [
+        ev("open", "a", 0), ev("startTalking", "a", 0),
+        ev("interrupt", "b", 2000),
+      ]);
+  assert.strictEqual(s.floor, "a", "b has no steals, so the interrupt no-ops");
+});
+
+// --- +5s Extend ------------------------------------------------------------
+
+check("extend adds 5s to the holder's clock and spends a token", () => {
+  const s = run(
+      createBattle(["a", "b"], {turnMs: 30000}, {extendsByPlayer: {a: 1}}), [
+        ev("open", "a", 0), ev("startTalking", "a", 0),
+        ev("extend", "a", 1000), // 1s elapsed, then +5s
+      ]);
+  // 30000 - 1000 elapsed + 5000 extend = 34000
+  assert.strictEqual(s.remaining.a, 34000);
+  assert.strictEqual(s.extends.a, 0, "token spent");
+});
+
+check("extend with no tokens is a no-op", () => {
+  const s = run(createBattle(["a", "b"], {}, {extendsByPlayer: {a: 0}}), [
+    ev("open", "a", 0), ev("extend", "a", 500),
+  ]);
+  assert.strictEqual(s.extends.a, 0);
+  assert.strictEqual(s.remaining.a, 60000 - 500);
+});
+
+check("only the floor-holder can extend their own clock", () => {
+  const s = run(createBattle(["a", "b"], {}, {extendsByPlayer: {b: 1}}), [
+    ev("open", "a", 0), ev("extend", "b", 500), // b doesn't hold the floor
+  ]);
+  assert.strictEqual(s.extends.b, 1, "not spent");
+});
+
+check("extend defers an incoming interrupt by 5s (buys time against it)", () => {
+  // a holds the floor; b interrupts with a 2s grace; a extends mid-grace.
+  let s = run(createBattle(["a", "b"], {graceMs: 2000}, {extendsByPlayer: {a: 1}}), [
+    ev("open", "a", 0), ev("startTalking", "a", 0),
+    ev("interrupt", "b", 1000), // steal winding up, grace until 3000
+    ev("extend", "a", 1500), // a buys 5s -> grace now until 8000
+  ]);
+  assert.strictEqual(s.pendingBy, "b", "steal still pending, not yet fired");
+  assert.strictEqual(s.floor, "a", "a keeps the floor");
+  // A tick at the ORIGINAL deadline would have handed off without the extend;
+  // now it must not, because the cut-in was pushed to 8000.
+  s = reduce(s, ev("tick", null, 3200));
+  assert.strictEqual(s.floor, "a", "extend held the floor past the old deadline");
+  // Past the deferred deadline, the steal finally lands.
+  s = reduce(s, ev("tick", null, 8100));
+  assert.strictEqual(s.floor, "b", "cut-in lands 5s later than it would have");
+});
+
 console.log(`\n${passed} passed`);

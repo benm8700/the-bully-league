@@ -32,7 +32,12 @@ const int kMainStageShotClockMs = 7 * 1000;
 const int kMainStageGraceMs = 0;
 const int kMainStageGraceDefaultMs = 1500;
 
-enum MsEvent { open, startTalking, yield, interrupt, endEarly, tick }
+/// How much the "+5 Seconds" loadout ability adds to the actor's clock (regular
+/// matches only; the finals never fire [MsEvent.extend]). Mirrors
+/// mainStageBattle.js's EXTEND_MS.
+const int kMainStageExtendMs = 5 * 1000;
+
+enum MsEvent { open, startTalking, yield, interrupt, extend, endEarly, tick }
 
 enum MsStatus { pending, live, ended }
 
@@ -52,21 +57,30 @@ class MainStageBattleConfig {
 class MainStageBattleState {
   MainStageBattleState._(this.players, this.config)
       : remaining = {},
-        steals = {};
+        steals = {},
+        extendTokens = {};
 
   /// A fresh battle between two distinct players.
+  ///
+  /// [stealsByPlayer]/[extendsByPlayer] let a REGULAR match seed per-player
+  /// interrupt/extend tokens from the paid loadout. Omitted (the finals), both
+  /// players get the symmetric [config.interrupts] steals and zero extends, so
+  /// Main Stage is unaffected. Mirrors mainStageBattle.js's `seed` argument.
   factory MainStageBattleState.create(
     List<String> players, {
     MainStageBattleConfig config = const MainStageBattleConfig(),
+    Map<String, int>? stealsByPlayer,
+    Map<String, int>? extendsByPlayer,
   }) {
     if (players.length != 2 || players[0] == players[1]) {
       throw ArgumentError('createBattle needs two distinct players');
     }
     final s = MainStageBattleState._([players[0], players[1]], config);
-    s.remaining[players[0]] = config.turnMs;
-    s.remaining[players[1]] = config.turnMs;
-    s.steals[players[0]] = config.interrupts;
-    s.steals[players[1]] = config.interrupts;
+    for (final p in players) {
+      s.remaining[p] = config.turnMs;
+      s.steals[p] = (stealsByPlayer?[p] ?? config.interrupts).clamp(0, 1 << 20);
+      s.extendTokens[p] = (extendsByPlayer?[p] ?? 0).clamp(0, 1 << 20);
+    }
     return s;
   }
 
@@ -74,6 +88,7 @@ class MainStageBattleState {
   final MainStageBattleConfig config;
   final Map<String, int> remaining; // ms left per player
   final Map<String, int> steals; // interrupt tokens left per player
+  final Map<String, int> extendTokens; // +5s tokens left per player
   String? floor; // who holds the mic
   bool talking = false; // has the floor-holder started talking (shot-clock)
   int? floorTakenMs;
@@ -89,6 +104,7 @@ class MainStageBattleState {
     final s = MainStageBattleState._(players, config);
     s.remaining.addAll(remaining);
     s.steals.addAll(steals);
+    s.extendTokens.addAll(extendTokens);
     s.floor = floor;
     s.talking = talking;
     s.floorTakenMs = floorTakenMs;
@@ -144,6 +160,7 @@ class MainStageBattleState {
         },
         'remaining': remaining,
         'steals': steals,
+        'extends': extendTokens,
         'floor': floor,
         'talking': talking,
         'floorTakenMs': floorTakenMs,
@@ -174,6 +191,9 @@ class MainStageBattleState {
     });
     (m['steals'] as Map).forEach((k, v) {
       s.steals[k as String] = (v as num).toInt();
+    });
+    (m['extends'] as Map?)?.forEach((k, v) {
+      s.extendTokens[k as String] = (v as num).toInt();
     });
     s.floor = m['floor'] as String?;
     s.talking = m['talking'] == true;
@@ -259,6 +279,21 @@ class MainStageBattleState {
           s.pendingAtMs = atMs;
         } else {
           s._takeFloor(by, atMs); // graceMs 0 -> instant steal
+        }
+        return s;
+
+      case MsEvent.extend:
+        // "+5 Seconds" loadout ability (regular matches). The floor-holder adds
+        // kMainStageExtendMs to their own clock; if a steal is winding up
+        // against them, the cut-in is deferred by the same amount, so they get
+        // the five seconds BEFORE the opponent takes over. Mirrors
+        // mainStageBattle.js.
+        if (by == null || s.floor != by) return s;
+        if ((s.extendTokens[by] ?? 0) <= 0) return s;
+        s.extendTokens[by] = s.extendTokens[by]! - 1;
+        s.remaining[by] = (s.remaining[by] ?? 0) + kMainStageExtendMs;
+        if (s.pendingBy != null && s.pendingBy == s._other(by)) {
+          s.pendingAtMs = (s.pendingAtMs ?? atMs) + kMainStageExtendMs;
         }
         return s;
 

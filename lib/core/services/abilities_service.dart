@@ -23,6 +23,17 @@ class AbilitiesService {
     return Loadout.fromMap(_asMap(r.data));
   }
 
+  /// Both players' resolved ability counts for [matchId], server-authoritative
+  /// (the host seeds the chess-clock engine from this - it can read the
+  /// opponent's loadout, which the client can't). Returns
+  /// `{enabled, players: {uid: {interrupt, tomato, extend, goFirst}}}`.
+  static Future<MatchAbilities> getMatchAbilities(String matchId) async {
+    final r = await _fns
+        .httpsCallable('getMatchAbilities')
+        .call<Object?>({'matchId': matchId});
+    return MatchAbilities.fromMap(_asMap(r.data));
+  }
+
   /// Buy ONE of [abilityId] for [matchId]. Idempotent via a fresh requestId, so
   /// a network retry never double-charges. Returns the raw server result
   /// (ok/bought/balance, or throws a FirebaseFunctionsException on refusal).
@@ -48,6 +59,29 @@ Map<String, dynamic> _asMap(Object? o) =>
     <String, dynamic>{};
 
 int _asInt(Object? o) => (o as num?)?.toInt() ?? 0;
+
+/// Both players' resolved ability counts for a match (server-authoritative),
+/// used by the host to seed the chess-clock engine.
+class MatchAbilities {
+  const MatchAbilities({required this.enabled, required this.players});
+
+  final bool enabled;
+
+  /// uid -> {abilityId -> count}. A player not present resolves to zeros.
+  final Map<String, Map<String, int>> players;
+
+  int count(String uid, String abilityId) => players[uid]?[abilityId] ?? 0;
+
+  factory MatchAbilities.fromMap(Map<String, dynamic> m) {
+    final raw = _asMap(m['players']);
+    final players = <String, Map<String, int>>{};
+    raw.forEach((uid, counts) {
+      final cm = _asMap(counts);
+      players[uid] = cm.map((k, v) => MapEntry(k, _asInt(v)));
+    });
+    return MatchAbilities(enabled: m['enabled'] == true, players: players);
+  }
+}
 
 /// A player's pre-match loadout for one match.
 class Loadout {

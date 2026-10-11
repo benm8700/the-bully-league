@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/main_stage_battle.dart';
+import '../../core/services/abilities_service.dart';
 import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
 import '../../core/services/matchmaking_service.dart';
@@ -117,6 +118,11 @@ class _MatchScreenState extends State<MatchScreen>
   // steal is winding up. Harmless when interrupts are off (nothing fires it).
   late final AnimationController _pulse;
   bool _beingInterrupted = false;
+
+  // Tomato splat (a loadout ability): a brief full-screen splat on the RECEIVER
+  // only, rendered over the Flutter UI so it never touches the recording.
+  bool _tomatoSplat = false;
+  Timer? _splatTimer;
 
   /// Known from the pairing itself now, rather than exchanged
   /// peer-to-peer over the data channel after joining.
@@ -377,6 +383,13 @@ class _MatchScreenState extends State<MatchScreen>
       return;
     }
     final t = message['t'];
+    if (t == 'ability' && message['id'] == 'tomato') {
+      // A tomato splats on the RECEIVER's screen. Ephemeral and client-only -
+      // it renders over the Flutter UI, never into the Agora stream, so it can
+      // never reach the recording (the heckle-graphics welfare rule).
+      _showTomatoSplat();
+      return;
+    }
     if (t == 'ms_state' && _isHost != true) {
       final s = message['s'];
       if (s is Map) {
@@ -398,6 +411,8 @@ class _MatchScreenState extends State<MatchScreen>
         return MsEvent.yield;
       case 'interrupt':
         return MsEvent.interrupt;
+      case 'extend':
+        return MsEvent.extend;
       case 'endEarly':
         return MsEvent.endEarly;
       default:
@@ -437,18 +452,60 @@ class _MatchScreenState extends State<MatchScreen>
       await Future<void>.delayed(Duration(seconds: _warmupSeconds));
     }
     if (_violationEnded || !mounted) return;
-    _openEngine();
+    await _openEngine();
   }
 
-  /// HOST: open the chess-clock engine and start the authoritative tick. The
-  /// coin-flipped leader (by Firebase uid) takes the floor first.
-  void _openEngine() {
+  /// HOST: open the chess-clock engine and start the authoritative tick.
+  ///
+  /// Seeds each player's interrupt/extend tokens and the go-first choice from
+  /// the paid loadout (server-resolved, since the opponent's loadout is not
+  /// client-readable). FAILS OPEN to the base yield-only / coin-flip format if
+  /// that resolution can't be read - abilities are a bonus, never a gate on the
+  /// battle starting. With abilities off every count is 0, so this is exactly
+  /// the amateur base: 30s each, yield-only, coin-flip first.
+  Future<void> _openEngine() async {
     if (_engineStarted) return;
     _engineStarted = true;
-    final firstFloor = _hostGoesFirst() ? _myFirebaseUid : _oppFirebaseUid;
+
+    Map<String, int>? steals;
+    Map<String, int>? extendsBy;
+    var myGoFirst = false;
+    var oppGoFirst = false;
+    try {
+      final ab = await AbilitiesService.getMatchAbilities(widget.pairing.matchId);
+      if (ab.enabled) {
+        steals = {
+          _myFirebaseUid: ab.count(_myFirebaseUid, 'interrupt'),
+          _oppFirebaseUid: ab.count(_oppFirebaseUid, 'interrupt'),
+        };
+        extendsBy = {
+          _myFirebaseUid: ab.count(_myFirebaseUid, 'extend'),
+          _oppFirebaseUid: ab.count(_oppFirebaseUid, 'extend'),
+        };
+        myGoFirst = ab.count(_myFirebaseUid, 'goFirst') > 0;
+        oppGoFirst = ab.count(_oppFirebaseUid, 'goFirst') > 0;
+      }
+    } catch (_) {
+      // Base format.
+    }
+    if (!mounted || _violationEnded) return;
+
+    // Go First: exactly one player brought it -> they lead; both or neither ->
+    // the coin flip.
+    final String firstFloor;
+    if (myGoFirst && !oppGoFirst) {
+      firstFloor = _myFirebaseUid;
+    } else if (oppGoFirst && !myGoFirst) {
+      firstFloor = _oppFirebaseUid;
+    } else {
+      firstFloor = _hostGoesFirst() ? _myFirebaseUid : _oppFirebaseUid;
+    }
+
     var b = MainStageBattleState.create(
       [_myFirebaseUid, _oppFirebaseUid],
       config: _battleConfig,
+      stealsByPlayer: steals,
+      extendsByPlayer: extendsBy,
     );
     b = b.reduce(MsEvent.open, by: firstFloor, atMs: _nowMs);
     _battle = b;
@@ -615,6 +672,7 @@ class _MatchScreenState extends State<MatchScreen>
   void dispose() {
     _ticker?.cancel();
     _battleTick?.cancel();
+    _splatTimer?.cancel();
     _pulse.dispose();
     _msgSub?.cancel();
     _matchDocSub?.cancel();
@@ -778,20 +836,51 @@ class _MatchScreenState extends State<MatchScreen>
               onDeploy: _onDeployAbility,
             ),
           ),
+        if (_tomatoSplat) Positioned.fill(child: _buildTomatoSplat()),
       ],
     );
   }
 
-  /// A power-up was deployed from the tap-to-deploy bar. The in-match EFFECT
-  /// (tomato splat, +5s extend) is format-specific and wired into the chess-
-  /// clock battle as part of the abilities-effects build; for now this confirms
-  /// the tap. (Interrupt is deployed from the controls, not here.)
+  /// A power-up was deployed from the tap-to-deploy bar. Interrupt is NOT here
+  /// (it's the chess-clock controls' button); this handles the bar abilities:
+  ///  - extend: feed MsEvent.extend into the engine (+5s to your clock, and it
+  ///    defers an incoming interrupt) - the engine enforces the token count.
+  ///  - tomato: broadcast a splat to the opponent (ephemeral, never recorded).
   void _onDeployAbility(String abilityId) {
     if (!mounted) return;
+    switch (abilityId) {
+      case 'extend':
+        _intent(MsEvent.extend);
+        _toast('+5 seconds');
+      case 'tomato':
+        _videoCallService
+            .sendMatchMessage({'t': 'ability', 'id': 'tomato', 'by': _myFirebaseUid});
+        _toast('Tomato thrown');
+    }
+  }
+
+  void _toast(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(milliseconds: 1200),
-        content: Text('$abilityId deployed'),
+      SnackBar(duration: const Duration(milliseconds: 1200), content: Text(message)),
+    );
+  }
+
+  /// Show the tomato splat briefly (I'm the target). Client-only overlay.
+  void _showTomatoSplat() {
+    if (!mounted) return;
+    setState(() => _tomatoSplat = true);
+    _splatTimer?.cancel();
+    _splatTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _tomatoSplat = false);
+    });
+  }
+
+  Widget _buildTomatoSplat() {
+    return IgnorePointer(
+      child: Container(
+        color: const Color(0xFFC4201A).withValues(alpha: 0.28),
+        alignment: Alignment.center,
+        child: const Text('🍅', style: TextStyle(fontSize: 160)),
       ),
     );
   }

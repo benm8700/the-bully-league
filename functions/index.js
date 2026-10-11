@@ -1168,6 +1168,10 @@ exports.purchaseAbility = onCall(async (request) => {
   const {purchaseAbility} = require("./abilities");
   return purchaseAbility(request.auth, request.data);
 });
+exports.getMatchAbilities = onCall(async (request) => {
+  const {getMatchAbilities} = require("./abilities");
+  return getMatchAbilities(request.auth, request.data);
+});
 
 exports.deleteMyAccount = onCall({timeoutSeconds: 300}, async (request) => {
   const {deleteAccount} = require("./accountDeletion");
