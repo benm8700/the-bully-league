@@ -62,6 +62,10 @@ function buildMainStageDoc({snapshot, nowMs, lockAtMs, showAtMs}) {
     status: "accepting", // accepting -> locked -> live -> completed | cancelled
     cutoffDayKey: snapshot.tournamentDayKey,
     finalists, // seed order (highest weekly Elo gain first)
+    // The seat-4 WILD CARD drawn from the rest of the field (see wildCard.js).
+    // Carried onto the doc so the client can mark it in the bracket/field and
+    // run the "wild-card draw" reveal. Null if the field was too small to draw.
+    wildCardUid: snapshot.wildCardUid || null,
     alternates, // seed order
     judgePool, // most-judged-this-week, for panel autofill
     handPickedJudges: [], // the founder's picks, set before the lock

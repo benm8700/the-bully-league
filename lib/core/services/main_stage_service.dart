@@ -22,8 +22,10 @@ class MainStageView {
     required this.role,
     required this.invite,
     required this.isTopSeed,
+    required this.finalists,
     required this.field,
     required this.candidates,
+    this.wildCardUid,
     this.myMatchupRound,
     this.myMatchupIndex,
     this.liveBattleMatchId,
@@ -41,8 +43,17 @@ class MainStageView {
   /// since the field isn't settled yet.
   final bool isTopSeed;
 
+  /// The seed-ordered finalists from the snapshot (known from Wednesday night,
+  /// before the 4pm lock) - [skill1, skill2, skill3, wildCard]. Use this to show
+  /// the announced field + the wild-card reveal while status is 'accepting'.
+  final List<String> finalists;
+
   /// The locked field (seed order), empty until the 4pm lock.
   final List<String> field;
+
+  /// The seat-4 WILD CARD uid (drawn from the field by engagement), or null if
+  /// the field was too small to draw one. Mark whichever seed matches this.
+  final String? wildCardUid;
 
   /// The opponents the #1 may call out: the locked field minus themselves.
   /// Empty unless [isTopSeed] and the callout is open (status == locked).
@@ -185,8 +196,10 @@ class MainStageService {
       role: role,
       invite: invite,
       isTopSeed: isTopSeed,
+      finalists: finalists,
       field: field,
       candidates: candidates,
+      wildCardUid: t['wildCardUid'] as String?,
       myMatchupRound: myRound,
       myMatchupIndex: myIdx,
       liveBattleMatchId: liveBattleMatchId,

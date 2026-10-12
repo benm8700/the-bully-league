@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/main_stage_service.dart';
@@ -215,34 +217,40 @@ class _MainStageScreenState extends State<MainStageScreen> {
               Theme.of(context).colorScheme.onSurfaceVariant),
       ];
     }
-    if (v.status == 'locked') return _locked(v);
+    // The announced field (with the wild-card reveal) shows below the viewer's
+    // own status in both the locked and accepting states.
+    if (v.status == 'locked') return [..._locked(v), _fieldWidget(v)];
     // accepting
-    switch (v.role) {
-      case MainStageRole.finalist:
-        return _invite(v, "You made the Main Stage.",
-            "Top 4 this week. Confirm you're in by Thursday 4pm or your spot "
-                'goes to an alternate.');
-      case MainStageRole.alternate:
-        return _invite(v, "You're an alternate.",
-            "Ranks 5-8 this week. If a finalist drops by Thursday 4pm, the "
-                'highest confirmed alternate rolls in — so confirm you\'re '
-                'around just in case.');
-      case MainStageRole.judge:
-        return _invite(v, "You're on the judging panel.",
-            'Five judges decide the finals live on stage. Confirm by Thursday '
-                '4pm.');
-      case MainStageRole.none:
-        return [
+    final base = switch (v.role) {
+      MainStageRole.finalist => _invite(v, "You made the Main Stage.",
+          "Top 4 this week. Confirm you're in by Thursday 4pm or your spot "
+              'goes to an alternate.'),
+      MainStageRole.alternate => _invite(v, "You're an alternate.",
+          "Ranks 5-8 this week. If a finalist drops by Thursday 4pm, the "
+              'highest confirmed alternate rolls in — so confirm you\'re '
+              'around just in case.'),
+      MainStageRole.judge => _invite(v, "You're on the judging panel.",
+          'Five judges decide the finals live on stage. Confirm by Thursday '
+              '4pm.'),
+      MainStageRole.none => <Widget>[
           const EmptyState(
             icon: Icons.visibility_outlined,
             title: "You're not in this week's finals",
             message:
-                'Watch the Main Stage live and judge the battles — the crowd '
-                'is half the show. Climb the ladder this week for a shot next '
-                'time.',
+                'Watch the Main Stage live — the crowd is half the show. Climb '
+                'the ladder this week for a shot next time.',
           ),
-        ];
-    }
+        ],
+    };
+    return [...base, _fieldWidget(v)];
+  }
+
+  /// The announced finals field with the wild card marked. Uses the locked
+  /// field once it's set, else the snapshot finalists (known from Wednesday).
+  Widget _fieldWidget(MainStageView v) {
+    final uids = v.field.isNotEmpty ? v.field : v.finalists;
+    if (uids.isEmpty) return const SizedBox.shrink();
+    return _FieldRoster(uids: uids, wildCardUid: v.wildCardUid);
   }
 
   List<Widget> _invite(MainStageView v, String title, String blurb) {
@@ -406,6 +414,137 @@ class _MainStageScreenState extends State<MainStageScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The announced finals field, with the seat-4 WILD CARD marked - the
+/// "wild-card draw" reveal. Seeds 1..3 are the skill locks; the seat matching
+/// [wildCardUid] is the player drawn in by engagement. Resolves usernames once.
+class _FieldRoster extends StatefulWidget {
+  const _FieldRoster({required this.uids, required this.wildCardUid});
+
+  final List<String> uids;
+  final String? wildCardUid;
+
+  @override
+  State<_FieldRoster> createState() => _FieldRosterState();
+}
+
+class _FieldRosterState extends State<_FieldRoster> {
+  final Map<String, String> _names = {};
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final uids = widget.uids.toSet().take(10).toList();
+      if (uids.isNotEmpty) {
+        final q = await FirebaseFirestore.instance
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: uids)
+            .get();
+        for (final d in q.docs) {
+          final n = d.data()['username'];
+          if (n is String) _names[d.id] = n;
+        }
+      }
+    } catch (_) {
+      // Names are a nicety; fall back to "Roaster".
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final gold = context.palette.reward;
+    final text = Theme.of(context).textTheme;
+    final me = FirebaseAuth.instance.currentUser?.uid;
+    final wc = widget.wildCardUid;
+    final iAmWild = wc != null && wc == me;
+
+    final reveal = iAmWild
+        ? "\u{1F3B2} You drew the wild card — you're in the finals."
+        : (wc != null
+            ? 'Top 3 locked in by skill. The 4th is the wild-card draw.'
+            : 'The finals field.');
+
+    return Container(
+      margin: const EdgeInsets.only(top: 22),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: Colors.black.withValues(alpha: 0.3),
+        border: Border.all(color: gold.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('THE FIELD',
+              style: text.labelMedium?.copyWith(
+                  color: gold, fontWeight: FontWeight.w900, letterSpacing: 1)),
+          const SizedBox(height: 2),
+          Text(reveal,
+              style: text.bodySmall
+                  ?.copyWith(color: Colors.white.withValues(alpha: 0.78))),
+          const SizedBox(height: 10),
+          ...List.generate(widget.uids.length, (i) {
+            final uid = widget.uids[i];
+            final isWild = wc != null && uid == wc;
+            final isMe = uid == me;
+            final name = _loading ? '…' : (_names[uid] ?? 'Roaster');
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 30,
+                    child: isWild
+                        ? const Text('\u{1F3B2}',
+                            style: TextStyle(fontSize: 17))
+                        : Text('${i + 1}',
+                            style: text.titleMedium?.copyWith(
+                                color: gold, fontWeight: FontWeight.w900)),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      isMe ? '$name (you)' : name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight:
+                              isMe ? FontWeight.w800 : FontWeight.w600),
+                    ),
+                  ),
+                  if (isWild)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: gold.withValues(alpha: 0.18),
+                        border: Border.all(color: gold.withValues(alpha: 0.6)),
+                      ),
+                      child: Text('WILD CARD',
+                          style: TextStyle(
+                              color: gold,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5)),
+                    ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
