@@ -393,7 +393,7 @@ class RoastHero extends StatelessWidget {
                 'Stage. Battle 5 different opponents to qualify - the top 3 by '
                 'skill lock in a finals seat, and everyone else who qualifies '
                 'goes in the wild-card draw for the 4th. The more you play and '
-                'judge, the better your draw odds.',
+                'vote on other matches, the better your draw odds.',
                 style: body,
               ),
               const SizedBox(height: 16),
