@@ -32,11 +32,13 @@ class RulesScreen extends StatelessWidget {
           const _Rule(
             icon: Icons.sports_mma_outlined,
             title: 'The battle',
-            body: 'You are matched one-on-one. First comes a short warmup - '
-                'both mics open, size each other up. Then you take turns: '
-                'when it is your turn you roast, and your opponent\'s mic is '
-                'muted. Turns are short, so land the joke fast. A few rounds '
-                'and it is done.',
+            body: 'You are matched one-on-one. First a short warmup - both '
+                'mics open, size each other up. Then it is on the clock: you '
+                'each get about 30 seconds that only counts down while YOU are '
+                'talking. Hold the floor and roast, then tap Yield to hand it '
+                'over (it also passes when your time runs out). While your '
+                'opponent has the floor, your mic is muted. When both clocks '
+                'hit zero, it is done - so pick your moments and land them.',
           ),
           const _Rule(
             icon: Icons.how_to_vote_outlined,
@@ -57,12 +59,13 @@ class RulesScreen extends StatelessWidget {
                 'forgettable matchup.',
           ),
           const _Rule(
-            icon: Icons.local_fire_department_outlined,
-            title: 'The Daily Gauntlet',
-            body: 'The nightly tournament, 6-7pm Pacific. It is the main event '
-                'and where the prestige and prizes are. Check in when it '
-                'opens, and battle through the bracket. Miss it and you can '
-                'still find a one-on-one any time.',
+            icon: Icons.stairs_outlined,
+            title: 'The Basement & The Main Stage',
+            body: 'The Bully League has two rooms. The Basement is everyday '
+                'play - roast a random stranger any time, climb the ranks. The '
+                'Main Stage is the tournament: the big show, where the prizes '
+                'and the prestige are. Win in The Basement to earn your way up '
+                'to it.',
           ),
           const _Rule(
             icon: Icons.emoji_emotions_outlined,
@@ -83,8 +86,8 @@ class RulesScreen extends StatelessWidget {
           ),
 
           // The interactive demo, at the bottom - the old "how a battle
-          // works" menu item. It runs the real turn machinery (countdown,
-          // the clock, End My Turn) against a simulated opponent, joining no
+          // works" menu item. It runs the real chess-clock machinery (the
+          // floor, the clock, Yield) against a simulated opponent, joining no
           // channel, so it is free to run and safe to replay any time.
           const SizedBox(height: 36),
           const Divider(),
@@ -102,9 +105,9 @@ class RulesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Walk through a real practice round - the countdown, the turn '
-            'clock, ending your turn - against a simulated opponent. No one '
-            'else is there and nothing is recorded.',
+            'Walk through a real battle - holding the floor, the clock, '
+            'yielding - against a simulated opponent. No one else is there and '
+            'nothing is recorded.',
             style: text.bodyMedium?.copyWith(height: 1.4),
           ),
           const SizedBox(height: 16),

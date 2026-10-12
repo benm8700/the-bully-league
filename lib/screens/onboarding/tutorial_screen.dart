@@ -242,10 +242,10 @@ class _TutorialScreenState extends State<TutorialScreen> {
       icon: Icons.sports_mma_outlined,
       title: 'You\'re about to roast a stranger',
       body: const [
-        'You get matched with someone at your level. You take turns roasting '
-            'each other on camera, and the community votes on who won.',
-        'It takes 2 minutes. Let\'s walk through it once so nothing catches '
-            'you off guard in a real battle.',
+        'You get matched with someone at your level. You trade roasts on '
+            'camera - on a clock - and the crowd votes on who won.',
+        'It takes a couple of minutes. Let\'s walk through it once so nothing '
+            'catches you off guard in a real battle.',
       ],
       action: 'Start',
       onAction: () {
@@ -307,16 +307,16 @@ class _TutorialScreenState extends State<TutorialScreen> {
       icon: Icons.gavel_outlined,
       title: 'Three rules',
       body: const [
-        'You take turns. While your opponent is roasting, your mic is muted '
-            'automatically — you cannot talk over them, and they cannot talk '
-            'over you.',
-        'Each turn is short and timed. When the clock runs out, your turn '
-            'ends. You can also end early if you have landed your joke.',
+        'You battle on a clock. You each get about 30 seconds that only ticks '
+            'down while YOU are talking — so hold the floor and go.',
+        'Tap Yield to hand the floor over (it also passes when your time runs '
+            'out). While your opponent has the floor, your mic is muted — you '
+            'cannot talk over them, and they cannot talk over you.',
         'Your battles are recorded, and the best moments may be posted '
             '(practice is the exception - those are never recorded). You '
             'confirm that before every match.',
       ],
-      action: 'Try a practice turn',
+      action: 'Try a practice round',
       onAction: _beginPractice,
     );
   }
@@ -342,7 +342,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('Your turn coming up',
+                        const Text('You get the floor first',
                             style: TextStyle(color: Colors.white, fontSize: 22)),
                         const SizedBox(height: 16),
                         // "Get ready" rather than a ticking number, matching the
@@ -407,14 +407,15 @@ class _TutorialScreenState extends State<TutorialScreen> {
                 isCountdown
                     ? 'Get ready...'
                     : isYourTurn
-                        ? 'Go. Say anything — nobody is listening.'
-                        : 'Now it\'s their turn. Your mic is muted.',
+                        ? 'You\'ve got the floor. Say anything — nobody is '
+                            'listening. Tap Yield when you\'re done.'
+                        : 'Now they have the floor. Your mic is muted.',
                 style: Theme.of(context).textTheme.titleMedium,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
               if (isYourTurn)
-                FilledButton(onPressed: _endYourTurn, child: const Text('End My Turn'))
+                FilledButton(onPressed: _endYourTurn, child: const Text('Yield'))
               else
                 const SizedBox(height: 48),
             ],
@@ -429,18 +430,21 @@ class _TutorialScreenState extends State<TutorialScreen> {
       icon: Icons.check_circle_outline,
       title: 'That\'s the whole format',
       body: [
-        'Take turns, keep it short, land the joke. The crowd decides the rest.',
-        // Said once, here, because the single hardest thing about a
-        // scheduled event is getting people to remember when it is - and
-        // this is the one moment every new player is guaranteed to read.
-        // Pulled from live config rather than hardcoded, since the name and
-        // hours are both provisional; the defaults match the live values,
-        // so an unreadable config still prints the right sentence.
-        '${_windowConfig.name} is the nightly tournament - ${_windowHours()}. '
-            'That is where the prizes and prestige are, and where you will '
-            'find people fastest.',
-        'One more thing: your profile is the ammo your opponent gets. Fill it '
-            'in, and it is funnier if it is true.',
+        'Hold the floor, land your jokes, and yield when you\'re done. The '
+            'crowd decides the rest.',
+        // The two parts of the league, framed as the climb (see the
+        // Basement/Main Stage naming decision).
+        'This is The Basement - everyday battles. Win here and you climb '
+            'toward The Main Stage, the tournament where the prizes and '
+            'prestige are.',
+        // Liquidity nudge, pulled from live config (hours are provisional);
+        // the single hardest thing about a scheduled moment is getting people
+        // to remember when it is, and this is the one screen every new player
+        // reads. An unreadable config still prints the default hours.
+        'Most roasters are online around ${_windowHours()} - that is when '
+            'you will find a battle fastest.',
+        'One more thing: your profile and intro are the ammo your opponent '
+            'gets. Put yourself out there - it is funnier if it is true.',
       ],
       action: _saving ? 'Saving...' : 'I\'m ready',
       onAction: _saving ? null : _finish,

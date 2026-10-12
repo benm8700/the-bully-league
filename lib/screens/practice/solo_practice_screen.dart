@@ -48,11 +48,12 @@ class SoloPracticeScreen extends StatefulWidget {
 enum _Phase { setup, countdown, yourTurn, theirTurn, done }
 
 class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
-  /// Documented defaults, used until config resolves and if it never does.
-  /// Mirrors functions/matchSettings.js - an unreadable config must never
-  /// stop someone practising.
-  int _roundCount = 3;
-  int _turnSeconds = 15;
+  /// A chess-clock battle is ONE continuous turn on a banked clock, not rounds,
+  /// so solo practice drills a single turn of [_turnSeconds]. Defaults mirror
+  /// functions/matchSettings.js - an unreadable config must never stop someone
+  /// practising.
+  static const _roundCount = 1;
+  int _turnSeconds = 30;
   int _countdownSeconds = 5;
 
   late final VideoCallService _videoCallService;
@@ -96,8 +97,8 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
 
       if (!mounted) return;
       setState(() {
-        _roundCount = pick('roundCount', 3, 1, 10);
-        _turnSeconds = pick('roundLengthSeconds', 15, 5, 120);
+        // The chess-clock battle's banked clock per player.
+        _turnSeconds = pick('turnSeconds', 30, 10, 180);
         _countdownSeconds = pick('countdownSeconds', 5, 1, 30);
       });
     } catch (_) {
@@ -238,16 +239,16 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
               style: text.headlineSmall, textAlign: TextAlign.center),
           const SizedBox(height: 12),
           Text(
-            'No opponent, no votes, nothing recorded or saved. Just you, '
-            '$_roundCount rounds, $_turnSeconds seconds a turn - the same '
-            'format as a real battle.',
+            'No opponent, no votes, nothing recorded or saved. Just you and '
+            'your $_turnSeconds-second clock - the same as a real battle. Hold '
+            'the floor and roast; tap Yield when you\'re done.',
             style: text.bodyMedium,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
-            'The gaps are where your opponent would be roasting you. Use '
-            'them to think of the next one.',
+            'This is how The Basement feels - loosen up here, then go find a '
+            'stranger.',
             style: text.bodySmall,
             textAlign: TextAlign.center,
           ),
@@ -278,8 +279,8 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Round $_round of $_roundCount',
-                            style: const TextStyle(
+                        const Text('You\'re up',
+                            style: TextStyle(
                                 color: Colors.white, fontSize: 20)),
                         const SizedBox(height: 12),
                         Text('$_secondsRemaining',
@@ -303,7 +304,7 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      'Round $_round/$_roundCount · ${_secondsRemaining}s',
+                      '${_secondsRemaining}s on the clock',
                       style: const TextStyle(
                           color: Colors.white, fontSize: 14),
                     ),
@@ -328,8 +329,7 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
               ),
               const SizedBox(height: 12),
               if (isYourTurn)
-                FilledButton(
-                    onPressed: _endTurn, child: const Text('End My Turn'))
+                FilledButton(onPressed: _endTurn, child: const Text('Yield'))
               else
                 const SizedBox(height: 48),
             ],
@@ -359,7 +359,7 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Round ${i + 1}', style: text.bodyMedium),
+                  Text('On the clock', style: text.bodyMedium),
                   Text('${_secondsUsed[i]}s of $_turnSeconds',
                       style: text.bodyMedium),
                 ],
@@ -370,14 +370,11 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
             // The only honest read available from a stopwatch, and it
             // happens to be the useful one for this format.
             ranOut == _secondsUsed.length
-                ? 'You used every second of every round. In a real battle '
-                    'the clock cuts you off mid-sentence, so land the joke '
+                ? 'You ran your whole clock down. In a real battle that just '
+                    'hands the floor to your opponent, so land the joke '
                     'earlier than feels natural.'
-                : ranOut == 0
-                    ? 'You finished every round early. That is the right '
-                        'instinct - short and landed beats long and lost.'
-                    : 'Mixed. The rounds you finished early are the ones '
-                        'that would have landed.',
+                : 'You yielded with time to spare - the right instinct. Short '
+                    'and landed beats long and lost.',
             style: text.bodySmall,
             textAlign: TextAlign.center,
           ),
