@@ -110,7 +110,7 @@ class _TournamentHubScreenState extends State<TournamentHubScreen> {
                         fontSize: 13),
                     tabs: const [
                       Tab(text: 'LOBBY'),
-                      Tab(text: 'RACE'),
+                      Tab(text: 'THE CUT'),
                       Tab(text: 'JUDGES'),
                       Tab(text: 'PRIZE'),
                     ],

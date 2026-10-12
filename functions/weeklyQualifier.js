@@ -17,6 +17,10 @@
  */
 const {pacificNow, pacificWallClockToUtcMs} = require("./eventWindow");
 
+// The eligibility floor: you must have beaten/faced this many DISTINCT
+// opponents that week to qualify (not just played this many matches - see the
+// anti-farm note in computeStandings). Named "games" for history; it gates on
+// distinct opponents.
 const DEFAULT_MIN_GAMES = 5;
 
 // Modes that do NOT move the competitive ladder, so they never count toward
@@ -136,13 +140,25 @@ function computeStandings(entries, opts = {}) {
     if (Number.isFinite(cutoffMs) && at >= cutoffMs) continue;
     const delta = Number(e.delta);
     if (!Number.isFinite(delta)) continue;
-    const cur = byUid.get(e.uid) || {uid: e.uid, gain: 0, games: 0};
+    const cur = byUid.get(e.uid) ||
+      {uid: e.uid, gain: 0, games: 0, opps: new Set()};
     cur.gain += delta;
     cur.games += 1;
+    // Only a known opponent counts toward the distinct-opponent floor - an
+    // entry with no opponent id can't prove breadth, so it never inflates it.
+    if (typeof e.opponent === "string" && e.opponent) cur.opps.add(e.opponent);
     byUid.set(e.uid, cur);
   }
   return [...byUid.values()]
-      .filter((p) => p.games >= minGames)
+      // ANTI-FARM: eligibility is >= minGames DISTINCT opponents, not just
+      // matches - so you can't farm your way onto the Main Stage by replaying
+      // one opponent all week. Requiring 5 distinct opponents also means >= 5
+      // matches (the "5 matches with 5 different opponents" floor), and Elo is
+      // already farm-proof, so this closes the games-count side of the door.
+      .filter((p) => p.opps.size >= minGames)
+      .map((p) => ({
+        uid: p.uid, gain: p.gain, games: p.games, opponents: p.opps.size,
+      }))
       .sort((a, b) =>
         b.gain - a.gain ||
         b.games - a.games ||

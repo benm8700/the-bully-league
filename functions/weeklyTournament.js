@@ -74,7 +74,9 @@ async function collectWeekEntries(db, startMs, endMs) {
     const uid = parent && parent.id;
     if (!uid) return;
     const d = doc.data();
-    entries.push({uid, delta: d.delta, mode: d.mode, at: d.at});
+    entries.push({
+      uid, delta: d.delta, mode: d.mode, at: d.at, opponent: d.opponentId,
+    });
   });
   return entries;
 }

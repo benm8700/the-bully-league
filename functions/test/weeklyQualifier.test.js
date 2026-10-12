@@ -118,7 +118,12 @@ check("mirror invariant: current week starts where the closed week ended", () =>
 console.log("weekly qualifier - computeStandings (weekly Elo gain)");
 
 const WIN = {startMs: 1000, cutoffMs: 2000, minGames: 2};
-const e = (uid, delta, at = 1500, mode = "ranked") => ({uid, delta, at, mode});
+// Each entry gets a UNIQUE opponent by default, so N entries for a player = N
+// distinct opponents (matching the old games-based fixtures). Pass an explicit
+// opponent to model replaying the same person (the farm case).
+let _oppSeq = 0;
+const e = (uid, delta, at = 1500, mode = "ranked", opponent) =>
+  ({uid, delta, at, mode, opponent: opponent ?? `o${_oppSeq++}`});
 
 check("sums deltas per player and ranks by gain", () => {
   const s = computeStandings([
@@ -190,6 +195,44 @@ check("a losing week is still eligible and ranked", () => {
   ], WIN);
   assert.deepStrictEqual(s.map((p) => p.uid), ["up", "down"]);
   assert.strictEqual(s[1].gain, -12);
+});
+
+check("ANTI-FARM: replaying ONE opponent does not qualify", () => {
+  const s = computeStandings([
+    // 5 matches, all vs the same victim -> 1 distinct opponent
+    e("farmer", 9, 1500, "ranked", "victim"),
+    e("farmer", 9, 1500, "ranked", "victim"),
+    e("farmer", 9, 1500, "ranked", "victim"),
+    e("farmer", 9, 1500, "ranked", "victim"),
+    e("farmer", 9, 1500, "ranked", "victim"),
+    // honest: 3 different opponents
+    e("honest", 1, 1500, "ranked", "x"),
+    e("honest", 1, 1500, "ranked", "y"),
+    e("honest", 1, 1500, "ranked", "z"),
+  ], {startMs: 1000, cutoffMs: 2000, minGames: 3});
+  assert.deepStrictEqual(s.map((p) => p.uid), ["honest"],
+      "the farmer has a huge gain but only 1 distinct opponent");
+});
+
+check("reports distinct-opponent count; a repeat opponent isn't double-counted",
+    () => {
+      const s = computeStandings([
+        e("a", 2, 1500, "ranked", "p"),
+        e("a", 2, 1500, "ranked", "q"),
+        e("a", 2, 1500, "ranked", "p"), // repeat p -> still 2 distinct
+      ], {startMs: 1000, cutoffMs: 2000, minGames: 2});
+      assert.strictEqual(s.length, 1);
+      assert.strictEqual(s[0].games, 3);
+      assert.strictEqual(s[0].opponents, 2);
+    });
+
+check("entries with no opponent id don't count toward the distinct floor", () => {
+  const s = computeStandings([
+    {uid: "a", delta: 5, at: 1500, mode: "ranked"}, // no opponent
+    {uid: "a", delta: 5, at: 1500, mode: "ranked"}, // no opponent
+    e("a", 5, 1500, "ranked", "real1"), // 1 real distinct opponent
+  ], {startMs: 1000, cutoffMs: 2000, minGames: 2});
+  assert.strictEqual(s.length, 0, "only 1 distinct opponent -> below the floor");
 });
 
 check("topN selects finalists (and alternates) in order", () => {

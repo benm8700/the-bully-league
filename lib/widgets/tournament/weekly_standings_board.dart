@@ -116,7 +116,7 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('This week’s race',
+            Text('This week’s contenders',
                 style: text.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800, color: gold)),
             const SizedBox(height: 2),
