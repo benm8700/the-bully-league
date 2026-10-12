@@ -7,7 +7,7 @@ import '../../theme/app_theme.dart';
 /// (aspect ~2.69). Displayed a touch taller than native (2.5) so the cards read
 /// a bit bigger, with only a small cover-crop at the far left/right edges - the
 /// baked wordmarks are centred, so nothing important is lost. Used by both
-/// RoastHero and EventWindowBanner so they stay the same size.
+/// RoastHero and MainStageCard so they stay the same size.
 const double kHeroPillAspect = 2.5;
 
 /// A cinematic hero card for a Home battle mode: a full-bleed background

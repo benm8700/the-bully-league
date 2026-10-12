@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/services/event_window.dart';
 import '../../core/services/hub_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/tournament/hub_chat.dart';
@@ -216,8 +217,12 @@ class _HubHeaderState extends State<_HubHeader> {
 
   String _countdown() {
     final c = _cutoffMs;
-    if (c == null) return 'Finals run Thursday nights';
-    final target = c + _showHourMs;
+    // When the tournament sweep has published a cutoff, count to that Thursday's
+    // 6pm show; otherwise compute the next Thursday 6pm directly, so the header
+    // shows a live countdown even before the tournament is switched on.
+    final target = c != null
+        ? c + _showHourMs
+        : nextMainStageFinals(DateTime.now()).millisecondsSinceEpoch;
     final left = target - DateTime.now().millisecondsSinceEpoch;
     if (left <= 0) return 'The finals are happening now';
     final mins = left ~/ 60000;

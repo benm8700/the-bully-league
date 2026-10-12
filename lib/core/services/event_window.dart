@@ -159,6 +159,40 @@ String upcomingWindowDayKey(DateTime now, EventWindowConfig config) {
   return '${pacific.year}-$month-$day';
 }
 
+/// The UTC instant of the next weekly MAIN STAGE finals - Thursday 6pm Pacific
+/// by default. If it is currently Thursday and 6pm has not yet passed, that is
+/// today's finals; otherwise the next Thursday. Pure and DST-correct, mirroring
+/// the server's qualifyingWeek (Thursday cutoff) + SHOW_HOUR_PACIFIC (18), so
+/// Home can show a live countdown even before the tournament sweep publishes a
+/// cutoff. The day/hour are placeholders like the rest of the event config.
+DateTime nextMainStageFinals(DateTime now,
+    {int showHour = 18, int weekday = DateTime.thursday}) {
+  final utc = now.toUtc();
+  // Resolve a Pacific wall-clock (year/month/day at showHour) to UTC, settling
+  // the offset at the instant itself (two passes), exactly like the daily
+  // window math above so a DST-transition day is never an hour out.
+  DateTime pacificWallToUtc(DateTime approxPacific) {
+    final wall = DateTime.utc(
+        approxPacific.year, approxPacific.month, approxPacific.day, showHour);
+    var guess = wall.subtract(pacificOffset(utc));
+    guess = wall.subtract(pacificOffset(guess));
+    return guess;
+  }
+
+  // Scan the next 8 Pacific days for the first Thursday whose 6pm is still
+  // ahead of now.
+  for (var dayOffset = 0; dayOffset <= 7; dayOffset++) {
+    final approxPacific =
+        utc.add(pacificOffset(utc)).add(Duration(days: dayOffset));
+    if (approxPacific.weekday != weekday) continue;
+    final instant = pacificWallToUtc(approxPacific);
+    if (utc.isBefore(instant)) return instant;
+  }
+  // Unreachable for a sane clock; a week out is safer than throwing in a build.
+  return pacificWallToUtc(utc.add(pacificOffset(utc)).add(
+      const Duration(days: 7)));
+}
+
 EventWindowOccurrence _windowOnPacificDay(
     DateTime utc, int dayOffset, EventWindowConfig config) {
   // Pacific wall-clock date for the day in question.

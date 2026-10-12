@@ -196,4 +196,49 @@ void main() {
       expect(EventWindowConfig.fromMap({'enabled': false}).enabled, isFalse);
     });
   });
+
+  group('nextMainStageFinals (weekly Thursday 6pm Pacific)', () {
+    test('from a summer Monday -> the coming Thursday 6pm PDT', () {
+      // Jul 6 2026 is a Monday; noon PDT (UTC-7) = 19:00 UTC. Next Thursday is
+      // Jul 9; 6pm PDT = Jul 10 01:00 UTC.
+      expect(nextMainStageFinals(DateTime.utc(2026, 7, 6, 19)),
+          DateTime.utc(2026, 7, 10, 1));
+    });
+
+    test('on Thursday before 6pm -> today', () {
+      // Jul 9 2026 (Thu) 10am PDT = 17:00 UTC; the 6pm show is still ahead.
+      expect(nextMainStageFinals(DateTime.utc(2026, 7, 9, 17)),
+          DateTime.utc(2026, 7, 10, 1));
+    });
+
+    test('on Thursday after 6pm -> next Thursday', () {
+      // Jul 9 (Thu) 8pm PDT = Jul 10 03:00 UTC; rolls to Jul 16.
+      expect(nextMainStageFinals(DateTime.utc(2026, 7, 10, 3)),
+          DateTime.utc(2026, 7, 17, 1));
+    });
+
+    test('winter uses the PST offset (one hour later in UTC)', () {
+      // Jan 5 2026 (Mon) noon PST (UTC-8) = 20:00 UTC; Jan 8 6pm PST = Jan 9
+      // 02:00 UTC.
+      expect(nextMainStageFinals(DateTime.utc(2026, 1, 5, 20)),
+          DateTime.utc(2026, 1, 9, 2));
+    });
+
+    test('is always a Thursday at 6pm Pacific, in the future', () {
+      for (final now in [
+        DateTime.utc(2026, 7, 6, 19),
+        DateTime.utc(2026, 1, 5, 20),
+        DateTime.utc(2026, 11, 2, 12), // just after the fall-back
+        DateTime.utc(2026, 3, 10, 12), // just after spring-forward
+        DateTime.utc(2026, 12, 25, 6),
+      ]) {
+        final f = nextMainStageFinals(now);
+        final pacific = f.add(pacificOffset(f));
+        expect(pacific.weekday, DateTime.thursday,
+            reason: 'finals land on a Thursday for $now');
+        expect(pacific.hour, 18, reason: '6pm Pacific for $now');
+        expect(f.isAfter(now), isTrue);
+      }
+    });
+  });
 }

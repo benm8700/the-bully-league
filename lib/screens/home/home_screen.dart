@@ -21,7 +21,8 @@ import '../../widgets/home/hero_mode_card.dart';
 import '../../widgets/home/player_status_card.dart';
 import '../../widgets/home/home_quick_actions.dart';
 import '../../widgets/home/home_featured.dart';
-import '../../widgets/event_window_banner.dart';
+import '../../widgets/home/main_stage_card.dart';
+import '../../widgets/home/daily_window_strip.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
@@ -160,10 +161,15 @@ class HomeScreen extends StatelessWidget {
                       onFindMatch: () => _startMatch(context, 'ranked'),
                     ),
                     const SizedBox(height: 12),
-                    // The Main Stage tournament, below the Basement hero.
-                    // Prestige and prizes live here; tapping it goes to the
-                    // tournament, where check-in lives.
-                    const EventWindowBanner(),
+                    // The WEEKLY Main Stage tournament, below the Basement hero.
+                    // Always shown; taps to the hub (standings/lobby/judges/
+                    // prize). The countdown to Thursday's finals lives in the
+                    // hub, not on the clean pill.
+                    const MainStageCard(),
+                    // The daily 6-7pm "power hour" (2x points) - a slim strip,
+                    // separate from the weekly Main Stage. Renders nothing when
+                    // the window is switched off.
+                    const DailyWindowStrip(),
                     const SizedBox(height: 14),
                     // Quick Actions row (Home overhaul): Daily Challenges /
                     // Free Rewards / Current Streak. The Daily Challenges card
