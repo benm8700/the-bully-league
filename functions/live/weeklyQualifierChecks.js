@@ -82,6 +82,10 @@ async function seed() {
       batch.set(ref, {
         delta, mode: p.mode, at: Timestamp.fromMillis(atMid + i),
         ratingBefore: 1200, ratingAfter: 1200 + delta, won: delta > 0,
+        // A DISTINCT opponent per entry, so each probe clears the
+        // distinct-opponent qualifying floor (the "low" probe's 3 entries
+        // stay below it, as intended). Added with that floor (2026-10-12).
+        opponentId: `${p.u}-opp${i}`,
       });
     });
   }

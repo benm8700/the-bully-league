@@ -4,9 +4,11 @@ import '../../theme/app_theme.dart';
 
 /// The shared aspect ratio for the two Home hero pills (Basement + Main Stage),
 /// so they are the SAME size. The developer's matched banner art is ~2056x765
-/// (aspect ~2.69) - a wide, short banner; displaying at its native aspect means
-/// no cropping and a compact card. Used by both RoastHero and EventWindowBanner.
-const double kHeroPillAspect = 2056 / 765;
+/// (aspect ~2.69). Displayed a touch taller than native (2.5) so the cards read
+/// a bit bigger, with only a small cover-crop at the far left/right edges - the
+/// baked wordmarks are centred, so nothing important is lost. Used by both
+/// RoastHero and EventWindowBanner so they stay the same size.
+const double kHeroPillAspect = 2.5;
 
 /// A cinematic hero card for a Home battle mode: a full-bleed background
 /// artwork with a glow border, a bottom scrim, and a bottom-anchored Flutter

@@ -25,8 +25,9 @@ class WeeklyStandingsBoard extends StatefulWidget {
   State<WeeklyStandingsBoard> createState() => _WeeklyStandingsBoardState();
 }
 
-/// Top 4 go to the Main Stage - must match FINALISTS in weeklyTournament.js.
-const int _weeklyCutoff = 4;
+/// The top 3 by skill lock in; the 4th Main Stage seat is a wild-card draw from
+/// everyone else who qualified. Must match SKILL_SEATS in wildCard.js.
+const int _weeklyCutoff = 3;
 
 class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
   bool _loading = true;
@@ -121,7 +122,8 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
                     fontWeight: FontWeight.w800, color: gold)),
             const SizedBox(height: 2),
             Text(
-              'Top $_weeklyCutoff make the Main Stage. ${_timeLeft()}',
+              'Top 3 lock in on skill. The 4th seat is a wild-card draw — '
+              'play and judge to boost your odds. ${_timeLeft()}',
               style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
@@ -150,7 +152,7 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
             Expanded(child: Divider(color: gold.withValues(alpha: 0.5))),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Text('MAIN STAGE CUTOFF',
+              child: Text('SEAT 4 · WILD-CARD DRAW',
                   style: TextStyle(
                       color: gold,
                       fontWeight: FontWeight.w900,

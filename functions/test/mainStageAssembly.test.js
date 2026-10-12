@@ -23,7 +23,9 @@ function qualifierEntries() {
   const out = [];
   for (const [uid, total] of Object.entries(totals)) {
     for (let i = 0; i < 5; i++) {
-      out.push({uid, delta: total / 5, mode: "ranked", at: 1500});
+      // 5 DISTINCT opponents each, to clear the distinct-opponent floor.
+      out.push({uid, delta: total / 5, mode: "ranked", at: 1500,
+        opponent: `o${i}`});
     }
   }
   return out;

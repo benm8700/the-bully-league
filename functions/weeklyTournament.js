@@ -14,6 +14,7 @@ const {
   resolveJudgeMinToQualify,
 } = require("./hubJudges");
 const {DEFAULT_PANEL_SIZE} = require("./judgePanel");
+const {resolveWildCardConfig, buildField} = require("./wildCard");
 
 /**
  * Weekly tournament qualifier - the Firestore wiring around the pure core.
@@ -159,20 +160,23 @@ async function sweepWeeklyQualifier(now = Date.now()) {
       const standings = computeStandings(entries, {
         startMs: closed.startMs, cutoffMs: closed.cutoffMs, minGames: MIN_GAMES,
       });
-      const finalists = topN(standings, FINALISTS);
-      const alternates = standings.slice(FINALISTS, FINALISTS + ALTERNATES);
-      // The most-judged-this-week pool, frozen alongside the field, for the
-      // panel autofill (judgePanel.selectPanel adds the founder's hand-picks
-      // and excludes finalists). Finalists can't judge, so drop them here too.
       const ballots = await collectWeekBallots(
           db, closed.startMs, closed.cutoffMs);
-      const finalistSet = new Set(finalists.map((f) => f.uid));
-      // The autofill pool is QUALIFIED VOLUNTEERS of the closed week, ranked by
-      // how much they judged - a seat is an opt-in you earn (see hubJudges.js),
-      // not just "whoever judged most". Finalists can't judge, so drop them.
       const closedJudges = computeJudgeStandings(ballots, {
         startMs: closed.startMs, cutoffMs: closed.cutoffMs,
       });
+      // THE FIELD: top 3 by skill + one WILD CARD drawn from everyone else who
+      // qualified, weighted by engagement (60/40 toward judging). See
+      // wildCard.js. The wild-card finalist row carries wildCard:true; the draw
+      // is seeded on the week key so the frozen field is reproducible.
+      const judgedByUid = new Map(closedJudges.map((j) => [j.uid, j.judged]));
+      const {finalists, wildCardUid, alternates} = buildField(
+          standings, judgedByUid, resolveWildCardConfig(cfgSnap.data()),
+          closed.cutoffDayKey, ALTERNATES);
+      const finalistSet = new Set(finalists.map((f) => f.uid));
+      // The panel autofill pool is QUALIFIED VOLUNTEERS of the closed week,
+      // ranked by how much they judged - a seat is an opt-in you earn (see
+      // hubJudges.js), not just "whoever judged most". Finalists can't judge.
       const closedVolunteers = await collectVolunteers(db, closed.cutoffDayKey);
       const eligibleUids = new Set(qualifiedPool(
           closedVolunteers, closedJudges, minToQualify, [...finalistSet]));
@@ -184,6 +188,7 @@ async function sweepWeeklyQualifier(now = Date.now()) {
         startMs: closed.startMs,
         cutoffMs: closed.cutoffMs,
         finalists,
+        wildCardUid: wildCardUid || null,
         alternates,
         judgePool,
         snapshotAt: FieldValue.serverTimestamp(),
@@ -191,6 +196,7 @@ async function sweepWeeklyQualifier(now = Date.now()) {
       snapshot = {
         tournamentDayKey: closed.cutoffDayKey,
         finalists: finalists.length,
+        wildCardUid: wildCardUid || null,
         alternates: alternates.length,
         judgePool: judgePool.length,
       };
