@@ -24,14 +24,14 @@ function test(name, fn) {
   }
 }
 
-const liveRunning = {format: "live", status: "in_progress"};
+const liveRunning = {format: "mainstage", status: "live"};
 const match = {
   mode: "tournament",
   status: "pending",
   player1Id: "alice",
   player2Id: "bob",
-  tournament: {tournamentId: "t1"},
-  channelName: "match_t1_r1_m0",
+  mainStage: {tournamentId: "ms1", roundIdx: 0, matchIdx: 0},
+  channelName: "ms_abc",
 };
 const ask = (over = {}) => spectateProblem({
   match, tournament: liveRunning, uid: "carol", ...over,
@@ -39,7 +39,7 @@ const ask = (over = {}) => spectateProblem({
 
 // --- the one case that is allowed ----------------------------------------
 
-test("a stranger may watch a live tournament match in progress", () => {
+test("a stranger may watch a running Main Stage battle", () => {
   assert.strictEqual(ask(), null);
 });
 
@@ -81,7 +81,7 @@ test("a Main Stage week not yet live is not watchable", () => {
   assert.strictEqual(
       ask({match: msMatch, tournament: {format: "mainstage", status: "locked"}}),
       "not-running");
-  // And an in_progress mainstage is NOT running - that word is for live/climb.
+  // The only "running" word for a mainstage week is "live"; in_progress is not.
   assert.strictEqual(
       ask({match: msMatch,
         tournament: {format: "mainstage", status: "in_progress"}}),
@@ -112,7 +112,7 @@ test("a finished match is not watchable live", () => {
 });
 
 test("a match with no tournament link is refused", () => {
-  assert.strictEqual(ask({match: {...match, tournament: undefined}}),
+  assert.strictEqual(ask({match: {...match, mainStage: undefined}}),
       "not-a-tournament-match");
 });
 

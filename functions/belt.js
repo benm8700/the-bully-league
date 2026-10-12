@@ -5,29 +5,29 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
  * THE BELT - the app's one losable "title fight" honour.
  *
  * There is exactly ONE belt platform-wide, held by whoever most recently won
- * the Daily Gauntlet. Win tonight's gauntlet and you take it; win it again and
- * you have DEFENDED it (defenseCount++); if someone else wins, the belt changes
- * hands. A single scarce, losable title - the same shape as GOAT, deliberately
- * NOT a second ladder of many titles (see the one-status-ladder rule). It is
- * pure prestige: it touches no rating, no XP, no points.
+ * the weekly Main Stage finals. Win this week's finals and you take it; win it
+ * again and you have DEFENDED it (defenseCount++); if someone else wins, the
+ * belt changes hands. A single scarce, losable title - the same shape as GOAT,
+ * deliberately NOT a second ladder of many titles (see the one-status-ladder
+ * rule). It is pure prestige: it touches no rating, no XP, no points.
  *
  * It lives at stats/belt, which firestore.rules already makes client-READABLE
  * and server-WRITE-ONLY - a client that could write it would crown itself.
  *
- * The award hooks a FORMAT-AGNOSTIC Firestore trigger on the tournament's
- * status -> "completed" transition, so it catches the climb sweep, the swiss
- * sweep, and any future format without touching each crowning site. Only the
- * Daily Gauntlet (createdBy "auto") awards the belt; a manually-created special
- * tournament carries its own prizes and never moves this title.
+ * The award hooks a Firestore trigger on the tournament's status -> "completed"
+ * transition. Only the weekly Main Stage (format "mainstage") moves the belt;
+ * the Main Stage IS the one tournament system now (the nightly gauntlet and the
+ * old async/live brackets were retired). A future special/cash tournament would
+ * decide for itself whether it contests this title.
  */
 
 const BELT_DOC = "belt";
 
 /**
- * PURE. Given the current belt state and a freshly-crowned gauntlet champion,
+ * PURE. Given the current belt state and a freshly-crowned Main Stage champion,
  * what stats/belt should become - or null for "no change".
  *
- * Returns null when there is no winner (a cancelled gauntlet keeps the current
+ * Returns null when there is no winner (a cancelled finals keeps the current
  * holder), and - the idempotency guard - when THIS tournament already awarded
  * the belt, so an at-least-once re-fire never double-counts a defense.
  */
@@ -50,35 +50,29 @@ function beltTransition(current, {championUid, championName, tournamentId, nowMs
 }
 
 /**
- * The belt is only contested in the nightly Daily Gauntlet. PURE.
+ * The belt is contested in the weekly Main Stage finals. PURE.
  *
- * It is auto-created (createdBy "auto") AND is NOT the weekly Main Stage: the
- * Main Stage finals are also auto-created ("auto") but are a separate, bigger
- * weekly event that carries its own prize and the permanent Champion badge -
- * winning it must never move the nightly belt, which is explicitly the Daily
- * Gauntlet champion's title. (A future daily format keeps the belt; only
- * mainstage is carved out.)
+ * The Main Stage is the one tournament system, so its champion holds the belt.
+ * A future special/cash tournament (a different format) would decide for itself
+ * whether it moves this title; today only "mainstage" does.
  */
-function isGauntlet(t) {
-  return !!t && t.createdBy === "auto" && t.format !== "mainstage";
+function isMainStage(t) {
+  return !!t && t.format === "mainstage";
 }
 
-/** The crowned champion of a completed gauntlet, whatever the format wrote. */
+/** The crowned champion of a completed tournament (the Main Stage winner). */
 function championOf(t) {
   if (!t) return null;
-  return t.winnerId ||
-    (t.swiss && t.swiss.championUid) ||
-    (t.climb && t.climb.championUid) ||
-    null;
+  return t.winnerId || null;
 }
 
 /**
- * Award (or defend) the belt for a just-completed gauntlet. Best-effort and
- * idempotent. Looks up the champion's display name so the public banner never
- * has to resolve a uid.
+ * Award (or defend) the belt for a just-completed Main Stage finals.
+ * Best-effort and idempotent. Looks up the champion's display name so the
+ * public banner never has to resolve a uid.
  */
 async function awardBeltForTournament(db, tournamentId, t, nowMs = Date.now()) {
-  if (!isGauntlet(t)) return {awarded: false, reason: "not-gauntlet"};
+  if (!isMainStage(t)) return {awarded: false, reason: "not-mainstage"};
   const championUid = championOf(t);
   if (!championUid) return {awarded: false, reason: "no-winner"};
 
@@ -185,8 +179,9 @@ exports.onTournamentCompleted = onDocumentUpdated(
       if (!becameComplete || !after.winnerId) return;
       const db = getFirestore();
       const id = event.params.tournamentId;
-      // Permanent win badge first (every tournament), then the belt (gauntlet
-      // only). Independent and best-effort - one failing never blocks the other.
+      // Permanent win badge first (every tournament), then the belt (the
+      // weekly Main Stage). Independent and best-effort - one never blocks
+      // the other.
       await recordTournamentWin(db, id, after)
           .catch((err) => console.error(`win record ${id}:`, err.message));
       await awardBeltForTournament(db, id, after)
@@ -206,7 +201,7 @@ exports.onTournamentCompleted = onDocumentUpdated(
     });
 
 module.exports.beltTransition = beltTransition;
-module.exports.isGauntlet = isGauntlet;
+module.exports.isMainStage = isMainStage;
 module.exports.championOf = championOf;
 module.exports.awardBeltForTournament = awardBeltForTournament;
 module.exports.recordTournamentWin = recordTournamentWin;

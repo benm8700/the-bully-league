@@ -9,7 +9,7 @@
  *   - recordBattleResult's transaction advancing a real bracket to a champion;
  *   - and the cross-module completion seam: a Main Stage win grants the
  *     permanent Champion badge (tournamentWins++) but must NOT move the daily
- *     belt (the bug this session fixed in belt.js's isGauntlet).
+ *     belt (the Main Stage champion now takes it; see belt.js's isMainStage).
  *
  * It backs up and restores the shared snapshot doc and the belt doc, drives the
  * module functions with explicit `now` values relative to a chosen cutoff day,
@@ -197,7 +197,7 @@ async function run() {
         assert.strictEqual(t.winnerId, uid("f1"));
       });
 
-  await check("completion grants the Champion badge but NOT the daily belt",
+  await check("completion grants the Champion badge AND the belt",
       async () => {
         // Wait for the deployed onTournamentCompleted trigger.
         let recorded = false;
@@ -210,12 +210,20 @@ async function run() {
         // Champion badge counter incremented (permanent, every tournament).
         const champ = (await db.collection("users").doc(uid("f1")).get()).data();
         assert.strictEqual(champ.tournamentWins, 1, "Champion badge counted");
-        // The DAILY belt must be untouched - a mainstage win is not a gauntlet.
-        const beltNow = (await db.collection("stats").doc("belt").get()).data();
-        const beltHolderNow = beltNow ? beltNow.holderUid : null;
-        const beltHolderBefore = beltBackup ? beltBackup.holderUid : null;
-        assert.strictEqual(beltHolderNow, beltHolderBefore,
-            "belt holder must be unchanged by a Main Stage win");
+        // The Main Stage is now the ONE belt-contesting event, so its champion
+        // takes the belt. The trigger awards it right after the win record, so
+        // poll a few times rather than read once.
+        let beltNow = null;
+        for (let i = 0; i < 10; i++) {
+          beltNow = (await db.collection("stats").doc("belt").get()).data();
+          if (beltNow && beltNow.holderUid === uid("f1")) break;
+          await new Promise((res) => setTimeout(res, 1000));
+        }
+        assert.ok(beltNow, "belt doc should exist after a Main Stage win");
+        assert.strictEqual(beltNow.holderUid, uid("f1"),
+            "the Main Stage champion takes the belt");
+        assert.strictEqual(beltNow.sourceTournamentId, TID,
+            "belt sourced from this tournament");
       });
 }
 

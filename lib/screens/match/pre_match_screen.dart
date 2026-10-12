@@ -17,7 +17,6 @@ import '../../core/services/video_call_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/framing_silhouette.dart';
 import '../tournament/main_stage_battle_screen.dart';
-import '../tournament/tournament_lobby_screen.dart';
 import 'bio_reveal_screen.dart';
 import 'matchmaking_screen.dart';
 
@@ -57,9 +56,7 @@ class PreMatchScreen extends StatefulWidget {
   const PreMatchScreen({
     super.key,
     required this.mode,
-    this.tournamentId,
     this.challengeMatchId,
-    this.climbPairing,
     this.mainStageStart,
   });
 
@@ -75,16 +72,6 @@ class PreMatchScreen extends StatefulWidget {
   /// already named - so this goes straight to the bio reveal for that
   /// match rather than to matchmaking.
   final String? challengeMatchId;
-
-  /// Set when this check precedes a CLIMB match. climbPoll already handed the
-  /// pairing over, so after the check we go straight to the bio reveal for it
-  /// - no fetch, no queue.
-  final MatchPairing? climbPairing;
-
-  /// Set when this check precedes a TOURNAMENT match. The pairing is
-  /// already decided by the bracket, so there is no queue to join - the
-  /// player goes to the lobby to meet a named opponent instead.
-  final String? tournamentId;
 
   /// Carried through to matchmaking - 'exhibition' or 'ranked'.
   final String mode;
@@ -254,11 +241,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
   /// the camera check just confirms you're set and sends you straight in.
   String get _readyLabel {
     if (widget.mainStageStart != null) return 'Step on stage';
-    if (widget.climbPairing != null ||
-        widget.challengeMatchId != null ||
-        widget.tournamentId != null) {
-      return "I'm Ready";
-    }
+    if (widget.challengeMatchId != null) return "I'm Ready";
     return 'Find an Opponent';
   }
 
@@ -271,7 +254,6 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     _serviceDisposed = true;
     await _videoCallService.dispose();
     if (!mounted) return;
-    final tournamentId = widget.tournamentId;
     final challengeMatchId = widget.challengeMatchId;
 
     // Main Stage finals: create the battle now (the camera is verified), then
@@ -312,17 +294,6 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
       return;
     }
 
-    // Climb match: the pairing is already in hand, so straight to the bio
-    // reveal (the intro + warmup + battle flow) like any other named matchup.
-    if (widget.climbPairing != null) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => BioRevealScreen(pairing: widget.climbPairing!),
-        ),
-      );
-      return;
-    }
-
     if (challengeMatchId != null) {
       // The pairing already exists - fetch it and hand off to the same bio
       // reveal every other match uses, which already handles both players
@@ -351,9 +322,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => tournamentId == null
-            ? MatchmakingScreen(mode: widget.mode)
-            : TournamentLobbyScreen(tournamentId: tournamentId),
+        builder: (_) => MatchmakingScreen(mode: widget.mode),
       ),
     );
   }

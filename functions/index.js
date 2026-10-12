@@ -5,7 +5,6 @@ const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {finalizeMatch, VOTE_WINDOW_MS, voteWindowEndMs} = require("./matchFinalization");
-const {generateBracket, debugAdvanceRound, DEFAULT_MIN_ENTRANTS} = require("./tournament");
 const {moderateImage, moderateImageContent, moderateVideo} =
   require("./visualModeration");
 const {generateToken, AGORA_APP_ID} = require("./agoraToken");
@@ -634,36 +633,6 @@ exports.dailyRewardReminder = onSchedule("every 30 minutes", async () => {
  * repeated notification is how an app earns an OS-level block, which
  * silences every other category too.
  */
-/**
- * Starts (or joins) the caller's current bracket matchup. Ordinary
- * matchmaking pairs out of a queue; a bracket matchup is two named
- * players who must face each other, so it needs its own path.
- */
-exports.startTournamentMatch = onCall((request) => {
-  const {startTournamentMatch} = require("./tournamentPlay");
-  return startTournamentMatch(request.auth, request.data);
-});
-
-// The nightly "climb" tournament (rolling single-elimination). Join enters you
-// at 0 wins; poll pairs you with a same-win-count opponent, the same shape as
-// the matchmaking queue.
-exports.joinClimb = onCall((request) => {
-  const {joinClimb} = require("./climbPlay");
-  return joinClimb(request.auth, request.data);
-});
-
-exports.climbPoll = onCall((request) => {
-  const {climbPoll} = require("./climbPlay");
-  return climbPoll(request.auth, request.data);
-});
-
-// The Daily Gauntlet lobby chat: the only write path, so moderation, rate
-// limiting and the window gate can never be skipped. See functions/lobby.js.
-exports.postLobbyMessage = onCall((request) => {
-  const {postLobbyMessage} = require("./lobby");
-  return postLobbyMessage(request.auth, request.data);
-});
-
 // ---- The Main Stage HUB (weekly tournament hub) ----
 // The hub's weekly lobby chat + the "I'll judge" opt-in. The chat room and the
 // judge week are both derived server-side from the clock (see hubChat.js /
@@ -695,85 +664,6 @@ exports.postHubAnnouncement = onCall(async (request) => {
 exports.volunteerToJudge = onCall((request) => {
   const {volunteerToJudge} = require("./hubJudges");
   return volunteerToJudge(request.auth, request.data);
-});
-
-// Crash/back-out recovery for the gauntlet: is the caller still an active
-// climber in a live gauntlet? Lets Home offer a one-click return.
-exports.getActiveGauntlet = onCall((request) => {
-  const {getActiveGauntlet} = require("./climbPlay");
-  return getActiveGauntlet(request.auth);
-});
-
-// The climb's backstop: force-resolves the endgame, forfeits stale unplayed
-// matches so one no-show cannot freeze the ladder, and crowns the champion at
-// the window's end. Every minute because climb matches are short.
-exports.sweepClimb = onSchedule("every 1 minutes", async () => {
-  const {sweepClimb} = require("./climbPlay");
-  try {
-    const result = await sweepClimb();
-    if (result.swept > 0) console.log("sweepClimb:", JSON.stringify(result));
-  } catch (err) {
-    console.error("sweepClimb failed:", err);
-  }
-});
-
-// The Daily Gauntlet SWISS format (2026-09-16 redesign): async all-day signup,
-// presence-based live pairing, "most wins" wins - see swissPlay.js. Runs
-// alongside the climb; the daily creator flips to it once verified.
-exports.signUpGauntlet = onCall((request) => {
-  const {signUpGauntlet} = require("./swissPlay");
-  return signUpGauntlet(request.auth, request.data);
-});
-
-exports.gauntletPoll = onCall((request) => {
-  const {gauntletPoll} = require("./swissPlay");
-  return gauntletPoll(request.auth, request.data);
-});
-
-// The gauntlet's backstop: settles played matches, forfeits no-shows (present
-// player wins), and crowns the most-wins champion at the window's end.
-exports.sweepGauntlet = onSchedule("every 1 minutes", async () => {
-  const {sweepGauntlet} = require("./swissPlay");
-  try {
-    const result = await sweepGauntlet();
-    if (result.swept > 0) console.log("sweepGauntlet:", JSON.stringify(result));
-  } catch (err) {
-    console.error("sweepGauntlet failed:", err);
-  }
-});
-
-/**
- * Closes rounds whose window has expired. Without this the window is
- * decoration and a bracket stalls the first time somebody loses interest.
- */
-/**
- * Tells players their round has opened, and warns anyone who has not
- * checked in before it closes.
- *
- * Justified more than any other notification here: every other one is an
- * invitation, but missing an async round window is a FORFEIT - out of a
- * tournament you paid to enter, without ever playing.
- */
-exports.tournamentNotifications = onSchedule("every 30 minutes", async () => {
-  const {sweepTournamentNotifications} = require("./tournamentNotify");
-  try {
-    const result = await sweepTournamentNotifications();
-    if (result.notified > 0) {
-      console.log("tournamentNotifications:", JSON.stringify(result));
-    }
-  } catch (err) {
-    console.error("tournamentNotifications failed:", err);
-  }
-});
-
-exports.tournamentForfeits = onSchedule("every 30 minutes", async () => {
-  const {sweepTournamentForfeits} = require("./tournamentPlay");
-  try {
-    const result = await sweepTournamentForfeits();
-    if (result.swept > 0) console.log("tournamentForfeits:", JSON.stringify(result));
-  } catch (err) {
-    console.error("tournamentForfeits failed:", err);
-  }
 });
 
 exports.voteReminders = onSchedule("every 120 minutes", async () => {
@@ -868,73 +758,6 @@ exports.debugFinalizeMatch = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "matchId is required.");
   }
   return finalizeMatch(matchId, {force: true});
-});
-
-/**
- * Closes entrants and generates the round-1 bracket for a tournament -
- * see functions/tournament.js and CLAUDE.md's Build Order step 8 status
- * note. Real admin tooling for tournaments is the Firebase console (same
- * pattern as profile approval/report review); this is the action an admin
- * triggers to actually start a tournament, so it's admin-gated like the
- * other functions here.
- */
-exports.generateTournamentBracket = onCall(async (request) => {
-  await requireAdmin(request.auth);
-  const {tournamentId} = request.data || {};
-  if (!tournamentId) {
-    throw new HttpsError("invalid-argument", "tournamentId is required.");
-  }
-  return generateBracket(tournamentId);
-});
-
-/**
- * DEV/TEST ONLY - resolves the current round with a coin flip per
- * matchup rather than a real match result, purely to prove bracket
- * advancement (byes, round generation, completion) works end to end.
- * See functions/tournament.js's debugAdvanceRound doc comment. Admin-gated
- * since it overwrites real bracket state.
- */
-exports.debugAdvanceTournamentRound = onCall(async (request) => {
-  await requireAdmin(request.auth);
-  const {tournamentId} = request.data || {};
-  if (!tournamentId) {
-    throw new HttpsError("invalid-argument", "tournamentId is required.");
-  }
-  return debugAdvanceRound(tournamentId);
-});
-
-/**
- * DEV/TEST ONLY - creates a tournament document. Firestore rules block
- * direct client writes to tournaments/{id} (real creation is meant to go
- * through the Firebase console, per CLAUDE.md's Admin/moderation tooling
- * notes), so this exists purely so the app can be tested end to end
- * without console access. Admin-gated.
- */
-exports.debugCreateTournament = onCall(async (request) => {
-  await requireAdmin(request.auth);
-  const {name, minEntrants} = request.data || {};
-  if (!name) {
-    throw new HttpsError("invalid-argument", "name is required.");
-  }
-  const db = getFirestore();
-  const ref = await db.collection("tournaments").add({
-    name,
-    description: "Test tournament created via debugCreateTournament.",
-    entryFee: null,
-    prizeType: "points",
-    prizeValue: 0,
-    eligibleStates: [],
-    format: "async",
-    bracketType: "single_elimination",
-    seeding: "random",
-    withdrawalAllowedBeforeStart: true,
-    minEntrants: minEntrants ?? DEFAULT_MIN_ENTRANTS,
-    status: "open",
-    bracket: null,
-    winnerId: null,
-    createdAt: FieldValue.serverTimestamp(),
-  });
-  return {tournamentId: ref.id};
 });
 
 /**
@@ -1546,63 +1369,6 @@ exports.getPendingFameMilestone = onCall((request) =>
   follows.getPendingFameMilestone(request.auth));
 
 /**
- * LIVE tournaments. The async format is untouched; these only ever act on
- * tournaments marked format: "live".
- */
-exports.checkInToTournament = onCall((request) => {
-  const {checkInToTournament} = require("./liveTournament");
-  return checkInToTournament(request.auth, request.data);
-});
-
-exports.settleLiveMatch = onCall((request) => {
-  const {settleLiveMatch} = require("./liveTournament");
-  return settleLiveMatch(request.auth, request.data);
-});
-
-/**
- * Starts live tournaments whose scheduled time has arrived, or cancels
- * them if too few people checked in.
- *
- * Every minute, because a scheduled show that starts up to half an hour
- * late is not a scheduled show. Cheap: it is one indexed query returning
- * the handful of open tournaments, and it writes nothing when there is
- * nothing to start.
- */
-exports.advanceLiveTournaments = onSchedule("every 1 minutes", async () => {
-  const {sweepLiveTournaments} = require("./liveTournament");
-  try {
-    const result = await sweepLiveTournaments();
-    // Logged only when something happened - a sweep that reports every
-    // quiet minute buries the one that mattered.
-    if (result.acted.length > 0) {
-      console.log("advanceLiveTournaments:", JSON.stringify(result));
-    }
-  } catch (err) {
-    console.error("advanceLiveTournaments failed:", err);
-  }
-});
-
-/**
- * Auto-creates tonight's Sixes and Sevens live tournament ahead of the
- * window so check-in can open at 6:00 (bracket kicks off at 6:15). Polled
- * rather than pinned to a 6pm cron because the window hours live in Firestore
- * and are provisional - a cron fixed at deploy time would keep firing at the
- * old hour after a retune. Idempotent via a Pacific-day marker, so the extra
- * polls are no-ops.
- */
-exports.createDailyTournament = onSchedule("every 15 minutes", async () => {
-  const {ensureDailyTournament} = require("./dailyTournament");
-  try {
-    const result = await ensureDailyTournament();
-    if (result.created) {
-      console.log("createDailyTournament:", JSON.stringify(result));
-    }
-  } catch (err) {
-    console.error("createDailyTournament failed:", err);
-  }
-});
-
-/**
  * Spectating a LIVE tournament match.
  *
  * Deliberately a narrower door than generateAgoraToken, which refuses a
@@ -1617,11 +1383,6 @@ exports.watchLiveMatch = onCall({secrets: [agoraAppCertificate]},
       return watchLiveMatch(request.auth, request.data,
           agoraAppCertificate.value());
     });
-
-exports.liveMatchesFor = onCall((request) => {
-  const {liveMatchesFor} = require("./spectator");
-  return liveMatchesFor(request.auth, request.data);
-});
 
 /**
  * The weekly recap, Sunday evening Pacific.

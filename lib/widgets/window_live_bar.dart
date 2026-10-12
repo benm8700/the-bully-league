@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app.dart';
-import '../screens/tournament/tournament_list_screen.dart';
+import '../screens/tournament/tournament_hub_screen.dart';
 import '../theme/app_theme.dart';
 
 /// A loud, app-wide "LIVE" bar shown only while Sixes and Sevens is on.
@@ -61,7 +61,7 @@ class _WindowLiveBarState extends State<WindowLiveBar>
           child: InkWell(
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
-                  builder: (_) => const TournamentListScreen()),
+                  builder: (_) => const TournamentHubScreen()),
             ),
             child: Stack(
               children: [

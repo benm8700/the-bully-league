@@ -4,7 +4,7 @@
  */
 const assert = require("assert");
 const {
-  beltTransition, isGauntlet, championOf, panelJudgeUids,
+  beltTransition, isMainStage, championOf, panelJudgeUids,
 } = require("../belt");
 
 let passed = 0;
@@ -69,26 +69,18 @@ test("a defense with no fresh name keeps the stored name", () => {
   assert.strictEqual(next.holderName, "Ava");
 });
 
-test("only the Daily Gauntlet (createdBy auto) contests the belt", () => {
-  assert.strictEqual(isGauntlet({createdBy: "auto"}), true);
-  assert.strictEqual(isGauntlet({createdBy: "auto", format: "climb"}), true);
-  assert.strictEqual(isGauntlet({createdBy: "auto", format: "swiss"}), true);
-  assert.strictEqual(isGauntlet({createdBy: "admin"}), false);
-  assert.strictEqual(isGauntlet({}), false);
-  assert.strictEqual(isGauntlet(null), false);
-});
-
-test("the weekly Main Stage (also auto) never moves the daily belt", () => {
-  // buildMainStageDoc writes createdBy "auto" too, so without the format carve-
-  // out a weekly finals win would wrongly take the nightly belt.
+test("only the weekly Main Stage (format mainstage) contests the belt", () => {
+  assert.strictEqual(isMainStage({format: "mainstage"}), true);
   assert.strictEqual(
-      isGauntlet({createdBy: "auto", format: "mainstage"}), false);
+      isMainStage({format: "mainstage", createdBy: "auto"}), true);
+  assert.strictEqual(isMainStage({format: "async"}), false);
+  assert.strictEqual(isMainStage({createdBy: "auto"}), false);
+  assert.strictEqual(isMainStage({}), false);
+  assert.strictEqual(isMainStage(null), false);
 });
 
-test("championOf reads the winner whatever the format wrote", () => {
+test("championOf reads the Main Stage winner", () => {
   assert.strictEqual(championOf({winnerId: "W"}), "W");
-  assert.strictEqual(championOf({swiss: {championUid: "S"}}), "S");
-  assert.strictEqual(championOf({climb: {championUid: "C"}}), "C");
   assert.strictEqual(championOf({status: "cancelled"}), null);
   assert.strictEqual(championOf(null), null);
 });

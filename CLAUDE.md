@@ -4369,6 +4369,24 @@ while adding the developer's all-day study idea.
 
 ## Tournament model — DECISION RECORD (2026-10-09), BUILD NOW / LAUNCH BEHIND A FLAG
 
+> **RETIRED (2026-10-12): the nightly Daily Gauntlet (both the `climb` and
+> `swiss` formats), its auto-creator, its lobby chat, AND the old async/live
+> bracket engine were all DELETED. The weekly Main Stage is now the ONE
+> tournament system.** The Belt was re-pointed from the gauntlet to the Main
+> Stage champion (`belt.js`'s `isMainStage`, format `"mainstage"`), and
+> `finalizeMatch` now routes only `match.mainStage`. **The full implementation
+> of every retired format is preserved at git tag `pre-gauntlet-cleanup`** — so
+> this is rebuildable: to bring back a bracket-based special/cash tournament
+> later, lift `tournament.js` / `liveTournament.js` / `tournamentPlay.js` (the
+> arbitrary-size bracket engine) from that tag, or extend `mainStageBracket.js`.
+> Deleted backend modules: `climbTournament`, `climbPlay`, `swissTournament`,
+> `swissPlay`, `dailyTournament`, `tournament`, `liveTournament`,
+> `tournamentPlay`, `tournamentNotify` (+ their tests and live-checks). Deleted
+> client: the gauntlet screens (`climb_screen`, `gauntlet_*`), the old-bracket
+> screens (`tournament_list`/`detail`/`lobby_screen`), `lobby_service`,
+> `live_checkin`, `watch_live_list`. The sections below describing the gauntlet
+> and the old brackets are kept as design HISTORY; they no longer run.
+
 **This is THE authoritative tournament design and SUPERSEDES the prior
 direction** (the 2026-09-16 "Daily Gauntlet = nightly Swiss/climb, crowd-judged
 live" record, and the live-tournament crowd-voting model). **BUILD APPROACH

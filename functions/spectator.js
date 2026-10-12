@@ -1,6 +1,5 @@
 const {getFirestore} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
-const {isLive} = require("./liveTournament");
 
 /**
  * Watching a live tournament match as a spectator.
@@ -62,25 +61,19 @@ function spectateProblem({match, tournament, uid}) {
     return "you-are-playing";
   }
   if (match.mode !== "tournament") return "not-a-tournament-match";
-  // A climb match carries its tournament id under `climb`, a bracket match
-  // under `tournament`, a Main Stage finals battle under `mainStage` - any
-  // of the three makes it a live event somebody signed up to perform in.
-  if (!match.tournament?.tournamentId && !match.climb?.tournamentId &&
-      !match.mainStage?.tournamentId) {
+  // A Main Stage finals battle carries its tournament id under `mainStage` -
+  // that is what makes it a live event somebody signed up to perform in.
+  if (!match.mainStage?.tournamentId) {
     return "not-a-tournament-match";
   }
   if (!tournament) return "tournament-not-found";
-  // Live-bracket, climb, and Main Stage tournaments are all live events you
-  // can watch. Main Stage is the weekly finals - its battles are the whole
-  // show, so the crowd (and the judges) must be able to watch them.
-  const fmt = tournament.format;
-  if (fmt !== "live" && fmt !== "climb" && fmt !== "mainstage") {
+  // The Main Stage weekly finals are the one live event you can watch - its
+  // battles are the whole show, so the crowd (and the judges) must be able to
+  // watch them. (The nightly gauntlet and old live brackets were retired.)
+  if (tournament.format !== "mainstage") {
     return "not-a-live-event";
   }
-  // Each format marks "a battle is happening now" with its own status word:
-  // live/climb tournaments use in_progress; a Main Stage week uses "live".
-  const running = fmt === "mainstage" ? "live" : "in_progress";
-  if (tournament.status !== running) return "not-running";
+  if (tournament.status !== "live") return "not-running";
   // Once a match is over there is nothing to watch live - the clip is the
   // way to see it, and that path has its own consent and takedown rules.
   if (match.status !== "pending" && match.status !== "in_progress") {
@@ -117,8 +110,7 @@ async function watchLiveMatch(auth, data, appCertificate) {
   const match = matchSnap.exists ? matchSnap.data() : null;
 
   let tournament = null;
-  const tournamentId = match?.tournament?.tournamentId ||
-    match?.climb?.tournamentId || match?.mainStage?.tournamentId;
+  const tournamentId = match?.mainStage?.tournamentId;
   if (tournamentId) {
     const tSnap = await db.collection("tournaments").doc(tournamentId).get();
     tournament = tSnap.exists ? tSnap.data() : null;
@@ -175,80 +167,8 @@ async function watchLiveMatch(auth, data, appCertificate) {
   };
 }
 
-/**
- * What is watchable in a live tournament right now.
- *
- * Returns the current round's matches that are actually being played, so
- * the client can offer a list rather than requiring somebody to already
- * know a match id.
- */
-async function liveMatchesFor(auth, data) {
-  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-  const {tournamentId} = data || {};
-  if (!tournamentId) {
-    throw new HttpsError("invalid-argument", "tournamentId is required.");
-  }
-  const db = getFirestore();
-  const tSnap = await db.collection("tournaments").doc(tournamentId).get();
-  if (!tSnap.exists) throw new HttpsError("not-found", "Tournament not found.");
-  const tournament = tSnap.data();
-  if (!isLive(tournament) || tournament.status !== "in_progress") {
-    return {matches: []};
-  }
-
-  const rounds = tournament.bracket?.rounds ?? [];
-  const round = rounds[rounds.length - 1];
-  if (!round?.matchups) return {matches: []};
-
-  const {tournamentMatchId} = require("./tournamentPlay");
-  // Name and follower count resolved here rather than by the client, which
-  // would otherwise do two document reads per matchup just to draw a list -
-  // and the follower count rides the SAME read, so it costs nothing extra.
-  const meta = new Map();
-  const metaOf = async (uid) => {
-    if (!uid) return {name: null, followers: 0};
-    if (meta.has(uid)) return meta.get(uid);
-    const snap = await db.collection("users").doc(uid).get();
-    const m = {
-      name: snap.data()?.username ?? "Unknown",
-      followers: Number(snap.data()?.followerCount) || 0,
-    };
-    meta.set(uid, m);
-    return m;
-  };
-  const out = [];
-  for (const [i, m] of round.matchups.entries()) {
-    // A settled matchup is over, and a bye was never played.
-    if (m.winnerId || !m.player1Id || !m.player2Id) continue;
-    const id = tournamentMatchId(tournamentId, round.roundNumber, i);
-    const snap = await db.collection("matches").doc(id).get();
-    if (!snap.exists) continue;
-    const match = snap.data();
-    if (match.status !== "pending" && match.status !== "in_progress") continue;
-    const [p1, p2] = await Promise.all([
-      metaOf(match.player1Id),
-      metaOf(match.player2Id),
-    ]);
-    out.push({
-      matchId: id,
-      player1Id: match.player1Id,
-      player2Id: match.player2Id,
-      player1Name: p1.name,
-      player2Name: p2.name,
-      player1Followers: p1.followers,
-      player2Followers: p2.followers,
-      roundNumber: round.roundNumber,
-      // Both players present means it is actually under way rather than
-      // waiting for someone to arrive.
-      live: Object.keys(match.arrivedAt ?? {}).length >= 2,
-    });
-  }
-  return {matches: out, roundNumber: round.roundNumber};
-}
-
 module.exports = {
   watchLiveMatch,
-  liveMatchesFor,
   spectateProblem,
   spectatorUid,
   MESSAGES,

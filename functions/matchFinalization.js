@@ -403,59 +403,20 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     }
   }
 
-  // A tournament match's result belongs to its structure, not just to the
-  // two players' ratings. A CLIMB match advances the ladder (winner climbs,
-  // loser out); a bracket match advances its round. Both use mode
-  // "tournament", so the `climb` field is what routes them apart - checked
-  // first so a climb match never falls into the bracket path (which expects
-  // a slot it doesn't have).
-  if (match.mode === "tournament") {
+  // A tournament match's result belongs to its structure, not just to the two
+  // players' ratings: a Main Stage finals battle advances the weekly bracket.
+  // The Main Stage is the one tournament system (the nightly gauntlet and the
+  // old async/live brackets were retired), so `mainStage` is the only routing.
+  if (match.mode === "tournament" && match.mainStage) {
     try {
-      if (match.mainStage) {
-        // Main Stage finals: advance the 4-player #1-callout bracket via the
-        // mainstage core (NOT the async bracket). The winner came from the
-        // judge panel above; checked first so a finals match never falls into
-        // the swiss/climb/async paths, which expect fields it doesn't carry.
-        const {recordBattleResult} = require("./mainStageTournament");
-        const {tournamentId, roundIdx, matchIdx} = match.mainStage;
-        const applied = winnerId ? await recordBattleResult(
-            db, tournamentId, roundIdx, matchIdx, winnerId) : {ok: false};
-        console.log(`mainstage advance for ${matchId}:`, JSON.stringify(applied));
-      } else if (match.swiss) {
-        // Daily Gauntlet's SWISS format: a win moves the record (winner +1
-        // win, loser +1 loss, both back to waiting - non-elimination); a TIE
-        // (no winner) scores neither. Either way the gauntlet MUST be moved or
-        // the two entrants strand `in_match` on a settled match forever.
-        const {applySwissResult, applySwissTie} = require("./swissPlay");
-        const applied = winnerId ?
-          await applySwissResult(match, winnerId, matchId) :
-          await applySwissTie(match, matchId);
-        console.log(`gauntlet(swiss) advance for ${matchId}:`,
-            JSON.stringify(applied));
-      } else if (match.climb) {
-        // A win climbs one climber and eliminates the other; a TIE (no
-        // winner - equal or zero votes) advances BOTH (the gauntlet tie rule,
-        // 2026-09-01). Either way the gauntlet MUST be moved, or the two
-        // climbers strand `in_match` on a settled match forever - the exact
-        // bug the 2026-09-01 dry run hit on a zero-vote tie.
-        const {applyClimbResult, applyClimbTie} = require("./climbPlay");
-        const applied = winnerId ?
-          await applyClimbResult(match, winnerId, matchId) :
-          await applyClimbTie(match, matchId);
-        console.log(`climb advance for ${matchId}:`, JSON.stringify(applied));
-      } else if (winnerId) {
-        // A bracket slot still needs a decisive winner to advance; a bracket
-        // tie is left to the endgame/forfeit sweep (out of scope for the
-        // gauntlet tie rule).
-        const {recordTournamentResult} = require("./tournament");
-        const applied = await recordTournamentResult(match, winnerId);
-        if (applied.applied) {
-          console.log(`tournament advance for ${matchId}:`, JSON.stringify(applied));
-        }
-      }
+      const {recordBattleResult} = require("./mainStageTournament");
+      const {tournamentId, roundIdx, matchIdx} = match.mainStage;
+      const applied = winnerId ? await recordBattleResult(
+          db, tournamentId, roundIdx, matchIdx, winnerId) : {ok: false};
+      console.log(`mainstage advance for ${matchId}:`, JSON.stringify(applied));
     } catch (e) {
-      // A ladder/bracket an admin can fix beats a finalization that failed
-      // after already applying rating changes.
+      // A bracket an admin can fix beats a finalization that failed after
+      // already applying rating changes.
       console.error(`tournament result for ${matchId} failed:`, e.message);
     }
   }
