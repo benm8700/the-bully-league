@@ -88,8 +88,8 @@ class EventWindowBanner extends StatelessWidget {
               Text(
                 "You don't enter - you qualify by battling in The Basement all "
                 'week. The top 3 roasters by skill lock in a seat. The 4th is a '
-                'wild card: qualify for the week, then the more you play AND '
-                'judge, the better your odds of getting pulled in.',
+                'wild card: the more you play and vote on other matches, the '
+                'better your odds of getting selected.',
                 style: body,
               ),
               const SizedBox(height: 16),
