@@ -53,7 +53,7 @@ class EventWindowBanner extends StatelessWidget {
               backgroundColor: Colors.black.withValues(alpha: 0.42),
               padding: const EdgeInsets.all(6),
             ),
-            onPressed: () => _showTournamentInfo(context, config),
+            onPressed: () => _showTournamentInfo(context),
           ),
           overlay: const SizedBox.shrink(),
         );
@@ -61,50 +61,52 @@ class EventWindowBanner extends StatelessWidget {
     );
   }
 
-  /// Explains the nightly tournament: what it is, the rules, the prize, and
-  /// the 2x bonus. Opened by the "?" on the card.
-  void _showTournamentInfo(BuildContext context, EventWindowConfig config) {
-    final hours =
-        '${_hour12(config.startHourPacific)}-${_hour12(config.endHourPacific)} Pacific';
+  /// Explains the Main Stage: what it is, how you qualify through the week, and
+  /// the wild-card draw. Opened by the "?" on the card. Deliberately high-level
+  /// - the finals' format (your clock, interrupts) lives in the hub's rules
+  /// screen. The wild-card odds are described by their LEVERS (play + judge),
+  /// never the exact weighting, matching the app's hidden-criteria style.
+  void _showTournamentInfo(BuildContext context) {
     final body = Theme.of(context).textTheme.bodyMedium;
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(config.name),
+        title: const Text('The Main Stage'),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'The nightly tournament - $hours, every night. One hour, one '
-                'crowd, one champion.',
+                'The weekly finals - the biggest stage in the league. Four '
+                'roasters battle live, a panel of judges decides, and the '
+                'champion takes The Belt.',
                 style: body,
               ),
               const SizedBox(height: 16),
-              _infoHeading(context, 'How it works'),
+              _infoHeading(context, 'How you get here'),
               Text(
-                'Hop in any time during the hour - everyone starts at 0 wins. '
-                "You're paired with someone who has the same number of wins as "
-                "you. Win, and you move up. Lose, and you're out - but you can "
-                'stick around to watch and vote. Keep winning to climb, and the '
-                'last one standing takes the crown. If the clock runs out '
-                "first, whoever's climbed highest wins it.",
+                "You don't enter - you qualify by battling in The Basement all "
+                'week. The top 3 roasters by skill lock in a seat. The 4th is a '
+                'wild card: qualify for the week, then the more you play AND '
+                'judge, the better your odds of getting pulled in.',
+                style: body,
+              ),
+              const SizedBox(height: 16),
+              _infoHeading(context, 'The night'),
+              Text(
+                'The four face off live, one battle at a time - the top seed '
+                'even gets to call out who they want first. The judges decide '
+                'each one, and the last roaster standing is champion.',
                 style: body,
               ),
               const SizedBox(height: 16),
               _infoHeading(context, 'The prize'),
               Text(
-                'Prestige, and prizes when they are on the line. It is free to '
-                'enter and the champion takes the night. Bigger cash-prize '
-                'events run on top from time to time.',
-                style: body,
-              ),
-              const SizedBox(height: 16),
-              _infoHeading(context, 'The bonus'),
-              Text(
-                'Everything counts double during the hour - 2x points on every '
-                'battle AND every vote.',
+                'The Belt - the one title you lose the moment someone else wins '
+                '- plus a permanent Champion badge. Bigger, real prizes come '
+                'later; for now it is the prestige, and the whole room watching '
+                'you take it.',
                 style: body,
               ),
             ],
@@ -131,10 +133,5 @@ class EventWindowBanner extends StatelessWidget {
             ),
       ),
     );
-  }
-
-  String _hour12(int hour24) {
-    final h = hour24 % 12 == 0 ? 12 : hour24 % 12;
-    return '$h${hour24 < 12 ? 'am' : 'pm'}';
   }
 }

@@ -356,26 +356,26 @@ class RoastHero extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Roast a Stranger'),
+        title: const Text('The Basement'),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Get matched with a random opponent for a live, one-on-one '
-                'roast battle. No bracket, no waiting for the hour - just you, '
-                'them, and a crowd to settle it.',
+                'The Basement is everyday play - get matched with a random '
+                'opponent for a live, one-on-one roast battle. No bracket, no '
+                'waiting; just you, them, and a crowd to settle it.',
                 style: body,
               ),
               const SizedBox(height: 16),
               heading('How it works'),
               Text(
-                'This is The Basement - everyday play. You each get about 30 '
-                'seconds of clock that only ticks while you hold the floor; '
-                'roast, then yield (or get cut off when it runs out). Before '
-                'the bell you watch their intro video, so you walk in with ammo '
-                'instead of winging it. The whole thing is recorded.',
+                'You each get about 30 seconds of clock that only ticks while '
+                'you hold the floor; roast, then yield (or get cut off when it '
+                'runs out). Before the bell you watch their intro video, so you '
+                'walk in with ammo instead of winging it. The whole thing is '
+                'recorded.',
                 style: body,
               ),
               const SizedBox(height: 16),
@@ -384,6 +384,16 @@ class RoastHero extends StatelessWidget {
                 'The crowd watches and votes - most votes takes it. These are '
                 'rated, so a win climbs your rank and a loss costs you, and '
                 'your best moments can become a clip you can post.',
+                style: body,
+              ),
+              const SizedBox(height: 16),
+              heading('Your road to the Main Stage'),
+              Text(
+                'Every rated battle this week counts toward the weekly Main '
+                'Stage. Battle 5 different opponents to qualify - the top 3 by '
+                'skill lock in a finals seat, and everyone else who qualifies '
+                'goes in the wild-card draw for the 4th. The more you play and '
+                'judge, the better your draw odds.',
                 style: body,
               ),
               const SizedBox(height: 16),
