@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../core/services/event_window.dart';
-import '../screens/tournament/tournament_list_screen.dart';
+import '../screens/tournament/tournament_hub_screen.dart';
 import '../theme/app_theme.dart';
 import 'home/hero_mode_card.dart';
 
@@ -64,9 +64,13 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
         final window = currentOrNextWindow(now, config);
         final live = window.contains(now);
 
+        // The gold Main Stage card is the front door to the tournament HUB
+        // (standings, lobby chat, judges, prize) - NOT a "join a bracket"
+        // button, because you qualify for the weekly Main Stage by battling all
+        // week, not by entering here.
         void openTournament() => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => const TournamentListScreen(),
+                builder: (_) => const TournamentHubScreen(),
               ),
             );
 

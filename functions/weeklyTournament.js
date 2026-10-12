@@ -7,6 +7,13 @@ const {
   computeJudgeStandings,
   topN,
 } = require("./weeklyQualifier");
+const {
+  collectVolunteers,
+  rankVolunteers,
+  qualifiedPool,
+  resolveJudgeMinToQualify,
+} = require("./hubJudges");
+const {DEFAULT_PANEL_SIZE} = require("./judgePanel");
 
 /**
  * Weekly tournament qualifier - the Firestore wiring around the pure core.
@@ -112,6 +119,28 @@ async function sweepWeeklyQualifier(now = Date.now()) {
     updatedAt: FieldValue.serverTimestamp(),
   });
 
+  // 1b. LIVE JUDGE BOARD - this week's VOLUNTEERS, ranked by how much they've
+  // judged, for the Judges tab. Only volunteers appear (judging a panel is an
+  // opt-in you choose), and >= minToQualify ballots marks you eligible for an
+  // autofill seat. Published to stats/weeklyJudges (client-read, server-write).
+  const minToQualify = resolveJudgeMinToQualify(cfgSnap.data());
+  const liveBallots = await collectWeekBallots(
+      db, week.startMs, Math.min(now, week.cutoffMs));
+  const liveJudges = computeJudgeStandings(liveBallots, {
+    startMs: week.startMs, cutoffMs: week.cutoffMs,
+  });
+  const volunteerUids = await collectVolunteers(db, week.cutoffDayKey);
+  const volunteers = rankVolunteers(volunteerUids, liveJudges, minToQualify);
+  await db.collection("stats").doc("weeklyJudges").set({
+    weekKey: week.cutoffDayKey,
+    volunteers: volunteers.slice(0, LIVE_BOARD_SIZE),
+    volunteerCount: volunteers.length,
+    qualifiedCount: volunteers.filter((v) => v.qualified).length,
+    panelSize: DEFAULT_PANEL_SIZE,
+    minToQualify,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
   // 2. CUTOFF SNAPSHOT - freeze the field once, when a week has just closed.
   const closed = mostRecentlyClosedWeek(now);
   const sincecutoff = now - closed.cutoffMs;
@@ -136,9 +165,18 @@ async function sweepWeeklyQualifier(now = Date.now()) {
       const ballots = await collectWeekBallots(
           db, closed.startMs, closed.cutoffMs);
       const finalistSet = new Set(finalists.map((f) => f.uid));
-      const judgePool = computeJudgeStandings(ballots, {
+      // The autofill pool is QUALIFIED VOLUNTEERS of the closed week, ranked by
+      // how much they judged - a seat is an opt-in you earn (see hubJudges.js),
+      // not just "whoever judged most". Finalists can't judge, so drop them.
+      const closedJudges = computeJudgeStandings(ballots, {
         startMs: closed.startMs, cutoffMs: closed.cutoffMs,
-      }).filter((j) => !finalistSet.has(j.uid)).slice(0, JUDGE_POOL_SIZE);
+      });
+      const closedVolunteers = await collectVolunteers(db, closed.cutoffDayKey);
+      const eligibleUids = new Set(qualifiedPool(
+          closedVolunteers, closedJudges, minToQualify, [...finalistSet]));
+      const judgePool = closedJudges
+          .filter((j) => eligibleUids.has(j.uid))
+          .slice(0, JUDGE_POOL_SIZE);
       await snapRef.set({
         tournamentDayKey: closed.cutoffDayKey,
         startMs: closed.startMs,

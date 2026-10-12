@@ -664,6 +664,39 @@ exports.postLobbyMessage = onCall((request) => {
   return postLobbyMessage(request.auth, request.data);
 });
 
+// ---- The Main Stage HUB (weekly tournament hub) ----
+// The hub's weekly lobby chat + the "I'll judge" opt-in. The chat room and the
+// judge week are both derived server-side from the clock (see hubChat.js /
+// hubJudges.js), so a client never chooses which room/week it writes to.
+
+// Hand the client the current hub week key (so it can read the weekly chat +
+// its own judge-volunteer state). Works regardless of the tournament flag.
+exports.getHubRoom = onCall((request) => {
+  const {getHubRoom} = require("./hubChat");
+  return getHubRoom(request.auth);
+});
+
+// Post to this week's hub lobby. The only write path (clients can't write
+// lobbyRooms/**), so moderation + rate limiting can't be skipped.
+exports.postHubMessage = onCall((request) => {
+  const {postHubMessage} = require("./hubChat");
+  return postHubMessage(request.auth, request.data);
+});
+
+// Pin an announcement to this week's hub lobby. Admin (founder) only.
+exports.postHubAnnouncement = onCall(async (request) => {
+  const {postHubAnnouncement} = require("./hubChat");
+  await requireAdmin(request.auth);
+  return postHubAnnouncement(request.auth, request.data);
+});
+
+// Opt in/out of judging this week's Main Stage. A seat takes volunteering AND
+// judging enough battles to qualify; see hubJudges.js.
+exports.volunteerToJudge = onCall((request) => {
+  const {volunteerToJudge} = require("./hubJudges");
+  return volunteerToJudge(request.auth, request.data);
+});
+
 // Crash/back-out recovery for the gauntlet: is the caller still an active
 // climber in a live gauntlet? Lets Home offer a one-click return.
 exports.getActiveGauntlet = onCall((request) => {

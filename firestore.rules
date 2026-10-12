@@ -347,6 +347,28 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // The Main Stage HUB weekly lobby chat. A standing "this week's" green room
+    // (keyed by the qualifying week), the same welfare-bounded animal as the
+    // gauntlet lobby: clients READ it live but can only WRITE through the
+    // postHubMessage / postHubAnnouncement Cloud Functions, which moderate and
+    // rate-limit. A direct client write would skip all of that.
+    match /lobbyRooms/{roomId}/messages/{messageId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /lobbyRooms/{roomId}/rate/{userId} {
+      allow read, write: if false;
+    }
+
+    // The "I'll judge the Main Stage" opt-in, per qualifying week. Readable so a
+    // client can see who's volunteered and check its own status; written ONLY
+    // by the volunteerToJudge Cloud Function (which derives the week from the
+    // clock), so a client can't volunteer for some other week or spoof one.
+    match /judgeVolunteers/{weekKey}/volunteers/{userId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     // Founder "Editor's Choice" spotlight - the battles the house has featured,
     // shown in the Home Featured row. Readable by any signed-in client (it's a
     // public showcase); written only from the /admin dashboard (Admin SDK,
