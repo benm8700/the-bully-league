@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
 
+/// The shared aspect ratio for the two Home hero pills (Basement + Main Stage),
+/// so they are the SAME size. The developer's matched banner art is ~2056x765
+/// (aspect ~2.69) - a wide, short banner; displaying at its native aspect means
+/// no cropping and a compact card. Used by both RoastHero and EventWindowBanner.
+const double kHeroPillAspect = 2056 / 765;
+
 /// A cinematic hero card for a Home battle mode: a full-bleed background
 /// artwork with a glow border, a bottom scrim, and a bottom-anchored Flutter
 /// [overlay] carrying every dynamic element (title, subtitle, chips, CTA).
@@ -305,11 +311,9 @@ class RoastHero extends StatelessWidget {
       glow: accent,
       // Art used as-is with no bottom overlay, so no scrim dimming the wordmark.
       scrim: false,
-      // More compact than 3/2 - shorter so it reads as the clear second option
-      // under the tournament hero and both cards clear the fold on shorter
-      // screens. Display-only crop; the roaster art stays centred and the file
-      // is untouched.
-      aspectRatio: 5 / 3,
+      // Native aspect of the wide banner art, shared with the Main Stage pill
+      // so the two cards are the same size (and compact). No crop.
+      aspectRatio: kHeroPillAspect,
       onTap: onFindMatch,
       // A "?" explainer pinned top-right, matching the tournament hero's for
       // continuity - same icon, size, and dark disc.

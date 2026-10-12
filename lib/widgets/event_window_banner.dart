@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
@@ -8,43 +6,20 @@ import '../screens/tournament/tournament_hub_screen.dart';
 import '../theme/app_theme.dart';
 import 'home/hero_mode_card.dart';
 
-/// The always-visible countdown to the daily window.
+/// The Main Stage hero card on Home - the front door to the tournament HUB.
 ///
-/// This is the cheapest and most durable way to teach the habit: a
-/// notification is a single moment that can be missed or muted, whereas a
-/// countdown sitting on Home sets the rhythm every time the app is opened,
-/// including for people who never granted notification permission.
+/// A clean full-bleed image pill, matched to the Basement (Roast a Stranger)
+/// hero: the baked "MAIN STAGE" artwork, a gold glow, a "?" explainer, and the
+/// whole card taps through to the hub (where the countdown, standings, lobby,
+/// judges and prize live). No countdown / chips / CTA on the card itself - the
+/// old "ENTER TOURNAMENT" button was redundant once the whole card opens the
+/// hub, so the two Home heroes now read as a matched pair of equal size.
 ///
-/// Reads its config live from `config/eventWindow`, so the name and hours -
-/// both explicitly provisional - can be retuned without shipping a new
-/// version. Renders nothing at all when disabled or unreadable: a broken
-/// or switched-off promo must never be the reason Home looks wrong.
-class EventWindowBanner extends StatefulWidget {
+/// Reads config/eventWindow only to decide whether to show at all (and to fill
+/// the "?" explainer). Renders nothing when disabled or unreadable, so a
+/// switched-off promo never makes Home look wrong.
+class EventWindowBanner extends StatelessWidget {
   const EventWindowBanner({super.key});
-
-  @override
-  State<EventWindowBanner> createState() => _EventWindowBannerState();
-}
-
-class _EventWindowBannerState extends State<EventWindowBanner> {
-  Timer? _ticker;
-
-  @override
-  void initState() {
-    super.initState();
-    // Once a minute is enough for a countdown displayed in minutes, and is
-    // far cheaper than a per-second rebuild for something that sits on
-    // screen the whole time someone is browsing.
-    _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _ticker?.cancel();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,221 +30,39 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return const SizedBox.shrink();
-        // Falls back to the documented defaults when the document doesn't
-        // exist yet, so the banner works before anyone creates it.
+        // Falls back to documented defaults if the doc doesn't exist yet.
         final config = EventWindowConfig.fromMap(snapshot.data?.data());
         if (!config.enabled) return const SizedBox.shrink();
 
-        final now = DateTime.now().toUtc();
-        final window = currentOrNextWindow(now, config);
-        final live = window.contains(now);
-
-        // The gold Main Stage card is the front door to the tournament HUB
-        // (standings, lobby chat, judges, prize) - NOT a "join a bracket"
-        // button, because you qualify for the weekly Main Stage by battling all
-        // week, not by entering here.
-        void openTournament() => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const TournamentHubScreen(),
-              ),
+        void openHub() => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const TournamentHubScreen()),
             );
 
-        // The PRIMARY Home hero (developer's redesign, 2026-09-14): the
-        // cinematic tournament artwork with every dynamic element - title,
-        // subtitle, info chips, countdown/LIVE state, CTA - as Flutter overlays
-        // on top. The same countdown/live logic as before, restyled.
-        //
-        // LIVE vs PRE-WINDOW differ only in the countdown chip: "LIVE now" (red)
-        // while the window is open, "Starts in Xh Ym" beforehand. The CTA always
-        // enters the tournament, where check-in and spectating live.
-        // The countdown is highlighted rather than a plain text chip so the
-        // time is the thing the eye lands on: a tinted pill (gold when
-        // counting down - tournament/event colour - red when live) with the
-        // value in bold. "Real Prizes" / "Live Bracket" stay plain beside it.
-        final Widget countdownChip = live
-            ? const _CountdownPill(
-                icon: Icons.circle,
-                leading: '',
-                value: 'LIVE now',
-                color: Color(0xFFFF3B47),
-              )
-            : _CountdownPill(
-                icon: Icons.schedule,
-                leading: 'Starts in ',
-                value: _remaining(window.start, now),
-                color: context.palette.reward,
-              );
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // The tournament HERO ART now has the banner text (BE FUNNY / WIN
-            // VOTES / TAKE THE / CROWN | PRIZES / STATUS / FAME) AND the
-            // TOURNAMENT title BAKED INTO THE PNG (developer's final art,
-            // 2026-09-14). So NOTHING of that is rendered in Flutter over the
-            // image - no banner text, no TOURNAMENT title, no "8 ROASTERS. 1
-            // CHAMPION." The image is landscape (1608x978), so the card matches
-            // that aspect ratio and the far-edge banners are never cropped.
-            // Only the DYNAMIC tournament UI (info chips + ENTER TOURNAMENT)
-            // stays Flutter, in a dark strip BELOW the artwork so it never
-            // covers the baked title/banners.
-            DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: context.palette.reward.withValues(alpha: 0.30),
-                    blurRadius: 26,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(22),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // The baked artwork. A wider display ratio (was
-                        // 1608/978) trims the card height ~14% with a small
-                        // top/bottom cover-crop - the image FILE is untouched,
-                        // only how it is displayed. Keeps the card the primary
-                        // hero while giving Roast a Stranger more room and
-                        // reading tighter (targeting shorter iPhone screens).
-                        AspectRatio(
-                          aspectRatio: 1608 / 840,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Image.asset(
-                                'assets/home/tournament_hero.png',
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => const ColoredBox(
-                                  color: Color(0xFF14100F),
-                                ),
-                              ),
-                              Positioned.fill(
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(onTap: openTournament),
-                                ),
-                              ),
-                              // The "?" help affordance used to float here on
-                              // the bright gold art and was nearly invisible
-                              // (developer's call, 2026-10-07). Moved to the
-                              // dark strip below the art as a clear "How it
-                              // works" link, where it reads unmistakably.
-                            ],
-                          ),
-                        ),
-                        // Dynamic tournament UI, in a dark strip BELOW the art.
-                        // Tightened vertical padding (was 14/16) to cut the
-                        // black dead-space so the card is closer in height to
-                        // the Roast a Stranger hero - a little black is kept.
-                        ColoredBox(
-                          color: const Color(0xFF0B0A0C),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // A Wrap, not a Row: three fixed Flexible cells
-                                // squeezed the long countdown ("Starts 21h 24m")
-                                // into an ellipsis. Wrap gives each chip its
-                                // natural width and flows the countdown onto a
-                                // second centred line when they don't all fit,
-                                // so the time is never cut off - at any width.
-                                Wrap(
-                                  alignment: WrapAlignment.center,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  spacing: 14,
-                                  runSpacing: 8,
-                                  children: [
-                                    const HeroInfoChip(
-                                      icon: Icons.emoji_events,
-                                      label: 'Real Prizes',
-                                      color: Color(0xFFF4C838),
-                                    ),
-                                    const HeroInfoChip(
-                                        icon: Icons.groups,
-                                        label: 'Live Bracket'),
-                                    countdownChip,
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: _goldCtaButton(
-                                    context,
-                                    label: 'ENTER TOURNAMENT',
-                                    onTap: openTournament,
-                                  ),
-                                ),
-                                // The "How it works" explainer, on the dark
-                                // strip where it's clearly visible (it used to
-                                // be a near-invisible "?" floating on the art).
-                                TextButton.icon(
-                                  onPressed: () =>
-                                      _showTournamentInfo(context, config),
-                                  icon: const Icon(Icons.help_outline, size: 18),
-                                  label: const Text('How the tournament works'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor:
-                                        Colors.white.withValues(alpha: 0.82),
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 2),
-                                    minimumSize: const Size(0, 32),
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Gold border over the whole card.
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color:
-                                context.palette.reward.withValues(alpha: 0.85),
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+        return HeroModeCard(
+          asset: 'assets/home/tournament_hero.png',
+          glow: context.palette.reward, // gold - the event/tournament colour
+          aspectRatio: kHeroPillAspect, // matched to the Basement pill
+          scrim: false, // baked art used as-is, no overlay to keep readable
+          onTap: openHub,
+          topRight: IconButton(
+            icon: const Icon(Icons.help_outline),
+            iconSize: 28,
+            color: Colors.white,
+            tooltip: 'How the tournament works',
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.black.withValues(alpha: 0.42),
+              padding: const EdgeInsets.all(6),
             ),
-            // The "I'm in tonight" pre-commit button was REMOVED from Home
-            // (developer's call, 2026-09-14) - it was cluttering the page. The
-            // _CommitRow widget still exists in this file; re-add it under the
-            // hero to restore the pre-commit + "N in tonight" count.
-          ],
+            onPressed: () => _showTournamentInfo(context, config),
+          ),
+          overlay: const SizedBox.shrink(),
         );
       },
     );
   }
 
-  String _remaining(DateTime target, DateTime now) {
-    final d = target.difference(now);
-    if (d.isNegative) return '0m';
-    final hours = d.inHours;
-    final minutes = d.inMinutes % 60;
-    if (hours >= 1) return '${hours}h ${minutes}m';
-    return '${d.inMinutes}m';
-  }
-
   /// Explains the nightly tournament: what it is, the rules, the prize, and
-  /// the 2x bonus. Opened by the "?" beside the tournament button.
+  /// the 2x bonus. Opened by the "?" on the card.
   void _showTournamentInfo(BuildContext context, EventWindowConfig config) {
     final hours =
         '${_hour12(config.startHourPacific)}-${_hour12(config.endHourPacific)} Pacific';
@@ -343,129 +136,5 @@ class _EventWindowBannerState extends State<EventWindowBanner> {
   String _hour12(int hour24) {
     final h = hour24 % 12 == 0 ? 12 : hour24 % 12;
     return '$h${hour24 < 12 ? 'am' : 'pm'}';
-  }
-}
-
-/// The metallic-gold "win money / prize" tournament button, reused on both the
-/// live and pre-window banner states. Pale-gold -> vivid gold -> deep gold
-/// with a gold glow; a plain FilledButton can't gradient, so this is a custom
-/// Ink button. Deliberately a DIFFERENT colour from the pink "Roast a
-/// Stranger" primary so the two never read as the same action. Goes to the
-/// tournament, where check-in and the live watch/vote list live.
-/// Width of the gold "Tonight: 6s and 7s Tournament" pill's footprint, reused
-/// on Home so the "Roast a Stranger" pill matches it exactly (developer's call,
-/// 2026-09-14). The two labels differ, so neither would otherwise be the same
-/// width; pinning both to one value keeps them a matched pair. Tuned to the
-/// gold pill's rendered width on a ~411dp phone — revisit if the tournament
-/// label or the display font changes.
-const double kEventPillWidth = 272;
-
-/// Full-width gold gradient CTA for the tournament hero ("ENTER TOURNAMENT").
-Widget _goldCtaButton(
-  BuildContext context, {
-  required String label,
-  required VoidCallback onTap,
-}) {
-  return Material(
-    color: Colors.transparent,
-    borderRadius: BorderRadius.circular(26),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(26),
-      onTap: onTap,
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(26),
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFCE9A6), Color(0xFFF4C838), Color(0xFFCF9A15)],
-            stops: [0.0, 0.5, 1.0],
-          ),
-          border: Border.all(color: const Color(0xFF7A5A12), width: 1.5),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                label,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: const Color(0xFF3D2C00),
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
-                    ),
-              ),
-              const SizedBox(width: 6),
-              const Icon(Icons.chevron_right,
-                  size: 20, color: Color(0xFF3D2C00)),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-/// A highlighted countdown pill for the tournament card - a tinted, bordered
-/// capsule with the time in bold, so the countdown reads at a glance instead
-/// of blending in with the plain info chips beside it.
-class _CountdownPill extends StatelessWidget {
-  const _CountdownPill({
-    required this.icon,
-    required this.leading,
-    required this.value,
-    required this.color,
-  });
-
-  /// A small icon (schedule, or a dot when live).
-  final IconData icon;
-
-  /// Un-emphasised prefix, e.g. "Starts " (may be empty).
-  final String leading;
-
-  /// The emphasised part - the time, or "LIVE now".
-  final String value;
-
-  /// Accent for the pill (gold while counting down, red when live).
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.55)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 5),
-          Text.rich(
-            TextSpan(
-              children: [
-                if (leading.isNotEmpty)
-                  TextSpan(
-                    text: leading,
-                    style: text.labelMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                TextSpan(
-                  text: value,
-                  style: text.labelMedium?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
