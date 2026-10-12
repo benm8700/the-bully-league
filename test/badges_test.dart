@@ -21,6 +21,42 @@ void main() {
       expect(stats.value(BadgeMetric.votesCast), 42);
     });
 
+    test('the Voter entry tier earns at the first vote', () {
+      final q0 = qualifyingBadgeIds(const BadgeStats(
+          wins: 0, battlesPlayed: 0, voteStreakDays: 0, votesCast: 0));
+      expect(q0, isNot(contains('voter')));
+      final q1 = qualifyingBadgeIds(const BadgeStats(
+          wins: 0, battlesPlayed: 0, voteStreakDays: 0, votesCast: 1));
+      expect(q1, contains('voter'));
+      expect(q1, isNot(contains('juror_1')), reason: 'Juror is 10 votes');
+    });
+  });
+
+  group('Main Stage Judge (panel service, prestigious)', () {
+    test('earns only from the server mainStagePanelsServed field', () {
+      expect(resolveEarnedIds({'mainStagePanelsServed': 1}),
+          contains('main_stage_judge'));
+      expect(resolveEarnedIds({'mainStagePanelsServed': 0}),
+          isNot(contains('main_stage_judge')));
+    });
+
+    test('is NOT grantable via the client earned set', () {
+      final injected = resolveEarnedIds({
+        'badges': {
+          'earned': ['main_stage_judge'],
+        },
+      });
+      expect(injected, isNot(contains('main_stage_judge')),
+          reason: 'serving on a panel is server-set, never self-awarded');
+    });
+
+    test('is distinct from the everyday voting family', () {
+      // Voting a lot (Basement) never grants the panel Judge badge.
+      final heavyVoter = resolveEarnedIds({'votesCast': 1000});
+      expect(heavyVoter, contains('juror_3'));
+      expect(heavyVoter, isNot(contains('main_stage_judge')));
+    });
+
     test('the family shows its highest earned tier with the next goal', () {
       final stats = const BadgeStats(
           wins: 0, battlesPlayed: 0, voteStreakDays: 0, votesCast: 137);

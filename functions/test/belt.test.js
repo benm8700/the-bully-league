@@ -3,7 +3,9 @@
  * Run: node test/belt.test.js
  */
 const assert = require("assert");
-const {beltTransition, isGauntlet, championOf} = require("../belt");
+const {
+  beltTransition, isGauntlet, championOf, panelJudgeUids,
+} = require("../belt");
 
 let passed = 0;
 function test(name, fn) {
@@ -89,6 +91,17 @@ test("championOf reads the winner whatever the format wrote", () => {
   assert.strictEqual(championOf({climb: {championUid: "C"}}), "C");
   assert.strictEqual(championOf({status: "cancelled"}), null);
   assert.strictEqual(championOf(null), null);
+});
+
+test("panelJudgeUids: only a mainstage panel counts, deduped", () => {
+  assert.deepStrictEqual(
+      panelJudgeUids({format: "mainstage", judges: ["a", "b", "a", "", null]}),
+      ["a", "b"]);
+  // Any other format (gauntlet/climb/swiss) has no panel service.
+  assert.deepStrictEqual(
+      panelJudgeUids({format: "swiss", judges: ["a", "b"]}), []);
+  assert.deepStrictEqual(panelJudgeUids({format: "mainstage"}), []);
+  assert.deepStrictEqual(panelJudgeUids(null), []);
 });
 
 if (process.exitCode) {

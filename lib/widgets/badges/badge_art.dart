@@ -33,7 +33,10 @@ class BadgeArt extends StatelessWidget {
         BadgeMetric.wins => Icons.local_fire_department,
         BadgeMetric.battlesPlayed => Icons.sports_mma,
         BadgeMetric.voteStreakDays => Icons.gavel,
-        BadgeMetric.votesCast => Icons.balance,
+        // Everyday Basement voting uses a ballot icon, so the voting family
+        // (Voter/Juror/...) stays visually distinct from the prestigious Main
+        // Stage Judge badge, which keeps the ⚖️ scales of the real panel.
+        BadgeMetric.votesCast => Icons.how_to_vote,
         // Never reached for glyph-medallion badges (emoji awards + the 🏆
         // champion / 🥈 runner-up render their glyph), but the switch must be
         // exhaustive.
@@ -44,7 +47,8 @@ class BadgeArt extends StatelessWidget {
         BadgeMetric.topClever ||
         BadgeMetric.topBoring ||
         BadgeMetric.topTrash ||
-        BadgeMetric.topRedFlag =>
+        BadgeMetric.topRedFlag ||
+        BadgeMetric.mainStagePanelsServed =>
           Icons.emoji_events,
       };
 
@@ -77,7 +81,7 @@ class BadgeArt extends StatelessWidget {
   }
 
   /// A medallion with the award's glyph, in one of three finishes:
-  ///  - GOLD for honours (🔥/🧠, the 🏆 champion, the ⭐ editor's choice),
+  ///  - GOLD for honours (🔥/🧠, the 🏆 champion, ⭐ editor's choice, ⚖️ judge),
   ///  - SILVER for the 🥈 runner-up (an honour, clearly below gold),
   ///  - TARNISHED grey for the negatives (🥱/💩/🚩), so a 💩 trophy never reads
   ///    as a gold honour - matching the emoji-badge medals.
@@ -85,7 +89,8 @@ class BadgeArt extends StatelessWidget {
     final gold = def.emoji == '🔥' ||
         def.emoji == '🧠' ||
         def.emoji == '🏆' ||
-        def.emoji == '⭐';
+        def.emoji == '⭐' ||
+        def.emoji == '⚖️';
     final silver = def.emoji == '🥈';
     final accent = gold
         ? const Color(0xFFF4C838)

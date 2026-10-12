@@ -34,6 +34,7 @@ enum BadgeMetric {
   topTrash,
   topRedFlag,
   editorsChoicePicks,
+  mainStagePanelsServed,
 }
 
 /// One badge definition. Tiered badges share a [family] and differ by [level]
@@ -102,6 +103,7 @@ const Set<String> kServerAwardIds = {
   'tournament_champion',
   'tournament_runner_up',
   'editors_choice',
+  'main_stage_judge',
 };
 
 /// The V1 badge catalogue, in a stable display order.
@@ -178,48 +180,76 @@ const List<BadgeDef> kBadges = [
   BadgeDef(
     id: 'loyal_juror',
     title: 'Loyal Juror',
-    earnedDesc: 'Judged 7 days running',
+    earnedDesc: 'Voted 7 days running',
     lockedHint: 'Vote 7 days in a row',
     metric: BadgeMetric.voteStreakDays,
     threshold: 7,
     prestige: 40,
   ),
-  // Judging-VOLUME family (tiered) - lifetime battles judged, off the
-  // votesCast counter. Distinct from Loyal Juror (a streak of DAYS); this is
-  // total votes cast. Votes are the scarce resource the ladder runs on, so
-  // judging a lot is worth recognising.
+  // Basement VOTING-VOLUME family (tiered) - lifetime battles you've voted on,
+  // off the votesCast counter. This is EVERYDAY crowd-voting (the Basement),
+  // deliberately DISTINCT from serving on the real Main Stage judge panel (the
+  // prestigious Judge badge below). Votes are the scarce resource the ladder
+  // runs on, so voting a lot is worth recognising. The courtroom theme is kept
+  // for the higher tiers (a juror votes); the entry tier is simply "Voter".
   BadgeDef(
-    id: 'juror_1',
-    title: 'Juror',
-    earnedDesc: 'Judged 10 battles',
-    lockedHint: 'Judge 10 battles',
+    id: 'voter',
+    title: 'Voter',
+    earnedDesc: 'Voted on your first battle',
+    lockedHint: 'Vote on a battle',
     metric: BadgeMetric.votesCast,
-    threshold: 10,
-    prestige: 20,
+    threshold: 1,
+    prestige: 8,
     family: 'juror',
     level: 1,
   ),
   BadgeDef(
-    id: 'juror_2',
-    title: 'Magistrate',
-    earnedDesc: 'Judged 100 battles',
-    lockedHint: 'Judge 100 battles',
+    id: 'juror_1',
+    title: 'Juror',
+    earnedDesc: 'Voted on 10 battles',
+    lockedHint: 'Vote on 10 battles',
     metric: BadgeMetric.votesCast,
-    threshold: 100,
-    prestige: 52,
+    threshold: 10,
+    prestige: 20,
     family: 'juror',
     level: 2,
   ),
   BadgeDef(
+    id: 'juror_2',
+    title: 'Magistrate',
+    earnedDesc: 'Voted on 100 battles',
+    lockedHint: 'Vote on 100 battles',
+    metric: BadgeMetric.votesCast,
+    threshold: 100,
+    prestige: 52,
+    family: 'juror',
+    level: 3,
+  ),
+  BadgeDef(
     id: 'juror_3',
     title: 'Chief Justice',
-    earnedDesc: 'Judged 500 battles',
-    lockedHint: 'Judge 500 battles',
+    earnedDesc: 'Voted on 500 battles',
+    lockedHint: 'Vote on 500 battles',
     metric: BadgeMetric.votesCast,
     threshold: 500,
     prestige: 88,
     family: 'juror',
-    level: 3,
+    level: 4,
+  ),
+  // MAIN STAGE JUDGE - the prestigious badge for actually SERVING on a real
+  // Main Stage judge panel (NOT everyday Basement voting). Earned-and-kept off
+  // the server-set `mainStagePanelsServed` counter, so it can never be
+  // self-awarded. Making the panel is rare and chosen, so it outranks the
+  // everyday voting family. Rendered as a gold ⚖️ glyph medallion (no PNG).
+  BadgeDef(
+    id: 'main_stage_judge',
+    title: 'Judge',
+    earnedDesc: 'Served on a Main Stage panel',
+    lockedHint: 'Be picked for a Main Stage panel',
+    metric: BadgeMetric.mainStagePanelsServed,
+    threshold: 1,
+    prestige: 80,
+    emoji: '⚖️',
   ),
   // Tournament champion - a PERMANENT award for ever winning any tournament
   // (the nightly gauntlet, a special event, a bracket). Earned-and-kept, like
@@ -341,6 +371,7 @@ class BadgeStats {
     this.tournamentWins = 0,
     this.tournamentRunnerUps = 0,
     this.editorsChoicePicks = 0,
+    this.mainStagePanelsServed = 0,
     this.topFire = false,
     this.topClever = false,
     this.topBoring = false,
@@ -355,6 +386,10 @@ class BadgeStats {
   final int tournamentWins;
   final int tournamentRunnerUps;
   final int editorsChoicePicks;
+
+  /// How many times you've served on a real Main Stage judge panel (server-set,
+  /// drives the prestigious Judge badge).
+  final int mainStagePanelsServed;
 
   /// The permanent "ever been #1 in this emoji" award flags, from the
   /// server-set `emojiTopAwards` map.
@@ -383,6 +418,8 @@ class BadgeStats {
       tournamentWins: (u['tournamentWins'] as num?)?.toInt() ?? 0,
       tournamentRunnerUps: (u['tournamentRunnerUps'] as num?)?.toInt() ?? 0,
       editorsChoicePicks: (u['editorsChoicePicks'] as num?)?.toInt() ?? 0,
+      mainStagePanelsServed:
+          (u['mainStagePanelsServed'] as num?)?.toInt() ?? 0,
       topFire: flag('fire'),
       topClever: flag('clever'),
       topBoring: flag('boring'),
@@ -399,6 +436,7 @@ class BadgeStats {
         BadgeMetric.tournamentWins => tournamentWins,
         BadgeMetric.tournamentRunnerUps => tournamentRunnerUps,
         BadgeMetric.editorsChoicePicks => editorsChoicePicks,
+        BadgeMetric.mainStagePanelsServed => mainStagePanelsServed,
         BadgeMetric.topFire => topFire ? 1 : 0,
         BadgeMetric.topClever => topClever ? 1 : 0,
         BadgeMetric.topBoring => topBoring ? 1 : 0,

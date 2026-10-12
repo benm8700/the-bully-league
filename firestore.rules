@@ -52,7 +52,7 @@ service cloud.firestore {
           'dailyReward', 'followerCount', 'lastSeenFameMilestone',
           'emojiCounts', 'votesCast', 'emojiTopAwards', 'emojiScrub',
           'tournamentWins', 'tournamentRunnerUps', 'pendingTournamentFinale',
-          'editorsChoicePicks',
+          'editorsChoicePicks', 'mainStagePanelsServed',
         ]);
 
       // Uses .get(field, default) rather than direct field access - a
@@ -193,6 +193,11 @@ service cloud.firestore {
         // reaching a final.
         request.resource.data.get('tournamentRunnerUps', null) ==
           resource.data.get('tournamentRunnerUps', null) &&
+        // Main Stage panels served, incremented only by the onTournamentCompleted
+        // trigger (Admin SDK) for each seated judge. Drives the prestigious
+        // "Judge" badge, so a client able to write it could self-award it.
+        request.resource.data.get('mainStagePanelsServed', null) ==
+          resource.data.get('mainStagePanelsServed', null) &&
         // The one-shot "you won / you came second" finale celebration, written
         // by the same trigger and CLEARED by getPendingTournamentFinale once
         // shown. Server-only so a client cannot summon a fake victory popup.

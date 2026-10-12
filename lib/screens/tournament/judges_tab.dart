@@ -149,8 +149,9 @@ class _JudgesTabState extends State<JudgesTab> {
                 const SizedBox(height: 6),
                 Text(
                   '$_panelSize seats on the panel. The founder picks a few; the '
-                  'rest go to the top volunteers who judged the most this week. '
-                  'You qualify for a seat at $_minToQualify battles judged.',
+                  'rest go to the top volunteers who voted on the most matches '
+                  'this week. You qualify for a seat after voting on at least '
+                  '$_minToQualify matches.',
                   style:
                       text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                 ),
@@ -180,7 +181,7 @@ class _JudgesTabState extends State<JudgesTab> {
                 icon: Icons.how_to_reg_outlined,
                 title: 'No volunteers yet',
                 message: 'Be the first to put your hand up. Volunteer, then '
-                    'judge battles to climb the roster.',
+                    'vote on matches to climb the roster.',
               ),
             )
           else
@@ -219,8 +220,8 @@ class _JudgesTabState extends State<JudgesTab> {
         ),
         subtitle: Text(
           qualified
-              ? 'Qualified · $judged judged'
-              : '${_minToQualify - judged} more to qualify · $judged judged',
+              ? 'Qualified · $judged votes'
+              : '${_minToQualify - judged} more to qualify · $judged votes',
           style: TextStyle(
               color: qualified ? gold : scheme.onSurfaceVariant, fontSize: 11),
         ),
@@ -280,9 +281,9 @@ class _StatusCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   volunteered
-                      ? 'Keep judging to climb the roster — top volunteers get '
+                      ? 'Keep voting to climb the roster — top volunteers get '
                           'the open seats.'
-                      : 'Volunteer, then judge $minToQualify battles this week '
+                      : 'Volunteer, then vote on $minToQualify matches this week '
                           'to qualify.',
                   style: text.bodySmall
                       ?.copyWith(color: Colors.white.withValues(alpha: 0.7)),

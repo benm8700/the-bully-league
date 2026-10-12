@@ -135,6 +135,45 @@ async function recordTournamentWin(db, tournamentId, t) {
   });
 }
 
+/** The deduped uids seated on a MAIN STAGE panel (empty for any other format
+ * or a tournament with no panel). Pure. */
+function panelJudgeUids(t) {
+  if (!t || t.format !== "mainstage") return [];
+  if (!Array.isArray(t.judges)) return [];
+  return [...new Set(t.judges.filter((u) => typeof u === "string" && u))];
+}
+
+/**
+ * Credit each seated judge of a completed MAIN STAGE with one panel service,
+ * which drives the prestigious "Judge" badge (mainStagePanelsServed). A no-op
+ * for every other format - only serving on the REAL panel counts, not everyday
+ * Basement voting. Idempotent via a `panelServiceRecorded` flag on the doc.
+ */
+async function recordPanelService(db, tournamentId, t) {
+  const judges = panelJudgeUids(t);
+  if (judges.length === 0) return {recorded: false, reason: "no-panel"};
+  const tRef = db.collection("tournaments").doc(tournamentId);
+  return db.runTransaction(async (tx) => {
+    const tSnap = await tx.get(tRef);
+    if (!tSnap.exists) return {recorded: false, reason: "gone"};
+    if (tSnap.data().panelServiceRecorded === true) {
+      return {recorded: false, reason: "already"};
+    }
+    const uRefs = judges.map((uid) => db.collection("users").doc(uid));
+    const uSnaps = await Promise.all(uRefs.map((r) => tx.get(r)));
+    let credited = 0;
+    uSnaps.forEach((s, i) => {
+      if (s.exists) {
+        tx.update(uRefs[i],
+            {mainStagePanelsServed: FieldValue.increment(1)});
+        credited += 1;
+      }
+    });
+    tx.update(tRef, {panelServiceRecorded: true});
+    return {recorded: credited};
+  });
+}
+
 exports.onTournamentCompleted = onDocumentUpdated(
     "tournaments/{tournamentId}", async (event) => {
       const before = event.data && event.data.before &&
@@ -152,6 +191,10 @@ exports.onTournamentCompleted = onDocumentUpdated(
           .catch((err) => console.error(`win record ${id}:`, err.message));
       await awardBeltForTournament(db, id, after)
           .catch((err) => console.error(`belt award ${id}:`, err.message));
+      // Credit the Main Stage panel's judges with a panel service (the
+      // prestigious "Judge" badge). No-op for every non-mainstage format.
+      await recordPanelService(db, id, after)
+          .catch((err) => console.error(`panel service ${id}:`, err.message));
       // The Main Stage finale celebration (winner + runner-up popups and the
       // runner-up badge). No-op for every non-mainstage format. Best-effort.
       await require("./mainStageFinale").recordMainStageFinale(db, id, after)
@@ -167,4 +210,6 @@ module.exports.isGauntlet = isGauntlet;
 module.exports.championOf = championOf;
 module.exports.awardBeltForTournament = awardBeltForTournament;
 module.exports.recordTournamentWin = recordTournamentWin;
+module.exports.recordPanelService = recordPanelService;
+module.exports.panelJudgeUids = panelJudgeUids;
 module.exports.BELT_DOC = BELT_DOC;
