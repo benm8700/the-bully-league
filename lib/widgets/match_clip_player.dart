@@ -286,7 +286,7 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
         context,
         Icons.movie_outlined,
         'Clip not available yet',
-        'You can still judge on the result, but the video for this battle '
+        'You can still vote on the result, but the video for this battle '
             'has not been published.',
       );
     }

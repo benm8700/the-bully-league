@@ -177,7 +177,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
         if (_progress?.hasJudgePriority ?? false) ...[
           const SizedBox(height: 12),
           Text(
-            'You judged today, so you are ahead of anyone who just queued.',
+            'You voted today, so you are ahead of anyone who just queued.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall,
           ),

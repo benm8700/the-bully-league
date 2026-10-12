@@ -37,8 +37,8 @@ class NotificationSettingsScreen extends StatelessWidget {
     ),
     _Category(
       key: 'vote_reminder',
-      title: 'Battles waiting to be judged',
-      description: 'Nudges to judge open battles while their vote window '
+      title: 'Battles waiting for your vote',
+      description: 'Nudges to vote on open battles while their window '
           'is still open.',
     ),
     _Category(

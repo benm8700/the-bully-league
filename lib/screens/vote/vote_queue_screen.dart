@@ -62,7 +62,7 @@ class _VoteQueueScreenState extends State<VoteQueueScreen> {
           list.map((e) => (e as Map).cast<String, dynamic>()).toList());
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Could not load matches to judge: $e');
+      setState(() => _error = 'Could not load matches to vote on: $e');
     }
   }
 
@@ -77,7 +77,7 @@ class _VoteQueueScreenState extends State<VoteQueueScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Judge a battle'),
+        title: const Text('Vote on a battle'),
         automaticallyImplyLeading: !widget.embedded,
       ),
       body: RefreshIndicator(
@@ -115,7 +115,7 @@ class _VoteQueueScreenState extends State<VoteQueueScreen> {
         EmptyState(
           icon: Icons.how_to_vote_outlined,
           title: 'Nothing in the queue right now',
-          message: 'Every open battle has either been judged by you already or '
+          message: 'Every open battle has either been voted on by you already or '
               'is one of your own. Any live tournament battles show up at the '
               'top the moment they start.',
         ),

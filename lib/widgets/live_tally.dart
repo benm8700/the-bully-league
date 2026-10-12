@@ -142,7 +142,7 @@ class LiveTally extends StatelessWidget {
         Text(
           total == 0
               ? 'No votes yet'
-              : '$total ${total == 1 ? 'person has' : 'people have'} judged this',
+              : '$total ${total == 1 ? 'person has' : 'people have'} voted on this',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         if (closesAtMs != null) ...[

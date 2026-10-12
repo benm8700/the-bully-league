@@ -550,7 +550,7 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
                     // judging would be noise.
                     : _skipsEarned > 0
                         ? 'Skip this opponent ($skipsLeft left today, '
-                            '$_skipsEarned from judging)'
+                            '$_skipsEarned from voting)'
                         : 'Skip this opponent ($skipsLeft left today)',
               ),
             )

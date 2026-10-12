@@ -33,11 +33,11 @@ const {pacificNow} = require("./eventWindow");
  */
 const QUESTS = {
   judge3: {id: "judge3", metric: "votes", target: 3, reward: 20,
-    label: "Judge 3 battles"},
+    label: "Vote on 3 battles"},
   judge5: {id: "judge5", metric: "votes", target: 5, reward: 35,
-    label: "Judge 5 battles"},
+    label: "Vote on 5 battles"},
   judge1: {id: "judge1", metric: "votes", target: 1, reward: 10,
-    label: "Judge a battle"},
+    label: "Vote on a battle"},
   play1: {id: "play1", metric: "matches", target: 1, reward: 15,
     label: "Play a battle"},
   play2: {id: "play2", metric: "matches", target: 2, reward: 30,

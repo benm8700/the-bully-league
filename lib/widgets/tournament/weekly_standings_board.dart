@@ -123,7 +123,8 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
             const SizedBox(height: 2),
             Text(
               'Top 3 lock in on skill. The 4th seat is a wild-card draw — '
-              'play and judge to boost your odds. ${_timeLeft()}',
+              'play and vote on other battles to boost your odds. '
+              '${_timeLeft()}',
               style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],

@@ -241,7 +241,7 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   // wrong about this mode, before they play rather than
                   // after: it does not count, and it is still filmed.
                   'Type their username. It does not affect your rank - but '
-                  'it is still recorded, judged by the crowd, and can be '
+                  'it is still recorded, voted on by the crowd, and can be '
                   'clipped.',
                   style: text.bodySmall,
                 ),

@@ -88,7 +88,7 @@ function reminderCopy(matchCount, {reciprocal = false} = {}) {
     // whoever has two open. Better to say something true without a number
     // than something specific and slightly wrong.
     return {
-      title: "Your battle is being judged",
+      title: "Your battle is up for a vote",
       body: "Return the favour - other battles are close to a verdict. " +
         "Takes about a minute.",
     };
@@ -96,7 +96,7 @@ function reminderCopy(matchCount, {reciprocal = false} = {}) {
   const battles = matchCount === 1 ? "1 battle" : `${matchCount} battles`;
   return {
     title: matchCount === 1 ? "A battle needs a verdict" : `${battles} need a verdict`,
-    body: "Closing soon and barely judged. Pick a winner in about a minute.",
+    body: "Closing soon and barely voted on. Pick a winner in about a minute.",
   };
 }
 

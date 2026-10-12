@@ -1175,8 +1175,8 @@ class _MatchScreenState extends State<MatchScreen>
             // that now determines how much any result moves rating.
             const Text(
               'Your battle is now with the crowd. They have 24 hours to call it.\n\n'
-              'Judge a few others while you wait - the more people who judge a '
-              'battle, the more it counts.',
+              'Vote on a few others while you wait - the more people who vote '
+              'on a battle, the more it counts.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -1186,7 +1186,7 @@ class _MatchScreenState extends State<MatchScreen>
                   MaterialPageRoute(builder: (_) => const VoteQueueScreen()),
                 ),
                 icon: const Icon(Icons.how_to_vote_outlined),
-                label: const Text('Judge a battle'),
+                label: const Text('Vote on a battle'),
               )
             else if (_matchSaveError != null)
               Text(_matchSaveError!,

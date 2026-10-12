@@ -108,7 +108,7 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
               const Text('Quick check before you vote',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              const Text('Once only - then judge as many battles as you like.',
+              const Text('Once only - then vote on as many battles as you like.',
                   textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
               const SizedBox(height: 16),
               TurnstileChallenge(
@@ -168,7 +168,7 @@ class _LiveVotePanelState extends State<LiveVotePanel> {
         // rather than anything to do with this battle.
         _error = e.code == 'failed-precondition' &&
                 (e.message ?? '').contains('session')
-            ? 'Solve the quick check on the Judge tab first, then come back.'
+            ? 'Solve the quick check on the Vote tab first, then come back.'
             : e.message ?? 'Could not cast that vote.';
       });
     }

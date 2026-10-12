@@ -52,7 +52,7 @@ class BadgeCase extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Milestones you earn as you play and judge.',
+          'Milestones you earn as you play and vote.',
           style: text.bodySmall?.copyWith(color: const Color(0xFF9A96A2)),
         ),
         const SizedBox(height: 14),

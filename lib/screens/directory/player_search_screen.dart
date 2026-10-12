@@ -217,7 +217,7 @@ class _PlayerSearchScreenState extends State<PlayerSearchScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
             child: Text(
-              'Challenges are unrated - no rating, no points. They are still recorded, judged and clippable.\n\nYou can remove yourself from search on your profile.',
+              'Challenges are unrated - no rating, no points. They are still recorded, voted on and clippable.\n\nYou can remove yourself from search on your profile.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),

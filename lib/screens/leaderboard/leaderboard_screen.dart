@@ -494,9 +494,9 @@ class _EmojiList extends StatelessWidget {
                 : Icons.psychology_outlined,
             title: isFire ? 'No fire yet' : 'No clever picks yet',
             message: isFire
-                ? 'Judges hand out \u{1F525} to the funniest performances. '
+                ? 'The crowd hands out \u{1F525} to the funniest performances. '
                     'Rack them up and you top this board.'
-                : 'Judges hand out \u{1F9E0} for the smartest, most original '
+                : 'The crowd hands out \u{1F9E0} for the smartest, most original '
                     'material. Earn them and you top this board.',
           );
         }
