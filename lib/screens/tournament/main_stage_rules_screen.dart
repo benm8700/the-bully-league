@@ -31,9 +31,9 @@ class MainStageRulesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'No fixed turns here. A Main Stage battle runs on two chess clocks - '
-            'you control when you talk and when you hand it over. One mic is '
-            'live at a time. Learn the rhythm before you step up.',
+            'No fixed turns here. You each get your own clock, and you control '
+            'when you talk and when you hand it over. One mic is live at a '
+            'time. Learn the rhythm before you step up.',
             style: text.bodyMedium?.copyWith(height: 1.4),
           ),
           const _MsRule(
