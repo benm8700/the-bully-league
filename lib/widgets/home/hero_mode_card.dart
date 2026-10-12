@@ -25,6 +25,7 @@ class HeroModeCard extends StatelessWidget {
     this.right,
     this.sideBannerX = 0.80,
     this.sideBannerY = -0.28,
+    this.scrim = true,
   });
 
   /// Background artwork path, e.g. `assets/home/tournament_hero.png`.
@@ -72,6 +73,11 @@ class HeroModeCard extends StatelessWidget {
   /// Vertical position of [left]/[right] in Alignment y (-1 top, +1 bottom).
   final double sideBannerY;
 
+  /// Whether to lay a bottom-up dark scrim over the art. On by default so
+  /// overlay text/chips stay readable; turned off for a card whose art is used
+  /// as-is with no bottom overlay (so the scrim would only dim the artwork).
+  final bool scrim;
+
   static const _radius = 22.0;
 
   @override
@@ -114,15 +120,16 @@ class HeroModeCard extends StatelessWidget {
                 ),
               ),
               // Bottom-up scrim so the overlay text stays readable over any art.
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.center,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black87],
+              if (scrim)
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.center,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black87],
+                    ),
                   ),
                 ),
-              ),
               // Tap layer under the overlay so empty areas of the card are
               // tappable, while the CTA button on top keeps its own ripple.
               Positioned.fill(
@@ -279,9 +286,12 @@ class HeroInfoChip extends StatelessWidget {
   }
 }
 
-/// Roast a Stranger - the secondary hero. Illustrated red/blue opponents +
-/// VS artwork behind, with the title, subtitle and FIND A MATCH CTA as Flutter
-/// overlays. Pink/red identity, distinct from the gold tournament hero.
+/// Roast a Stranger ("The Basement") - the everyday hero. The developer's art
+/// carries the identity and title itself (the baked "BASEMENT" wordmark + the
+/// two roasters facing off), so Flutter overlays ONLY the FIND A MATCH CTA and
+/// the "?" explainer over the top - no title/subtitle/VS competing with the
+/// baked wordmark. Same treatment as the tournament hero, whose text is baked
+/// into its art too. Pink/red identity, distinct from the gold tournament hero.
 class RoastHero extends StatelessWidget {
   const RoastHero({super.key, required this.onFindMatch});
 
@@ -293,6 +303,8 @@ class RoastHero extends StatelessWidget {
     return HeroModeCard(
       asset: 'assets/home/roast_hero.png',
       glow: accent,
+      // Art used as-is with no bottom overlay, so no scrim dimming the wordmark.
+      scrim: false,
       // More compact than 3/2 - shorter so it reads as the clear second option
       // under the tournament hero and both cards clear the fold on shorter
       // screens. Display-only crop; the roaster art stays centred and the file
@@ -312,48 +324,11 @@ class RoastHero extends StatelessWidget {
         ),
         onPressed: () => _showRoastInfo(context, accent),
       ),
-      centerAlignment: const Alignment(0, -0.5),
-      center: Text(
-        'VS',
-        style: TextStyle(
-          fontSize: 52,
-          fontWeight: FontWeight.w900,
-          fontStyle: FontStyle.italic,
-          color: Colors.white,
-          letterSpacing: 1,
-          shadows: [
-            Shadow(color: accent, blurRadius: 26),
-            const Shadow(color: Color(0xFF3B7DFF), blurRadius: 26),
-            const Shadow(color: Colors.black, blurRadius: 10),
-          ],
-        ),
-      ),
-      overlay: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          HeroTitle('ROAST A STRANGER', color: accent),
-          const SizedBox(height: 6),
-          const HeroSubtitle('RANDOM OPPONENT. REAL ROASTS.'),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: onFindMatch,
-              style: FilledButton.styleFrom(
-                backgroundColor: accent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                textStyle: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                    ),
-              ),
-              icon: const Icon(Icons.bolt, size: 20),
-              label: const Text('FIND A MATCH'),
-            ),
-          ),
-        ],
-      ),
+      // The art is used AS-IS: it carries the identity, the title (baked
+      // "BASEMENT" wordmark) and the two roasters, with nothing drawn over it.
+      // No bottom overlay, because a button here would bury the baked wordmark.
+      // The whole card taps through to onFindMatch, and the "?" explains it.
+      overlay: const SizedBox.shrink(),
     );
   }
 
