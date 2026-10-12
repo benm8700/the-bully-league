@@ -150,24 +150,25 @@ class HomeScreen extends StatelessWidget {
                     const GoatThroneBanner(),
                     const _TrialStatus(),
                     const SizedBox(height: 8),
-                    // THE HEADLINE: Sixes and Sevens IS the nightly
-                    // tournament (CLAUDE.md), so it leads - prestige and
-                    // prizes live here, and it is where everyone is pointed
-                    // first. Tapping it goes to the tournament, where
-                    // check-in lives.
-                    const EventWindowBanner(),
-                    // One-line "where you stand this week" hook under the
-                    // tournament banner, tapping through to the WEEKLY Ranks
-                    // board. Renders nothing until a weekly race is live.
-                    const WeeklyStandingBanner(),
-                    const SizedBox(height: 12),
-                    // Secondary hero: Roast a Stranger (play now). Illustrated
-                    // red/blue VS artwork with the title, subtitle and FIND A
-                    // MATCH CTA as Flutter overlays - distinct from the gold
-                    // tournament hero above, with dark breathing room between.
+                    // THE BASEMENT LEADS (developer's call, 2026-10-11):
+                    // everyday play - Roast a Stranger - is the TOP hero now,
+                    // with the Main Stage tournament below it. This reverses
+                    // the earlier "tournament is the Home headline" overhaul
+                    // decision; backlogged to revisit with the Home redesign.
+                    // Illustrated red/blue VS artwork with the title, subtitle
+                    // and FIND A MATCH CTA as Flutter overlays.
                     RoastHero(
                       onFindMatch: () => _startMatch(context, 'ranked'),
                     ),
+                    const SizedBox(height: 12),
+                    // The Main Stage tournament, below the Basement hero.
+                    // Prestige and prizes live here; tapping it goes to the
+                    // tournament, where check-in lives.
+                    const EventWindowBanner(),
+                    // "Where you stand this week" hook under the tournament
+                    // banner, tapping through to the WEEKLY Ranks board.
+                    // Renders nothing until a weekly race is live.
+                    const WeeklyStandingBanner(),
                     const SizedBox(height: 14),
                     // Quick Actions row (Home overhaul): Daily Challenges /
                     // Free Rewards / Current Streak. The Daily Challenges card
