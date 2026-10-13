@@ -423,6 +423,38 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
 });
 
 /**
+ * LIVE CROWD REACTION on a Main Stage battle - one emoji per roaster (feeds
+ * their permanent emoji identity) plus a non-binding Crowd Favourite pick. The
+ * crowd does NOT decide the Main Stage winner (the judge panel does), so this
+ * is separate from castVote. Guarded exactly like a vote - a session, or a
+ * Turnstile solve - because emojiCounts is a public identity number; the one-
+ * reaction-per-account guard and the write live in functions/liveReactions.js.
+ */
+exports.castLiveReaction = onCall({secrets: [turnstileSecret]}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in to react.");
+  }
+  const {turnstileToken} = request.data || {};
+  // Same human-proof as voting: spend a session slot first (so an app already
+  // holding a session never pays for a token it doesn't need), else verify a
+  // fresh Turnstile solve. Mirrors castVote.
+  const {spendVote} = require("./voteSession");
+  const spent = await spendVote(request.auth.uid);
+  if (!spent.ok) {
+    if (!turnstileToken) {
+      throw new HttpsError("failed-precondition",
+          "No active session. Complete the CAPTCHA to start one.");
+    }
+    const ok = await verifyTurnstileToken(turnstileToken, turnstileSecret.value());
+    if (!ok) {
+      throw new HttpsError("permission-denied", "Turnstile verification failed.");
+    }
+  }
+  const {recordLiveReaction} = require("./liveReactions");
+  return recordLiveReaction(request.auth, request.data);
+});
+
+/**
  * Production path (Build Order step 6): sweeps for ranked/tournament
  * matches whose 24h voting window has closed and applies Elo rating
  * changes - see functions/matchFinalization.js and CLAUDE.md's Ranking

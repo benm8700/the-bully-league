@@ -10,6 +10,7 @@ import '../../widgets/home_action_button.dart';
 import '../../core/services/agora_spectator_service.dart';
 import '../../core/services/spectator_service.dart';
 import '../../widgets/follow_button.dart';
+import '../../widgets/live_reaction_panel.dart';
 import '../profile/performer_profile_screen.dart';
 
 /// Watching a live tournament battle.
@@ -218,31 +219,44 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                   builder: (context, snap) {
                     final completed =
                         snap.data?.data()?['status'] == 'completed';
+                    final haveNames =
+                        _player1Id != null && _player2Id != null;
                     // The battle is over: leave the Agora channel (this is what
-                    // stops the match audio - the leak the live test hit), then
-                    // show a watch-only "finished" note instead of a dead feed.
+                    // stops the match audio - the leak the live test hit). The
+                    // winner is the judge panel's call, so there is no ballot -
+                    // but the crowd can still react (emoji + crowd favourite).
                     if (completed && !_watchStopped) {
                       _watchStopped = true;
                       WidgetsBinding.instance.addPostFrameCallback(
                           (_) => _spectator.stopWatching());
                     }
                     if (completed) {
-                      // Watch-only: the Main Stage winner is decided by the
-                      // judge panel, not the crowd, so there is no ballot here.
-                      // (A live crowd-reaction layer - emoji / crowd favourite -
-                      // comes with the broadcast-desk build.)
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            'Battle finished.\nThe judges are deciding the winner.',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(color: Colors.white70),
+                      return Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                            child: Text(
+                              'Battle finished. The judges decide the winner.',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(color: Colors.white70),
+                            ),
                           ),
-                        ),
+                          if (haveNames)
+                            Expanded(
+                              child: SingleChildScrollView(
+                                child: LiveReactionPanel(
+                                  matchId: widget.matchId,
+                                  player1Id: _player1Id!,
+                                  player2Id: _player2Id!,
+                                  player1Name: _player1Name,
+                                  player2Name: _player2Name,
+                                ),
+                              ),
+                            ),
+                        ],
                       );
                     }
                     // Live: the two video tiles (watch-only).
@@ -284,6 +298,14 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                             },
                           ),
                         ),
+                        if (haveNames)
+                          LiveReactionPanel(
+                            matchId: widget.matchId,
+                            player1Id: _player1Id!,
+                            player2Id: _player2Id!,
+                            player1Name: _player1Name,
+                            player2Name: _player2Name,
+                          ),
                       ],
                     );
                   },

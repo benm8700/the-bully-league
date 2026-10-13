@@ -415,6 +415,25 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Live crowd reactions on a Main Stage battle. Reactions ONLY go through the
+    // castLiveReaction Cloud Function (session/Turnstile, one-per-account, and
+    // the emojiCounts increment all need server-side enforcement - emojiCounts
+    // is a public identity number).
+    match /liveReactions/{matchId} {
+      // The live Crowd Favourite tally is readable ONLY once you have reacted,
+      // so the running favourite can't bias your pick - the same
+      // hidden-until-you-act rule the winner tally follows.
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/liveReactions/$(matchId)/reactors/$(request.auth.uid));
+      allow write: if false;
+    }
+    match /liveReactions/{matchId}/reactors/{uid} {
+      // You may read your OWN reaction record (to know you've reacted and lock
+      // the picker); nobody writes directly.
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     match /matches/{matchId} {
       // Match documents are now created and settled entirely server-side:
       // pollMatchmaking creates them at pairing time and completeMatch
