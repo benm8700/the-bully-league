@@ -10,7 +10,6 @@ import '../../widgets/home_action_button.dart';
 import '../../core/services/agora_spectator_service.dart';
 import '../../core/services/spectator_service.dart';
 import '../../widgets/follow_button.dart';
-import '../../widgets/live_vote_panel.dart';
 import '../profile/performer_profile_screen.dart';
 
 /// Watching a live tournament battle.
@@ -219,46 +218,34 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                   builder: (context, snap) {
                     final completed =
                         snap.data?.data()?['status'] == 'completed';
-                    final haveNames = _player1Id != null && _player2Id != null;
                     // The battle is over: leave the Agora channel (this is what
-                    // stops the match audio - the leak the live test hit) and
-                    // put the BALLOT front and centre, rather than a dead video
-                    // feed and a "watch the clip" dead-end.
+                    // stops the match audio - the leak the live test hit), then
+                    // show a watch-only "finished" note instead of a dead feed.
                     if (completed && !_watchStopped) {
                       _watchStopped = true;
                       WidgetsBinding.instance.addPostFrameCallback(
                           (_) => _spectator.stopWatching());
                     }
-                    if (completed && haveNames) {
-                      return Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-                            child: Text(
-                              'Battle finished - cast your vote',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
+                    if (completed) {
+                      // Watch-only: the Main Stage winner is decided by the
+                      // judge panel, not the crowd, so there is no ballot here.
+                      // (A live crowd-reaction layer - emoji / crowd favourite -
+                      // comes with the broadcast-desk build.)
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            'Battle finished.\nThe judges are deciding the winner.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(color: Colors.white70),
                           ),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: LiveVotePanel(
-                                matchId: widget.matchId,
-                                player1Id: _player1Id!,
-                                player2Id: _player2Id!,
-                                player1Name: _player1Name,
-                                player2Name: _player2Name,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       );
                     }
-                    // Live: the two video tiles, plus the vote panel (which
-                    // renders nothing until the battle ends).
+                    // Live: the two video tiles (watch-only).
                     return Column(
                       children: [
                         Expanded(
@@ -297,14 +284,6 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                             },
                           ),
                         ),
-                        if (haveNames)
-                          LiveVotePanel(
-                            matchId: widget.matchId,
-                            player1Id: _player1Id!,
-                            player2Id: _player2Id!,
-                            player1Name: _player1Name,
-                            player2Name: _player2Name,
-                          ),
                       ],
                     );
                   },
