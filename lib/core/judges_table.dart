@@ -1,10 +1,16 @@
-/// Pure logic for the Main Stage judges' video table: mapping the seated panel
-/// to stable seat positions / Agora uids, and folding in each judge's live
-/// vote. Kept out of the widget so it can be unit-tested without a device.
-///
-/// Mirrors the server: a judge at panel index i publishes on the judges channel
-/// with Agora uid `seatUidBase + i` (JUDGE_SEAT_UID_BASE in spectator.js), so
-/// both the judges and the crowd render each seat at a fixed position.
+// Pure logic for the Main Stage judges' video table: mapping the seated panel
+// to stable seat positions / Agora uids, and folding in each judge's live vote.
+// Kept out of the widget so it can be unit-tested without a device.
+//
+// Mirrors the server: a judge at panel index i publishes on the judges channel
+// with Agora uid `seatUidBase + i` (JUDGE_SEAT_UID_BASE in spectator.js), so
+// both the judges and the crowd render each seat at a fixed position.
+
+/// The seat-uid base, mirroring JUDGE_SEAT_UID_BASE in functions/spectator.js.
+/// The crowd learns it from watchJudgesTable; a publishing judge (who uses the
+/// publisher-token path, not watchJudgesTable) reads it from here.
+const int kJudgeSeatUidBase = 11;
+
 class JudgeSeat {
   const JudgeSeat({
     required this.seatIndex,

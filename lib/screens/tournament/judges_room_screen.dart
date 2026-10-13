@@ -10,6 +10,7 @@ import '../../core/services/main_stage_service.dart';
 import '../../core/services/spectator_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/house_theme.dart';
+import '../../widgets/judge_panel_view.dart';
 
 /// The Main Stage judges' room: a seated panellist watches the battle live and
 /// casts their OPEN verdict. Unlike the crowd's live vote, a judge's pick is
@@ -23,9 +24,9 @@ import '../../theme/house_theme.dart';
 /// server stamps as `judgeWinnerId` and which settles the battle + advances the
 /// bracket.
 ///
-/// This is the LEAN judging surface. The full judges'-video-table / broadcast
-/// desk (the five judges seeing each other and debating on camera) is the
-/// deliberately deferred layer; here each judge watches the battle and votes.
+/// During the BATTLE a judge watches the two roasters here. Once the battle
+/// ends, the DEBATE opens and this routes to [JudgePanelView] - the judges on
+/// camera at the table, seeing each other, each casting their public vote.
 class JudgesRoomScreen extends StatefulWidget {
   const JudgesRoomScreen({super.key, required this.matchId, this.service});
 
@@ -51,6 +52,7 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
   String _player1Name = 'Player 1';
   String _player2Name = 'Player 2';
   int _panelSize = 0; // the number of seated judges (the "of N" denominator)
+  String? _tournamentId;
 
   bool _submitting = false;
   String? _voteError;
@@ -106,6 +108,7 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
       _player1Id = m['player1Id'] as String?;
       _player2Id = m['player2Id'] as String?;
       final tid = (m['mainStage'] as Map?)?['tournamentId'] as String?;
+      _tournamentId = tid;
       await _resolveNamesAndPanel(tid);
 
       // Attach the LIVE video as a best-effort extra. Its failure (battle over,
@@ -238,6 +241,28 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
             // Which battler reads as "selected": the one you tapped, or the one
             // you already voted for.
             final highlight = _selectedPlayerId ?? myPick;
+            // THE DEBATE: once the battle is over (and not yet decided), the
+            // judge goes ON CAMERA at the table - sees the other judges, and
+            // casts their public vote there. JudgePanelView owns that whole
+            // view (and its own vote control), so it replaces the battle-watch
+            // tiles + confirm bar here. The battle-watch and the decided verdict
+            // keep the original layout below.
+            if (completed &&
+                !decided &&
+                _tournamentId != null &&
+                _player1Id != null &&
+                _player2Id != null) {
+              return JudgePanelView(
+                matchId: widget.matchId,
+                tournamentId: _tournamentId!,
+                myUid: _myUid,
+                player1Id: _player1Id!,
+                player2Id: _player2Id!,
+                player1Name: _player1Name,
+                player2Name: _player2Name,
+                service: widget.service,
+              );
+            }
             return Column(
               children: [
                 Expanded(child: _videoOrVerdict(decided, judgeWinner, highlight)),
