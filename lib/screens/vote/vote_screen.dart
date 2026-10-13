@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../theme/house_theme.dart';
 import '../../widgets/emoji_rate_row.dart';
 import '../../widgets/live_tally.dart';
 import '../../widgets/match_clip_player.dart';
@@ -202,6 +203,10 @@ class _VoteScreenState extends State<VoteScreen> {
                     child: MatchClipPlayer(
                       videoUrl: widget.videoUrl,
                       watchSecondsRequired: kWatchSecondsBeforeVote,
+                      // Top player = red, bottom = blue: the same colour tie
+                      // as the judges' table, tally and emoji rows below.
+                      topColor: House.gelRed,
+                      bottomColor: House.gelBlue,
                       onWatchedEnough: () {
                         if (mounted) setState(() => _watchedEnough = true);
                       },
@@ -222,14 +227,30 @@ class _VoteScreenState extends State<VoteScreen> {
               ),
               const SizedBox(height: 16),
               if (canVote) ...[
-                Text(
-                  _selectedWinner == null
-                      ? 'Who won? Tap a roaster.'
-                      : 'Your pick: '
-                          '${_selectedWinner == player1Id ? player1Name : player2Name}',
-                  style: Theme.of(context).textTheme.titleLarge,
-                  textAlign: TextAlign.center,
-                ),
+                _selectedWinner == null
+                    ? Text(
+                        'Who won? Tap a roaster.',
+                        style: Theme.of(context).textTheme.titleLarge,
+                        textAlign: TextAlign.center,
+                      )
+                    : Text.rich(
+                        TextSpan(children: [
+                          const TextSpan(text: 'Your pick: '),
+                          TextSpan(
+                            text: _selectedWinner == player1Id
+                                ? player1Name
+                                : player2Name,
+                            style: TextStyle(
+                              color: _selectedWinner == player1Id
+                                  ? House.gelRed
+                                  : House.gelBlue,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ]),
+                        style: Theme.of(context).textTheme.titleLarge,
+                        textAlign: TextAlign.center,
+                      ),
                 const SizedBox(height: 6),
                 Text(
                   'Tap the top or bottom video to pick the funnier roaster. '
@@ -246,6 +267,7 @@ class _VoteScreenState extends State<VoteScreen> {
                     name: player1Name,
                     selected: _emojiP1,
                     dark: false,
+                    accent: House.gelRed,
                     onSelect: (k) => setState(() => _emojiP1 = k),
                   ),
                   const SizedBox(height: 8),
@@ -253,6 +275,7 @@ class _VoteScreenState extends State<VoteScreen> {
                     name: player2Name,
                     selected: _emojiP2,
                     dark: false,
+                    accent: House.gelBlue,
                     onSelect: (k) => setState(() => _emojiP2 = k),
                   ),
                   const SizedBox(height: 12),

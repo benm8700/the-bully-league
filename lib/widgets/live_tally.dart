@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/house_theme.dart';
 
 
 /// Live head-to-head scoreboard for a match still open for voting.
@@ -104,13 +104,16 @@ class LiveTally extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _side(context, player1Name, p1, highlight: !tied && leaderIsP1),
+            _side(context, player1Name, p1,
+                color: House.gelRed, highlight: !tied && leaderIsP1),
             Text(
               tied ? 'TIED' : 'vs',
               style: Theme.of(context).textTheme.labelLarge,
             ),
             _side(context, player2Name, p2,
-                highlight: !tied && !leaderIsP1, alignEnd: true),
+                color: House.gelBlue,
+                highlight: !tied && !leaderIsP1,
+                alignEnd: true),
           ],
         ),
         SizedBox(height: compact ? 8 : 12),
@@ -126,14 +129,17 @@ class LiveTally extends StatelessWidget {
                 )
               : Row(
                   children: [
-                    // The two player gels, never the accent - see AppPalette.
+                    // The fixed stage gels (player 1 red, player 2 blue), the
+                    // same colour-to-person tie used on the clip, the emoji
+                    // rows and the judges' table - not the per-skin palette, so
+                    // red always means player 1 wherever a battle is shown.
                     Expanded(
                       flex: (p1Share * 1000).round().clamp(1, 999),
-                      child: Container(height: barH, color: context.palette.gelA),
+                      child: Container(height: barH, color: House.gelRed),
                     ),
                     Expanded(
                       flex: ((1 - p1Share) * 1000).round().clamp(1, 999),
-                      child: Container(height: barH, color: context.palette.gelB),
+                      child: Container(height: barH, color: House.gelBlue),
                     ),
                   ],
                 ),
@@ -163,7 +169,9 @@ class LiveTally extends StatelessWidget {
   }
 
   Widget _side(BuildContext context, String name, int votes,
-      {required bool highlight, bool alignEnd = false}) {
+      {required Color color,
+      required bool highlight,
+      bool alignEnd = false}) {
     final numberStyle = compact
         ? Theme.of(context).textTheme.titleMedium
         : Theme.of(context).textTheme.headlineSmall;
@@ -176,8 +184,11 @@ class LiveTally extends StatelessWidget {
             name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            // The name wears the player's gel so it matches their half of the
+            // bar below - left/red is player 1, right/blue is player 2.
             style: TextStyle(
-              fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
+              color: color,
+              fontWeight: FontWeight.w700,
             ),
           ),
           // The number now says "votes" so it never reads as a bare figure.

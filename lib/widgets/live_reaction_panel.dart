@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../core/services/watch_feed_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/house_theme.dart';
 import 'emoji_rate_row.dart';
 import 'turnstile_challenge.dart';
 
@@ -206,6 +207,7 @@ class _LiveReactionPanelState extends State<LiveReactionPanel> {
         name: widget.player1Name,
         selected: _emojiP1,
         dark: false,
+        accent: House.gelRed,
         onSelect: (k) => setState(() => _emojiP1 = k),
       ),
       const SizedBox(height: 8),
@@ -213,6 +215,7 @@ class _LiveReactionPanelState extends State<LiveReactionPanel> {
         name: widget.player2Name,
         selected: _emojiP2,
         dark: false,
+        accent: House.gelBlue,
         onSelect: (k) => setState(() => _emojiP2 = k),
       ),
       const SizedBox(height: 14),

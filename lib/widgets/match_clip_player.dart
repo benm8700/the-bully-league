@@ -10,6 +10,10 @@ import '../core/services/clip_cache.dart';
 /// composites player 1 on TOP and player 2 on the BOTTOM.
 enum ClipSelectRegion { none, top, bottom }
 
+/// The neutral fallback pick outline, used when a caller does not pass the
+/// per-player stage gels.
+const _defaultPickColor = Color(0xFF31D67A);
+
 /// Plays a match's highlight clip, so someone judging a battle can
 /// actually watch it.
 ///
@@ -33,6 +37,8 @@ class MatchClipPlayer extends StatefulWidget {
     this.onSelectTop,
     this.onSelectBottom,
     this.selectedRegion = ClipSelectRegion.none,
+    this.topColor = _defaultPickColor,
+    this.bottomColor = _defaultPickColor,
   });
 
   final String? videoUrl;
@@ -46,6 +52,13 @@ class MatchClipPlayer extends StatefulWidget {
   final VoidCallback? onSelectTop;
   final VoidCallback? onSelectBottom;
   final ClipSelectRegion selectedRegion;
+
+  /// The outline colour for each half when it is the selected pick. Defaults
+  /// to a neutral green, but callers pass the per-player STAGE GELS (top =
+  /// player 1 = red, bottom = player 2 = blue) so the pick reinforces the
+  /// same colour-to-person association used on the judges' table and tally.
+  final Color topColor;
+  final Color bottomColor;
 
   /// Optional clip segment. When BOTH are set (and endMs > startMs) the
   /// player shows ONLY [startMs, endMs] of the clip - it seeks there on
@@ -404,8 +417,10 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
   Widget _selectHalf({required bool top}) {
     final region = top ? ClipSelectRegion.top : ClipSelectRegion.bottom;
     final selected = widget.selectedRegion == region;
-    const green = Color(0xFF31D67A);
-    // JUST the outline - no fill, glow or badge, so it never covers the faces.
+    // The picked player's own gel (top = player 1, bottom = player 2), so the
+    // colour matches them everywhere else. JUST the outline - no fill, glow or
+    // badge, so it never covers the faces.
+    final color = top ? widget.topColor : widget.bottomColor;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: top ? widget.onSelectTop : widget.onSelectBottom,
@@ -413,7 +428,7 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
         duration: const Duration(milliseconds: 120),
         decoration: BoxDecoration(
           border: Border.all(
-            color: selected ? green : Colors.transparent,
+            color: selected ? color : Colors.transparent,
             width: 5,
           ),
         ),

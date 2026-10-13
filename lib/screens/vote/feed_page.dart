@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import '../../core/emoji_ratings.dart';
 import '../../core/services/clip_cache.dart';
 import '../../core/services/watch_feed_service.dart';
+import '../../theme/house_theme.dart';
 import '../../widgets/follow_button.dart';
 import '../moderation/report_screen.dart';
 import '../profile/performer_profile_screen.dart';
@@ -375,9 +376,11 @@ class _FeedPageState extends State<FeedPage> {
 
   Widget _selectHalf({required bool top, required String playerId}) {
     final selected = _selectedWinner == playerId;
-    // JUST the outline - no fill, no glow, no badge (developer's call): the
-    // green box must not cover the faces. The selected player's name is
-    // confirmed in the Submit panel below.
+    // The picked player's own stage gel (top = player 1 = red, bottom =
+    // player 2 = blue), so the pick carries the same colour used on the emoji
+    // bars, tally and judges' table. JUST the outline - no fill, no glow, no
+    // badge (developer's call): it must not cover the faces.
+    final color = top ? House.gelRed : House.gelBlue;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _pickWinner(playerId),
@@ -385,7 +388,7 @@ class _FeedPageState extends State<FeedPage> {
         duration: const Duration(milliseconds: 120),
         decoration: BoxDecoration(
           border: Border.all(
-            color: selected ? _pickGreen : Colors.transparent,
+            color: selected ? color : Colors.transparent,
             width: 5,
           ),
         ),
@@ -476,7 +479,7 @@ class _FeedPageState extends State<FeedPage> {
             right: 8,
             top: h * 0.5 - 50,
             child: _emojiBar(m.player1Username, _emojiP1,
-                (k) => setState(() => _emojiP1 = k)),
+                (k) => setState(() => _emojiP1 = k), House.gelRed),
           ),
           // Player 2 is the BOTTOM half - bar just below the seam, above the
           // Submit pill at the very bottom.
@@ -485,7 +488,7 @@ class _FeedPageState extends State<FeedPage> {
             right: 8,
             top: h * 0.5 + 8,
             child: _emojiBar(m.player2Username, _emojiP2,
-                (k) => setState(() => _emojiP2 = k)),
+                (k) => setState(() => _emojiP2 = k), House.gelBlue),
           ),
         ],
       ),
@@ -495,8 +498,8 @@ class _FeedPageState extends State<FeedPage> {
   /// One player's floating emoji bar: their name + the four choices, the
   /// picked one lit. Wrapped so a tap on the bar never falls through to the
   /// winner-select layer beneath it.
-  Widget _emojiBar(
-      String name, String? selected, ValueChanged<String> onSelect) {
+  Widget _emojiBar(String name, String? selected, ValueChanged<String> onSelect,
+      Color accent) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {},
@@ -516,10 +519,12 @@ class _FeedPageState extends State<FeedPage> {
                 name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Colors.white,
+                // The name wears the player's gel so red/blue means the same
+                // person here as on the clip outline and the tally.
+                style: TextStyle(
+                    color: accent,
                     fontSize: 11,
-                    fontWeight: FontWeight.w600),
+                    fontWeight: FontWeight.w700),
               ),
             ),
             Expanded(
@@ -534,7 +539,7 @@ class _FeedPageState extends State<FeedPage> {
                             horizontal: 7, vertical: 4),
                         decoration: BoxDecoration(
                           color: selected == r.key
-                              ? _pickGreen.withValues(alpha: 0.9)
+                              ? accent.withValues(alpha: 0.9)
                               : Colors.white.withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(11),
                         ),

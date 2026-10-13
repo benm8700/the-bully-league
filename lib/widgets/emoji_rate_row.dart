@@ -27,7 +27,9 @@ class EmojiRateRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final a = accent ?? Theme.of(context).colorScheme.primary;
-    final nameColor = dark ? Colors.white : null;
+    // When a player accent is given (the stage gel), the NAME wears it too, so
+    // the colour-to-person tie reads the same here as on the clip and tally.
+    final nameColor = accent ?? (dark ? Colors.white : null);
     final idle = dark
         ? Colors.white.withValues(alpha: 0.08)
         : Theme.of(context).colorScheme.surfaceContainerHighest;
@@ -39,7 +41,11 @@ class EmojiRateRow extends StatelessWidget {
             name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: nameColor, fontSize: 13),
+            style: TextStyle(
+              color: nameColor,
+              fontSize: 13,
+              fontWeight: accent != null ? FontWeight.w700 : FontWeight.normal,
+            ),
           ),
         ),
         Expanded(

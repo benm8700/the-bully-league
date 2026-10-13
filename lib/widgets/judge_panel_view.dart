@@ -67,6 +67,12 @@ class _JudgePanelViewState extends State<JudgePanelView> {
   bool _submitting = false;
   String? _voteError;
 
+  // The battler this judge just tapped, highlighted INSTANTLY so the tap feels
+  // immediate instead of waiting on the castJudgeVote round-trip + the vote
+  // listener echoing it back. Reconciled against the server below; reverted
+  // only if the vote actually fails.
+  String? _optimisticPick;
+
   // Once decided, a 30s grace runs (cameras stay live, judges keep talking),
   // then this nudges the server to settle. The 1s tick drives the countdown.
   bool _settleCalled = false;
@@ -166,15 +172,26 @@ class _JudgePanelViewState extends State<JudgePanelView> {
 
   Future<void> _vote(String winnerUid) async {
     setState(() {
+      _optimisticPick = winnerUid; // light up the tap now; reconcile below
       _submitting = true;
       _voteError = null;
     });
     try {
       await _service.castJudgeVote(widget.matchId, winnerUid);
     } on FirebaseFunctionsException catch (e) {
-      if (mounted) setState(() => _voteError = e.message ?? "Couldn't record that.");
+      if (mounted) {
+        setState(() {
+          _optimisticPick = null; // revert the optimistic highlight on failure
+          _voteError = e.message ?? "Couldn't record that.";
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() => _voteError = "Couldn't record that - try again.");
+      if (mounted) {
+        setState(() {
+          _optimisticPick = null;
+          _voteError = "Couldn't record that - try again.";
+        });
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -310,7 +327,7 @@ class _JudgePanelViewState extends State<JudgePanelView> {
   }
 
   Widget _voteButton(String id, String name, Color color, String? myPick) {
-    final selected = myPick == id;
+    final selected = (_optimisticPick ?? myPick) == id;
     return OutlinedButton(
       onPressed: _submitting ? null : () => _vote(id),
       style: OutlinedButton.styleFrom(
