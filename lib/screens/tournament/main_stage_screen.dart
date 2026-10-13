@@ -30,6 +30,11 @@ class MainStageScreen extends StatefulWidget {
 
 class _MainStageScreenState extends State<MainStageScreen> {
   late final MainStageService _service = widget.service ?? MainStageService();
+  // Created ONCE: re-reading _service.watch() in build() would hand the
+  // StreamBuilder a new stream on every rebuild, flip it to "waiting" and
+  // replace the whole screen (chat included) with a spinner - which is what
+  // was stealing focus from the chat's text field when the keyboard opened.
+  late final Stream<MainStageView?> _view = _service.watch();
   bool _submitting = false;
   bool _startingBattle = false;
   String? _error;
@@ -103,7 +108,7 @@ class _MainStageScreenState extends State<MainStageScreen> {
         ],
       ),
       body: StreamBuilder<MainStageView?>(
-        stream: _service.watch(),
+        stream: _view,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

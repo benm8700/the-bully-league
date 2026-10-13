@@ -52,70 +52,68 @@ class JudgesTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Hide the VIEWING JUDGE's own camera - you don't need to watch yourself,
+    // and from a 5-panel that leaves the four OTHER judges, which tile as an
+    // even 2x2. Your camera still PUBLISHES, so the crowd and the other judges
+    // still see you; only this device hides its own tile. The crowd view has no
+    // "me" seat, so it still shows the full panel (spotlight + grid).
+    //
+    // No running-tally bar either: each judge's vote already colours their own
+    // tile, so the count is redundant and the cameras get the whole area.
+    final visible = [for (final s in seats) if (!s.isMe) s];
+    if (visible.isEmpty) {
+      return const Center(
+        child: Text('Waiting for the rest of the panel…',
+            style: TextStyle(color: Colors.white54)),
+      );
+    }
+    return visible.length >= 5
+        ? _spotlight(context, visible)
+        : _gridOf(context, visible);
+  }
+
+  /// A full panel (5+) does NOT fit as equal tiles on a phone, so it is shown
+  /// broadcast-style: the current speaker up top, everyone else in a 2-column
+  /// grid below (much bigger than a thin strip). The spotlight takes a little
+  /// under half the height so the other tiles stay substantial, and the big
+  /// tile follows whoever is talking (falls back to the head judge, then the
+  /// first seat). All faces stay on screen - no scrolling.
+  Widget _spotlight(BuildContext context, List<JudgeSeat> list) {
+    final big = _spotlightSeat(list);
+    final rest = [for (final s in list) if (s.seatUid != big.seatUid) s];
     return Column(
       children: [
         Expanded(
-          child: seats.length >= 5 ? _spotlight(context) : _grid(context),
+          flex: 7,
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: _seatTile(context, big),
+          ),
         ),
-        _tallyBar(context),
+        Expanded(flex: 5, child: _gridOf(context, rest)),
       ],
     );
   }
 
-  /// A full panel (5+) does NOT fit as equal tiles on a phone, so it is shown
-  /// broadcast-style: the current speaker big up top, everyone else in a small
-  /// strip below. All faces stay on screen, and the big tile follows whoever is
-  /// talking (falls back to the head judge, then the first seat).
-  Widget _spotlight(BuildContext context) {
-    final big = _spotlightSeat();
-    final rest = [for (final s in seats) if (s.seatUid != big.seatUid) s];
-    return Padding(
-      padding: const EdgeInsets.all(4),
-      child: Column(
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: _seatTile(context, big),
-            ),
-          ),
-          SizedBox(
-            height: 96,
-            child: Row(
-              children: [
-                for (final s in rest)
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: _seatTile(context, s),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  JudgeSeat _spotlightSeat() {
+  JudgeSeat _spotlightSeat(List<JudgeSeat> list) {
     if (activeSeatUid != null) {
-      for (final s in seats) {
+      for (final s in list) {
         if (s.seatUid == activeSeatUid) return s;
       }
     }
-    for (final s in seats) {
+    for (final s in list) {
       if (s.isHead) return s;
     }
-    return seats.first;
+    return list.first;
   }
 
-  /// A small panel (<=4) fits as equal tiles - and 2 side-by-side is the sweet
-  /// spot on a phone. Rows fill the height equally, max two per row (so three
-  /// is 2-over-1, never a cramped 3-across).
-  Widget _grid(BuildContext context) {
-    if (seats.isEmpty) return const SizedBox.shrink();
-    final rows = _rowSizes(seats.length);
+  /// Lay a set of seats as equal tiles - 2 side-by-side is the sweet spot on a
+  /// phone. Used both for a small panel (<=4) and for the "everyone else" grid
+  /// under the spotlight. Rows fill the height equally, max two per row (so
+  /// three is 2-over-1, never a cramped 3-across).
+  Widget _gridOf(BuildContext context, List<JudgeSeat> list) {
+    if (list.isEmpty) return const SizedBox.shrink();
+    final rows = _rowSizes(list.length);
     var i = 0;
     final rowWidgets = <Widget>[];
     for (final count in rows) {
@@ -124,7 +122,7 @@ class JudgesTable extends StatelessWidget {
         tiles.add(Expanded(
           child: Padding(
             padding: const EdgeInsets.all(4),
-            child: _seatTile(context, seats[i++]),
+            child: _seatTile(context, list[i++]),
           ),
         ));
       }
@@ -226,43 +224,4 @@ class JudgesTable extends StatelessWidget {
     );
   }
 
-  Widget _tallyBar(BuildContext context) {
-    final votes = <String, String>{
-      for (final s in seats)
-        if (s.votedFor != null) s.judgeId: s.votedFor!,
-    };
-    final tally = judgeVoteTally(votes);
-    final players = playerNames.keys.toList();
-    final cast = votes.length;
-    final total = seats.length;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: Theme.of(context).colorScheme.surface,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$cast of $total judges have voted',
-              style: Theme.of(context).textTheme.labelMedium),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (var i = 0; i < players.length; i++) ...[
-                if (i > 0) const SizedBox(width: 18),
-                Text(
-                  '${playerNames[players[i]] ?? ''}  ${tally[players[i]] ?? 0}',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: playerColors[players[i]] ??
-                            context.palette.winner,
-                      ),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 }

@@ -38,6 +38,12 @@ class _JudgeChatState extends State<JudgeChat> {
   bool _sending = false;
   String? _error;
 
+  // Created ONCE, not per build: a fresh stream each build would reset the
+  // StreamBuilder to "waiting", rebuild the whole panel and steal focus from
+  // the text field the instant the keyboard opens (the flash-then-close bug).
+  late final Stream<List<JudgeChatMessage>> _messages =
+      _service.watch(widget.tournamentId);
+
   @override
   void dispose() {
     _controller.dispose();
@@ -141,7 +147,7 @@ class _JudgeChatState extends State<JudgeChat> {
   /// a fixed-height panel suitable for a scroll view.
   Widget _messageArea(ColorScheme cs) {
     final list = StreamBuilder<List<JudgeChatMessage>>(
-      stream: _service.watch(widget.tournamentId),
+      stream: _messages,
       builder: (context, snap) {
         final msgs = snap.data ?? const <JudgeChatMessage>[];
         if (snap.connectionState == ConnectionState.waiting) {

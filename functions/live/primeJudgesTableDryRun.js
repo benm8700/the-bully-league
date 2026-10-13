@@ -51,7 +51,6 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {createBracket} = require("../mainStageBracket");
 const {storeBracket} = require("../mainStageLifecycle");
 const {DEFAULTS: BATTLE_DEFAULTS} = require("../mainStageBattle");
-const {JUDGE_WINDOW_MS} = require("../mainStagePlay");
 
 const db = getFirestore();
 const TID = "mainstage_dryrun"; // the single canonical dry-run tournament doc
@@ -76,16 +75,18 @@ async function resolve(arg) {
 
 async function run() {
   const args = process.argv.slice(2);
-  if (args.length < 2) {
-    console.error("usage: node live/primeJudgesTableDryRun.js <judge1> <judge2>");
+  if (args.length < 1) {
+    console.error("usage: node live/primeJudgesTableDryRun.js <judge1> [judge2] [--five]");
     process.exit(2);
   }
   const realArgs = args.filter((a) => a !== "--five");
   const five = args.includes("--five");
-  const [j1, j2] = await Promise.all(realArgs.slice(0, 2).map(resolve));
+  const resolved = await Promise.all(realArgs.slice(0, 2).map(resolve));
+  const j1 = resolved[0];
+  const j2 = resolved[1] || null; // 1-judge panel: a single vote decides it
   console.log(`judge1 (head) = ${j1.name} (${j1.uid})`);
-  console.log(`judge2        = ${j2.name} (${j2.uid})`);
-  if (j1.uid === j2.uid) throw new Error("judge1 and judge2 must be two DIFFERENT accounts");
+  console.log(j2 ? `judge2        = ${j2.name} (${j2.uid})` : "judge2        = (none, 1-judge panel)");
+  if (j2 && j1.uid === j2.uid) throw new Error("judge1 and judge2 must be two DIFFERENT accounts");
 
   // --five: pad the panel to 5 with dummy judges so the layout shows a real
   // 3-over-2 on device (the 3 extras have no camera, so they render as "camera
@@ -95,7 +96,8 @@ async function run() {
     {id: "msjt-j4", name: "JudgeFour"},
     {id: "msjt-j5", name: "JudgeFive"},
   ];
-  const panel = [j1.uid, j2.uid, ...(five ? JUDGE_DUMMIES.map((j) => j.id) : [])];
+  const realJudges = [j1.uid, ...(j2 ? [j2.uid] : [])];
+  const panel = [...realJudges, ...(five ? JUDGE_DUMMIES.map((j) => j.id) : [])];
   if (five) console.log("panel padded to 5 (3 placeholder judges)");
 
   // Clean slate: remove any existing active mainstage doc so the client picks
@@ -136,7 +138,6 @@ async function run() {
     mainStage: {tournamentId: TID, roundIdx: 0, matchIdx: 0},
     mainStageConfig: {...BATTLE_DEFAULTS},
     settings,
-    judgeWindowMs: JUDGE_WINDOW_MS, // matches the real finals window (10 min)
     status: "completed", // battle over -> the judges' debate is open
     channelName: `match_${matchId}`,
     origin: "mainstage",
@@ -159,10 +160,10 @@ async function run() {
     field: seeds,
     alternates: [],
     judgePool: [],
-    handPickedJudges: [j1.uid, j2.uid], // first = head judge (breaks a tie)
-    judges: panel, // the seated panel (2, or 5 with --five)
+    handPickedJudges: realJudges, // first = head judge (breaks a tie)
+    judges: panel, // the seated panel (1-2 real, +3 with --five)
     invites: {
-      [j1.uid]: "accepted", [j2.uid]: "accepted",
+      ...Object.fromEntries(realJudges.map((u) => [u, "accepted"])),
       [DUMMIES[0].id]: "accepted", [DUMMIES[1].id]: "accepted",
     },
     bracket: {...stored, rounds},

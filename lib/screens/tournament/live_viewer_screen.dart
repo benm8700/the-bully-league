@@ -237,7 +237,12 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                     if (completed) {
                       final winnerId =
                           snap.data?.data()?['judgeWinnerId'] as String?;
-                      if (winnerId != null) {
+                      // Only a SETTLED result ends the show. A verdict that's
+                      // landed but still in its 30s grace keeps the crowd on the
+                      // judges' table, watching the panel react.
+                      final settled =
+                          snap.data?.data()?['voteFinalized'] == true;
+                      if (settled && winnerId != null) {
                         // The verdict has landed.
                         final winnerName = winnerId == _player1Id
                             ? _player1Name

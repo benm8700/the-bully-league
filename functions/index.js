@@ -584,6 +584,14 @@ exports.castMainStageJudgeVote = onCall(async (request) => {
   return castMainStageJudgeVote(request.auth, request.data);
 });
 
+// Finish a DECIDED Main Stage battle after its 30s grace (client-nudged when
+// the countdown hits zero; the server re-checks the buffer so it can't end
+// early). The sweep backstops it. See functions/mainStagePlay.js.
+exports.settleMainStageBattle = onCall((request) => {
+  const {settleMainStageBattle} = require("./mainStagePlay");
+  return settleMainStageBattle(request.auth, request.data);
+});
+
 // The Main Stage judges' private chat room (before/during/after the battle).
 // The only write path - clients can't write judgeChat/** - so the seated-judge
 // gate, moderation and rate limit can't be skipped. See functions/judgeChat.js.

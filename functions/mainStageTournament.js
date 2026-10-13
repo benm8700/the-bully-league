@@ -134,18 +134,21 @@ async function lockDueTournaments(db, now = Date.now()) {
   return results;
 }
 
-/** The scheduled sweep: create, lock, and force-close any stalled on-stage
- * panel - all gated on the launch flag. The force-close is the backstop that
- * stops a quiet judge halting the whole show. */
+/** The scheduled sweep: create tonight's tournament, lock the field at the
+ * cutoff, and finish any battle the panel already DECIDED whose 30s grace has
+ * elapsed (a backstop, in case every client left before nudging the settle) -
+ * all gated on the launch flag. There is deliberately NO deadline force-close
+ * on an UNDECIDED battle: a debate runs as long or short as it needs, and a
+ * battle settles only when the panel reaches a verdict, not on a clock. */
 async function sweepMainStage(now = Date.now()) {
   const db = getFirestore();
   const cfg = (await db.collection("config").doc("tournament").get()).data();
   if (!tournamentEnabled(cfg)) return {skipped: "disabled"};
   const created = await createFromSnapshot(db, now);
   const locked = await lockDueTournaments(db, now);
-  const {forceCloseStalledBattles} = require("./mainStagePlay");
-  const forceClosed = await forceCloseStalledBattles(db, now);
-  return {created, locked, forceClosed};
+  const {settleDecidedBattles} = require("./mainStagePlay");
+  const settled = await settleDecidedBattles(db, now);
+  return {created, locked, settled};
 }
 
 /** A finalist/alternate confirms or declines (callable body). */

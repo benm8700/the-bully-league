@@ -217,6 +217,11 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
         final match = msnap.data?.data();
         final judgeWinner = match?['judgeWinnerId'] as String?;
         final decided = judgeWinner != null;
+        final decidedAtMs = (match?['judgeDecidedAtMs'] as num?)?.toInt();
+        // SETTLED = the 30s grace has run and finalize applied the result. Only
+        // then does the room flip to the final screen and the cameras stop; a
+        // mere verdict (decided) keeps the judges on camera for the grace.
+        final settled = match?['voteFinalized'] == true;
         // Battle over (or decided): leave the channel so the audio stops.
         final completed = decided || match?['status'] == 'completed';
         if (completed && !_watchStopped) {
@@ -241,14 +246,14 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
             // Which battler reads as "selected": the one you tapped, or the one
             // you already voted for.
             final highlight = _selectedPlayerId ?? myPick;
-            // THE DEBATE: once the battle is over (and not yet decided), the
-            // judge goes ON CAMERA at the table - sees the other judges, and
-            // casts their public vote there. JudgePanelView owns that whole
-            // view (and its own vote control), so it replaces the battle-watch
-            // tiles + confirm bar here. The battle-watch and the decided verdict
-            // keep the original layout below.
-            if (completed &&
-                !decided &&
+            // THE DEBATE + the 30s grace: the judge is ON CAMERA at the table
+            // throughout - casting a public vote while it's open, then staying
+            // on camera with the verdict shown during the grace. JudgePanelView
+            // owns that whole view; it stays mounted (cameras live) until the
+            // result SETTLES. Only a settled result drops to the final screen
+            // below, which is what tears the cameras down.
+            if (!settled &&
+                completed &&
                 _tournamentId != null &&
                 _player1Id != null &&
                 _player2Id != null) {
@@ -260,6 +265,8 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
                 player2Id: _player2Id!,
                 player1Name: _player1Name,
                 player2Name: _player2Name,
+                winnerId: judgeWinner,
+                decidedAtMs: decidedAtMs,
                 service: widget.service,
               );
             }

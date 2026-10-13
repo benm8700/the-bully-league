@@ -271,6 +271,15 @@ class MainStageService {
       'winnerUid': winnerUid,
     });
   }
+
+  /// Nudge a DECIDED battle to finish once its 30s grace has elapsed. The server
+  /// re-checks the buffer (so this can't end it early) and is idempotent, so any
+  /// watcher can call it. Best-effort - failures are swallowed by the caller.
+  Future<void> settleBattle(String matchId) async {
+    await _functions
+        .httpsCallable('settleMainStageBattle')
+        .call<Map<String, dynamic>>({'matchId': matchId});
+  }
 }
 
 /// The bracket slot a finalist is about to play - everything

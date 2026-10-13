@@ -29,6 +29,8 @@ class JudgePanelView extends StatefulWidget {
     required this.player2Id,
     required this.player1Name,
     required this.player2Name,
+    this.winnerId,
+    this.decidedAtMs,
     this.service,
   });
 
@@ -39,6 +41,13 @@ class JudgePanelView extends StatefulWidget {
   final String player2Id;
   final String player1Name;
   final String player2Name;
+
+  /// Set once the panel has DECIDED (the verdict is locked); null during the
+  /// debate. While set, voting is closed and the 30s grace countdown runs.
+  final String? winnerId;
+
+  /// When the verdict was decided (ms), for the grace countdown + auto-settle.
+  final int? decidedAtMs;
   final MainStageService? service;
 
   @override
@@ -57,16 +66,20 @@ class _JudgePanelViewState extends State<JudgePanelView> {
 
   bool _submitting = false;
   String? _voteError;
-  String? _selected; // tapped-but-not-confirmed battler
 
-  // The judging deadline the server force-closes a stalled panel at, shown as a
-  // live countdown so the panel feels the clock. Null if it can't be read.
-  int? _deadlineMs;
+  // Once decided, a 30s grace runs (cameras stay live, judges keep talking),
+  // then this nudges the server to settle. The 1s tick drives the countdown.
+  bool _settleCalled = false;
   Timer? _tick;
 
   @override
   void initState() {
     super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      _maybeSettle();
+      setState(() {});
+    });
     _join();
   }
 
@@ -113,20 +126,6 @@ class _JudgePanelViewState extends State<JudgePanelView> {
         names[id] = (u.data()?['username'] as String?) ?? 'Judge';
       }
 
-      // The judging deadline: match createdAt + its judgeWindowMs. The server
-      // force-closes the panel past this, so the countdown is a real clock.
-      try {
-        final m = await db.collection('matches').doc(widget.matchId).get();
-        final created = m.data()?['createdAt'];
-        final windowMs = (m.data()?['judgeWindowMs'] as num?)?.toInt() ?? 600000;
-        if (created is Timestamp) {
-          _deadlineMs = created.millisecondsSinceEpoch + windowMs;
-          _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-            if (mounted) setState(() {});
-          });
-        }
-      } catch (_) {/* the countdown is a nicety; voting works without it */}
-
       if (!mounted) return;
       setState(() {
         _judgeNames = names;
@@ -145,17 +144,24 @@ class _JudgePanelViewState extends State<JudgePanelView> {
     super.dispose();
   }
 
-  /// "m:ss to decide", or "Deciding now…" once the window has elapsed (the
-  /// server sweep force-closes the panel at that point). Null if unknown.
-  String? _countdownLabel() {
-    final d = _deadlineMs;
-    if (d == null) return null;
-    final remMs = d - DateTime.now().millisecondsSinceEpoch;
-    if (remMs <= 0) return 'Deciding now…';
-    final s = (remMs / 1000).ceil();
-    final mm = s ~/ 60;
-    final ss = (s % 60).toString().padLeft(2, '0');
-    return '$mm:$ss to decide';
+  /// Seconds left in the post-decision grace (cameras keep rolling), or null if
+  /// the panel hasn't decided yet. 30s to match the server buffer.
+  int? _graceLeft() {
+    final d = widget.decidedAtMs;
+    if (widget.winnerId == null || d == null) return null;
+    final remMs = d + 30 * 1000 - DateTime.now().millisecondsSinceEpoch;
+    return remMs <= 0 ? 0 : (remMs / 1000).ceil();
+  }
+
+  /// Once the grace has run out, nudge the server to finish the battle (apply
+  /// Elo, advance the bracket, stop the cameras). Idempotent + server-rechecked,
+  /// and called at most once per view.
+  void _maybeSettle() {
+    if (_settleCalled || widget.winnerId == null) return;
+    final left = _graceLeft();
+    if (left == null || left > 0) return;
+    _settleCalled = true;
+    _service.settleBattle(widget.matchId).catchError((_) {});
   }
 
   Future<void> _vote(String winnerUid) async {
@@ -244,92 +250,81 @@ class _JudgePanelViewState extends State<JudgePanelView> {
     );
   }
 
+  /// Transparent vote control at the very bottom - no boxed panel, so the
+  /// cameras own the screen. Two tap-to-vote buttons; tapping casts (or
+  /// changes) the vote immediately - no separate confirm, since a vote is
+  /// changeable until the panel settles and the colour already shows your pick.
   Widget _voteBar(String? myPick) {
-    final sel = _selected;
-    final canConfirm = sel != null && sel != myPick && !_submitting;
-    final countdown = _countdownLabel();
-    return Container(
-      width: double.infinity,
-      color: const Color(0xFF151515),
-      padding: EdgeInsets.fromLTRB(
-          12, 6, 12, 6 + MediaQuery.of(context).padding.bottom),
+    final bottom = 8 + MediaQuery.of(context).padding.bottom;
+    // DECIDED: the verdict is locked, so swap the buttons for the result + the
+    // 30s grace - the judges stay on camera and keep talking before it ends.
+    if (widget.winnerId != null) {
+      final left = _graceLeft() ?? 0;
+      final name = widget.winnerId == widget.player1Id
+          ? widget.player1Name
+          : widget.player2Name;
+      return Padding(
+        padding: EdgeInsets.fromLTRB(12, 6, 12, bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('$name takes it',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: context.palette.reward,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16)),
+            const SizedBox(height: 2),
+            Text(
+              left > 0 ? 'Wrapping up in ${left}s' : 'Wrapping up…',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+          ],
+        ),
+      );
+    }
+    // Open vote: two transparent tap-to-vote buttons.
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, 4, 12, bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (countdown != null)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.timer_outlined,
-                    size: 13, color: Colors.white54),
-                const SizedBox(width: 4),
-                Text(countdown,
-                    style: const TextStyle(color: Colors.white54, fontSize: 12)),
-              ],
+          if (_voteError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(_voteError!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: context.palette.live, fontSize: 11)),
             ),
-          if (countdown != null) const SizedBox(height: 6),
           Row(children: [
-            Expanded(child: _pickChip(widget.player1Id, widget.player1Name,
-                House.gelRed, myPick)),
+            Expanded(child: _voteButton(
+                widget.player1Id, widget.player1Name, House.gelRed, myPick)),
             const SizedBox(width: 10),
-            Expanded(child: _pickChip(widget.player2Id, widget.player2Name,
-                House.gelBlue, myPick)),
+            Expanded(child: _voteButton(
+                widget.player2Id, widget.player2Name, House.gelBlue, myPick)),
           ]),
-          if (_voteError != null) ...[
-            const SizedBox(height: 4),
-            Text(_voteError!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: context.palette.live, fontSize: 12)),
-          ],
-          const SizedBox(height: 6),
-          if (canConfirm)
-            FilledButton(
-              onPressed: () => _vote(sel),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(double.infinity, 44),
-                backgroundColor: _colorOf(sel),
-                foregroundColor: Colors.white,
-              ),
-              child: _submitting
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : Text(myPick == null
-                      ? 'Vote for ${_nameOf(sel)}'
-                      : 'Change to ${_nameOf(sel)}'),
-            )
-          else if (myPick != null)
-            Text('You voted for ${_nameOf(myPick)} - tap the other to change',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white54, fontSize: 12))
-          else
-            const Text('Tap the winner, then confirm.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white54, fontSize: 12)),
         ],
       ),
     );
   }
 
-  Widget _pickChip(String id, String name, Color color, String? myPick) {
-    final selected = (_selected ?? myPick) == id;
+  Widget _voteButton(String id, String name, Color color, String? myPick) {
+    final selected = myPick == id;
     return OutlinedButton(
-      onPressed: _submitting ? null : () => setState(() => _selected = id),
+      onPressed: _submitting ? null : () => _vote(id),
       style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        backgroundColor: selected ? color.withValues(alpha: 0.22) : null,
-        side: BorderSide(color: selected ? Colors.white : color, width: selected ? 2 : 1),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        backgroundColor:
+            selected ? color.withValues(alpha: 0.28) : Colors.transparent,
+        side: BorderSide(
+            color: selected ? Colors.white : color, width: selected ? 2 : 1),
       ),
       child: Text(name,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w700)),
     );
   }
-
-  String _nameOf(String id) => id == widget.player1Id ? widget.player1Name
-      : id == widget.player2Id ? widget.player2Name : 'them';
-  Color _colorOf(String id) => id == widget.player1Id ? House.gelRed : House.gelBlue;
 }

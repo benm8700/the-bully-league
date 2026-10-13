@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {loadBracket} = require("./mainStageLifecycle");
-const {tallyJudgeVotes, stalledBattleVerdict} = require("./mainStageJudging");
+const {tallyJudgeVotes} = require("./mainStageJudging");
 const {DEFAULTS: BATTLE_DEFAULTS, resolveGraceMs} = require("./mainStageBattle");
 
 /**
@@ -13,13 +13,9 @@ const {DEFAULTS: BATTLE_DEFAULTS, resolveGraceMs} = require("./mainStageBattle")
  */
 
 const STARTING_RATING = 1200;
-// The live judging window: settlement normally lands the moment the panel is
-// decided (all voted / early-decisive), but a stalled panel is force-closed at
-// this deadline by the sweep, so a quiet or absent judge can never hang the
-// show. 10 minutes - the judges can watch, debate and change their votes right
-// up to it (the client shows the countdown). Note the sweep runs on its own
-// interval, so the actual force-close is this window plus up to one sweep gap.
-const JUDGE_WINDOW_MS = 10 * 60 * 1000;
+// No judging deadline: a debate runs as long or short as it needs, and a battle
+// settles when the panel reaches a verdict (a majority / early-decisive in
+// castMainStageJudgeVote), never on a clock.
 
 function httpsError(code, message) {
   const {HttpsError} = require("firebase-functions/v2/https");
@@ -108,7 +104,6 @@ async function startMainStageBattle(auth, data) {
       mainStage: {tournamentId, roundIdx, matchIdx}, // ...which routes HERE
       mainStageConfig: {...BATTLE_DEFAULTS, graceMs}, // chess-clock timings for the UI
       settings,
-      judgeWindowMs: JUDGE_WINDOW_MS,
       status: "pending",
       channelName: `match_${id}`, // short (ms_ + 24 hex) -> well under 64 bytes
       origin: "mainstage",
@@ -132,11 +127,18 @@ async function startMainStageBattle(auth, data) {
   return pairingFor(match, matchId, auth.uid);
 }
 
+// After the panel DECIDES, the result locks but the match does NOT end for
+// another 30 seconds - the judges stay on camera and keep talking (a reaction
+// beat, and good footage), then it settles. The decision is made the moment the
+// panel decides; this is only the buffer before cameras stop. Tunable.
+const SETTLE_BUFFER_MS = 30 * 1000;
+
 /**
  * A seated judge casts (or changes) their OPEN vote for a finals battle. The
- * vote is public (the crowd sees the tally live). When the panel's verdict is
- * decided, the winner is stamped and the battle is finalized (force), which
- * applies the finals Elo and advances the bracket.
+ * vote is public (the crowd sees each pick land live). When the panel's verdict
+ * is decided, the winner is LOCKED (judgeWinnerId + judgeDecidedAtMs) but the
+ * battle is NOT finalized yet - settleMainStageBattle does that after the 30s
+ * grace, so the judges get a reaction beat on camera before it ends.
  */
 async function castMainStageJudgeVote(auth, data) {
   if (!auth) throw httpsError("unauthenticated", "Must be signed in.");
@@ -190,88 +192,77 @@ async function castMainStageJudgeVote(auth, data) {
     });
 
     const tally = tallyJudgeVotes(votes, panel, {headJudge});
-    if (tally.decided) {
-      tx.update(matchRef, {judgeWinnerId: tally.winner, status: "completed"});
+    // LOCK the verdict on decision, but do NOT finalize/end here - stamp when it
+    // was decided so the 30s grace can run (settleMainStageBattle finishes it).
+    if (tally.decided && tally.winner) {
+      tx.update(matchRef,
+          {judgeWinnerId: tally.winner, judgeDecidedAtMs: Date.now()});
     }
     return {decided: tally.decided, winner: tally.winner,
       counts: tally.counts, cast: tally.cast};
   });
 
-  // Settle OUTSIDE the vote transaction: finalize applies the finals Elo and
-  // routes to recordBattleResult (bracket advance). force, because there is no
-  // community vote window for a finals battle.
-  if (outcome.decided && !outcome.already && outcome.winner) {
-    try {
-      const {finalizeMatch} = require("./matchFinalization");
-      await finalizeMatch(matchId, {force: true});
-    } catch (e) {
-      console.error(`mainstage finalize ${matchId} failed:`, e.message);
-    }
-  }
   return outcome;
 }
 
 /**
- * The backstop the show cannot run without: force-close any on-stage battle
- * whose panel has stalled past its judging deadline, so a quiet or absent judge
- * can never halt the whole finals with the audience watching. Settles on
- * whatever votes were cast (head-judge tiebreak), or the higher seed if the
- * panel is dead-even or silent - a bracket must advance exactly one player.
- *
- * Scans only LIVE mainstage tournaments (a handful at most), and only matchups
- * with a started battle (a stamped matchId) and no winner yet. Idempotent: a
- * battle decided by a real vote between the read and the claim is left alone.
+ * Finish a DECIDED finals battle once its 30s grace has elapsed: applies the
+ * finals Elo and advances the bracket (finalize). Client-nudged when the grace
+ * countdown hits zero, and backstopped by the sweep (settleDecidedBattles) in
+ * case every client has left. The server re-checks the buffer, so a client
+ * cannot end it early. Idempotent.
  */
-async function forceCloseStalledBattles(db, now = Date.now()) {
+async function settleMainStageBattle(auth, data) {
+  if (!auth) throw httpsError("unauthenticated", "Must be signed in.");
+  const {matchId} = data || {};
+  if (!matchId) throw httpsError("invalid-argument", "Missing matchId.");
+  const db = getFirestore();
+  const match = (await db.collection("matches").doc(matchId).get()).data();
+  if (!match || !match.mainStage) {
+    throw httpsError("failed-precondition", "Not a Main Stage battle.");
+  }
+  if (match.voteFinalized) return {settled: true, already: true};
+  if (!match.judgeWinnerId) return {settled: false, reason: "not-decided"};
+  const decidedAt = Number(match.judgeDecidedAtMs) || 0;
+  const remainingMs = decidedAt + SETTLE_BUFFER_MS - Date.now();
+  if (remainingMs > 0) return {settled: false, remainingMs};
+  const {finalizeMatch} = require("./matchFinalization");
+  await finalizeMatch(matchId, {force: true});
+  return {settled: true};
+}
+
+/**
+ * Sweep backstop: finalize any mainstage battle that was DECIDED and whose 30s
+ * grace has elapsed but was never settled (every client left before the nudge).
+ * Only finishes battles the panel ALREADY decided - it never forces a verdict.
+ *
+ * Scans the LIVE mainstage tournaments' brackets (a handful) and reads each
+ * started matchup's doc directly, so it needs no composite index and no stamped
+ * voteFinalized field.
+ */
+async function settleDecidedBattles(db, now = Date.now()) {
   const snap = await db.collection("tournaments")
       .where("format", "==", "mainstage")
       .where("status", "==", "live").get();
   const out = [];
+  const {finalizeMatch} = require("./matchFinalization");
   for (const d of snap.docs) {
     const t = d.data();
     if (!t.bracket) continue;
     const bracket = loadBracket(t.bracket); // core shape: rounds[][]
-    const field = Array.isArray(t.field) ? t.field : [];
-    const panel = Array.isArray(t.judges) ? t.judges : [];
-    const headJudge =
-      (t.handPickedJudges || []).find((u) => panel.includes(u)) || null;
-    for (let ri = 0; ri < bracket.rounds.length; ri++) {
-      const round = bracket.rounds[ri] || [];
-      for (let mi = 0; mi < round.length; mi++) {
-        const m = round[mi];
+    for (const round of bracket.rounds) {
+      for (const m of (round || [])) {
         if (!m || !m.matchId || m.winner != null) continue;
-        const matchRef = db.collection("matches").doc(m.matchId);
-        const match = (await matchRef.get()).data();
-        if (!match) continue;
-        const votes = {};
-        const vs = await matchRef.collection("mainStageVotes").get();
-        vs.forEach((v) => {
-          votes[v.id] = v.data().winnerUid;
-        });
-        const verdict = stalledBattleVerdict(
-            {match, votes, panel, headJudge, field, now});
-        if (!verdict.stalled) continue;
-        // Claim it: a real vote may have decided it since the read above.
-        const claimed = await db.runTransaction(async (tx) => {
-          const fresh = (await tx.get(matchRef)).data();
-          if (!fresh || fresh.judgeWinnerId) return false;
-          tx.update(matchRef, {
-            judgeWinnerId: verdict.winner,
-            status: "completed",
-            judgeForceClosedAt: FieldValue.serverTimestamp(),
-          });
-          return true;
-        });
-        if (!claimed) continue;
-        // Settle OUTSIDE the tx (same as a live verdict): finalize applies the
-        // finals Elo and routes to recordBattleResult -> bracket advance.
+        const match = (await db.collection("matches").doc(m.matchId).get()).data();
+        if (!match || match.voteFinalized || !match.judgeWinnerId) continue;
+        const decidedAt = Number(match.judgeDecidedAtMs) || 0;
+        if (!decidedAt || now < decidedAt + SETTLE_BUFFER_MS) continue;
         try {
-          const {finalizeMatch} = require("./matchFinalization");
           await finalizeMatch(m.matchId, {force: true});
+          out.push(m.matchId);
         } catch (e) {
-          console.error(`mainstage force-close ${m.matchId}:`, e.message);
+          console.error(`mainstage settle ${m.matchId}:`, e.message);
         }
-        out.push({tournamentId: d.id, matchId: m.matchId, winner: verdict.winner});
       }
     }
   }
@@ -281,6 +272,7 @@ async function forceCloseStalledBattles(db, now = Date.now()) {
 module.exports = {
   startMainStageBattle,
   castMainStageJudgeVote,
-  forceCloseStalledBattles,
-  JUDGE_WINDOW_MS,
+  settleMainStageBattle,
+  settleDecidedBattles,
+  SETTLE_BUFFER_MS,
 };
