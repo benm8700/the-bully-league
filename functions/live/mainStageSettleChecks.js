@@ -1,8 +1,10 @@
 /**
  * Live check for the Main Stage finals SETTLEMENT against the DEPLOYED backend:
- * start a bracket battle, have the 5-judge panel cast open votes, and assert
- * the verdict settles the battle (finals Elo applied) AND advances the
- * #1-callout bracket. Primes a synthetic live mainstage tournament directly
+ * start a bracket battle, have the panel cast open votes, and assert the
+ * verdict LOCKS but does not end the match (the 30s grace), that settling is
+ * refused inside the buffer, and that settleMainStageBattle after the buffer
+ * applies the finals Elo AND advances the #1-callout bracket (idempotently).
+ * Primes a synthetic live mainstage tournament directly
  * (the flag-gated auto-creation is bypassed) and mints real ID tokens per
  * participant via createCustomToken -> signInWithCustomToken, so the deployed
  * callables run under genuine auth. Everything is torn down in a finally.
@@ -171,32 +173,56 @@ async function run() {
     assert.strictEqual(r.status, 403, JSON.stringify(r.body));
   });
 
-  await check("judge votes tally; the panel verdict settles the battle", async () => {
-    // 3 judges for pA, then it's decisive (3 of 5, 2 out can't catch).
+  let headTok;
+  await check("3 decisive votes LOCK the verdict but do NOT finalize (grace)", async () => {
+    // 3 judges for pA, then it's decisive (3 of 5, 2 out can't catch). The
+    // verdict locks, but the match must NOT end yet - the 30s grace runs first.
     for (const j of JUDGES.slice(0, 3)) {
       const tok = await idToken(j);
       const r = await callFn("castMainStageJudgeVote", tok,
           {matchId, winnerUid: FIELD[0]});
       assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     }
-    // allow the (forced) finalize to run
-    await new Promise((res) => setTimeout(res, 1500));
     const m = (await db.collection("matches").doc(matchId).get()).data();
-    assert.strictEqual(m.judgeWinnerId, FIELD[0]);
+    assert.strictEqual(m.judgeWinnerId, FIELD[0], "verdict locked to pA");
+    assert.ok(Number(m.judgeDecidedAtMs) > 0, "decidedAt stamped");
+    assert.notStrictEqual(m.voteFinalized, true, "NOT finalized during the grace");
+    assert.strictEqual(m.winnerId, undefined, "no result recorded during the grace");
+  });
+
+  await check("settling BEFORE the 30s grace elapses is refused", async () => {
+    headTok = await idToken(JUDGES[0]);
+    const r = await callFn("settleMainStageBattle", headTok, {matchId});
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.result.settled, false, "not settled yet");
+    assert.ok(r.body.result.remainingMs > 0, "reports time still to run");
+    const m = (await db.collection("matches").doc(matchId).get()).data();
+    assert.notStrictEqual(m.voteFinalized, true);
+  });
+
+  await check("after the grace, settle finalizes + advances + moves Elo", async () => {
+    // Back-date the decision past the 30s buffer rather than waiting it out.
+    await db.collection("matches").doc(matchId)
+        .update({judgeDecidedAtMs: Date.now() - 31000});
+    const r = await callFn("settleMainStageBattle", headTok, {matchId});
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.result.settled, true, JSON.stringify(r.body));
+    const m = (await db.collection("matches").doc(matchId).get()).data();
     assert.strictEqual(m.winnerId, FIELD[0]);
     assert.strictEqual(m.voteFinalized, true);
-  });
-
-  await check("the bracket advanced: the matchup winner is filled", async () => {
     const t = (await db.collection("tournaments").doc(TID).get()).data();
     assert.strictEqual(t.bracket.rounds[0].matches[0].winner, FIELD[0]);
-  });
-
-  await check("finals moved Elo (the winner's hidden rating rose)", async () => {
     const pa = (await db.collection("users").doc(FIELD[0]).get()).data();
     assert.ok(pa.rating > 1200, `pA rating ${pa.rating} should exceed 1200`);
     const pb = (await db.collection("users").doc(FIELD[1]).get()).data();
     assert.ok(pb.rating < 1200, `pB rating ${pb.rating} should be below 1200`);
+  });
+
+  await check("a second settle is an idempotent no-op", async () => {
+    const r = await callFn("settleMainStageBattle", headTok, {matchId});
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.result.settled, true);
+    assert.strictEqual(r.body.result.already, true);
   });
 }
 
