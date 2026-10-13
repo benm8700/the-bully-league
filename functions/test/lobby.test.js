@@ -22,10 +22,15 @@ ok(messageProblem("damn that was a savage roast") === null,
     "profanity passes (not hate)");
 ok(messageProblem("let's gooo 🔥🔥") === null, "hype passes");
 
-// Reuses the username hate/slur filter - a reserved staff/platform token is
-// blocked (stands in for the moderation path being wired, without writing
-// slurs into the test file; the username suite covers the slur detection).
-ok(messageProblem("admin") !== null, "reserved token blocked (moderation wired)");
+// CHAT is deliberately looser than the username filter: ordinary profanity
+// and platform words ("admin", "help", "team") are ALLOWED here (free-speech
+// stance), while genuine hate stays blocked. (The username suite covers the
+// full slur detection; "nazi" stands in here without a raw racial slur.)
+ok(messageProblem("admin") === null, "platform word allowed in chat");
+ok(messageProblem("can someone help the team") === null,
+    "ordinary words allowed");
+ok(messageProblem("you absolute cunt") === null, "profanity allowed in chat");
+ok(messageProblem("heil hitler to that") !== null, "hate still blocked");
 
 // --- rateProblem / nextRate ---
 const now = 1_000_000;

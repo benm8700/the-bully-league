@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../../screens/profile/performer_profile_screen.dart';
 import '../../theme/app_theme.dart';
-import '../empty_state.dart';
 
 /// This week's qualifier race toward the Main Stage - the Standings tab of the
 /// tournament hub. Reads the server-published board at stats/weeklyQualifier
@@ -94,54 +93,76 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_rows.isEmpty) {
-      return Padding(
-        padding: EdgeInsets.only(top: widget.topPad),
-        child: const EmptyState(
-          icon: Icons.emoji_events_outlined,
-          title: 'The race starts Thursday night',
-          message:
-              'Every ranked battle this week moves you up here. The top 4 make '
-              'the weekly Main Stage — climb in.',
-        ),
-      );
-    }
     final gold = context.palette.reward;
     final selfUid = FirebaseAuth.instance.currentUser?.uid;
-    final text = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
 
-    final children = <Widget>[
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('This week’s contenders',
-                style: text.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800, color: gold)),
-            const SizedBox(height: 2),
-            Text(
-              'Top 3 lock in on skill. The 4th seat is a wild-card draw — '
-              'play and vote on other battles to boost your odds. '
-              '${_timeLeft()}',
-              style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ),
-    ];
+    // The explainer is a PERMANENT header - always above the list, so people
+    // know what the board is whether or not anyone has battled yet. (It used to
+    // be an empty-state message that vanished the moment the first row showed.)
+    final children = <Widget>[_header(gold)];
 
-    for (var i = 0; i < _rows.length; i++) {
-      if (i == _weeklyCutoff) children.add(_cutoffDivider(gold));
-      children.add(_row(i, _rows[i], selfUid, gold));
+    if (_rows.isEmpty) {
+      children.add(_emptyNote());
+    } else {
+      for (var i = 0; i < _rows.length; i++) {
+        if (i == _weeklyCutoff) children.add(_cutoffDivider(gold));
+        children.add(_row(i, _rows[i], selfUid, gold));
+      }
     }
 
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: EdgeInsets.only(top: widget.topPad, bottom: 24),
+        physics: const AlwaysScrollableScrollPhysics(),
         children: children,
+      ),
+    );
+  }
+
+  /// The permanent board explainer, pinned at the top under the tab bar.
+  Widget _header(Color gold) {
+    final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    final left = _timeLeft();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.emoji_events_outlined, size: 20, color: gold),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('The Main Stage opens Thursday night',
+                    style: text.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800, color: gold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Every ranked battle this week moves you up this board. The top 4 '
+            'make the weekly Main Stage — the top 3 on skill, the 4th a '
+            'wild-card draw.${left.isEmpty ? '' : ' $left'}',
+            style: text.bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant, height: 1.3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _emptyNote() {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 28, 16, 16),
+      child: Text(
+        'No battles counted yet this week. Play a ranked match to get on the '
+        'board.',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: scheme.onSurfaceVariant),
       ),
     );
   }

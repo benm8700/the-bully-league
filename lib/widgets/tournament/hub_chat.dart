@@ -195,23 +195,18 @@ class _ChatList extends StatelessWidget {
         final docs = snap.data!.docs
             .where((d) => d.data()['pinned'] != true)
             .toList();
-        if (docs.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'Quiet in here. Say something to the room.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
-              ),
-            ),
-          );
-        }
         return ListView.builder(
           reverse: true,
           padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: docs.length,
+          // +1 for the default room intro, always shown as the oldest message.
+          itemCount: docs.length + 1,
           itemBuilder: (context, i) {
+            if (i == docs.length) {
+              return const _RoomIntro(
+                text: 'This is the Main Stage chat room — keep it relevant, '
+                    'and keep it comedy.',
+              );
+            }
             final d = docs[i].data();
             final uid = d['uid'] as String? ?? '';
             final name = d['username'] as String? ?? 'Roaster';
@@ -249,43 +244,53 @@ class _MessageTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = context.palette.reward;
+    // One compact line per message - "Name: message" (Twitch-style), so chat
+    // packs in without the old two-line name-over-bubble layout.
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: Align(
-        alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-        child: GestureDetector(
-          onLongPress: onReport,
-          child: Container(
-            constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.78),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: isMine
-                  ? accent.withValues(alpha: 0.18)
-                  : Colors.white.withValues(alpha: 0.08),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      child: GestureDetector(
+        onLongPress: onReport,
+        behavior: HitTestBehavior.opaque,
+        child: Text.rich(
+          TextSpan(children: [
+            TextSpan(
+              text: '${isMine ? 'You' : name}: ',
+              style: TextStyle(
+                color: isMine ? accent : Colors.white.withValues(alpha: 0.72),
+                fontWeight: FontWeight.w800,
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isMine ? 'You' : name,
-                  style: TextStyle(
-                    color: isMine
-                        ? accent
-                        : Colors.white.withValues(alpha: 0.75),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  text,
-                  style: const TextStyle(color: Colors.white, height: 1.3),
-                ),
-              ],
+            TextSpan(
+              text: text,
+              style: const TextStyle(color: Colors.white),
             ),
-          ),
+          ]),
+          style: const TextStyle(fontSize: 14, height: 1.3),
+        ),
+      ),
+    );
+  }
+}
+
+/// The default, always-present first line in a chat room - a quiet system note
+/// that names the room and sets the tone. Rendered as the oldest message.
+class _RoomIntro extends StatelessWidget {
+  const _RoomIntro({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.5),
+          fontSize: 12,
+          fontStyle: FontStyle.italic,
+          height: 1.3,
         ),
       ),
     );

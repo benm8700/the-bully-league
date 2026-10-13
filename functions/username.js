@@ -66,8 +66,15 @@ const HATE_SUBSTRINGS = [
   "retard", "mongoloid", "halfbreed", "mudslime",
   "hitler", "nazi", "whitepower", "whitepride", "heilhitler", "kkk",
   "gaschamber", "lynchthe",
-  "childporn", "childrape", "pedophile", "cumslut", "blowjob",
+  "childporn", "childrape", "pedophile",
 ];
+
+/**
+ * Sexual profanity blocked in USERNAMES (a permanent public identifier) but
+ * ALLOWED in chat, where the stance is free-speech: bad words are fine, only
+ * hate is not.
+ */
+const SEXUAL_PROFANITY_SUBSTRINGS = ["cumslut", "blowjob"];
 
 /**
  * Terms matched only as WHOLE TOKENS - split on separators and on
@@ -79,15 +86,30 @@ const HATE_SUBSTRINGS = [
  * aviary. The token rule catches the name that IS the word without
  * touching the name that merely contains it.
  */
-const BLOCKED_TOKENS = [
+// Short SLUR tokens - genuine bigotry, blocked EVERYWHERE including chat.
+const SLUR_TOKENS = [
   "fag", "fags", "spic", "chink", "coon", "paki", "abo", "dyke", "kaffir",
-  "cunt", "rape", "rapist", "slut", "whore", "cock", "dick", "nigg",
-  // Impersonation of the platform or its staff. Cheap to prevent now,
-  // and a name like "Support" in a report queue or a DM is a phishing
-  // primitive rather than a joke.
+  "nigg",
+];
+
+// Ordinary profanity - blocked in USERNAMES, ALLOWED in chat (free-speech).
+const PROFANITY_TOKENS = [
+  "cunt", "rape", "rapist", "slut", "whore", "cock", "dick",
+];
+
+// Impersonation of the platform or its staff. A USERNAME concern only - a name
+// like "Support" in a report queue is a phishing primitive - but these are
+// ordinary words in chat ("can someone help", "the team"), so chat never
+// blocks them.
+const IMPERSONATION_TOKENS = [
   "admin", "administrator", "mod", "mods", "moderator", "staff", "support",
   "official", "help", "helpdesk", "root", "system", "team",
   "thebullyleague", "bullyleague", "bullyleagueofficial",
+];
+
+// The full username token denylist, unchanged in effect from before the split.
+const BLOCKED_TOKENS = [
+  ...SLUR_TOKENS, ...PROFANITY_TOKENS, ...IMPERSONATION_TOKENS,
 ];
 
 /**
@@ -182,7 +204,7 @@ function contentProblem(name, extra = []) {
   const normalized = normalizeForMatch(name);
   if (ALLOWLIST.has(normalized)) return null;
 
-  const substrings = [...HATE_SUBSTRINGS, ...extra]
+  const substrings = [...HATE_SUBSTRINGS, ...SEXUAL_PROFANITY_SUBSTRINGS, ...extra]
       .map((t) => normalizeForMatch(t))
       .filter(Boolean);
   for (const term of substrings) {
@@ -203,6 +225,29 @@ function contentProblem(name, extra = []) {
     return "That username isn't available. Try another.";
   }
   return null;
+}
+
+/**
+ * The CHAT content check: blocks genuine hate/bigotry and child-sexual terms
+ * ONLY. Ordinary profanity, insults and platform words ("help", "team") are
+ * ALLOWED - chat follows the app's free-speech stance, with the reactive
+ * report queue as the backstop for anything in bad faith. Returns true if the
+ * message should be blocked. Deliberately narrower than the username filter,
+ * because a username is a permanent public identifier and a chat line is not.
+ */
+function chatContentProblem(text) {
+  const normalized = normalizeForMatch(text);
+  const substrings = HATE_SUBSTRINGS
+      .map((t) => normalizeForMatch(t))
+      .filter(Boolean);
+  for (const term of substrings) {
+    if (normalized.includes(term)) return true;
+  }
+  const slurs = new Set(SLUR_TOKENS.map((t) => normalizeForMatch(t)));
+  for (const token of tokensOf(text)) {
+    if (slurs.has(token)) return true;
+  }
+  return false;
 }
 
 /**
@@ -415,6 +460,7 @@ module.exports = {
   tokensOf,
   shapeProblem,
   contentProblem,
+  chatContentProblem,
   usernameProblem,
   usernameKey,
   cooldownUntilMs,

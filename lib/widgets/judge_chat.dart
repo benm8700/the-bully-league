@@ -153,21 +153,17 @@ class _JudgeChatState extends State<JudgeChat> {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (msgs.isEmpty) {
-          return Center(
-            child: Text('No messages yet. Say hi to the panel.',
-                style: TextStyle(color: cs.onSurfaceVariant)),
-          );
-        }
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (_scroll.hasClients) {
             _scroll.jumpTo(_scroll.position.maxScrollExtent);
           }
         });
+        // +1 for the default room intro, shown as the first (oldest) line.
         return ListView.builder(
           controller: _scroll,
-          itemCount: msgs.length,
-          itemBuilder: (context, i) => _bubble(msgs[i], cs),
+          itemCount: msgs.length + 1,
+          itemBuilder: (context, i) =>
+              i == 0 ? _roomIntro(cs) : _bubble(msgs[i - 1], cs),
         );
       },
     );
@@ -176,31 +172,39 @@ class _JudgeChatState extends State<JudgeChat> {
         : SizedBox(height: 220, child: list);
   }
 
+  /// The default, always-present first line - names the room and sets the tone.
+  Widget _roomIntro(ColorScheme cs) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
+        child: Text(
+          "This is the judges' chat room — keep the discussion relevant.",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: cs.onSurfaceVariant,
+            fontSize: 12,
+            fontStyle: FontStyle.italic,
+            height: 1.3,
+          ),
+        ),
+      );
+
+  // One compact "Name: message" line (Twitch-style) - no two-line name-over-
+  // bubble, so the panel packs more in.
   Widget _bubble(JudgeChatMessage m, ColorScheme cs) {
     final mine = m.uid == _myUid;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Column(
-        crossAxisAlignment:
-            mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          Text(mine ? 'You' : m.username,
-              style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 1),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: mine
-                  ? context.palette.reward.withValues(alpha: 0.18)
-                  : Colors.white.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Text.rich(
+        TextSpan(children: [
+          TextSpan(
+            text: '${mine ? 'You' : m.username}: ',
+            style: TextStyle(
+              color: mine ? context.palette.reward : cs.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
             ),
-            child: Text(m.text, style: const TextStyle(color: Colors.white)),
           ),
-        ],
+          TextSpan(text: m.text, style: const TextStyle(color: Colors.white)),
+        ]),
+        style: const TextStyle(fontSize: 13, height: 1.3),
       ),
     );
   }

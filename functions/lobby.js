@@ -1,7 +1,7 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
-const {contentProblem} = require("./username");
+const {chatContentProblem} = require("./username");
 
 /**
  * The Daily Gauntlet LOBBY chat.
@@ -40,10 +40,11 @@ function messageProblem(text) {
   const t = (text || "").trim();
   if (!t) return "Say something first.";
   if (t.length > MAX_LEN) return `Keep it under ${MAX_LEN} characters.`;
-  // Reuses the username hate/slur filter: blocks bigotry and slurs, allows
-  // ordinary insults and edgy comedy (profanity is fine here, same as a
-  // username like "DamnGood" passing). The message never quotes what tripped.
-  if (contentProblem(t)) {
+  // Chat-only hate filter: blocks genuine bigotry/slurs and child-sexual
+  // terms, but ALLOWS ordinary profanity, insults and edgy comedy (free-speech
+  // stance - "cunt" is fine, slurs are not). Narrower than the username filter.
+  // The message never quotes what tripped.
+  if (chatContentProblem(t)) {
     return "That one's blocked - keep it comedy, not hate.";
   }
   return null;
