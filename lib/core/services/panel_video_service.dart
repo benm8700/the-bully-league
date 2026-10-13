@@ -25,11 +25,21 @@ class PanelVideoService {
   final _present = ValueNotifier<Set<int>>({});
   final _joined = ValueNotifier<bool>(false);
   final _failure = ValueNotifier<String?>(null);
+  final _activeUid = ValueNotifier<int?>(null);
+  int? _localUid;
 
   /// Remote judge uids currently publishing (never includes the local judge).
   ValueListenable<Set<int>> get presentUids => _present;
   ValueListenable<bool> get joined => _joined;
   ValueListenable<String?> get failure => _failure;
+
+  /// The seat uid currently speaking loudest (local mapped to its seat uid), or
+  /// null before anyone has spoken. Sticky - holds the last speaker through a
+  /// pause rather than blanking - so the spotlight does not flicker.
+  ValueListenable<int?> get activeSpeaker => _activeUid;
+
+  // 0-255; below this a report is "quiet" and the last speaker is held.
+  static const _speakThreshold = 15;
 
   static const _encoder = VideoEncoderConfiguration(
     dimensions: VideoDimensions(width: 360, height: 640),
@@ -47,10 +57,16 @@ class PanelVideoService {
     await engine.setVideoEncoderConfiguration(_encoder);
     await engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
     await engine.startPreview();
+    // Report who's talking every ~0.5s, so the spotlight can follow the speaker.
+    await engine.enableAudioVolumeIndication(
+        interval: 500, smooth: 3, reportVad: false);
     engine.registerEventHandler(RtcEngineEventHandler(
       onJoinChannelSuccess: (connection, elapsed) {
         _joined.value = true;
         _failure.value = null;
+      },
+      onAudioVolumeIndication: (connection, speakers, speakerNumber, total) {
+        _updateActiveSpeaker(speakers);
       },
       onError: (err, msg) {
         if (err == ErrorCodeType.errInvalidToken ||
@@ -89,6 +105,7 @@ class PanelVideoService {
       throw StateError('initialize() must be called before join()');
     }
     _channelName = channelName;
+    _localUid = uid;
     await engine.joinChannel(
       token: token,
       channelId: channelName,
@@ -102,6 +119,26 @@ class PanelVideoService {
         autoSubscribeAudio: true,
       ),
     );
+  }
+
+  /// Pick the loudest speaker in a volume report and spotlight them. The local
+  /// user reports as uid 0, mapped to this judge's seat uid. A quiet report
+  /// changes nothing (the last speaker stays lit).
+  void _updateActiveSpeaker(List<AudioVolumeInfo> speakers) {
+    int? loudUid;
+    var loudVol = 0;
+    for (final s in speakers) {
+      final v = s.volume ?? 0;
+      if (v > loudVol) {
+        loudVol = v;
+        loudUid = s.uid;
+      }
+    }
+    if (loudVol < _speakThreshold || loudUid == null) return;
+    final seatUid = loudUid == 0 ? _localUid : loudUid;
+    if (seatUid != null && seatUid != _activeUid.value) {
+      _activeUid.value = seatUid;
+    }
   }
 
   Future<void> muteLocalAudio(bool muted) async =>
@@ -150,5 +187,6 @@ class PanelVideoService {
     _present.dispose();
     _joined.dispose();
     _failure.dispose();
+    _activeUid.dispose();
   }
 }

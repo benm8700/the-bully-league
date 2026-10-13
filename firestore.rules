@@ -585,6 +585,21 @@ service cloud.firestore {
       match /lobbyRate/{userId} {
         allow read, write: if false;
       }
+
+      // The Main Stage judges' PRIVATE chat room. Only a seated judge of this
+      // tournament may even READ it (it is the panel's green room, not public),
+      // and nobody writes directly - every message goes through
+      // postJudgeChatMessage, which re-checks the seated-judge gate, moderates
+      // and rate-limits. Wiped when the tournament ends (lobby.js purgeLobby).
+      match /judgeChat/{messageId} {
+        allow read: if request.auth != null &&
+          get(/databases/$(database)/documents/tournaments/$(tournamentId))
+            .data.judges.hasAny([request.auth.uid]);
+        allow write: if false;
+      }
+      match /judgeRate/{userId} {
+        allow read, write: if false;
+      }
     }
 
     match /reports/{reportId} {

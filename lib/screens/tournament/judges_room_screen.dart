@@ -505,10 +505,24 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
   Widget _confirmAction(bool decided, String? winner, String? sel,
       String? myPick, bool canConfirm) {
     if (decided) {
-      return Text('${_nameOf(winner)} wins. The bracket moves on.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-              color: context.palette.reward, fontWeight: FontWeight.w700));
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('${_nameOf(winner)} wins. The bracket moves on.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: context.palette.reward, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).maybePop(),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(double.infinity, 48),
+            ),
+            icon: const Icon(Icons.forum),
+            label: const Text("Back to the judges' room"),
+          ),
+        ],
+      );
     }
     if (canConfirm) {
       final color = _colorOf(sel);

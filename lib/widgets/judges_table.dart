@@ -22,9 +22,14 @@ class JudgesTable extends StatelessWidget {
     required this.remoteViewBuilder,
     required this.playerColors,
     this.localViewBuilder,
+    this.activeSeatUid,
   });
 
   final List<JudgeSeat> seats;
+
+  /// The seat uid currently speaking (loudest), when known - gets the spotlight
+  /// in the 5-up layout. Null falls back to the head judge, then the first seat.
+  final int? activeSeatUid;
 
   /// Remote judge seat uids currently publishing video.
   final Set<int> present;
@@ -50,18 +55,92 @@ class JudgesTable extends StatelessWidget {
     return Column(
       children: [
         Expanded(
-          child: GridView.count(
-            crossAxisCount: 2,
-            childAspectRatio: 0.72,
-            padding: const EdgeInsets.all(8),
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            children: [for (final s in seats) _seatTile(context, s)],
-          ),
+          child: seats.length >= 5 ? _spotlight(context) : _grid(context),
         ),
         _tallyBar(context),
       ],
     );
+  }
+
+  /// A full panel (5+) does NOT fit as equal tiles on a phone, so it is shown
+  /// broadcast-style: the current speaker big up top, everyone else in a small
+  /// strip below. All faces stay on screen, and the big tile follows whoever is
+  /// talking (falls back to the head judge, then the first seat).
+  Widget _spotlight(BuildContext context) {
+    final big = _spotlightSeat();
+    final rest = [for (final s in seats) if (s.seatUid != big.seatUid) s];
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: _seatTile(context, big),
+            ),
+          ),
+          SizedBox(
+            height: 96,
+            child: Row(
+              children: [
+                for (final s in rest)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: _seatTile(context, s),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  JudgeSeat _spotlightSeat() {
+    if (activeSeatUid != null) {
+      for (final s in seats) {
+        if (s.seatUid == activeSeatUid) return s;
+      }
+    }
+    for (final s in seats) {
+      if (s.isHead) return s;
+    }
+    return seats.first;
+  }
+
+  /// A small panel (<=4) fits as equal tiles - and 2 side-by-side is the sweet
+  /// spot on a phone. Rows fill the height equally, max two per row (so three
+  /// is 2-over-1, never a cramped 3-across).
+  Widget _grid(BuildContext context) {
+    if (seats.isEmpty) return const SizedBox.shrink();
+    final rows = _rowSizes(seats.length);
+    var i = 0;
+    final rowWidgets = <Widget>[];
+    for (final count in rows) {
+      final tiles = <Widget>[];
+      for (var c = 0; c < count; c++) {
+        tiles.add(Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: _seatTile(context, seats[i++]),
+          ),
+        ));
+      }
+      rowWidgets.add(Expanded(child: Row(children: tiles)));
+    }
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: Column(children: rowWidgets),
+    );
+  }
+
+  /// Tiles per row for a small panel: 1-2 in one row, 3 as 2-over-1, 4 as 2+2.
+  static List<int> _rowSizes(int n) {
+    if (n <= 2) return [n];
+    if (n == 3) return [2, 1];
+    return [2, 2];
   }
 
   Widget _seatTile(BuildContext context, JudgeSeat s) {

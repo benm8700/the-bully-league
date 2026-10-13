@@ -26,6 +26,13 @@ class AgoraSpectatorService implements SpectatorService {
   final _present = ValueNotifier<Set<int>>({});
   final _watching = ValueNotifier<bool>(false);
   final _failure = ValueNotifier<String?>(null);
+  final _activeUid = ValueNotifier<int?>(null);
+
+  /// The remote uid currently speaking loudest, for the judges'-table spotlight
+  /// (audience hears everyone but publishes nothing). Sticky through pauses.
+  ValueListenable<int?> get activeSpeaker => _activeUid;
+
+  static const _speakThreshold = 15;
 
   @override
   ValueListenable<Set<int>> get presentUids => _present;
@@ -47,11 +54,32 @@ class AgoraSpectatorService implements SpectatorService {
     // permission is ever requested.
     await engine.setClientRole(role: ClientRoleType.clientRoleAudience);
     await engine.enableVideo();
+    // Report remote speakers' volumes so the judges'-table spotlight can follow
+    // whoever is talking. Audience-side, so only remote uids are ever reported.
+    await engine.enableAudioVolumeIndication(
+        interval: 500, smooth: 3, reportVad: false);
 
     engine.registerEventHandler(RtcEngineEventHandler(
       onJoinChannelSuccess: (connection, elapsed) {
         _watching.value = true;
         _failure.value = null;
+      },
+      onAudioVolumeIndication: (connection, speakers, speakerNumber, total) {
+        int? loudUid;
+        var loudVol = 0;
+        for (final s in speakers) {
+          final v = s.volume ?? 0;
+          if (v > loudVol) {
+            loudVol = v;
+            loudUid = s.uid;
+          }
+        }
+        if (loudVol >= _speakThreshold &&
+            loudUid != null &&
+            loudUid != 0 &&
+            loudUid != _activeUid.value) {
+          _activeUid.value = loudUid;
+        }
       },
       // Without this a rejected token is completely silent: the join call
       // returns fine and the screen waits forever for video that will
@@ -126,6 +154,7 @@ class AgoraSpectatorService implements SpectatorService {
     _present.dispose();
     _watching.dispose();
     _failure.dispose();
+    _activeUid.dispose();
   }
 
   @override

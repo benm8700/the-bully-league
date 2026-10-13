@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/main_stage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/judge_chat.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import 'judges_room_screen.dart';
@@ -118,13 +119,79 @@ class _MainStageScreenState extends State<MainStageScreen> {
                   'Main Stage.',
             );
           }
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-            children: _body(v),
-          );
+          return _layout(v);
         },
       ),
     );
+  }
+
+  /// The judge's LIVE view is chat-dominant: a fixed header (the status + the
+  /// "Open the judges' room" button) with the judges' room filling the rest to
+  /// the bottom, input + send pinned there. Every other view scrolls normally.
+  Widget _layout(MainStageView v) {
+    if (v.status == 'live' &&
+        v.role == MainStageRole.judge &&
+        !v.hasBattleToPlay) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: _judgeLiveHeader(v),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              // Keep the input + send clear of the system gesture bar at the
+              // bottom edge (the recurring bottom-inset gotcha in this app).
+              padding: EdgeInsets.fromLTRB(
+                  16, 0, 16, 12 + MediaQuery.of(context).padding.bottom),
+              child: JudgeChat(tournamentId: v.tournamentId, expand: true),
+            ),
+          ),
+        ],
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      children: _body(v),
+    );
+  }
+
+  /// The judge's live header (no chat - the chat fills the rest in [_layout]):
+  /// the "Open the judges' room" button, or the "between battles" pill.
+  List<Widget> _judgeLiveHeader(MainStageView v) {
+    final gold = context.palette.reward;
+    final battle = v.liveBattleMatchId;
+    return [
+      _headline('The Main Stage is LIVE', context.palette.live),
+      const SizedBox(height: 8),
+      Text('You are on the panel. Watch the battle and cast your verdict.',
+          style: _muted()),
+      const SizedBox(height: 16),
+      if (battle != null)
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: gold,
+            foregroundColor: Colors.black,
+            minimumSize: const Size(double.infinity, 54),
+          ),
+          icon: const Icon(Icons.gavel),
+          label: const Text("Open the judges' room"),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => JudgesRoomScreen(matchId: battle),
+            ),
+          ),
+        )
+      else
+        _statusPill(Icons.hourglass_top, 'Between battles',
+            'The next battle is being set up. The room opens when the '
+                'battlers step on stage.', gold),
+    ];
   }
 
   List<Widget> _body(MainStageView v) {
@@ -156,33 +223,9 @@ class _MainStageScreenState extends State<MainStageScreen> {
         ];
       }
       if (v.role == MainStageRole.judge) {
-        final battle = v.liveBattleMatchId;
-        return [
-          _headline('The Main Stage is LIVE', context.palette.live),
-          const SizedBox(height: 8),
-          Text('You are on the panel. Watch the battle and cast your verdict.',
-              style: _muted()),
-          const SizedBox(height: 20),
-          if (battle != null)
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: gold,
-                foregroundColor: Colors.black,
-                minimumSize: const Size(0, 54),
-              ),
-              icon: const Icon(Icons.gavel),
-              label: const Text("Open the judges' room"),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => JudgesRoomScreen(matchId: battle),
-                ),
-              ),
-            )
-          else
-            _statusPill(Icons.hourglass_top, 'Between battles',
-                'The next battle is being set up. The room opens when the '
-                    'battlers step on stage.', gold),
-        ];
+        // Judge + live is rendered chat-dominant by _layout; this is a
+        // fallback that keeps the same header.
+        return _judgeLiveHeader(v);
       }
       // Finalist waiting their turn, or the crowd: watch the battle on stage.
       final battle = v.liveBattleMatchId;
@@ -356,6 +399,8 @@ class _MainStageScreenState extends State<MainStageScreen> {
     } else if (v.role == MainStageRole.judge) {
       widgets.add(_statusPill(Icons.gavel, "You're judging",
           'Five of you decide the finals. The show starts at 6pm.', gold));
+      widgets.add(const SizedBox(height: 16));
+      widgets.add(JudgeChat(tournamentId: v.tournamentId));
     } else {
       widgets.add(_statusPill(Icons.visibility, 'Field set',
           'Come watch the finals live at 6pm.',

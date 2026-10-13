@@ -584,6 +584,14 @@ exports.castMainStageJudgeVote = onCall(async (request) => {
   return castMainStageJudgeVote(request.auth, request.data);
 });
 
+// The Main Stage judges' private chat room (before/during/after the battle).
+// The only write path - clients can't write judgeChat/** - so the seated-judge
+// gate, moderation and rate limit can't be skipped. See functions/judgeChat.js.
+exports.postJudgeChatMessage = onCall((request) => {
+  const {postJudgeChatMessage} = require("./judgeChat");
+  return postJudgeChatMessage(request.auth, request.data);
+});
+
 /**
  * Rolls a recent sample of matches into stats/matchStats once a day - round
  * length, completion rate, votes per match, counts by mode. The data already

@@ -13,10 +13,13 @@ const {DEFAULTS: BATTLE_DEFAULTS, resolveGraceMs} = require("./mainStageBattle")
  */
 
 const STARTING_RATING = 1200;
-// A generous live judging window; settlement normally lands the moment the
-// panel is decided (all voted / early-decisive), but a stalled panel is force-
-// closed at this deadline by a sweep (not built yet - see the note in index).
-const JUDGE_WINDOW_MS = 12 * 60 * 1000;
+// The live judging window: settlement normally lands the moment the panel is
+// decided (all voted / early-decisive), but a stalled panel is force-closed at
+// this deadline by the sweep, so a quiet or absent judge can never hang the
+// show. 10 minutes - the judges can watch, debate and change their votes right
+// up to it (the client shows the countdown). Note the sweep runs on its own
+// interval, so the actual force-close is this window plus up to one sweep gap.
+const JUDGE_WINDOW_MS = 10 * 60 * 1000;
 
 function httpsError(code, message) {
   const {HttpsError} = require("firebase-functions/v2/https");

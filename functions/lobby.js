@@ -115,10 +115,12 @@ async function postLobbyMessage(auth, data) {
   return {ok: true, messageId: msgRef.id};
 }
 
-/** Wipe a gauntlet's lobby chat + rate records. Ephemeral by design. */
+/** Wipe a tournament's chat rooms + rate records when it ends. Ephemeral by
+ * design - covers both the gauntlet lobby and the Main Stage judges' room, so
+ * neither outlives the event. */
 async function purgeLobby(db, tournamentId) {
   const tRef = db.collection("tournaments").doc(tournamentId);
-  for (const sub of ["lobbyChat", "lobbyRate"]) {
+  for (const sub of ["lobbyChat", "lobbyRate", "judgeChat", "judgeRate"]) {
     await db.recursiveDelete(tRef.collection(sub)).catch(() => {});
   }
 }

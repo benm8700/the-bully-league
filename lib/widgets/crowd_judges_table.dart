@@ -124,13 +124,17 @@ class _CrowdJudgesTableState extends State<CrowdJudgesTable> {
         );
         return ValueListenableBuilder<Set<int>>(
           valueListenable: _spectator.presentUids,
-          builder: (context, present, _) => JudgesTable(
-            seats: seats,
-            present: present,
-            judgeNames: _judgeNames,
-            playerNames: widget.playerNames,
-            playerColors: widget.playerColors,
-            remoteViewBuilder: (uid) => _spectator.playerVideo(uid),
+          builder: (context, present, _) => ValueListenableBuilder<int?>(
+            valueListenable: _spectator.activeSpeaker,
+            builder: (context, active, _) => JudgesTable(
+              seats: seats,
+              present: present,
+              activeSeatUid: active,
+              judgeNames: _judgeNames,
+              playerNames: widget.playerNames,
+              playerColors: widget.playerColors,
+              remoteViewBuilder: (uid) => _spectator.playerVideo(uid),
+            ),
           ),
         );
       },

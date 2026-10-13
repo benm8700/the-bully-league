@@ -59,6 +59,11 @@ class _JudgePanelViewState extends State<JudgePanelView> {
   String? _voteError;
   String? _selected; // tapped-but-not-confirmed battler
 
+  // The judging deadline the server force-closes a stalled panel at, shown as a
+  // live countdown so the panel feels the clock. Null if it can't be read.
+  int? _deadlineMs;
+  Timer? _tick;
+
   @override
   void initState() {
     super.initState();
@@ -107,6 +112,21 @@ class _JudgePanelViewState extends State<JudgePanelView> {
         final u = await db.collection('users').doc(id).get();
         names[id] = (u.data()?['username'] as String?) ?? 'Judge';
       }
+
+      // The judging deadline: match createdAt + its judgeWindowMs. The server
+      // force-closes the panel past this, so the countdown is a real clock.
+      try {
+        final m = await db.collection('matches').doc(widget.matchId).get();
+        final created = m.data()?['createdAt'];
+        final windowMs = (m.data()?['judgeWindowMs'] as num?)?.toInt() ?? 600000;
+        if (created is Timestamp) {
+          _deadlineMs = created.millisecondsSinceEpoch + windowMs;
+          _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+            if (mounted) setState(() {});
+          });
+        }
+      } catch (_) {/* the countdown is a nicety; voting works without it */}
+
       if (!mounted) return;
       setState(() {
         _judgeNames = names;
@@ -120,8 +140,22 @@ class _JudgePanelViewState extends State<JudgePanelView> {
 
   @override
   void dispose() {
+    _tick?.cancel();
     _panel.dispose();
     super.dispose();
+  }
+
+  /// "m:ss to decide", or "Deciding now…" once the window has elapsed (the
+  /// server sweep force-closes the panel at that point). Null if unknown.
+  String? _countdownLabel() {
+    final d = _deadlineMs;
+    if (d == null) return null;
+    final remMs = d - DateTime.now().millisecondsSinceEpoch;
+    if (remMs <= 0) return 'Deciding now…';
+    final s = (remMs / 1000).ceil();
+    final mm = s ~/ 60;
+    final ss = (s % 60).toString().padLeft(2, '0');
+    return '$mm:$ss to decide';
   }
 
   Future<void> _vote(String winnerUid) async {
@@ -182,20 +216,24 @@ class _JudgePanelViewState extends State<JudgePanelView> {
           builder: (context, present, _) => Column(
             children: [
               Expanded(
-                child: JudgesTable(
-                  seats: seats,
-                  present: present,
-                  judgeNames: _judgeNames,
-                  playerNames: {
-                    widget.player1Id: widget.player1Name,
-                    widget.player2Id: widget.player2Name,
-                  },
-                  playerColors: {
-                    widget.player1Id: House.gelRed,
-                    widget.player2Id: House.gelBlue,
-                  },
-                  localViewBuilder: _panel.localVideoView,
-                  remoteViewBuilder: _panel.remoteVideoView,
+                child: ValueListenableBuilder<int?>(
+                  valueListenable: _panel.activeSpeaker,
+                  builder: (context, active, _) => JudgesTable(
+                    seats: seats,
+                    present: present,
+                    activeSeatUid: active,
+                    judgeNames: _judgeNames,
+                    playerNames: {
+                      widget.player1Id: widget.player1Name,
+                      widget.player2Id: widget.player2Name,
+                    },
+                    playerColors: {
+                      widget.player1Id: House.gelRed,
+                      widget.player2Id: House.gelBlue,
+                    },
+                    localViewBuilder: _panel.localVideoView,
+                    remoteViewBuilder: _panel.remoteVideoView,
+                  ),
                 ),
               ),
               _voteBar(myPick),
@@ -209,20 +247,27 @@ class _JudgePanelViewState extends State<JudgePanelView> {
   Widget _voteBar(String? myPick) {
     final sel = _selected;
     final canConfirm = sel != null && sel != myPick && !_submitting;
+    final countdown = _countdownLabel();
     return Container(
       width: double.infinity,
       color: const Color(0xFF151515),
       padding: EdgeInsets.fromLTRB(
-          14, 10, 14, 10 + MediaQuery.of(context).padding.bottom),
+          12, 6, 12, 6 + MediaQuery.of(context).padding.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Your verdict',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelLarge
-                  ?.copyWith(color: Colors.white70)),
-          const SizedBox(height: 8),
+          if (countdown != null)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.timer_outlined,
+                    size: 13, color: Colors.white54),
+                const SizedBox(width: 4),
+                Text(countdown,
+                    style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              ],
+            ),
+          if (countdown != null) const SizedBox(height: 6),
           Row(children: [
             Expanded(child: _pickChip(widget.player1Id, widget.player1Name,
                 House.gelRed, myPick)),
@@ -231,17 +276,17 @@ class _JudgePanelViewState extends State<JudgePanelView> {
                 House.gelBlue, myPick)),
           ]),
           if (_voteError != null) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(_voteError!,
                 textAlign: TextAlign.center,
                 style: TextStyle(color: context.palette.live, fontSize: 12)),
           ],
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           if (canConfirm)
             FilledButton(
               onPressed: () => _vote(sel),
               style: FilledButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
+                minimumSize: const Size(double.infinity, 44),
                 backgroundColor: _colorOf(sel),
                 foregroundColor: Colors.white,
               ),
