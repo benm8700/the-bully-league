@@ -433,6 +433,16 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
     }
+    // Ephemeral live "cheers" - pure crowd energy that floats up and vanishes.
+    // Unlimited and touching no identity count or verdict, so a direct
+    // own-write is fine (client rate-limited); docs self-expire via a TTL
+    // policy on `expireAt`. A cheer can never be edited or deleted by a client.
+    match /liveReactions/{matchId}/cheers/{cheerId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null &&
+        request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
 
     match /matches/{matchId} {
       // Match documents are now created and settled entirely server-side:

@@ -10,6 +10,7 @@ import '../../widgets/home_action_button.dart';
 import '../../core/services/agora_spectator_service.dart';
 import '../../core/services/spectator_service.dart';
 import '../../widgets/follow_button.dart';
+import '../../widgets/live_cheer_overlay.dart';
 import '../../widgets/live_reaction_panel.dart';
 import '../profile/performer_profile_screen.dart';
 
@@ -263,7 +264,9 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                     return Column(
                       children: [
                         Expanded(
-                          child: ValueListenableBuilder<String?>(
+                          child: LiveCheerOverlay(
+                            matchId: widget.matchId,
+                            child: ValueListenableBuilder<String?>(
                             valueListenable: _spectator.failure,
                             builder: (context, failure, _) {
                               // A rejected or expired token is otherwise
@@ -296,6 +299,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                                 ),
                               );
                             },
+                          ),
                           ),
                         ),
                         if (haveNames)
