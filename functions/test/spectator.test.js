@@ -11,7 +11,8 @@
  */
 
 const assert = require("assert");
-const {spectateProblem, spectatorUid, MESSAGES} = require("../spectator");
+const {spectateProblem, judgesTableProblem, spectatorUid, MESSAGES} =
+  require("../spectator");
 
 let passed = 0;
 function test(name, fn) {
@@ -156,6 +157,55 @@ test("the same account always gets the same spectator uid", () => {
   // ghosts in the channel - and Agora bills per participant-minute.
   assert.strictEqual(spectatorUid("carol"), spectatorUid("carol"));
   assert.notStrictEqual(spectatorUid("carol"), spectatorUid("dave"));
+});
+
+// --- the judges' video table (debate phase) ------------------------------
+
+const msLive = {format: "mainstage", status: "live"};
+const debateMatch = {
+  status: "completed", // battle over
+  player1Id: "alice",
+  player2Id: "bob",
+  mainStage: {tournamentId: "ms1", roundIdx: 0, matchIdx: 0},
+};
+const askJT = (over = {}) => judgesTableProblem({
+  match: debateMatch, tournament: msLive, ...over,
+});
+
+test("the judges' table is watchable once the battle is over, not yet decided", () => {
+  assert.strictEqual(askJT(), null);
+});
+
+test("the table is NOT watchable while the battle is still being fought", () => {
+  assert.strictEqual(
+      askJT({match: {...debateMatch, status: "in_progress"}}), "no-debate-yet");
+  assert.strictEqual(
+      askJT({match: {...debateMatch, status: "pending"}}), "no-debate-yet");
+});
+
+test("once the verdict lands, the table is over", () => {
+  assert.strictEqual(
+      askJT({match: {...debateMatch, judgeWinnerId: "alice"}}), "debate-over");
+});
+
+test("the table requires a live mainstage tournament", () => {
+  assert.strictEqual(
+      askJT({tournament: {format: "async", status: "live"}}), "not-a-live-event");
+  assert.strictEqual(
+      askJT({tournament: {format: "mainstage", status: "locked"}}), "not-running");
+  assert.strictEqual(askJT({tournament: null}), "tournament-not-found");
+});
+
+test("a non-Main-Stage match has no judges' table", () => {
+  const {mainStage, ...noMs} = debateMatch;
+  assert.strictEqual(askJT({match: noMs}), "not-a-tournament-match");
+  assert.strictEqual(askJT({match: null}), "match-not-found");
+});
+
+test("judgesTableProblem does NOT block battlers (they may watch the panel)", () => {
+  // It takes no uid at all - a just-finished battler watching the panel decide
+  // their fate is the point, so there is nothing to block on.
+  assert.strictEqual(askJT(), null);
 });
 
 console.log(`spectator: ${passed} checks passed`);

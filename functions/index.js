@@ -898,10 +898,9 @@ exports.generateAgoraToken = onCall({secrets: [agoraAppCertificate]}, async (req
     throw new HttpsError("invalid-argument", "channelName is required.");
   }
 
-  if (channelName !== `precheck_${request.auth.uid}`) {
-    if (!channelName.startsWith("match_")) {
-      throw new HttpsError("permission-denied", "Not a channel you can join.");
-    }
+  if (channelName === `precheck_${request.auth.uid}`) {
+    // The caller's own solo pre-match camera/mic check - always allowed.
+  } else if (channelName.startsWith("match_")) {
     const matchId = channelName.slice("match_".length);
     const matchSnap = await getFirestore().collection("matches").doc(matchId).get();
     if (!matchSnap.exists) {
@@ -914,6 +913,28 @@ exports.generateAgoraToken = onCall({secrets: [agoraAppCertificate]}, async (req
     if (match.status !== "pending") {
       throw new HttpsError("failed-precondition", "This match has already ended.");
     }
+  } else if (channelName.startsWith("judges_")) {
+    // The Main Stage JUDGES' video table. A seated judge publishes here to
+    // debate on camera after a battle; the crowd watches via watchJudgesTable
+    // (a SUBSCRIBER token). So this PUBLISHER door is seated-judges-only - the
+    // same shape as the players-only match_ door above.
+    const matchId = channelName.slice("judges_".length);
+    const matchSnap = await getFirestore().collection("matches").doc(matchId).get();
+    if (!matchSnap.exists) {
+      throw new HttpsError("not-found", "Match not found.");
+    }
+    const tid = matchSnap.data().mainStage && matchSnap.data().mainStage.tournamentId;
+    if (!tid) {
+      throw new HttpsError("permission-denied", "Not a Main Stage battle.");
+    }
+    const tSnap = await getFirestore().collection("tournaments").doc(tid).get();
+    const panel = (tSnap.exists && Array.isArray(tSnap.data().judges)) ?
+      tSnap.data().judges : [];
+    if (!panel.includes(request.auth.uid)) {
+      throw new HttpsError("permission-denied", "Only seated judges join the table.");
+    }
+  } else {
+    throw new HttpsError("permission-denied", "Not a channel you can join.");
   }
 
   const token = generateToken(agoraAppCertificate.value(), channelName);
@@ -1413,6 +1434,16 @@ exports.watchLiveMatch = onCall({secrets: [agoraAppCertificate]},
     (request) => {
       const {watchLiveMatch} = require("./spectator");
       return watchLiveMatch(request.auth, request.data,
+          agoraAppCertificate.value());
+    });
+
+// The crowd watching the Main Stage JUDGES' video table during the debate - a
+// subscriber token for the judges_<matchId> channel. The judges publish there
+// via generateAgoraToken's judges_ branch.
+exports.watchJudgesTable = onCall({secrets: [agoraAppCertificate]},
+    (request) => {
+      const {watchJudgesTable} = require("./spectator");
+      return watchJudgesTable(request.auth, request.data,
           agoraAppCertificate.value());
     });
 

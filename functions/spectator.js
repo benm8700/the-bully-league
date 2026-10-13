@@ -90,7 +90,80 @@ const MESSAGES = {
   "not-a-live-event": "That tournament is not a live event.",
   "not-running": "That tournament is not running right now.",
   "already-finished": "That battle has finished. Watch the clip instead.",
+  "no-debate-yet": "The judges haven't started their table yet.",
+  "debate-over": "The verdict is already in.",
 };
+
+/** The Agora uid a judge at panel index i publishes with on the judges' table
+ * channel. Kept well clear of the battlers' 1/2, the recorder's 999999, and the
+ * spectator range (1000+). The crowd maps a remote uid back to a judge via
+ * (uid - JUDGE_SEAT_UID_BASE) into the panel array. Mirrored client-side. */
+const JUDGE_SEAT_UID_BASE = 11;
+
+/**
+ * Whether the Main Stage JUDGES' video table may be watched right now. PURE.
+ *
+ * The table exists only during the DEBATE - the battle is over but the panel
+ * has not landed a verdict yet. Unlike the battle, a battler MAY watch it: they
+ * are no longer performing, and watching the panel decide their fate is exactly
+ * the point.
+ */
+function judgesTableProblem({match, tournament}) {
+  if (!match) return "match-not-found";
+  if (!match.mainStage || !match.mainStage.tournamentId) {
+    return "not-a-tournament-match";
+  }
+  if (!tournament) return "tournament-not-found";
+  if (tournament.format !== "mainstage") return "not-a-live-event";
+  if (tournament.status !== "live") return "not-running";
+  if (match.status !== "completed") return "no-debate-yet";
+  if (match.judgeWinnerId) return "debate-over";
+  return null;
+}
+
+/**
+ * Mints a SUBSCRIBER token for the crowd to watch the judges' video table
+ * (channel `judges_<matchId>`), plus the seated panel (in seat order) and the
+ * head judge so the client can label the tiles. The judges themselves publish
+ * here via generateAgoraToken's judges_ branch; this is the watch-only door.
+ */
+async function watchJudgesTable(auth, data, appCertificate) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const {matchId} = data || {};
+  if (!matchId) {
+    throw new HttpsError("invalid-argument", "matchId is required.");
+  }
+  const db = getFirestore();
+  const matchSnap = await db.collection("matches").doc(matchId).get();
+  const match = matchSnap.exists ? matchSnap.data() : null;
+  let tournament = null;
+  const tid = match && match.mainStage && match.mainStage.tournamentId;
+  if (tid) {
+    const tSnap = await db.collection("tournaments").doc(tid).get();
+    tournament = tSnap.exists ? tSnap.data() : null;
+  }
+  const problem = judgesTableProblem({match, tournament});
+  if (problem) {
+    throw new HttpsError("permission-denied",
+        MESSAGES[problem] ?? "You cannot watch that.", {reason: problem});
+  }
+  if (!appCertificate) {
+    throw new HttpsError("failed-precondition",
+        "Live viewing is not configured.", {reason: "unconfigured"});
+  }
+  const {RtcTokenBuilder, RtcRole} = require("agora-token");
+  const {AGORA_APP_ID} = require("./agoraToken");
+  const uid = spectatorUid(auth.uid);
+  const channelName = `judges_${matchId}`;
+  const token = RtcTokenBuilder.buildTokenWithUid(
+      AGORA_APP_ID, appCertificate, channelName, uid,
+      RtcRole.SUBSCRIBER, 3600, 3600);
+  const panel = Array.isArray(tournament.judges) ? tournament.judges : [];
+  const headJudge =
+    (tournament.handPickedJudges || []).find((u) => panel.includes(u)) || null;
+  return {channelName, token, agoraUid: uid, judges: panel, headJudge,
+    seatUidBase: JUDGE_SEAT_UID_BASE, matchId};
+}
 
 /**
  * Mints a subscriber token for watching a live tournament match.
@@ -169,7 +242,10 @@ async function watchLiveMatch(auth, data, appCertificate) {
 
 module.exports = {
   watchLiveMatch,
+  watchJudgesTable,
   spectateProblem,
+  judgesTableProblem,
   spectatorUid,
+  JUDGE_SEAT_UID_BASE,
   MESSAGES,
 };

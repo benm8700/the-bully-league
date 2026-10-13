@@ -153,6 +153,15 @@ async function castMainStageJudgeVote(auth, data) {
     if (match.judgeWinnerId) {
       return {decided: true, winner: match.judgeWinnerId, already: true};
     }
+    // Voting happens during the DEBATE - after the battle ends, not while it is
+    // still being fought. This is both the product rule (the crowd sees each
+    // vote land live at the judges' table) and a real guard: without it a judge
+    // voting mid-battle could tally-decide and flip the match to "completed",
+    // ending the live battle for everyone early.
+    if (match.status !== "completed") {
+      throw httpsError("failed-precondition",
+          "Voting opens when the battle ends, during the debate.");
+    }
     if (winnerUid !== match.player1Id && winnerUid !== match.player2Id) {
       throw httpsError("invalid-argument", "Pick one of the two battlers.");
     }
