@@ -9,6 +9,8 @@ import '../../widgets/home_action_button.dart';
 
 import '../../core/services/agora_spectator_service.dart';
 import '../../core/services/spectator_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/crowd_judges_table.dart';
 import '../../widgets/follow_button.dart';
 import '../../widgets/live_cheer_overlay.dart';
 import '../../widgets/live_reaction_panel.dart';
@@ -232,31 +234,56 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                           (_) => _spectator.stopWatching());
                     }
                     if (completed) {
-                      return Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                      final winnerId =
+                          snap.data?.data()?['judgeWinnerId'] as String?;
+                      if (winnerId != null) {
+                        // The verdict has landed.
+                        final winnerName = winnerId == _player1Id
+                            ? _player1Name
+                            : winnerId == _player2Id
+                                ? _player2Name
+                                : null;
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
                             child: Text(
-                              'Battle finished. The judges decide the winner.',
+                              winnerName == null
+                                  ? 'The judges have decided.'
+                                  : '$winnerName takes it.',
                               textAlign: TextAlign.center,
                               style: Theme.of(context)
                                   .textTheme
-                                  .titleMedium
-                                  ?.copyWith(color: Colors.white70),
+                                  .titleLarge
+                                  ?.copyWith(
+                                      color: context.palette.winner,
+                                      fontWeight: FontWeight.bold),
                             ),
                           ),
-                          if (haveNames)
-                            Expanded(
-                              child: SingleChildScrollView(
-                                child: LiveReactionPanel(
-                                  matchId: widget.matchId,
-                                  player1Id: _player1Id!,
-                                  player2Id: _player2Id!,
-                                  player1Name: _player1Name,
-                                  player2Name: _player2Name,
-                                ),
-                              ),
+                        );
+                      }
+                      if (!haveNames) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      // The debate: cut to the judges' table (votes landing
+                      // live), with the crowd's own one-per-battle rating below.
+                      return Column(
+                        children: [
+                          Expanded(
+                            child: CrowdJudgesTable(
+                              matchId: widget.matchId,
+                              playerNames: {
+                                _player1Id!: _player1Name,
+                                _player2Id!: _player2Name,
+                              },
                             ),
+                          ),
+                          LiveReactionPanel(
+                            matchId: widget.matchId,
+                            player1Id: _player1Id!,
+                            player2Id: _player2Id!,
+                            player1Name: _player1Name,
+                            player2Name: _player2Name,
+                          ),
                         ],
                       );
                     }
