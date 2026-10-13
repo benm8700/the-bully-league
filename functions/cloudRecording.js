@@ -133,7 +133,7 @@ async function agoraPost(path, body, appId, customerId, customerSecret) {
  * its own credentials for it - an HMAC key pair, not the Firebase service
  * account. Vendor 6 is Google Cloud Storage in Agora's vendor enum.
  */
-function storageConfig(config, matchId) {
+function storageConfig(config, matchId, fileNamePrefix) {
   return {
     vendor: 6,
     region: 0, // Ignored for GCS, but the field is required.
@@ -141,8 +141,9 @@ function storageConfig(config, matchId) {
     accessKey: config.accessKey,
     secretKey: config.secretKey,
     // Files land under match_recordings/{matchId}/ so retention and
-    // review can find everything for a match without a manifest.
-    fileNamePrefix: ["match_recordings", matchId],
+    // review can find everything for a match without a manifest. The judges'
+    // debate recording passes its own prefix (debate_recordings/{matchId}/).
+    fileNamePrefix: fileNamePrefix ?? ["match_recordings", matchId],
   };
 }
 
@@ -155,8 +156,15 @@ function storageConfig(config, matchId) {
  * about to play, so the failure is recorded on the match document and the
  * match proceeds unrecorded.
  */
-async function startRecording(matchId, channelName, creds) {
+async function startRecording(matchId, channelName, creds, opts = {}) {
   const {appId, customerId, customerSecret, storage} = creds;
+  // Defaults reproduce the battle recording exactly; the judges' debate passes
+  // overrides (its 5 seat uids, a live-broadcasting channel, a larger subscriber
+  // pool, and its own storage prefix).
+  const uids = opts.uids ?? PLAYER_UIDS;
+  const channelType = opts.channelType ?? 0;
+  const subscribeUidGroup = opts.subscribeUidGroup ?? 0;
+  const storagePrefix = opts.storagePrefix; // undefined -> battle default
   try {
     const acquired = await agoraPost(
         "cloud_recording/acquire",
@@ -176,21 +184,24 @@ async function startRecording(matchId, channelName, creds) {
           clientRequest: {
             token: creds.token,
             recordingConfig: {
-              channelType: 0, // Communication - matches how the app joins.
+              // 0 = Communication (how the 2-player battle joins); 1 = Live
+              // Broadcasting (how the judges' table joins).
+              channelType,
               streamTypes: 2, // Audio + video.
               videoStreamType: 0,
               maxIdleTime: 30, // Stop by itself if everyone leaves.
-              // Record exactly the two players. Possible because their
-              // uids are fixed at pairing rather than assigned by Agora.
-              subscribeVideoUids: PLAYER_UIDS,
-              subscribeAudioUids: PLAYER_UIDS,
+              // Record exactly the named uids - the two players for a battle,
+              // the seated judges for the debate. Possible because their uids
+              // are fixed (pairing / seat index) rather than assigned by Agora.
+              subscribeVideoUids: uids,
+              subscribeAudioUids: uids,
               // REQUIRED in individual mode, and its absence is a hard
               // 400 ("subscribeUidGroup type mismatch or missing under
               // single mode") rather than a default. It declares the
               // expected size of the subscriber pool so Agora can size
-              // the recorder: 0 covers 1-2 uids, which is exactly a
-              // two-player match.
-              subscribeUidGroup: 0,
+              // the recorder: 0 covers 1-2 uids (a two-player match), 1
+              // covers 3-7 (the up-to-5 judges' table).
+              subscribeUidGroup,
               // No transcodingConfig here: that configures the mixing
               // canvas, and individual mode does no mixing. Framing,
               // layout and length all move to the editing pipeline.
@@ -206,7 +217,7 @@ async function startRecording(matchId, channelName, creds) {
             // It reads HLS fine - ffmpeg takes an .m3u8 as an input - so
             // this costs a build step, not capability.
             recordingFileConfig: {avFileType: ["hls"]},
-            storageConfig: storageConfig(storage, matchId),
+            storageConfig: storageConfig(storage, matchId, storagePrefix),
           },
         },
         appId, customerId, customerSecret,
@@ -231,7 +242,7 @@ async function startRecording(matchId, channelName, creds) {
  * recording once both players leave the channel, so the footage isn't
  * lost - only the file list is, which the query endpoint can recover.
  */
-async function stopRecording(matchId, channelName, handle, creds) {
+async function stopRecording(matchId, channelName, handle, creds, opts = {}) {
   const {appId, customerId, customerSecret} = creds;
   let stopError = null;
   try {
@@ -255,7 +266,7 @@ async function stopRecording(matchId, channelName, handle, creds) {
   }
 
   // Authoritative regardless of who actually ended the recording.
-  const files = await listRecordedFiles(matchId);
+  const files = await listRecordedFiles(matchId, opts.listPrefix);
   if (files.length > 0) {
     return {ok: true, files, stopError};
   }
@@ -299,10 +310,10 @@ function uidFromFileName(path) {
   return null;
 }
 
-async function listRecordedFiles(matchId) {
+async function listRecordedFiles(matchId, prefix) {
   try {
     const [objects] = await getStorage().bucket()
-        .getFiles({prefix: `match_recordings/${matchId}/`});
+        .getFiles({prefix: prefix ?? `match_recordings/${matchId}/`});
     return objects.map((o) => ({
       path: o.name,
       sizeBytes: Number(o.metadata?.size ?? 0),
@@ -333,10 +344,10 @@ async function listRecordedFiles(matchId) {
  * which are stricter than this app's internal speech policy. Nothing in
  * this pipeline publishes anything on its own.
  */
-async function writeRecordingState(matchId, patch) {
+async function writeRecordingState(matchId, patch, field = "recording") {
   try {
     await getFirestore().collection("matches").doc(matchId).set(
-        {recording: {...patch, updatedAt: FieldValue.serverTimestamp()}},
+        {[field]: {...patch, updatedAt: FieldValue.serverTimestamp()}},
         {merge: true},
     );
   } catch (e) {
@@ -373,6 +384,42 @@ function maxRecordingSeconds(settings) {
   // nothing.
   const SLACK_SECONDS = 120;
   return reveal + matchSeconds + SLACK_SECONDS;
+}
+
+// ---- The judges' DEBATE recording (its own channel + storage prefix) ----
+
+// The judges' table seat uids (JUDGE_SEAT_UID_BASE + index, up to 5 judges).
+const DEBATE_UIDS = ["11", "12", "13", "14", "15"];
+
+function debatePrefix(matchId) {
+  return `debate_recordings/${matchId}/`;
+}
+
+/**
+ * Starts recording the judges' DEBATE on its own channel (judges_<matchId>).
+ * The debate is live-broadcasting with up to 5 publishers, and its files land
+ * under debate_recordings/{matchId}/ so they never mix with the battle's.
+ */
+function startDebateRecording(matchId, judgesChannel, creds) {
+  return startRecording(matchId, judgesChannel, creds, {
+    uids: DEBATE_UIDS,
+    channelType: 1, // Live broadcasting - how the judges' table joins.
+    subscribeUidGroup: 1, // 3-7 hosts (the up-to-5 judges).
+    storagePrefix: ["debate_recordings", matchId],
+  });
+}
+
+/** Stops the debate recording and lists its files (debate_recordings/). */
+function stopDebateRecording(matchId, judgesChannel, handle, creds) {
+  return stopRecording(matchId, judgesChannel, handle, creds,
+      {listPrefix: debatePrefix(matchId)});
+}
+
+/** The longest a judges' debate could run, from the match's judge window
+ * (default 12 min) plus slack - the watchdog's cap for a wedged debate. */
+function maxDebateRecordingSeconds(match) {
+  const windowMs = Number(match && match.judgeWindowMs) || (12 * 60 * 1000);
+  return Math.round(windowMs / 1000) + 120;
 }
 
 /**
@@ -418,7 +465,43 @@ async function stopRunawayRecordings(creds, {now = Date.now()} = {}) {
     stopped++;
   }
 
-  return {stopped, running, checked: snap.size};
+  // The judges' DEBATE recording runs on its own channel (judges_<matchId>) and
+  // is tracked under `debateRecording`; sweep it the same way so a wedged debate
+  // can't bill forever either.
+  const dsnap = await db
+      .collection("matches")
+      .where("debateRecording.status", "==", "recording")
+      .get();
+  for (const doc of dsnap.docs) {
+    const match = doc.data();
+    const startedAt = match.debateRecording?.startedAt;
+    if (typeof startedAt !== "number") continue;
+    // Stop the debate recording once the VERDICT has landed (the normal end -
+    // judges leave, so Agora's maxIdleTime has usually stopped it already; this
+    // reconciles the file list onto the doc), OR once it has outlived the judge
+    // window (the wedged-recording backstop). This is why no client "stop" call
+    // is needed - the watchdog, which already holds the recording creds, owns
+    // both endings.
+    const decided = !!match.judgeWinnerId;
+    const ageSeconds = (now - startedAt) / 1000;
+    if (!decided && ageSeconds <= maxDebateRecordingSeconds(match)) {
+      running++;
+      continue;
+    }
+    console.warn(
+        `stopping debate recording on match ${doc.id}: ${Math.round(ageSeconds)}s old, ` +
+        `${decided ? "verdict reached" : "runaway"}`,
+    );
+    const result = await stopDebateRecording(
+        doc.id, `judges_${doc.id}`, match.debateRecording, creds);
+    await writeRecordingState(doc.id, result.ok ?
+      {status: "recorded", files: result.files, stoppedAt: now, forceStopped: true} :
+      {status: "stop_failed", error: result.error, forceStopped: true},
+    "debateRecording");
+    stopped++;
+  }
+
+  return {stopped, running, checked: snap.size + dsnap.size};
 }
 
 module.exports = {
@@ -430,6 +513,11 @@ module.exports = {
   maxRecordingSeconds,
   writeRecordingState,
   isRecordingConfigured,
+  startDebateRecording,
+  stopDebateRecording,
+  maxDebateRecordingSeconds,
+  debatePrefix,
+  DEBATE_UIDS,
   UNSET,
   RECORDING_MODE,
   PLAYER_UIDS,

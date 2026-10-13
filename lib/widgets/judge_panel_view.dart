@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
@@ -91,6 +93,14 @@ class _JudgePanelViewState extends State<JudgePanelView> {
         token: token,
         uid: seatUid,
       );
+
+      // Start the debate recording (best-effort). The server claims it
+      // race-safely, so only one of the judges' calls actually records, and the
+      // watchdog stops it when the verdict lands - so this is fire-and-forget.
+      unawaited(FirebaseFunctions.instance
+          .httpsCallable('startDebateRecording')
+          .call<Map<String, dynamic>>({'matchId': widget.matchId})
+          .then((_) {}, onError: (_) {}));
 
       final names = <String, String>{};
       for (final id in _judges) {

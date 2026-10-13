@@ -15,7 +15,8 @@
  */
 
 const assert = require("assert");
-const {maxRecordingSeconds} = require("../cloudRecording");
+const {maxRecordingSeconds, maxDebateRecordingSeconds} =
+  require("../cloudRecording");
 const {DEFAULTS, LIMITS} = require("../matchSettings");
 
 let passed = 0;
@@ -129,6 +130,18 @@ test("a longer configuration produces a longer cap", () => {
   const short = maxRecordingSeconds({...DEFAULTS, roundCount: 1});
   const long = maxRecordingSeconds({...DEFAULTS, roundCount: 10});
   assert.ok(long > short, "cap must scale with round count");
+});
+
+test("the debate cap follows the judge window, with slack", () => {
+  // 12-minute window (the default) + 2 min slack.
+  const def = maxDebateRecordingSeconds({});
+  assert.strictEqual(def, 12 * 60 + 120);
+  // A configured window is tracked.
+  const short = maxDebateRecordingSeconds({judgeWindowMs: 5 * 60 * 1000});
+  assert.strictEqual(short, 5 * 60 + 120);
+  assert.ok(short < def, "a shorter window gives a shorter cap");
+  // A garbage window falls back to the 12-minute default rather than 0.
+  assert.strictEqual(maxDebateRecordingSeconds({judgeWindowMs: 'nope'}), def);
 });
 
 console.log(`recordingWatchdog: ${passed} checks passed`);

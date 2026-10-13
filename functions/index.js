@@ -982,6 +982,19 @@ exports.startMatchRecording = onCall({secrets: recordingSecrets}, async (request
 });
 
 /**
+ * Starts recording the Main Stage JUDGES' DEBATE on its own channel. Called by
+ * a seated judge as they go on camera; race-safe + idempotent. The recording is
+ * stopped by the runaway-recording watchdog once the verdict lands (or it runs
+ * over), so there is no matching stop callable. See functions/debatePlay.js.
+ */
+exports.startDebateRecording = onCall({secrets: recordingSecrets}, (request) => {
+  const {startDebate} = require("./debatePlay");
+  const matchId = request.data?.matchId;
+  const channelName = matchId ? `judges_${matchId}` : null;
+  return startDebate(request.auth, request.data, recordingCreds(channelName));
+});
+
+/**
  * Pre-match bio reveal (CLAUDE.md's "Pre-match bio reveal" decision): each
  * player reads the other's profile "ammo" for up to a minute before the
  * match starts, and either can decline the pairing outright.

@@ -33,6 +33,11 @@ const RECORDING_PREFIX = "match_recordings";
  * Published highlights are exempt, exactly as they are for raw footage. */
 const HIGHLIGHT_PREFIX = "match_highlights";
 
+/** The Main Stage JUDGES' debate recording. Raw footage of real people that is
+ * never published as a clip on its own, so it is ALWAYS purged once expired -
+ * there is no published-highlight exemption for it, unlike the battle footage. */
+const DEBATE_PREFIX = "debate_recordings";
+
 /**
  * Decides what to do with one match's recording. Pure, and separated from
  * the sweep so it can be tested directly - this is the code that
@@ -84,9 +89,29 @@ async function purgeExpiredRecordings({now = Date.now(), dryRun = false} = {}) {
   let purged = 0;
   let kept = 0;
   let skipped = 0;
+  let debatePurged = 0;
 
   for (const doc of snap.docs) {
     const data = doc.data();
+
+    // The judges' DEBATE raw footage is never published as a clip, so it is
+    // ALWAYS deleted once expired - independent of whether the BATTLE highlight
+    // was published and kept below. Marked purged so later sweeps skip it.
+    if (data.debateRecording && !data.debateRecording.purged) {
+      if (!dryRun) {
+        await bucket.deleteFiles(
+            {prefix: `${DEBATE_PREFIX}/${doc.id}/`, force: true});
+        await doc.ref.set({
+          debateRecording: {
+            purged: true,
+            purgedAt: FieldValue.serverTimestamp(),
+            files: FieldValue.delete(),
+          },
+        }, {merge: true});
+      }
+      debatePurged++;
+    }
+
     const decision = purgeDecision(data);
     if (decision === "skip") {
       skipped++;
@@ -118,7 +143,8 @@ async function purgeExpiredRecordings({now = Date.now(), dryRun = false} = {}) {
     purged++;
   }
 
-  return {purged, kept, skipped, cutoff: cutoff.toISOString(), dryRun};
+  return {purged, kept, skipped, debatePurged,
+    cutoff: cutoff.toISOString(), dryRun};
 }
 
 module.exports = {
@@ -128,4 +154,5 @@ module.exports = {
   RETENTION_MS,
   RECORDING_PREFIX,
   HIGHLIGHT_PREFIX,
+  DEBATE_PREFIX,
 };
