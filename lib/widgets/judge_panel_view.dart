@@ -180,6 +180,10 @@ class _JudgePanelViewState extends State<JudgePanelView> {
                     widget.player1Id: widget.player1Name,
                     widget.player2Id: widget.player2Name,
                   },
+                  playerColors: {
+                    widget.player1Id: House.gelRed,
+                    widget.player2Id: House.gelBlue,
+                  },
                   localViewBuilder: _panel.localVideoView,
                   remoteViewBuilder: _panel.remoteVideoView,
                 ),

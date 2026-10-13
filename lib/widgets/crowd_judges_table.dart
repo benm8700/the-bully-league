@@ -17,12 +17,16 @@ class CrowdJudgesTable extends StatefulWidget {
     super.key,
     required this.matchId,
     required this.playerNames,
+    required this.playerColors,
   });
 
   final String matchId;
 
   /// playerId -> name, for the vote badges + the tally.
   final Map<String, String> playerNames;
+
+  /// playerId -> the battler's gel colour (red/blue), for the vote treatment.
+  final Map<String, Color> playerColors;
 
   @override
   State<CrowdJudgesTable> createState() => _CrowdJudgesTableState();
@@ -125,6 +129,7 @@ class _CrowdJudgesTableState extends State<CrowdJudgesTable> {
             present: present,
             judgeNames: _judgeNames,
             playerNames: widget.playerNames,
+            playerColors: widget.playerColors,
             remoteViewBuilder: (uid) => _spectator.playerVideo(uid),
           ),
         );

@@ -10,6 +10,7 @@ import '../../widgets/home_action_button.dart';
 import '../../core/services/agora_spectator_service.dart';
 import '../../core/services/spectator_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/house_theme.dart';
 import '../../widgets/crowd_judges_table.dart';
 import '../../widgets/follow_button.dart';
 import '../../widgets/live_cheer_overlay.dart';
@@ -274,6 +275,10 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                               playerNames: {
                                 _player1Id!: _player1Name,
                                 _player2Id!: _player2Name,
+                              },
+                              playerColors: {
+                                _player1Id!: House.gelRed,
+                                _player2Id!: House.gelBlue,
                               },
                             ),
                           ),

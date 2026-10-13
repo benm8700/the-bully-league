@@ -20,6 +20,7 @@ class JudgesTable extends StatelessWidget {
     required this.judgeNames,
     required this.playerNames,
     required this.remoteViewBuilder,
+    required this.playerColors,
     this.localViewBuilder,
   });
 
@@ -33,6 +34,10 @@ class JudgesTable extends StatelessWidget {
 
   /// playerId -> display name, for the "voted for X" badge + the tally.
   final Map<String, String> playerNames;
+
+  /// playerId -> the battler's "stage gel" colour (player 1 red, player 2 blue).
+  /// A judge's vote wraps their tile in the colour of the battler they picked.
+  final Map<String, Color> playerColors;
 
   /// Builds a remote judge's video tile by their seat uid.
   final Widget? Function(int seatUid) remoteViewBuilder;
@@ -67,49 +72,63 @@ class JudgesTable extends StatelessWidget {
       video = remoteViewBuilder(s.seatUid);
     }
     final name = judgeNames[s.judgeId] ?? 'Judge';
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        color: const Color(0xFF141414),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            video ??
-                const Center(
-                  child: Icon(Icons.videocam_off_outlined,
-                      color: Colors.white24, size: 28),
+    // The vote, the instant it lands: the whole tile is wrapped in the colour
+    // of the battler this judge picked (player 1 red, player 2 blue). Glanceable
+    // - the panel's lean reads as a red/blue split without reading any names.
+    final voteColor = s.votedFor == null ? null : playerColors[s.votedFor];
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border:
+            voteColor == null ? null : Border.all(color: voteColor, width: 4),
+        boxShadow: voteColor == null
+            ? null
+            : [BoxShadow(color: voteColor.withValues(alpha: 0.55), blurRadius: 14)],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(voteColor == null ? 12 : 9),
+        child: Container(
+          color: const Color(0xFF141414),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              video ??
+                  const Center(
+                    child: Icon(Icons.videocam_off_outlined,
+                        color: Colors.white24, size: 28),
+                  ),
+              if (s.isHead)
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child:
+                      _pill(context, '\u{1F451} Head', context.palette.reward),
                 ),
-            if (s.isHead)
+              if (s.votedFor != null && voteColor != null)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: _pill(
+                      context, playerNames[s.votedFor] ?? 'picked', voteColor),
+                ),
               Positioned(
-                top: 6,
                 left: 6,
-                child: _pill(context, '\u{1F451} Head', context.palette.reward),
-              ),
-            if (s.votedFor != null)
-              Positioned(
-                top: 6,
                 right: 6,
-                child: _pill(
-                    context,
-                    '\u{2192} ${playerNames[s.votedFor] ?? 'picked'}',
-                    context.palette.winner),
-              ),
-            Positioned(
-              left: 6,
-              right: 6,
-              bottom: 6,
-              child: Text(
-                s.isMe ? '$name (you)' : name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                bottom: 6,
+                child: Text(
+                  s.isMe ? '$name (you)' : name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -156,7 +175,8 @@ class JudgesTable extends StatelessWidget {
                   '${playerNames[players[i]] ?? ''}  ${tally[players[i]] ?? 0}',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
-                        color: context.palette.winner,
+                        color: playerColors[players[i]] ??
+                            context.palette.winner,
                       ),
                 ),
               ],
