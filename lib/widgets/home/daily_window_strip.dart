@@ -51,9 +51,10 @@ class _DailyWindowStripState extends State<DailyWindowStrip> {
         final now = DateTime.now().toUtc();
         final window = currentOrNextWindow(now, config);
         final live = window.contains(now);
-        final gold = context.palette.reward;
-        final liveColor = context.palette.live;
-        final accent = live ? liveColor : gold;
+        // Basement colours (the brand pink), NOT the tournament gold: the 2x
+        // multiplier is for everyday Basement play, so it reads in the same
+        // family as the Basement hero rather than the gold Main Stage.
+        final accent = context.palette.accent;
 
         final hours =
             '${_h(config.startHourPacific)}-${_h(config.endHourPacific)} Pacific';

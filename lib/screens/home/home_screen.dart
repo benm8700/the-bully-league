@@ -148,6 +148,12 @@ class HomeScreen extends StatelessWidget {
                     const GoatThroneBanner(),
                     const _TrialStatus(),
                     const SizedBox(height: 8),
+                    // The daily 6-7pm "power hour" (2x points) sits ABOVE the
+                    // Basement hero - the multiplier is for everyday Basement
+                    // play, so it headlines that block. Renders nothing when
+                    // the window is switched off (its own bottom padding spaces
+                    // it from the hero below).
+                    const DailyWindowStrip(),
                     // THE BASEMENT LEADS (developer's call, 2026-10-11):
                     // everyday play - Roast a Stranger - is the TOP hero now,
                     // with the Main Stage tournament below it. This reverses
@@ -164,10 +170,6 @@ class HomeScreen extends StatelessWidget {
                     // prize). The countdown to Thursday's finals lives in the
                     // hub, not on the clean pill.
                     const MainStageCard(),
-                    // The daily 6-7pm "power hour" (2x points) - a slim strip,
-                    // separate from the weekly Main Stage. Renders nothing when
-                    // the window is switched off.
-                    const DailyWindowStrip(),
                     const SizedBox(height: 14),
                     // Quick Actions row (Home overhaul): Daily Challenges /
                     // Free Rewards / Current Streak. The Daily Challenges card
@@ -677,6 +679,12 @@ class _IncomingChallengeBannerState extends State<_IncomingChallengeBanner>
           .call<Map<String, dynamic>>();
       final incoming = (r.data['incoming'] as List?) ?? const [];
       if (!mounted) return;
+      // Only the INCOMING (unanswered) challenge belongs here - the acceptor's
+      // "answer this" prompt. Rejoining a LIVE accepted battle is handled by
+      // _ActiveMatchBanner, which keys off the match's own status so it
+      // self-clears when the battle ends. (An earlier "accepted" banner here
+      // keyed off the challenge, which never clears, so it lingered after the
+      // battle was over and duplicated the active-match banner.)
       setState(() => _challenge = incoming.isEmpty
           ? null
           : (incoming.first as Map).cast<String, dynamic>());
@@ -688,9 +696,9 @@ class _IncomingChallengeBannerState extends State<_IncomingChallengeBanner>
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final challenge = _challenge;
     if (challenge == null) return const SizedBox.shrink();
-    final scheme = Theme.of(context).colorScheme;
     return Card(
       color: scheme.surfaceContainerHigh,
       child: Padding(
@@ -738,16 +746,28 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
     with WidgetsBindingObserver {
   final _service = MatchmakingService();
   MatchPairing? _pending;
+  Timer? _poll;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _check();
+    // POLL, not just initState + resume. Home lives in MainShell's
+    // IndexedStack and is built ONCE, and backing out of pre-match/bio-reveal
+    // is an in-app pop (not an app-lifecycle resume), so without a poll the
+    // rejoin banner only caught up on the next app resume - the ~15s lag the
+    // developer saw. getActiveMatch keys off the match's own status, so the
+    // same poll makes the banner DISAPPEAR within a few seconds once the
+    // battle completes or is abandoned (the stale-after-completion bug).
+    _poll = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) _check();
+    });
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -779,38 +799,76 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
   @override
   Widget build(BuildContext context) {
     if (_pending == null) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    // Deliberately LOUD and distinct from the neutral Home cards around it -
+    // "you have a battle waiting RIGHT NOW" is the most time-sensitive thing
+    // on the screen, and the old primaryContainer tint blended in. A solid
+    // primary (brand pink) card with an icon and a high-contrast button reads
+    // as an alert, not another option.
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Card(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              // Someone who left a standing challenge may have queued
-              // hours ago and forgotten. "You have a match waiting" reads
-              // as a bug to them; naming what happened reads as the thing
-              // they actually asked for.
-              Text(
-                switch (_pending?.origin) {
-                  'standing' => 'Someone took up your challenge',
-                  'friend' => 'Your friend battle is waiting',
-                  _ => 'You have a match waiting',
-                },
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              FilledButton(
-                onPressed: _rejoin,
-                child: Text(
-                  switch (_pending?.origin) {
-                    'standing' => 'Battle now',
-                    'friend' => 'Rejoin battle',
-                    _ => 'Rejoin match',
-                  },
+      child: Material(
+        color: scheme.primary,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: _rejoin,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Row(
+              children: [
+                Icon(Icons.sports_mma, color: scheme.onPrimary, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Someone who left a standing challenge may have queued
+                      // hours ago and forgotten, so name what happened rather
+                      // than announcing a generic match.
+                      Text(
+                        switch (_pending?.origin) {
+                          'standing' => 'Someone took up your challenge',
+                          'friend' => 'Your friend battle is ready',
+                          _ => 'You have a match waiting',
+                        },
+                        style: TextStyle(
+                          color: scheme.onPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Tap to jump in',
+                        style: TextStyle(
+                          color: scheme.onPrimary.withValues(alpha: 0.85),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _rejoin,
+                  // A deep warm-charcoal button with a warm-white label - dark
+                  // on hot pink reads sharp and modern and meshes with the
+                  // warm pink far better than white or gold (both rejected).
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF221015),
+                    foregroundColor: const Color(0xFFFFF2F4),
+                  ),
+                  child: Text(
+                    switch (_pending?.origin) {
+                      'standing' => 'Battle now',
+                      'friend' => 'Battle now',
+                      _ => 'Rejoin',
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

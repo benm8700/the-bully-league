@@ -153,7 +153,13 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
           // checks moments ago.
           _requeue();
         } else {
-          _endMatch('This match ended before it started.');
+          // Friend battles have no queue to fall back into, so the honest
+          // next step is to challenge them again rather than "find someone
+          // else". A ranked pairing just says the pairing is gone.
+          _endMatch(widget.pairing.mode == 'friend'
+              ? 'That battle ended before it started. '
+                  'Challenge them again any time.'
+              : 'This match ended before it started.');
         }
         return;
       }
@@ -192,12 +198,28 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (released) {
-      // Straight back to searching rather than out to Home: they did
-      // nothing wrong and passed consent and the camera check moments ago.
-      _requeue();
+      if (widget.pairing.mode == 'friend') {
+        // No queue to return to for a friend battle - leaving just ends it.
+        // Drop to Home rather than a friend queue that does not exist.
+        _leaveToHome();
+      } else {
+        // Straight back to searching rather than out to Home: they did
+        // nothing wrong and passed consent and the camera check moments ago.
+        _requeue();
+      }
     } else {
       setState(() => _opponentGone = false);
     }
+  }
+
+  /// Friend battles have no queue, so an opponent who vanished just means the
+  /// battle is off - go Home rather than to a queue that does not exist.
+  void _leaveToHome() {
+    if (_navigated || _endedReason != null) return;
+    _navigated = true;
+    _ticker?.cancel();
+    _matchSub?.cancel();
+    Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
   void _startTicker() {
@@ -322,8 +344,13 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
             Text(_endedReason!, textAlign: TextAlign.center),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Back'),
+              // Land on Home, not whatever stale screen pushed this one. A
+              // single pop() returned to the dead PreMatchScreen/challenge
+              // route the player came through, which is the "I can only press
+              // Back and it goes nowhere useful" dead end.
+              onPressed: () =>
+                  Navigator.of(context).popUntil((r) => r.isFirst),
+              child: const Text('Back to home'),
             ),
           ],
         ),
@@ -518,7 +545,11 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
             OutlinedButton.icon(
               onPressed: _busy ? null : _leaveUnresponsive,
               icon: const Icon(Icons.person_off_outlined),
-              label: const Text('Opponent left - find someone else'),
+              // "find someone else" is nonsense for a friend battle - there is
+              // no queue, and the person who stepped away may be rejoining.
+              label: Text(widget.pairing.mode == 'friend'
+                  ? 'Opponent stepped away - leave'
+                  : 'Opponent left - find someone else'),
             ),
           ],
           const SizedBox(height: 8),
@@ -528,7 +559,14 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
           // picked, and there is no queue here to be returned to.
           if (widget.pairing.mode == 'friend')
             Text(
-              'You challenged them. Leaving now just cancels the battle.',
+              // Only the challenger (player1 / agoraUid 1) actually
+              // challenged - telling the acceptor "you challenged them" is
+              // simply wrong, and it showed on BOTH phones before. Both
+              // outcomes are identical (leaving cancels); only the
+              // attribution differs.
+              widget.pairing.agoraUid == 2
+                  ? 'Leaving now just cancels the battle.'
+                  : 'You challenged them. Leaving now just cancels the battle.',
               style: Theme.of(context).textTheme.bodySmall,
               textAlign: TextAlign.center,
             )

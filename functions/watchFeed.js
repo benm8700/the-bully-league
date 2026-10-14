@@ -40,10 +40,6 @@ const URGENCY_BAND_MS = 2 * 60 * 60 * 1000;
  * limits renders to signed-in viewers. */
 const CLIP_URL_TTL_MS = 6 * 60 * 60 * 1000;
 
-/** How many candidates get a ballot lookup. Bounds the reads one feed
- * load costs while still giving an honest badge count. */
-const BALLOT_CHECK_LIMIT = 30;
-
 const PAGE_SIZE = 10;
 const SCAN_LIMIT = 60;
 
@@ -143,33 +139,31 @@ async function getWatchFeed(auth, data) {
   const db = getFirestore();
   const nowMs = Date.now();
 
-  // Paginated by completion time, walking backwards.
-  //
-  // A chronological cursor works here for a reason that is easy to miss:
-  // a match open for voting is BY DEFINITION one that finished in the last
-  // 24 hours, so ordering by completedAt descending already puts every
-  // votable battle at the top. Judging work therefore lands on the first
-  // page or two on its own, and later pages are pure archive - no need for
-  // a second cursor over a different ordering.
-  //
-  // Scrolling back in time also beats globally sorting the archive by
-  // popularity, which would show the same handful of clips forever and
-  // never surface anything new. Popularity still orders within a page.
+  // THE JUDGE FEED IS A VOTE WINDOW: only battles the viewer can actually
+  // vote on belong here. A battle open for voting is BY DEFINITION one that
+  // finished within its vote window (<=24h), so bounding the scan to the last
+  // ~26 hours captures every possibly-open battle and makes the feed
+  // self-terminating - it never pages endlessly through the old closed
+  // archive returning empty results. Reuses the existing (status, completedAt)
+  // composite index: a range on completedAt (the orderBy field) needs no new
+  // index.
+  const sinceMs = nowMs - 26 * 60 * 60 * 1000;
   const cursorMs = Number(data?.cursorMs);
   let query = db.collection("matches")
       .where("status", "==", "completed")
+      .where("completedAt", ">=", Timestamp.fromMillis(sinceMs))
       .orderBy("completedAt", "desc");
   if (Number.isFinite(cursorMs) && cursorMs > 0) {
     query = query.startAfter(Timestamp.fromMillis(cursorMs));
   }
   const snap = await query.limit(SCAN_LIMIT).get();
 
-  const candidates = [];
+  const scanned = [];
   // Advanced past EVERY document examined, not just the ones kept. A whole
-  // page can be filtered out - matches with no render yet, for instance -
-  // and a cursor that only tracked kept items would then never move, so
-  // the client would request the same window forever and the feed would
-  // stop dead a few clips in.
+  // page can be filtered out - matches with no render yet, or ones this
+  // viewer already judged - and a cursor that only tracked kept items would
+  // then never move, so the client would request the same window forever and
+  // the feed would stop dead a few clips in.
   let lastScannedMs = 0;
   for (const doc of snap.docs) {
     const match = doc.data();
@@ -184,38 +178,27 @@ async function getWatchFeed(auth, data) {
       auth.uid === match.player1Id || auth.uid === match.player2Id;
     const windowOpen = match.voteFinalized !== true && nowMs < windowEndMs;
 
-    candidates.push({
-      doc,
-      match,
-      windowEndMs,
-      isParticipant,
-      windowOpen,
-    });
+    // Only votable battles: not your OWN (those live in My Battles, and you
+    // can never vote on them), and not already CLOSED. Anything you cannot
+    // vote on is clutter in the vote window (developer's call).
+    if (isParticipant || !windowOpen) continue;
+
+    scanned.push({doc, match, windowEndMs, isParticipant, windowOpen});
   }
 
-  // Resolve votability for every candidate, not just the page being
-  // returned, so the Judge tab's badge can show a true count of battles
-  // waiting on this viewer. A badge that undercounts because it only saw
-  // one page would quietly stop being the pull it exists to be.
-  const votable = new Map();
-  for (const c of candidates.slice(0, BALLOT_CHECK_LIMIT)) {
-    // Participants can never vote on their own match, and a ballot already
-    // cast cannot be cast again - both make a match archive-like for this
-    // viewer even while its window is open.
-    if (!c.windowOpen || c.isParticipant) {
-      votable.set(c.doc.id, false);
-      continue;
-    }
+  // DROP BATTLES THIS VIEWER ALREADY JUDGED too (everything here is already
+  // open and non-participant). Checked in parallel to keep the feed snappy,
+  // bounded by SCAN_LIMIT candidates.
+  const votedFlags = await Promise.all(scanned.map(async (c) => {
     const ballot = await db.collection("votes").doc(c.doc.id)
         .collection("ballots").doc(auth.uid).get();
-    votable.set(c.doc.id, !ballot.exists);
-  }
+    return ballot.exists;
+  }));
+  const candidates = scanned.filter((_, i) => !votedFlags[i]);
 
   const results = [];
   for (const c of candidates) {
     if (results.length >= limit) break;
-    const alreadyVoted = c.windowOpen && !c.isParticipant &&
-      votable.get(c.doc.id) === false;
 
     const [p1, p2] = await Promise.all([
       db.collection("users").doc(c.match.player1Id).get(),
@@ -231,16 +214,13 @@ async function getWatchFeed(auth, data) {
       mode: c.match.mode ?? "ranked",
       voteCount: c.match.voteCount ?? 0,
       windowEndMs: c.windowEndMs,
-      canVote: c.windowOpen && !c.isParticipant && !alreadyVoted,
-      // Distinguishes "you already judged this, it is still being decided"
-      // from "this is settled". Without it the client cannot tell the two
-      // apart, because both simply have canVote false and no verdict.
-      alreadyVoted,
-      windowOpen: c.windowOpen,
-      isParticipant: c.isParticipant,
-      // Null while voting is open - the running score stays hidden until
-      // the viewer has judged, or until the result is settled.
-      verdict: verdictFor(c.match),
+      // Everything in this feed is votable now (open, not yours, unjudged).
+      canVote: true,
+      alreadyVoted: false,
+      windowOpen: true,
+      isParticipant: false,
+      // Running score stays hidden while voting is open (always, here).
+      verdict: null,
       videoUrl: await clipUrl(c.match),
       captioned: c.match.highlight?.captioned === true,
       // So the judge can pick a winner per round. Standard 3 by default.
@@ -250,9 +230,9 @@ async function getWatchFeed(auth, data) {
 
   return {
     matches: orderFeed(results, nowMs),
-    // Only meaningful on the first page: it counts battles waiting on this
-    // viewer overall, not within a window of the archive.
-    pendingVotes: [...votable.values()].filter(Boolean).length,
+    // Every surviving candidate is a battle waiting on this viewer, so the
+    // Judge badge is just the count.
+    pendingVotes: candidates.length,
     // Where the next page starts. Null means the collection is exhausted -
     // a short scan cannot be refilled by asking again.
     nextCursorMs: snap.size < SCAN_LIMIT ? null : lastScannedMs,

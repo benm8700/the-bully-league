@@ -181,7 +181,7 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                               Row(
                                 children: [
                                   Icon(Icons.sports_mma,
-                                      size: 18, color: scheme.secondary),
+                                      size: 18, color: scheme.primary),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
@@ -191,7 +191,9 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                                 ],
                               ),
                               const SizedBox(height: 10),
-                              FilledButton.tonal(
+                              // The hottest action on the screen - your friend
+                              // is ready NOW - so it is the one solid-pink CTA.
+                              FilledButton(
                                 onPressed: _busy
                                     ? null
                                     : () => _startAccepted(
@@ -219,7 +221,9 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                               Row(
                                 children: [
                                   Expanded(
-                                    child: FilledButton.tonal(
+                                    // Pink (the brand primary) - the green read
+                                    // as out of place here (developer's call).
+                                    child: FilledButton(
                                       onPressed: _busy
                                           ? null
                                           : () => _respond(
@@ -264,7 +268,14 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   onSubmitted: (_) => _send(),
                 ),
                 const SizedBox(height: 12),
-                FilledButton.tonal(
+                // Purple compose action - initiating a challenge is calmer
+                // than answering a live one, and the colour keeps it clearly
+                // apart from the pink/green "a battle is happening" buttons.
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: scheme.secondary,
+                    foregroundColor: scheme.onSecondary,
+                  ),
                   onPressed: _busy ? null : _send,
                   child: const Text('Send challenge'),
                 ),

@@ -769,9 +769,16 @@ class _MatchScreenState extends State<MatchScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Leave the match?'),
-        content: const Text(
-          'The battle is still going. If you leave now you may forfeit - it '
-          'can count as a loss, and your opponent keeps going without you.',
+        content: Text(
+          // "your opponent keeps going without you" was confusing - a 1v1
+          // roast has nothing to continue solo. Friend battles carry no
+          // penalty at all (not scored, not recorded).
+          widget.pairing.mode == 'friend'
+              ? 'The battle is still going. Leaving now ends it - but a '
+                  'friend battle is just for fun, so there is no penalty. '
+                  'You can challenge them again any time.'
+              : 'The battle is still going. If you leave now it can count '
+                  'as a loss.',
         ),
         actions: [
           TextButton(

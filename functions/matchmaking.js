@@ -895,6 +895,14 @@ async function getActiveMatch(auth) {
   // into an accepted friend battle for either side. Reuses the
   // (playerId, createdAt) indexes My Battles already declares and filters
   // mode/status in code, so this needs no new composite index.
+  // How long without a bio-reveal heartbeat before a player counts as GONE.
+  // Matches the client's own opponent-gone threshold so behaviour is
+  // consistent, with enough slack past the 20s heartbeat to tolerate a missed
+  // beat. Also used as a grace window from creation, so a freshly accepted
+  // match (nobody has heartbeat'd yet) is never ended out from under them.
+  const FRIEND_PRESENCE_STALE_MS = 75000;
+  const nowMs = Date.now();
+
   for (const field of ["player1Id", "player2Id"]) {
     const recent = await db.collection("matches")
         .where(field, "==", auth.uid)
@@ -904,11 +912,52 @@ async function getActiveMatch(auth) {
     for (const doc of recent.docs) {
       const m = doc.data();
       if (m.mode !== "friend" || m.status !== "pending") continue;
+      const opponentId = m.player1Id === auth.uid ? m.player2Id : m.player1Id;
+
+      // BOTH-OUT ENDS THE BATTLE; ONE-OUT KEEPS IT ALIVE (developer's rule).
+      // The caller is on Home polling this, so the CALLER is out. If the
+      // OPPONENT is also out (no recent bio-reveal heartbeat, past the grace
+      // from creation) AND the battle has not actually started, both have
+      // left - end it so it stops offering a dead "Battle now". If the
+      // opponent is still present, hand the match back so the caller (who
+      // backed out, maybe by accident) can rejoin a battle that is still on.
+      const ready = Array.isArray(m.readyPlayerIds) ? m.readyPlayerIds : [];
+      const battleUnderway = ready.length >= 2;
+      if (!battleUnderway) {
+        const seen = m.lastSeenAt || {};
+        const oppLastSeen = Number(seen[opponentId]) || 0;
+        const createdMs = m.createdAt?.toMillis?.() ?? 0;
+        const oppPresent =
+            (nowMs - oppLastSeen < FRIEND_PRESENCE_STALE_MS) ||
+            (nowMs - createdMs < FRIEND_PRESENCE_STALE_MS);
+        if (!oppPresent) {
+          // Guarded in a transaction: two backed-out clients may both poll
+          // and reach here, and the match must only be settled once (and
+          // never if a battle has meanwhile started).
+          await db.runTransaction(async (tx) => {
+            const fresh = await tx.get(doc.ref);
+            const fm = fresh.data();
+            const fready = Array.isArray(fm?.readyPlayerIds) ?
+              fm.readyPlayerIds : [];
+            if (fresh.exists && fm.status === "pending" && fready.length < 2) {
+              tx.update(doc.ref, {
+                status: "abandoned",
+                voteFinalized: true,
+                winnerId: null,
+                abandonedReason: "both-left",
+                completedAt: new Date(),
+              });
+            }
+          }).catch(() => {});
+          continue; // both out - do not hand back a dead match
+        }
+      }
+
       return {
         found: true,
         matchId: doc.id,
         channelName: m.channelName,
-        opponentId: m.player1Id === auth.uid ? m.player2Id : m.player1Id,
+        opponentId,
         mode: "friend",
         settings: m.settings ?? null,
         // Lets the client word the banner for a friend battle rather than a

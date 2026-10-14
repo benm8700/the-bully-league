@@ -309,9 +309,38 @@ async function getMyChallenges(auth) {
       .filter((d) => !isExpired(d.data(), nowMs))
       .map((d) => ({id: d.id, ...d.data()}));
 
-  const incomingLive = live(incoming);
-  const outgoingLive = live(outgoing);
-  const acceptedLive = live(accepted);
+  // ONE challenge per other-person, each direction. Even though a re-send is
+  // deduped at creation, a stale state can still leave more than one around -
+  // most commonly an "accepted" challenge whose battle is long over sitting
+  // alongside a fresh "pending" one, which is the "multiple challenges between
+  // the same two users" the developer saw. Keep the latest-expiring (newest).
+  const newestPer = (list, keyField) => {
+    const byKey = new Map();
+    for (const c of list) {
+      const prev = byKey.get(c[keyField]);
+      if (!prev ||
+          (Number(c.expiresAtMs) || 0) > (Number(prev.expiresAtMs) || 0)) {
+        byKey.set(c[keyField], c);
+      }
+    }
+    return [...byKey.values()];
+  };
+
+  const incomingLive = newestPer(live(incoming), "fromUid");
+  const outgoingLive = newestPer(live(outgoing), "toUid");
+
+  // An accepted challenge stays "accepted" forever - nothing closes it when
+  // its match ends. So only surface the ones whose match is STILL joinable;
+  // a completed/abandoned battle must not keep offering a dead "Battle now".
+  // The match read is by doc id (no index) and acceptedLive is tiny.
+  const acceptedCandidates = newestPer(live(accepted), "toUid");
+  const acceptedLive = [];
+  await Promise.all(acceptedCandidates.map(async (c) => {
+    const mid = c.matchId ?? friendMatchId(c.id);
+    const ms = await db.collection("matches").doc(mid).get();
+    const status = ms.data()?.status;
+    if (status === "pending" || status === "in_progress") acceptedLive.push(c);
+  }));
 
   // Names are resolved here rather than trusted from the challenge, for
   // the outgoing directions at least - the target may have renamed
@@ -335,7 +364,7 @@ async function getMyChallenges(auth) {
       toUsername: names.get(c.toUid) ?? "Unknown",
       expiresAtMs: c.expiresAtMs,
     })),
-    // The challenger's way into an accepted battle.
+    // The challenger's way into an accepted battle - only while it is live.
     accepted: acceptedLive.map((c) => ({
       challengeId: c.id,
       toUsername: names.get(c.toUid) ?? "Unknown",

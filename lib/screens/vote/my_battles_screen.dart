@@ -842,18 +842,24 @@ class _BattleCard extends StatelessWidget {
 
 enum _Result { win, loss, draw, judging }
 
-/// "2h ago" / "Aug 28" style relative date from a Firestore Timestamp.
+/// Minutes-ago within the hour, hours-ago within the day, and a full
+/// day/month/year date beyond that - no "N days ago" (developer's call).
 String _relativeDate(Object? ts) {
   if (ts is! Timestamp) return '';
   final then = ts.toDate();
   final diff = DateTime.now().difference(then);
   if (diff.inMinutes < 1) return 'just now';
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-  if (diff.inHours < 24) return '${diff.inHours}h ago';
-  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  if (diff.inMinutes < 60) {
+    final m = diff.inMinutes;
+    return '$m ${m == 1 ? 'minute' : 'minutes'} ago';
+  }
+  if (diff.inHours < 24) {
+    final h = diff.inHours;
+    return '$h ${h == 1 ? 'hour' : 'hours'} ago';
+  }
   const months = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
   ];
-  return '${months[then.month - 1]} ${then.day}';
+  return '${months[then.month - 1]} ${then.day}, ${then.year}';
 }
