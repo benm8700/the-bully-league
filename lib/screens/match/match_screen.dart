@@ -20,6 +20,7 @@ import '../../core/services/visual_moderation_service.dart';
 import '../../core/services/yuv_to_jpeg.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/match/ability_deploy_bar.dart';
+import '../../widgets/match/tomato_splat.dart';
 import '../vote/my_battles_screen.dart';
 import '../vote/vote_queue_screen.dart';
 
@@ -122,7 +123,14 @@ class _MatchScreenState extends State<MatchScreen>
   // Tomato splat (a loadout ability): a brief full-screen splat on the RECEIVER
   // only, rendered over the Flutter UI so it never touches the recording.
   bool _tomatoSplat = false;
+  int _splatSeq = 0; // bumped per throw so a repeat splat replays its animation
   Timer? _splatTimer;
+
+  // The Instant Interrupt cue (no grace, so the floor just snaps - this makes
+  // the steal visible on both screens). Seq replays the one-shot flash.
+  bool _stealFlash = false;
+  int _stealSeq = 0;
+  Timer? _stealTimer;
 
   /// Known from the pairing itself now, rather than exchanged
   /// peer-to-peer over the data channel after joining.
@@ -388,6 +396,13 @@ class _MatchScreenState extends State<MatchScreen>
       // it renders over the Flutter UI, never into the Agora stream, so it can
       // never reach the recording (the heckle-graphics welfare rule).
       _showTomatoSplat();
+      return;
+    }
+    if (t == 'fx' && message['id'] == 'instantSteal') {
+      // An Instant Interrupt has no grace window (unlike the graced interrupt's
+      // flash + buzz), so the floor just snaps over. This cue makes that
+      // visible to the person being cut off. Client-only, like the tomato.
+      _showStealFlash();
       return;
     }
     if (t == 'ms_state' && _isHost != true) {
@@ -687,6 +702,7 @@ class _MatchScreenState extends State<MatchScreen>
     _ticker?.cancel();
     _battleTick?.cancel();
     _splatTimer?.cancel();
+    _stealTimer?.cancel();
     _pulse.dispose();
     _msgSub?.cancel();
     _matchDocSub?.cancel();
@@ -848,9 +864,21 @@ class _MatchScreenState extends State<MatchScreen>
             child: AbilityDeployBar(
               matchId: widget.pairing.matchId,
               onDeploy: _onDeployAbility,
+              // +5s only works on your own clock, so gate its button on holding
+              // the floor; tomato stays always-on inside the bar.
+              holdsFloor: inBattle && _battle?.floor == _myFirebaseUid,
             ),
           ),
-        if (_tomatoSplat) Positioned.fill(child: _buildTomatoSplat()),
+        if (_tomatoSplat)
+          Positioned.fill(
+            child: TomatoSplat(
+              key: ValueKey(_splatSeq),
+              onDone: () {
+                if (mounted) setState(() => _tomatoSplat = false);
+              },
+            ),
+          ),
+        if (_stealFlash) Positioned.fill(child: _buildStealFlash()),
       ],
     );
   }
@@ -880,23 +908,80 @@ class _MatchScreenState extends State<MatchScreen>
   }
 
   /// Show the tomato splat briefly (I'm the target). Client-only overlay.
-  void _showTomatoSplat() {
+  /// Deploy the Instant Interrupt: snap the floor with no grace, flash the cue
+  /// locally, and tell the opponent so their screen flashes too.
+  void _deployInstant() {
+    _intent(MsEvent.interrupt, instant: true);
+    _showStealFlash();
+    _videoCallService
+        .sendMatchMessage({'t': 'fx', 'id': 'instantSteal', 'by': _myFirebaseUid});
+  }
+
+  void _showStealFlash() {
     if (!mounted) return;
-    setState(() => _tomatoSplat = true);
-    _splatTimer?.cancel();
-    _splatTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _tomatoSplat = false);
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _stealSeq++;
+      _stealFlash = true;
+    });
+    _stealTimer?.cancel();
+    _stealTimer = Timer(const Duration(milliseconds: 750), () {
+      if (mounted) setState(() => _stealFlash = false);
     });
   }
 
-  Widget _buildTomatoSplat() {
+  /// A one-shot "cut in" flash for the Instant Interrupt: a quick gold wash and
+  /// a bolt that pops and fades. Replays per [_stealSeq].
+  Widget _buildStealFlash() {
+    final gold = context.palette.reward;
     return IgnorePointer(
-      child: Container(
-        color: const Color(0xFFC4201A).withValues(alpha: 0.28),
-        alignment: Alignment.center,
-        child: const Text('🍅', style: TextStyle(fontSize: 160)),
+      child: TweenAnimationBuilder<double>(
+        key: ValueKey(_stealSeq),
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 650),
+        curve: Curves.easeOut,
+        builder: (context, t, _) {
+          final fade = t < 0.35 ? 1.0 : (1 - (t - 0.35) / 0.65);
+          return Opacity(
+            opacity: fade.clamp(0.0, 1.0),
+            child: Container(
+              color: gold.withValues(alpha: 0.16 * (1 - t)),
+              alignment: Alignment.center,
+              child: Transform.scale(
+                scale: 0.6 + 0.6 * Curves.easeOutBack.transform(t.clamp(0.0, 1.0)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bolt, color: gold, size: 52),
+                    const Text('CUT IN!',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 42,
+                          fontWeight: FontWeight.w900,
+                          shadows: [Shadow(color: Colors.black, blurRadius: 8)],
+                        )),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
+  }
+
+  void _showTomatoSplat() {
+    if (!mounted) return;
+    setState(() {
+      _splatSeq++;
+      _tomatoSplat = true;
+    });
+    // The TomatoSplat widget self-times (~1.1s) and clears via onDone; this is
+    // a backstop in case onDone never fires (e.g. disposed mid-animation).
+    _splatTimer?.cancel();
+    _splatTimer = Timer(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => _tomatoSplat = false);
+    });
   }
 
   /// The Warmup Round banner. Deliberately NON-blocking (a top pill, not a
@@ -1139,8 +1224,7 @@ class _MatchScreenState extends State<MatchScreen>
             const SizedBox(width: 12),
             Expanded(
               child: FilledButton(
-                onPressed:
-                    canInstant ? () => _intent(MsEvent.interrupt, instant: true) : null,
+                onPressed: canInstant ? _deployInstant : null,
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(0, 54),
                   backgroundColor: context.palette.reward,

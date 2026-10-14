@@ -4,7 +4,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../match/pre_match_screen.dart';
-import '../match/recording_consent_screen.dart';
 
 /// Challenge someone by name, and answer challenges sent to you.
 ///
@@ -173,16 +172,26 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   Text('Ready to battle', style: text.titleMedium),
                   const SizedBox(height: 8),
                   ..._accepted.map((c) => Card(
-                        color: scheme.primaryContainer,
+                        color: scheme.surfaceContainerHigh,
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Text('${c['toUsername']} accepted your challenge',
-                                  style: text.titleSmall),
+                              Row(
+                                children: [
+                                  Icon(Icons.sports_mma,
+                                      size: 18, color: scheme.secondary),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                        '${c['toUsername']} accepted your challenge',
+                                        style: text.titleSmall),
+                                  ),
+                                ],
+                              ),
                               const SizedBox(height: 10),
-                              FilledButton(
+                              FilledButton.tonal(
                                 onPressed: _busy
                                     ? null
                                     : () => _startAccepted(
@@ -210,7 +219,7 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                               Row(
                                 children: [
                                   Expanded(
-                                    child: FilledButton(
+                                    child: FilledButton.tonal(
                                       onPressed: _busy
                                           ? null
                                           : () => _respond(
@@ -237,12 +246,12 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                 Text('Challenge someone', style: text.titleMedium),
                 const SizedBox(height: 4),
                 Text(
-                  // States the two things people are most likely to get
-                  // wrong about this mode, before they play rather than
-                  // after: it does not count, and it is still filmed.
-                  'Type their username. It does not affect your rank - but '
-                  'it is still recorded, voted on by the crowd, and can be '
-                  'clipped.',
+                  // Friend battles are a PRIVATE scrimmage now: it does not
+                  // count, and it is NOT recorded, judged, or clipped - just
+                  // you two, for fun.
+                  'Type their username. It is a private battle just for fun - '
+                  'it does not affect your rank, and it is not recorded, '
+                  'judged, or clipped.',
                   style: text.bodySmall,
                 ),
                 const SizedBox(height: 12),
@@ -255,7 +264,7 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   onSubmitted: (_) => _send(),
                 ),
                 const SizedBox(height: 12),
-                FilledButton(
+                FilledButton.tonal(
                   onPressed: _busy ? null : _send,
                   child: const Text('Send challenge'),
                 ),
@@ -286,17 +295,12 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
   }
 }
 
-/// Takes an accepted challenge into the normal match flow.
+/// Takes an accepted challenge straight into the camera check + battle.
 ///
-/// Routed through recording consent and the camera check exactly like any
-/// other battle - a friend battle IS recorded and clip-eligible, so
-/// consent is not optional here just because you know the person.
+/// NO recording-consent step: friend battles are PRIVATE now (not recorded,
+/// judged or clipped - see RECORDED_MODES), so there is nothing to consent to,
+/// and dropping it also removes the extra screen people were backing out of.
 Future<void> startChallengeMatch(BuildContext context, String matchId) async {
-  final consented = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
-      ) ??
-      false;
-  if (!consented || !context.mounted) return;
   await Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => PreMatchScreen(mode: 'friend', challengeMatchId: matchId),

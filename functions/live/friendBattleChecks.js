@@ -169,7 +169,7 @@ async function makeUser(uid, extra = {}) {
     check("answering twice is refused rather than making a second match",
         r.status !== 200, JSON.stringify(r.raw).slice(0, 120));
 
-    console.log("\nTHE CONSTRAINT: judged, but no rating and no points");
+    console.log("\nTHE CONSTRAINT: PRIVATE - not judged, not recorded, no rating/points");
     // Settled through the REAL completeMatch callable, not by writing
     // status straight to Firestore.
     //
@@ -190,8 +190,10 @@ async function makeUser(uid, extra = {}) {
     check("it finalizes", r.status === 200, JSON.stringify(r.raw).slice(0, 160));
 
     const after = await db.collection("matches").doc(matchId).get();
-    check("A WINNER IS RECORDED - the crowd's verdict is real",
-        after.data().winnerId === A, JSON.stringify(after.data().winnerId));
+    // Friend battles are PRIVATE now - not judged. Even with a ballot written
+    // straight to Firestore, finalize short-circuits with NO winner.
+    check("NO WINNER - friend battles aren't judged by the crowd",
+        after.data().winnerId == null, JSON.stringify(after.data().winnerId));
 
     const [aDoc, bDoc] = await Promise.all([
       db.collection("users").doc(A).get(),
@@ -214,8 +216,8 @@ async function makeUser(uid, extra = {}) {
         (aDoc.data().points ?? 0) === 0 && (bDoc.data().points ?? 0) === 0,
         JSON.stringify({a: aDoc.data().points, b: bDoc.data().points,
           ledger: reasons}));
-    check("but it IS a recorded mode, so it can still be clipped",
-        require("../matchmaking").RECORDED_MODES.includes("friend"));
+    check("and it is NOT a recorded mode - private, never clipped",
+        !require("../matchmaking").RECORDED_MODES.includes("friend"));
 
     console.log("\ndeclining");
     r = await call(B, "challengeFriend", {username: NAMES[A]});

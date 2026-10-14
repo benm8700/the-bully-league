@@ -54,7 +54,7 @@ class _FramingPainter extends CustomPainter {
     // radius still nudges people to sit BACK (head-and-shoulders) rather than
     // jamming their face into the lens.
     final c = o(0.50, 0.30);
-    final r = w * 0.20;
+    final r = w * 0.24;
 
     // X eyes: two short crossing strokes each, up and out from the centre.
     final eyeDx = r * 0.42;

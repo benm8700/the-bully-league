@@ -16,13 +16,15 @@ const {stopRecording, writeRecordingState} = require("./cloudRecording");
  * Exhibition matches are casual, don't move rating, and are never posted,
  * so they're never recorded - which also keeps the per-match recording
  * cost off the mode people play most casually. */
-// "friend" is here on purpose despite not affecting rating: CLAUDE.md
-// makes friend battles an explicit EXCEPTION to "exhibition is never
-// recorded", because being recorded, judged and clipped is precisely what
-// distinguishes a friend battle from a video call. Two separate questions,
-// answered differently: does it move rating (no), and does it produce
-// something (yes).
-const RECORDED_MODES = ["ranked", "tournament", "friend"];
+// "friend" is deliberately NOT here (reversed 2026-10-14, developer's call):
+// a recorded + crowd-judged + clippable friend battle can be STAGED - two
+// buddies scripting a bit - and that staged clip would pollute the discovery
+// feed, the emoji ratings and fame (rating was already safe; friend battles
+// never moved it). So friend battles are now PRIVATE: not recorded, not
+// judged, not clippable - a casual structured scrimmage. That also removes the
+// recording-consent step (nothing is recorded) and simplifies the flow. If a
+// crowd verdict or a clip is wanted, that is what ranked is for.
+const RECORDED_MODES = ["ranked", "tournament"];
 
 /**
  * Real matchmaking (Build Order step 4's missing half). Replaces the

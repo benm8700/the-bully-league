@@ -136,12 +136,14 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     return {skipped: "not-completed"};
   }
 
-  if (match.mode === "exhibition") {
-    // Exhibition matches never affect rating (see CLAUDE.md's Match
-    // structure notes) - mark finalized so the scheduled sweep stops
-    // reconsidering it, but there's nothing to tally.
+  if (match.mode === "exhibition" || match.mode === "friend") {
+    // Neither mode is judged: exhibition is a stakes-free warm-up, and a
+    // FRIEND battle is now a PRIVATE scrimmage (reversed 2026-10-14 - not
+    // recorded, not judged, not clippable, because a staged friend clip is a
+    // bad look; see RECORDED_MODES). Mark finalized so the sweep stops
+    // reconsidering it; there is nothing to tally and no rating/points move.
     await matchRef.update({voteFinalized: true, winnerId: null});
-    return {skipped: "exhibition"};
+    return {skipped: match.mode};
   }
 
   const windowClosed = Date.now() > voteWindowEndMs(match);
@@ -199,34 +201,9 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     judgeWeight = totalWeight;
   }
 
-  // A FRIEND BATTLE GETS A REAL VERDICT AND NOTHING ELSE.
-  //
-  // It is voted on and recorded like any other battle, because external
-  // judgement is the entire reason to use this app instead of a video
-  // call - but it moves no rating and pays no points, and both of those
-  // omissions are deliberate rather than unfinished.
-  //
-  // Rating: CLAUDE.md's explicit constraint. You choose your opponent, so
-  // counting it would open the collusion door the whole ranked design
-  // works to keep shut - two friends trading wins is a ladder.
-  //
-  // Points: the same argument, one step along. Ranked participation pays
-  // because you cannot choose who you meet and a cooldown stops you
-  // meeting them twice. Here you can pick the same person all evening, so
-  // paying per match would be a straight farm. What you get instead is the
-  // clip and the crowd's verdict, which is what the feature is for.
-  if (match.mode === "friend") {
-    await matchRef.update({
-      voteFinalized: true,
-      winnerId,
-      roundsWon,
-      voteConfidence: voteConfidence(
-          judgeWeight, match.settings?.fullConfidenceVotes),
-      player1FinalWeight: player1Weight,
-      player2FinalWeight: player2Weight,
-    });
-    return {skipped: "friend", winnerId};
-  }
+  // (Friend battles short-circuit at the top alongside exhibition now - they
+  // are private scrimmages, not judged. The old "friend gets a real verdict"
+  // branch was removed when friend battles were made private, 2026-10-14.)
 
   const player1Ref = db.collection("users").doc(match.player1Id);
   const player2Ref = db.collection("users").doc(match.player2Id);

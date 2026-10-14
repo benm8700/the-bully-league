@@ -692,21 +692,26 @@ class _IncomingChallengeBannerState extends State<_IncomingChallengeBanner>
     if (challenge == null) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     return Card(
-      color: scheme.primaryContainer,
+      color: scheme.surfaceContainerHigh,
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              '${challenge['fromUsername']} challenged you',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(color: scheme.onPrimaryContainer),
+            Row(
+              children: [
+                Icon(Icons.sports_mma, size: 18, color: scheme.secondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${challenge['fromUsername']} challenged you',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            FilledButton(
+            const SizedBox(height: 10),
+            FilledButton.tonal(
               onPressed: () async {
                 await Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const ChallengeScreen()),

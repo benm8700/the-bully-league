@@ -112,6 +112,25 @@ class Loadout {
 
   /// True when there's anything worth showing (on, and at least one ability).
   bool get hasAny => enabled && abilities.isNotEmpty;
+
+  /// A copy reflecting a purchase of [id] - the new owned count for that
+  /// ability and the new [balance]. Recomputes total/canBuy for EVERY ability,
+  /// because a changed balance can flip whether the others are still
+  /// affordable. Lets the buy button update instantly (optimistically) without
+  /// a second round-trip to refetch the whole loadout.
+  Loadout withPurchase(String id, {required int bought, required int balance}) {
+    final updated = abilities.map((a) {
+      final b = a.id == id ? bought : a.bought;
+      final total = a.free + b;
+      return a.copyWith(
+        bought: b,
+        total: total,
+        canBuy: total < a.max && balance >= a.cost,
+      );
+    }).toList();
+    return Loadout(
+      enabled: enabled, balance: balance, matchId: matchId, abilities: updated);
+  }
 }
 
 /// One ability as offered for a match, with how many the player already has.
@@ -157,6 +176,19 @@ class AbilityOption {
   final bool canBuy;
 
   bool get atCap => total >= max;
+
+  AbilityOption copyWith({int? bought, int? total, bool? canBuy}) => AbilityOption(
+        id: id,
+        name: name,
+        description: description,
+        deploy: deploy,
+        cost: cost,
+        free: free,
+        bought: bought ?? this.bought,
+        total: total ?? this.total,
+        max: max,
+        canBuy: canBuy ?? this.canBuy,
+      );
 
   factory AbilityOption.fromMap(Map<String, dynamic> m) => AbilityOption(
         id: m['id']?.toString() ?? '',

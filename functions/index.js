@@ -207,6 +207,13 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     );
   }
 
+  // Friend battles are private scrimmages now - never judged (a staged clip
+  // would be a bad look), so no ballots on them even via a direct call.
+  if (match.mode === "friend") {
+    throw new HttpsError(
+        "failed-precondition", "Friend battles aren't judged by the crowd.");
+  }
+
   if (voterId === match.player1Id || voterId === match.player2Id) {
     throw new HttpsError("permission-denied", "Match participants can't vote on their own match.");
   }

@@ -39,6 +39,8 @@ function isVotableBy(match, userId, nowMs) {
   if (!match) return false;
   if (match.status !== "completed") return false;
   if (match.voteFinalized === true) return false;
+  // Friend battles are PRIVATE scrimmages now - never judged (staging risk).
+  if (match.mode === "friend") return false;
   // Participants can't judge their own match.
   if (userId === match.player1Id || userId === match.player2Id) return false;
   if (nowMs > windowEndMs(match)) return false;

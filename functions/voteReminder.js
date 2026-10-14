@@ -60,6 +60,8 @@ function matchesWorthNudging(matches, nowMs) {
   return matches.filter((m) => {
     if (m.voteFinalized === true) return false;
     if (m.status !== "completed") return false;
+    // Friend battles are private scrimmages - never judged, so never nudged.
+    if (m.mode === "friend") return false;
     const remaining = m.windowEndMs - nowMs;
     if (remaining <= 0) return false;
     const votes = Number(m.voteCount) || 0;

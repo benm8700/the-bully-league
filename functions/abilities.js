@@ -25,6 +25,28 @@ const {isSubscriber, isInTrial, readMonetizationConfig} = require("./entitlement
  * pointsBalance (spendable, never the career total) + an idempotent ledger
  * entry. The per-match loadout is server-only and each player sees only THEIR
  * own (the opponent's is a surprise).
+ *
+ * REMOVAL / KILL SWITCH (the whole feature is built to be trivially undoable if
+ * the developer decides abilities are a bad idea):
+ *   - INSTANT OFF, no deploy, no code change: set config/abilities.enabled =
+ *     false (its current state). Every path reads it - getLoadout and
+ *     getMatchAbilities return enabled:false with zero counts, purchaseAbility
+ *     refuses, and the client hides the loadout + deploy UI. The chess-clock
+ *     engine is then seeded with 0 interrupts/instant/extend/go-first, so a
+ *     regular match simply runs as a PLAIN chess clock (talk budget + free
+ *     yield + shot-clock). That is the complete "abilities removed" runtime
+ *     behaviour, reached by flipping one boolean. Verified by
+ *     functions/live/abilityChecks.js.
+ *   - FULL CODE REMOVAL (tidiness only; the flag above already does the job):
+ *     delete this file, its 3 callables in index.js (getLoadout /
+ *     purchaseAbility / getMatchAbilities), test/abilities.test.js,
+ *     live/abilityChecks.js, and the client abilities_service.dart /
+ *     ability_deploy_bar.dart / loadout_panel.dart; then strip the ability
+ *     wiring from match_screen.dart (the getMatchAbilities seed in _seedBattle,
+ *     the Interrupt/Instant controls, the deploy bar, _onDeployAbility, the
+ *     tomato splat). DO NOT delete mainStageBattle.js / main_stage_battle.dart:
+ *     the chess-clock engine is SHARED with the Main Stage finals and IS the
+ *     match format - with abilities gone it just runs with zero seeds.
  */
 
 // The catalog. `deploy` says WHERE the ability is used, so the client knows

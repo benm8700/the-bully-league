@@ -40,6 +40,7 @@ class AbilityDeployBar extends StatefulWidget {
     super.key,
     required this.matchId,
     required this.onDeploy,
+    this.holdsFloor = false,
   });
 
   final String matchId;
@@ -47,6 +48,13 @@ class AbilityDeployBar extends StatefulWidget {
   /// Called with the ability id when the player deploys one. The actual
   /// gameplay effect lives in the handler (format-specific, deferred).
   final void Function(String abilityId) onDeploy;
+
+  /// Whether the player currently holds the floor. "+5 Seconds" (extend) only
+  /// adds to YOUR OWN clock, so the engine ignores it when it is not your turn
+  /// - and tapping it off-turn used to silently burn the displayed charge and
+  /// pop a misleading "+5 seconds" toast. Its button is now disabled off-turn.
+  /// Tomato is floor-independent (a splat on the opponent) and always enabled.
+  final bool holdsFloor;
 
   @override
   State<AbilityDeployBar> createState() => _AbilityDeployBarState();
@@ -77,9 +85,13 @@ class _AbilityDeployBarState extends State<AbilityDeployBar> {
     }
   }
 
+  /// Extend only works on your own clock, so it is deployable only while you
+  /// hold the floor; everything else (tomato) is always deployable.
+  bool _deployableNow(String id) => id == 'extend' ? widget.holdsFloor : true;
+
   void _deploy(AbilityOption a) {
     final left = _remaining[a.id] ?? 0;
-    if (left <= 0) return;
+    if (left <= 0 || !_deployableNow(a.id)) return;
     setState(() => _remaining[a.id] = left - 1);
     widget.onDeploy(a.id);
   }
@@ -103,6 +115,7 @@ class _AbilityDeployBarState extends State<AbilityDeployBar> {
           _DeployButton(
             ability: a,
             remaining: _remaining[a.id] ?? 0,
+            enabled: _deployableNow(a.id),
             onTap: () => _deploy(a),
           ),
           const SizedBox(height: 8),
@@ -117,20 +130,27 @@ class _DeployButton extends StatelessWidget {
     required this.ability,
     required this.remaining,
     required this.onTap,
+    this.enabled = true,
   });
 
   final AbilityOption ability;
   final int remaining;
   final VoidCallback onTap;
 
+  /// When false (e.g. "+5 Seconds" while it is not your turn), the button is
+  /// dimmed and inert with a short reason, instead of silently doing nothing.
+  final bool enabled;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
+    return Opacity(
+      opacity: enabled ? 1 : 0.45,
+      child: Material(
       color: Colors.black.withValues(alpha: 0.55),
       borderRadius: BorderRadius.circular(22),
       child: InkWell(
-        onTap: onTap,
+        onTap: enabled ? onTap : null,
         borderRadius: BorderRadius.circular(22),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -144,6 +164,11 @@ class _DeployButton extends StatelessWidget {
                 style: const TextStyle(
                     color: Colors.white, fontWeight: FontWeight.bold),
               ),
+              if (!enabled) ...[
+                const SizedBox(width: 6),
+                const Text('· your turn only',
+                    style: TextStyle(color: Colors.white70, fontSize: 11)),
+              ],
               const SizedBox(width: 8),
               Container(
                 padding:
@@ -161,6 +186,7 @@ class _DeployButton extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }

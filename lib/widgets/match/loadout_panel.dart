@@ -47,19 +47,34 @@ class _LoadoutPanelState extends State<LoadoutPanel> {
   }
 
   Future<void> _buy(AbilityOption a) async {
-    if (_busyId != null) return;
-    setState(() => _busyId = a.id);
+    final before = _loadout;
+    if (_busyId != null || before == null || !a.canBuy) return;
+    // Optimistic: reflect the purchase INSTANTLY so the button doesn't feel
+    // laggy waiting on the callable. Reconcile with the server's exact
+    // bought/balance when it returns; revert to `before` if it fails.
+    setState(() {
+      _busyId = a.id;
+      _loadout =
+          before.withPurchase(a.id, bought: a.bought + 1, balance: before.balance - a.cost);
+    });
     try {
-      await AbilitiesService.buyAbility(
+      final res = await AbilitiesService.buyAbility(
           matchId: widget.matchId, abilityId: a.id);
-      await _load();
+      final nb = (res['bought'] as num?)?.toInt();
+      final bal = (res['balance'] as num?)?.toInt();
+      if (mounted && nb != null && bal != null) {
+        setState(() =>
+            _loadout = (_loadout ?? before).withPurchase(a.id, bought: nb, balance: bal));
+      }
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
+      setState(() => _loadout = before); // revert the optimistic bump
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message ?? "Couldn't add that.")),
       );
     } catch (_) {
       if (!mounted) return;
+      setState(() => _loadout = before);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Couldn't add that - try again.")),
       );
@@ -179,16 +194,6 @@ class _AbilityRow extends StatelessWidget {
   }
 
   Widget _buyControl(BuildContext context) {
-    if (busy) {
-      return const SizedBox(
-        width: 92,
-        height: 36,
-        child: Center(
-          child: SizedBox(
-              width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-        ),
-      );
-    }
     if (ability.atCap) {
       return SizedBox(
         width: 92,
@@ -197,10 +202,12 @@ class _AbilityRow extends StatelessWidget {
             style: Theme.of(context).textTheme.labelMedium),
       );
     }
+    // No spinner: the count bumps optimistically on tap, so the button just
+    // disables briefly while the purchase confirms.
     return SizedBox(
       width: 92,
       child: OutlinedButton(
-        onPressed: ability.canBuy ? onBuy : null,
+        onPressed: (ability.canBuy && !busy) ? onBuy : null,
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 6),
           visualDensity: VisualDensity.compact,
