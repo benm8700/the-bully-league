@@ -329,17 +329,28 @@ async function getMyChallenges(auth) {
   const incomingLive = newestPer(live(incoming), "fromUid");
   const outgoingLive = newestPer(live(outgoing), "toUid");
 
-  // An accepted challenge stays "accepted" forever - nothing closes it when
-  // its match ends. So only surface the ones whose match is STILL joinable;
-  // a completed/abandoned battle must not keep offering a dead "Battle now".
-  // The match read is by doc id (no index) and acceptedLive is tiny.
+  // An accepted challenge stays "accepted" forever on its own - nothing closes
+  // it when its match ends. So surface only the ones whose match is STILL
+  // joinable, and CLOSE the rest authoritatively: when the battle is over,
+  // mark the challenge "completed" so it drops out of the "accepted" query
+  // entirely (no dead "Battle now" lingering, and no repeated match read on
+  // later calls). This is the single place that covers every settle path -
+  // completeMatch, the both-left abandon, a forfeit - because it keys off the
+  // match's own status rather than hooking each. Best-effort: a failed close
+  // just means it gets filtered on read again next time.
   const acceptedCandidates = newestPer(live(accepted), "toUid");
   const acceptedLive = [];
   await Promise.all(acceptedCandidates.map(async (c) => {
     const mid = c.matchId ?? friendMatchId(c.id);
     const ms = await db.collection("matches").doc(mid).get();
     const status = ms.data()?.status;
-    if (status === "pending" || status === "in_progress") acceptedLive.push(c);
+    if (status === "pending" || status === "in_progress") {
+      acceptedLive.push(c);
+    } else {
+      await db.collection("challenges").doc(c.id)
+          .update({status: "completed", closedAtMs: nowMs})
+          .catch(() => {});
+    }
   }));
 
   // Names are resolved here rather than trusted from the challenge, for
