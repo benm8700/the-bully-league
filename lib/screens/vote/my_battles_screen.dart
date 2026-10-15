@@ -20,10 +20,20 @@ import '../moderation/clip_takedown_sheet.dart';
 /// the CENTRE badge says whether YOU won or lost, while the GREEN avatar ring
 /// always marks whoever actually won.
 class MyBattlesScreen extends StatefulWidget {
-  const MyBattlesScreen({super.key, this.embedded = false});
+  const MyBattlesScreen({
+    super.key,
+    this.embedded = false,
+    this.isActiveTab = true,
+  });
 
   /// True when shown as a bottom-nav tab.
   final bool embedded;
+
+  /// True when this tab is the one currently on screen. The list is refetched
+  /// when it becomes active, because the shell keeps every tab MOUNTED in an
+  /// IndexedStack - without this the initState fetch ran once (at login) and a
+  /// battle finished mid-session never appears until the app restarts.
+  final bool isActiveTab;
 
   @override
   State<MyBattlesScreen> createState() => _MyBattlesScreenState();
@@ -44,6 +54,20 @@ class _MyBattlesScreenState extends State<MyBattlesScreen> {
     super.initState();
     _uid = FirebaseAuth.instance.currentUser?.uid;
     if (_uid != null) _matchesFuture = _myMatches(_uid!);
+  }
+
+  @override
+  void didUpdateWidget(covariant MyBattlesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Refetch each time the tab is switched TO, so a battle finished while
+    // this (always-mounted) tab was in the background shows up.
+    if (!oldWidget.isActiveTab && widget.isActiveTab) _refresh();
+  }
+
+  void _refresh() {
+    final uid = _uid;
+    if (uid == null) return;
+    setState(() => _matchesFuture = _myMatches(uid));
   }
 
   /// Win / loss / tie / still-judging, from the current user's perspective.

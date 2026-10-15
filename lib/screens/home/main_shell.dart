@@ -58,9 +58,14 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
-  /// The Vote/Judge tab, whose feed autoplays a clip WITH SOUND. Named so
-  /// the shell can tell that tab when it is not the one on screen.
+  /// The Vote tab, whose feed autoplays a clip WITH SOUND. Named so the shell
+  /// can tell that tab when it is not the one on screen.
   static const _voteTabIndex = 1;
+
+  /// My Battles. Told when it becomes active so it refetches - the tab stays
+  /// mounted in the IndexedStack, so a battle finished mid-session would
+  /// otherwise never appear until an app restart.
+  static const _myBattlesTabIndex = 2;
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +80,8 @@ class _MainShellState extends State<MainShell> {
     final screens = [
       const HomeScreen(),
       WatchFeedScreen(embedded: true, isActiveTab: _index == _voteTabIndex),
-      const MyBattlesScreen(embedded: true),
+      MyBattlesScreen(
+          embedded: true, isActiveTab: _index == _myBattlesTabIndex),
       const LeaderboardScreen(embedded: true),
       const ProfileScreen(embedded: true),
     ];
