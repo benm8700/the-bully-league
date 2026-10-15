@@ -104,6 +104,21 @@ class _MatchScreenState extends State<MatchScreen>
   _Phase _phase = _Phase.waitingForOpponent;
   int _secondsRemaining = 0; // warmup countdown only
   Timer? _ticker; // warmup countdown only
+
+  // Warm-up skip: BOTH players must agree to end the warmup early. Each sends
+  // a skipWarmup message when they tap; the HOST (which drives the timeline)
+  // ends the warmup the moment it holds both agreements. A future purchasable
+  // ability could bypass the mutual rule and let one person force it.
+  bool _mySkipRequested = false;
+  bool _oppSkipRequested = false;
+  // The host's warmup wait resolves EITHER on the full timer OR early when
+  // both agree to skip - a single place that opens the engine, so the skip
+  // never races a second _openEngine against _runHostSequence.
+  Completer<void>? _warmupSkip;
+  // Re-announces this side's skip intent every couple of seconds while in
+  // warmup, so a peer who (re)joins mid-warmup learns about a skip request
+  // that was sent before it was listening.
+  Timer? _skipResend;
   bool _matchCompleted = false;
   bool _completeRequested = false;
   String? _matchSaveError;
@@ -390,6 +405,17 @@ class _MatchScreenState extends State<MatchScreen>
       _enterWarmup((message['duration'] as num?)?.toInt() ?? _warmupSeconds);
       return;
     }
+    if (message['type'] == 'skipWarmup') {
+      // The other player wants to end the warmup early. Record it; the HOST
+      // ends the warmup once BOTH have agreed (mutual, see _maybeEndWarmup).
+      if (message['by'] != _myFirebaseUid) {
+        if (!_oppSkipRequested && mounted) {
+          setState(() => _oppSkipRequested = true);
+        }
+        _maybeEndWarmupEarly();
+      }
+      return;
+    }
     final t = message['t'];
     if (t == 'ability' && message['id'] == 'tomato') {
       // A tomato splats on the RECEIVER's screen. Ephemeral and client-only -
@@ -467,7 +493,14 @@ class _MatchScreenState extends State<MatchScreen>
       await _videoCallService.sendMatchMessage(
           {'type': 'warmup', 'duration': _warmupSeconds});
       _enterWarmup(_warmupSeconds);
-      await Future<void>.delayed(Duration(seconds: _warmupSeconds));
+      // Wait out the warmup, OR end it early when both players agree to skip
+      // (whichever comes first). The early end completes _warmupSkip from
+      // _maybeEndWarmupEarly - so the engine still opens through THIS one path.
+      _warmupSkip = Completer<void>();
+      await Future.any<void>([
+        Future<void>.delayed(Duration(seconds: _warmupSeconds)),
+        _warmupSkip!.future,
+      ]);
     }
     if (_violationEnded || !mounted) return;
     await _openEngine();
@@ -621,6 +654,46 @@ class _MatchScreenState extends State<MatchScreen>
     _startWarmupTicker(seconds);
   }
 
+  /// This player taps "Skip warm-up". Announces it to the opponent and, if the
+  /// opponent has already agreed, ends the warmup. Both must agree - a single
+  /// tap only arms this side.
+  void _requestSkipWarmup() {
+    if (_phase != _Phase.warmup || _mySkipRequested) return;
+    setState(() => _mySkipRequested = true);
+    _sendSkipIntent();
+    // Re-announce every 2s so a peer that (re)joins mid-warmup still learns
+    // this standing request; self-cancels once warmup is over.
+    _skipResend?.cancel();
+    _skipResend = Timer.periodic(const Duration(seconds: 2), (t) {
+      if (!mounted || _phase != _Phase.warmup || !_mySkipRequested) {
+        t.cancel();
+        return;
+      }
+      _sendSkipIntent();
+    });
+    _maybeEndWarmupEarly();
+  }
+
+  void _sendSkipIntent() {
+    _videoCallService
+        .sendMatchMessage({'type': 'skipWarmup', 'by': _myFirebaseUid});
+  }
+
+  /// Ends the warmup early once BOTH players have asked to skip. Only the HOST
+  /// acts (it drives the timeline): it completes the warmup wait, so the engine
+  /// opens through the SINGLE path in _runHostSequence rather than a second,
+  /// racing _openEngine call. The guest flips to battle when the host's first
+  /// ms_state arrives.
+  void _maybeEndWarmupEarly() {
+    if (_phase != _Phase.warmup || _isHost != true) return;
+    if (!_mySkipRequested || !_oppSkipRequested) return;
+    _ticker?.cancel();
+    _skipResend?.cancel();
+    if (_warmupSkip != null && !_warmupSkip!.isCompleted) {
+      _warmupSkip!.complete();
+    }
+  }
+
   String get _oppFirebaseUid => _opponentFirebaseUid;
 
   /// Flips the already-existing match document from "pending" to
@@ -701,6 +774,7 @@ class _MatchScreenState extends State<MatchScreen>
   void dispose() {
     _ticker?.cancel();
     _battleTick?.cancel();
+    _skipResend?.cancel();
     _splatTimer?.cancel();
     _stealTimer?.cancel();
     _pulse.dispose();
@@ -1046,9 +1120,39 @@ class _MatchScreenState extends State<MatchScreen>
                   ),
                 ),
               ],
+              const SizedBox(height: 4),
+              _buildWarmupSkip(),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Small, unobtrusive "skip warm-up" control under the warmup banner. Both
+  /// players must tap it; a single tap arms this side and waits for the other.
+  Widget _buildWarmupSkip() {
+    if (_mySkipRequested) {
+      return const Text(
+        'Waiting for your opponent to skip…',
+        style: TextStyle(color: Colors.white54, fontSize: 12),
+      );
+    }
+    final agreeing = _oppSkipRequested;
+    return TextButton.icon(
+      onPressed: _requestSkipWarmup,
+      icon: Icon(Icons.fast_forward,
+          size: 16, color: agreeing ? Colors.amberAccent : Colors.white70),
+      style: TextButton.styleFrom(
+        foregroundColor: agreeing ? Colors.amberAccent : Colors.white70,
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: const Size(0, 28),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      label: Text(
+        agreeing ? 'Opponent wants to skip — tap to agree' : 'Skip warm-up',
+        style: const TextStyle(fontSize: 12),
       ),
     );
   }

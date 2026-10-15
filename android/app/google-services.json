@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "283010814552",
+    "firebase_url": "https://the-bully-league-default-rtdb.firebaseio.com",
     "project_id": "the-bully-league",
     "storage_bucket": "the-bully-league.firebasestorage.app"
   },

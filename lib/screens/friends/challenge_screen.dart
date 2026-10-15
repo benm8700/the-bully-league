@@ -158,7 +158,7 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Battle a friend')),
+      appBar: AppBar(title: const Text('Challenge a friend')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(

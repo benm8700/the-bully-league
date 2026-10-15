@@ -2,35 +2,70 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-/// An animated tomato SPLAT overlay: a tomato smacks the screen, bursts into a
-/// red splatter with droplets flung outward and seed flecks, then the whole
-/// thing drips and fades. Ephemeral and non-interactive - it renders only on
-/// the live client view and can never reach a recording (the splat is drawn
-/// here, not in the camera stream).
+/// An animated tomato BARRAGE overlay: ONE throw fires a rapid burst of
+/// several tomatoes (boom-boom-boom) that smack the screen at scattered
+/// positions - over the video, the timers and the buttons - each bursting
+/// into a red splatter with flung droplets and seed flecks, then dripping and
+/// fading. Ephemeral and non-interactive (IgnorePointer), drawn only on the
+/// live client view, so it can never reach a recording.
 ///
-/// Self-timing: plays once (~1.1s) and calls [onDone] so the host can clear it.
-/// Mount it under a unique key per throw so a second tomato replays rather than
-/// reusing the finished controller.
+/// Self-timing: the whole barrage plays once and calls [onDone] so the host
+/// can clear it. Mount under a unique key per throw so a second throw replays
+/// rather than reusing the finished controller.
 class TomatoSplat extends StatefulWidget {
-  const TomatoSplat({super.key, this.onDone});
+  const TomatoSplat({super.key, this.onDone, this.count = 5});
 
   final VoidCallback? onDone;
+
+  /// How many tomatoes one throw lobs. 4-6 reads as a satisfying barrage.
+  final int count;
 
   @override
   State<TomatoSplat> createState() => _TomatoSplatState();
 }
 
+/// Each tomato in the barrage: when it lands (fraction of the whole barrage),
+/// where it lands (fractional screen position), and its splatter.
+class _Splat {
+  const _Splat(this.start, this.cx, this.cy, this.scale, this.drops);
+  final double start; // 0..1 into the barrage timeline
+  final double cx; // 0..1 of width
+  final double cy; // 0..1 of height
+  final double scale; // per-tomato size variation
+  final List<_Drop> drops;
+}
+
 class _TomatoSplatState extends State<TomatoSplat>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c;
-  late final List<_Drop> _drops;
+  late final List<_Splat> _splats;
+
+  // Each splat's own impact->spread->fade takes this long; the barrage is the
+  // last splat's start plus this.
+  static const _splatMs = 950;
+  // Gap between successive tomatoes - the boom-boom-boom cadence.
+  static const _staggerMs = 135;
 
   @override
   void initState() {
     super.initState();
-    _drops = _makeDrops(Random());
+    final r = Random();
+    final n = widget.count.clamp(1, 8);
+    final totalMs = (n - 1) * _staggerMs + _splatMs;
+    _splats = List.generate(n, (i) {
+      final startMs = i * _staggerMs;
+      return _Splat(
+        startMs / totalMs,
+        // Scattered across the screen (kept off the very edges so each splat
+        // reads whole). The first lands central-ish; the rest spread out.
+        i == 0 ? 0.4 + r.nextDouble() * 0.2 : 0.12 + r.nextDouble() * 0.76,
+        i == 0 ? 0.38 + r.nextDouble() * 0.24 : 0.14 + r.nextDouble() * 0.72,
+        0.8 + r.nextDouble() * 0.5,
+        _makeDrops(r),
+      );
+    });
     _c = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1100))
+        vsync: this, duration: Duration(milliseconds: totalMs))
       ..addStatusListener((s) {
         if (s == AnimationStatus.completed) widget.onDone?.call();
       })
@@ -49,25 +84,9 @@ class _TomatoSplatState extends State<TomatoSplat>
       child: AnimatedBuilder(
         animation: _c,
         builder: (context, _) {
-          final t = _c.value;
-          // Impact: the tomato scales in fast with an overshoot in the first
-          // ~22%, then holds while the splat takes over.
-          final impact =
-              Curves.easeOutBack.transform((t / 0.22).clamp(0.0, 1.0));
-          // The splatter spreads outward just after impact.
-          final spread =
-              Curves.easeOutCubic.transform(((t - 0.16) / 0.5).clamp(0.0, 1.0));
-          // A brief red flash of the whole screen on impact, then clear.
-          final flash = (1 - (t / 0.3).clamp(0.0, 1.0)) * 0.3;
-          // Everything fades out over the last 40%.
-          final fade = 1 - Curves.easeIn.transform(((t - 0.6) / 0.4).clamp(0.0, 1.0));
-          return Opacity(
-            opacity: fade.clamp(0.0, 1.0),
-            child: CustomPaint(
-              painter: _SplatPainter(
-                  impact: impact, spread: spread, flash: flash, drops: _drops),
-              child: const SizedBox.expand(),
-            ),
+          return CustomPaint(
+            painter: _BarragePainter(t: _c.value, splats: _splats),
+            child: const SizedBox.expand(),
           );
         },
       ),
@@ -98,18 +117,11 @@ List<_Drop> _makeDrops(Random r) {
   });
 }
 
-class _SplatPainter extends CustomPainter {
-  _SplatPainter({
-    required this.impact,
-    required this.spread,
-    required this.flash,
-    required this.drops,
-  });
+class _BarragePainter extends CustomPainter {
+  _BarragePainter({required this.t, required this.splats});
 
-  final double impact;
-  final double spread;
-  final double flash;
-  final List<_Drop> drops;
+  final double t; // 0..1 across the whole barrage
+  final List<_Splat> splats;
 
   static const _red = Color(0xFFE23B2E);
   static const _dark = Color(0xFFB11C12);
@@ -117,62 +129,93 @@ class _SplatPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final maxDist = size.shortestSide * 0.46;
     final red = Paint()..color = _red;
     final dark = Paint()..color = _dark;
     final seedPaint = Paint()..color = _seed;
 
+    // ONE full-screen red flash on the first impact only - repeating it per
+    // tomato would strobe. Keyed to the first splat's impact window.
+    final first = splats.first;
+    final firstLocal = ((t - first.start) / _localSpan()).clamp(0.0, 1.0);
+    final flash = (1 - (firstLocal / 0.3).clamp(0.0, 1.0)) * 0.22;
     if (flash > 0) {
-      canvas.drawRect(Offset.zero & size, Paint()..color = _red.withValues(alpha: flash));
+      canvas.drawRect(
+          Offset.zero & size, Paint()..color = _red.withValues(alpha: flash));
     }
 
-    // The flung droplets + seed flecks.
-    for (final d in drops) {
-      final travel = maxDist * d.dist * spread;
-      final dir = Offset(cos(d.angle), sin(d.angle));
-      final pos = center + dir * travel;
-      final rad = d.radius * (0.4 + 0.6 * spread);
-      if (d.seed) {
-        canvas.drawCircle(pos, rad, seedPaint);
-      } else {
-        // A short dark drip trailing back toward the impact.
-        canvas.drawCircle(pos - dir * rad * 0.7, rad * 0.55, dark);
-        canvas.drawCircle(pos, rad, red);
-      }
-    }
+    for (final s in splats) {
+      // This tomato's own 0..1 progress, from when it was thrown.
+      final local = (t - s.start) / _localSpan();
+      if (local <= 0) continue; // not thrown yet
+      final lt = local.clamp(0.0, 1.0);
 
-    // The central splat: an irregular cluster of lobes so the edge isn't a
-    // clean circle.
-    final coreR = size.shortestSide * 0.17 * spread;
-    if (coreR > 0) {
-      canvas.drawCircle(center, coreR, red);
-      for (var i = 0; i < 7; i++) {
-        final a = i / 7 * 2 * pi;
-        canvas.drawCircle(
-            center + Offset(cos(a), sin(a)) * coreR * 0.85, coreR * 0.46, red);
-      }
-      // A couple of seeds on the splat.
-      for (var i = 0; i < 4; i++) {
-        final a = i / 4 * 2 * pi + 0.6;
-        canvas.drawCircle(
-            center + Offset(cos(a), sin(a)) * coreR * 0.4, coreR * 0.07, seedPaint);
-      }
-    }
+      final impact = Curves.easeOutBack.transform((lt / 0.22).clamp(0.0, 1.0));
+      final spread =
+          Curves.easeOutCubic.transform(((lt - 0.16) / 0.5).clamp(0.0, 1.0));
+      final fade =
+          1 - Curves.easeIn.transform(((lt - 0.6) / 0.4).clamp(0.0, 1.0));
+      final alpha = fade.clamp(0.0, 1.0);
+      if (alpha <= 0) continue;
 
-    // The tomato itself at the moment of impact, on top, before the splat
-    // swallows it.
-    if (impact > 0) {
-      final tp = TextPainter(
-        text: TextSpan(
-            text: '🍅', style: TextStyle(fontSize: 70 * (0.5 + 0.5 * impact))),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
+      final center = Offset(size.width * s.cx, size.height * s.cy);
+      final maxDist = size.shortestSide * 0.34 * s.scale;
+
+      void withAlpha(Paint p, Color base) =>
+          p.color = base.withValues(alpha: base.a * alpha);
+      withAlpha(red, _red);
+      withAlpha(dark, _dark);
+      withAlpha(seedPaint, _seed);
+
+      for (final d in s.drops) {
+        final travel = maxDist * d.dist * spread;
+        final dir = Offset(cos(d.angle), sin(d.angle));
+        final pos = center + dir * travel;
+        final rad = d.radius * s.scale * (0.4 + 0.6 * spread);
+        if (d.seed) {
+          canvas.drawCircle(pos, rad, seedPaint);
+        } else {
+          canvas.drawCircle(pos - dir * rad * 0.7, rad * 0.55, dark);
+          canvas.drawCircle(pos, rad, red);
+        }
+      }
+
+      final coreR = size.shortestSide * 0.15 * s.scale * spread;
+      if (coreR > 0) {
+        canvas.drawCircle(center, coreR, red);
+        for (var i = 0; i < 7; i++) {
+          final a = i / 7 * 2 * pi;
+          canvas.drawCircle(
+              center + Offset(cos(a), sin(a)) * coreR * 0.85, coreR * 0.46, red);
+        }
+        for (var i = 0; i < 4; i++) {
+          final a = i / 4 * 2 * pi + 0.6;
+          canvas.drawCircle(center + Offset(cos(a), sin(a)) * coreR * 0.4,
+              coreR * 0.07, seedPaint);
+        }
+      }
+
+      if (impact > 0 && lt < 0.5) {
+        final tp = TextPainter(
+          text: TextSpan(
+              text: '🍅',
+              style: TextStyle(
+                  fontSize: 64 * s.scale * (0.5 + 0.5 * impact),
+                  color: Colors.white.withValues(alpha: alpha))),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
+      }
     }
   }
 
+  /// A single tomato's lifetime as a fraction of the whole barrage timeline.
+  double _localSpan() {
+    final n = splats.length;
+    final totalMs = (n - 1) * _TomatoSplatState._staggerMs +
+        _TomatoSplatState._splatMs;
+    return _TomatoSplatState._splatMs / totalMs;
+  }
+
   @override
-  bool shouldRepaint(covariant _SplatPainter old) =>
-      old.impact != impact || old.spread != spread || old.flash != flash;
+  bool shouldRepaint(covariant _BarragePainter old) => old.t != t;
 }

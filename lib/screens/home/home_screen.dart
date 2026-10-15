@@ -22,6 +22,7 @@ import '../../widgets/home/player_status_card.dart';
 import '../../widgets/home/home_quick_actions.dart';
 import '../../widgets/home/home_featured.dart';
 import '../../widgets/home/main_stage_card.dart';
+import '../../widgets/home/friend_battle_card.dart';
 import '../../widgets/home/daily_window_strip.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
@@ -170,6 +171,13 @@ class HomeScreen extends StatelessWidget {
                     // prize). The countdown to Thursday's finals lives in the
                     // hub, not on the clean pill.
                     const MainStageCard(),
+                    const SizedBox(height: 12),
+                    // Battle a Friend - a FULL hero pill now (developer's call),
+                    // sitting under the other two so people see it and invite a
+                    // buddy. Promoted from the quiet nav-list card it used to be
+                    // because friend challenges drive growth (and seed the
+                    // invite-by-text loop). Purple, distinct from pink/gold.
+                    const FriendBattleCard(),
                     const SizedBox(height: 14),
                     // Quick Actions row (Home overhaul): Daily Challenges /
                     // Free Rewards / Current Streak. The Daily Challenges card
@@ -203,12 +211,10 @@ class HomeScreen extends StatelessWidget {
                     // is a solo activity anyway, and solo practice still lives
                     // where it is actually wanted - the matchmaking screen
                     // offers "Warm up solo instead" for the empty-queue case.
-                    // Battle a friend leads the navigation trio now.
+                    // Battle a Friend is now a FEATURED hero pill up top (under
+                    // the two mode heroes), not a quiet nav-list card - so it is
+                    // deliberately not repeated down here.
                     //
-                    // Sits with the battle actions because it IS a way to
-                    // start a battle - and with a thin pool it is the most
-                    // reliable one there is.
-                    const _BattleFriendCard(),
                     // Solo practice is no longer offered here - Home is for
                     // battling and the day's business, not warm-ups. It
                     // still lives where it is actually wanted: the
@@ -1010,139 +1016,7 @@ class _WalletBar extends StatelessWidget {
 /// (identity/secondary colour per the app's colour hierarchy) that is quieter
 /// than the gold Tournament banner and the pink Roast a Stranger hero, but
 /// more premium than a plain outlined button. The whole card is tappable.
-class _BattleFriendCard extends StatelessWidget {
-  const _BattleFriendCard();
-
-  static const Color _violet = Color(0xFFC08CEE);
-  static const Color _border = Color(0xFF9A4FD0);
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const ChallengeScreen()),
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              // Subtle plum illumination top-left into near-black navy.
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF241A33), Color(0xFF100C18)],
-              ),
-              border: Border.all(color: _border.withValues(alpha: 0.5)),
-              boxShadow: [
-                // Very restrained purple perimeter glow.
-                BoxShadow(
-                  color: _border.withValues(alpha: 0.16),
-                  blurRadius: 16,
-                  spreadRadius: -5,
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-              child: Row(
-                children: [
-                  const _DuelIcon(),
-                  const SizedBox(width: 12),
-                  Container(
-                    width: 1,
-                    height: 34,
-                    color: Colors.white.withValues(alpha: 0.12),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'BATTLE A FRIEND',
-                          style: text.titleSmall?.copyWith(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Challenge someone you know',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodySmall?.copyWith(
-                            fontSize: 11.5,
-                            color: const Color(0xFFA79FB2),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.chevron_right,
-                    size: 20,
-                    color: _violet.withValues(alpha: 0.75),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A compact purple "two people + microphone" mark for Battle a Friend:
-/// two-person silhouette with a small mic sitting between/below them, so it
-/// reads immediately as "play against someone you know."
-class _DuelIcon extends StatelessWidget {
-  const _DuelIcon();
-
-  static const Color _violet = Color(0xFFC08CEE);
-  static const Color _micViolet = Color(0xFFDBBAF6);
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 32,
-      height: 30,
-      child: Stack(
-        alignment: Alignment.center,
-        clipBehavior: Clip.none,
-        children: [
-          // Two people, lifted a little so the mic tucks in below them.
-          const Padding(
-            padding: EdgeInsets.only(bottom: 6),
-            child: Icon(Icons.people_alt, color: _violet, size: 25),
-          ),
-          // The competitive element: a small mic between/near them, on a dark
-          // disc so it stays legible against the silhouettes.
-          Positioned(
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: const BoxDecoration(
-                color: Color(0xFF140F1E),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.mic, color: _micViolet, size: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// _BattleFriendCard / _DuelIcon removed - Battle a Friend is now the
+// FriendBattleCard hero pill up top (lib/widgets/home/friend_battle_card.dart).
 
 
