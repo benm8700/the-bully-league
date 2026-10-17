@@ -386,6 +386,19 @@ class MatchmakingService {
     }
   }
 
+  /// Deliberately cancels a PRE-BATTLE match (e.g. leaving the bio reveal) -
+  /// ends it as a no-contest for BOTH players so neither is stranded waiting.
+  /// Best-effort; the server only honours it before a round has started.
+  Future<void> cancelPendingMatch(String matchId) async {
+    try {
+      await _functions
+          .httpsCallable('leaveMatch')
+          .call<Map<String, dynamic>>({'matchId': matchId, 'cancel': true});
+    } catch (_) {
+      // Best-effort: the opponent's own escape / the sweep still clean up.
+    }
+  }
+
   /// Leaves a match whose opponent never turned up, without spending a
   /// skip - they declined nobody, they were stood up.
   Future<bool> releaseUnresponsive(String matchId) async {

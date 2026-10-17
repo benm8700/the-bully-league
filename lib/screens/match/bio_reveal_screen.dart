@@ -323,13 +323,62 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Your Opponent'),
-        automaticallyImplyLeading: false,
+    // Once the match has ended there's nothing to cancel - let it pop freely.
+    final canLeaveFreely = _endedReason != null;
+    return PopScope(
+      canPop: canLeaveFreely,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmCancel();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Your Opponent'),
+          automaticallyImplyLeading: canLeaveFreely,
+          // A visible way out even after you've readied up and are waiting on a
+          // slow/broken opponent - otherwise this screen is a trap (no back,
+          // and the "opponent gone" escape only appears after 75s).
+          leading: canLeaveFreely
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Leave match',
+                  onPressed: _confirmCancel,
+                ),
+        ),
+        body: _endedReason != null ? _buildEndedUi() : _buildRevealUi(),
       ),
-      body: _endedReason != null ? _buildEndedUi() : _buildRevealUi(),
     );
+  }
+
+  /// Confirm, then cancel this pre-battle match (no-contest) and go Home.
+  /// Safe in any state here - the battle hasn't started, so no penalty - and
+  /// it ends the match for BOTH players so the opponent isn't left waiting.
+  Future<void> _confirmCancel() async {
+    if (_navigated || _endedReason != null) return;
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Leave this match?'),
+        content: const Text(
+          "The battle hasn't started, so there's no penalty - this just "
+          'cancels the match for both of you.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Stay'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+    if (leave == true && mounted) {
+      unawaited(_service.cancelPendingMatch(widget.pairing.matchId));
+      _leaveToHome();
+    }
   }
 
   Widget _buildEndedUi() {

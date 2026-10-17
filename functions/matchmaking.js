@@ -1090,6 +1090,23 @@ async function leaveMatch(auth, data) {
     // Only a live (pending) match can be left - a completed or already
     // abandoned one is settled, and a normal verdict never routes here.
     if (m.status !== "pending") return;
+    // A DELIBERATE pre-battle cancel (e.g. the Leave/X on the bio reveal):
+    // end the match as a no-contest for BOTH so neither player is stranded
+    // waiting on the other. Only before a round has started - once
+    // battleStartedAt is set the battle/forfeit rules apply instead. This is
+    // distinct from a crash (which never calls leaveMatch, so the match stays
+    // pending and getActiveMatch can recover it).
+    if (data?.cancel === true && !m.battleStartedAt) {
+      tx.update(ref, {
+        status: "abandoned",
+        abandonedReason: "cancelled-pre-battle",
+        voteFinalized: true,
+        winnerId: null,
+        completedAt: new Date(),
+      });
+      abandoned = true;
+      return;
+    }
     const {leftPlayerIds, end, reason} = leaveOutcome(m, auth.uid);
     if (end) {
       tx.update(ref, {

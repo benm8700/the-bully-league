@@ -162,6 +162,36 @@ async function matchState() {
         r.body?.abandoned === false && rk.status === "pending",
         `abandoned=${r.body?.abandoned} status=${rk.status}`);
     await db.collection("matches").doc(RANKED).delete().catch(() => {});
+
+    // DELIBERATE pre-battle cancel (the bio-reveal Leave/X): ends the match as
+    // a no-contest for BOTH, so neither player is stranded waiting.
+    const CANCEL = `lmcancel_${stamp}`;
+    await db.collection("matches").doc(CANCEL).set({
+      player1Id: A, player2Id: B, mode: "ranked", status: "pending",
+      readyPlayerIds: [A], // one readied, round not started
+      voteFinalized: false, winnerId: null, createdAt: Timestamp.now(),
+    });
+    r = await call(A, "leaveMatch", {matchId: CANCEL, cancel: true});
+    const cm = (await db.collection("matches").doc(CANCEL).get()).data();
+    check("a deliberate pre-battle cancel abandons it no-contest (both freed)",
+        r.body?.abandoned === true && cm.status === "abandoned" &&
+        cm.abandonedReason === "cancelled-pre-battle" && cm.winnerId === null,
+        `abandoned=${r.body?.abandoned} status=${cm.status} reason=${cm.abandonedReason}`);
+    await db.collection("matches").doc(CANCEL).delete().catch(() => {});
+
+    // But cancel must NOT override a battle already underway (battleStartedAt).
+    const CANCEL2 = `lmcancel2_${stamp}`;
+    await db.collection("matches").doc(CANCEL2).set({
+      player1Id: A, player2Id: B, mode: "ranked", status: "pending",
+      readyPlayerIds: [A, B], battleStartedAt: Date.now(),
+      voteFinalized: false, winnerId: null, createdAt: Timestamp.now(),
+    });
+    r = await call(A, "leaveMatch", {matchId: CANCEL2, cancel: true});
+    const cm2 = (await db.collection("matches").doc(CANCEL2).get()).data();
+    check("cancel is ignored once a round has started (stays pending)",
+        cm2.status === "pending",
+        `status=${cm2.status}`);
+    await db.collection("matches").doc(CANCEL2).delete().catch(() => {});
   } catch (e) {
     console.error("ERROR", e);
     failed++;
