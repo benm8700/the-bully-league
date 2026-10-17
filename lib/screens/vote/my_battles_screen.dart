@@ -585,13 +585,12 @@ class _BattleCard extends StatelessWidget {
 
   Widget _typePill(
       BuildContext context, String mode, Color gold, Color pink) {
-    // Categorised by mode so Roast and Improv battles are told apart. The
-    // mode is "Improv Station" on Home, but the My Battles tag reads "SPEED
-    // ROUND" (developer's call) so it's distinct from a Roast at a glance;
-    // teal matches the Improv Home pill.
+    // Categorised by mode so Roast and Face-Off battles are told apart. The
+    // improv mode is branded "Face-Off" everywhere user-facing; teal matches
+    // its Home card. (Code id stays "improv".)
     final (String label, Color color) = switch (mode) {
       'tournament' => ('TOURNAMENT', gold),
-      'improv' => ('SPEED ROUND', const Color(0xFF2BC4B0)),
+      'improv' => ('FACE-OFF', const Color(0xFF2BC4B0)),
       _ => ('ROAST', pink),
     };
     return Container(

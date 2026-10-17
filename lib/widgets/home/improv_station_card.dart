@@ -31,7 +31,7 @@ class ImprovStationCard extends StatelessWidget {
         icon: const Icon(Icons.help_outline),
         iconSize: 28,
         color: Colors.white,
-        tooltip: 'About Improv Station',
+        tooltip: 'About Face-Off',
         style: IconButton.styleFrom(
           backgroundColor: Colors.black.withValues(alpha: 0.42),
           padding: const EdgeInsets.all(6),
@@ -41,7 +41,7 @@ class ImprovStationCard extends StatelessWidget {
       center: Column(
         mainAxisSize: MainAxisSize.min,
         children: const [
-          HeroTitle('IMPROV STATION', color: _teal),
+          HeroTitle('FACE-OFF', color: _teal),
           SizedBox(height: 4),
           HeroSubtitle('SAME PROMPT. FUNNIEST WINS.'),
         ],
@@ -65,7 +65,7 @@ class ImprovStationCard extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Improv Station'),
+        title: const Text('Face-Off'),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
