@@ -268,6 +268,22 @@ class HomeScreen extends StatelessWidget {
 /// Top-level rather than a method so both the exhibition button and the
 /// Ranked unlock gate can start the flow without one reaching into the
 /// other's widget.
+/// Runs [future] behind a non-dismissible spinner, so a tap that kicks off a
+/// (possibly cold) Cloud Function call gives immediate feedback and can't be
+/// double-fired while it's in flight. Pops the spinner when done.
+Future<T?> _withSpinner<T>(BuildContext context, Future<T> future) async {
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const Center(child: CircularProgressIndicator()),
+  );
+  try {
+    return await future;
+  } finally {
+    if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+  }
+}
+
 Future<void> _startMatch(BuildContext context, String mode) async {
   // Asked FIRST, before anything that costs the player effort. Without
   // this a lapsed player sits through the tutorial gate, the recording
@@ -275,8 +291,13 @@ Future<void> _startMatch(BuildContext context, String mode) async {
   // turned away by the queue - the worst possible moment to say no, and it
   // reads as a bug rather than a price. The server still enforces; this
   // just turns a late refusal into an early offer.
-  final entitlement = await EntitlementService().current();
-  if (!context.mounted) return;
+  //
+  // Shown behind a blocking spinner because this is a Cloud Function call and
+  // the FIRST one after a cold app launch is slow - without feedback the first
+  // tap looked completely dead and people tapped again (seen on both phones).
+  // The modal barrier also stops a double-tap starting two flows at once.
+  final entitlement = await _withSpinner(context, EntitlementService().current());
+  if (entitlement == null || !context.mounted) return;
   if (!entitlement.allows(mode)) {
     await _showBlockedSheet(context, entitlement, mode);
     return;

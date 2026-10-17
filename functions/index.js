@@ -17,6 +17,8 @@ const {
   startMatchRecording,
   getActiveMatch,
   leaveMatch,
+  claimBattleForfeit,
+  markBattleStarted,
   setMatchReady,
   skipMatch,
   getSkipAllowance,
@@ -1036,6 +1038,19 @@ exports.getActiveMatch = onCall((request) => getActiveMatch(request.auth));
  * leaveMatch in matchmaking.js.
  */
 exports.leaveMatch = onCall((request) => leaveMatch(request.auth, request.data));
+
+/**
+ * The present player claims a ranked battle whose opponent abandoned it (Leave
+ * or crash) - a forfeit loss for the absent player, server-verified so it
+ * can't be faked. See claimBattleForfeit in matchmaking.js.
+ */
+exports.claimBattleForfeit =
+    onCall((request) => claimBattleForfeit(request.auth, request.data));
+
+/** The host stamps when the first round begins; before it, a mid-match
+ * departure is a no-contest rather than a forfeit. See markBattleStarted. */
+exports.markBattleStarted =
+    onCall((request) => markBattleStarted(request.auth, request.data));
 
 /**
  * User-initiated account and data deletion (CCPA - see CLAUDE.md's

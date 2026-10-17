@@ -1108,6 +1108,151 @@ async function leaveMatch(auth, data) {
   return {abandoned};
 }
 
+/** Grace before a ranked battle counts an absent player as gone. Short, since
+ * there is NO way back into a live battle (returning belongs to setup, not the
+ * fight) - so a long delay would just strand the present player on a frozen
+ * screen. Still long enough that a 1-2s blip won't trip it, because the server
+ * only acts when the opponent's HEARTBEAT actually stopped (an app that's alive
+ * and reconnecting keeps beating, ~10s apart, and is never forfeited). */
+const BATTLE_FORFEIT_STALE_MS = 15 * 1000;
+
+/**
+ * Decides whether the CALLER (the present player) may claim a forfeit in a
+ * ranked battle whose opponent has gone - by an explicit Leave OR a crash/
+ * force-quit (a stale heartbeat). PURE, so the rule is testable without
+ * Firestore or a clock.
+ *
+ * ABUSE-RESISTANT BY CONSTRUCTION: absence is judged from the OTHER player's
+ * OWN signal (their leftPlayerIds entry, or their own heartbeat going stale),
+ * which the caller cannot forge - so "my opponent left, I win" is not something
+ * a client can fake. A brief RTC blip where their app is still alive keeps
+ * their heartbeat fresh, so it never triggers.
+ *
+ * Deliberately does NOT reuse opponentUnresponsive: that one exempts a player
+ * who has readied (correct for the bio reveal), but in a battle BOTH have
+ * readied, so it would never fire. Here readiness is not presence.
+ *
+ * Returns {ok:false, reason} when no forfeit applies, or {ok:true, winnerId}
+ * where winnerId is the caller (one gone) or null (BOTH gone -> no-contest).
+ */
+function battleForfeitDecision({match, uid, nowMs, staleMs = BATTLE_FORFEIT_STALE_MS}) {
+  if (!match || match.status !== "pending") return {ok: false, reason: "not-pending"};
+  // Only ranked carries a rating to forfeit. Friend ends on one-leave already
+  // (leaveOutcome); exhibition/improv/mainstage are out of scope for v1.
+  if (match.mode !== "ranked") return {ok: false, reason: "mode"};
+  const ready = Array.isArray(match.readyPlayerIds) ? match.readyPlayerIds : [];
+  if (ready.length < 2) return {ok: false, reason: "not-started"};
+  const oppId = match.player1Id === uid ? match.player2Id :
+    match.player2Id === uid ? match.player1Id : null;
+  if (!oppId) return {ok: false, reason: "not-participant"};
+
+  const left = Array.isArray(match.leftPlayerIds) ? match.leftPlayerIds : [];
+  const seen = match.lastSeenAt || {};
+  const gone = (id) => {
+    if (left.includes(id)) return true; // explicit Leave
+    const t = Number(seen[id]);
+    // No heartbeat recorded is NOT evidence of absence (never punish on
+    // missing data); only a heartbeat that has gone stale counts.
+    if (!Number.isFinite(t) || t <= 0) return false;
+    return nowMs - t > staleMs;
+  };
+
+  if (!gone(oppId)) return {ok: false, reason: "opponent-present"};
+  // Both gone -> no-contest (nobody present to award the win to).
+  if (gone(uid)) return {ok: true, winnerId: null, reason: "both-gone"};
+  // A forfeit (a LOSS) only attaches once the first ROUND has actually begun.
+  // The warm-up is a no-stakes staredown with no roasting, so leaving during it
+  // ends the match as a NO-CONTEST (no loss) - matching the documented "before
+  // the first roasting turn = no-contest" rule. battleStartedAt is stamped by
+  // the host when round 1 starts (markBattleStarted). Either way the match ends
+  // here, so the present player is never stranded on a frozen battle.
+  if (!match.battleStartedAt) {
+    return {ok: true, winnerId: null, reason: "warmup-noncontest"};
+  }
+  return {ok: true, winnerId: uid, reason: "forfeit"};
+}
+
+/**
+ * The present player claims a ranked battle their opponent abandoned (Leave or
+ * crash). Server-verified via battleForfeitDecision, then settled immediately
+ * with the caller as the winner and finalized with FULL rating (a forfeit is a
+ * definitive result, not a thin-vote one) - no 24h vote window to wait on.
+ * Both-gone settles as a no-contest instead.
+ */
+async function claimBattleForfeit(auth, data) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const matchId = typeof data?.matchId === "string" ? data.matchId : "";
+  if (!matchId) {
+    throw new HttpsError("invalid-argument", "matchId is required.");
+  }
+  const db = getFirestore();
+  const ref = db.collection("matches").doc(matchId);
+  let outcome = {ok: false, reason: "race"};
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) {
+      outcome = {ok: false, reason: "not-found"};
+      return;
+    }
+    const m = snap.data();
+    if (m.player1Id !== auth.uid && m.player2Id !== auth.uid) {
+      throw new HttpsError("permission-denied", "That isn't your match.");
+    }
+    const d = battleForfeitDecision({match: m, uid: auth.uid, nowMs: Date.now()});
+    outcome = d;
+    if (!d.ok) return;
+    if (d.winnerId) {
+      // A win by forfeit: stamp the winner and mark completed so finalize
+      // applies rating (finalize reads forfeitWinnerId, bypassing votes).
+      tx.update(ref, {forfeitWinnerId: d.winnerId, status: "completed",
+        completedAt: new Date()});
+    } else {
+      // No winner (both gone, or a warm-up departure): settle no-contest, no
+      // rating. The reason distinguishes the cases for the client/logs.
+      tx.update(ref, {status: "abandoned", abandonedReason: d.reason,
+        voteFinalized: true, winnerId: null, completedAt: new Date()});
+    }
+  });
+  // Apply rating NOW (outside the transaction), only for a real forfeit win.
+  if (outcome.ok && outcome.winnerId) {
+    const {finalizeMatch} = require("./matchFinalization");
+    await finalizeMatch(matchId, {force: true}).catch((e) => {
+      console.error("forfeit finalize failed:", e.message);
+    });
+  }
+  return {settled: outcome.ok, winnerId: outcome.winnerId ?? null,
+    reason: outcome.reason};
+}
+
+/**
+ * Stamps when the first ROUND begins (the host calls this as it leaves the
+ * warm-up). It is what turns a mid-battle departure into a forfeit rather than
+ * a no-contest - before it is set, leaving is a no-contest (the warm-up is a
+ * no-stakes staredown). Idempotent: set once, never overwritten, so the clock
+ * reflects the true first-round start even if called again. Participant-only,
+ * pending-only.
+ */
+async function markBattleStarted(auth, data) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const matchId = typeof data?.matchId === "string" ? data.matchId : "";
+  if (!matchId) {
+    throw new HttpsError("invalid-argument", "matchId is required.");
+  }
+  const db = getFirestore();
+  const ref = db.collection("matches").doc(matchId);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return;
+    const m = snap.data();
+    if (m.player1Id !== auth.uid && m.player2Id !== auth.uid) {
+      throw new HttpsError("permission-denied", "That isn't your match.");
+    }
+    if (m.status !== "pending" || m.battleStartedAt) return; // once only
+    tx.update(ref, {battleStartedAt: Date.now()});
+  });
+  return {ok: true};
+}
+
 /**
  * Marks a paired match finished. Server-side so a client can't mark a
  * match it isn't in as complete (which would push it into the voting
@@ -1559,6 +1704,10 @@ module.exports = {
   leaveMatch,
   applyLeave,
   leaveOutcome,
+  claimBattleForfeit,
+  battleForfeitDecision,
+  markBattleStarted,
+  BATTLE_FORFEIT_STALE_MS,
   RECORDED_MODES,
   sanitiseRoundBoundaries,
   // Every queue that exists, so the online-count publisher (presence.js)

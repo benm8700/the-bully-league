@@ -167,7 +167,16 @@ async function finalizeMatch(matchId, {force = false} = {}) {
   let player2Weight = 0;
   let judgeWeight = 0;
   let mainStageFullConfidence = false;
-  if (match.mainStage) {
+  let forfeitFullConfidence = false;
+  if (match.forfeitWinnerId) {
+    // A ranked battle the opponent abandoned (Leave or crash). The winner is
+    // pre-stamped by claimBattleForfeit; a forfeit is a definitive result, so
+    // it moves the FULL Elo (no vote-confidence discount) and there are no
+    // ballots to tally.
+    winnerId = match.forfeitWinnerId;
+    roundsWon = null;
+    forfeitFullConfidence = true;
+  } else if (match.mainStage) {
     winnerId = match.judgeWinnerId ?? null;
     roundsWon = null;
     mainStageFullConfidence = true;
@@ -265,10 +274,11 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     // match is judged by the rules that were in force when it was played
     // rather than by whatever the config says a day later. Falls back to
     // the default for matches recorded before this was configurable.
-    const confidence = mainStageFullConfidence ? 1 : voteConfidence(
-        judgeWeight,
-        match.settings?.fullConfidenceVotes,
-    );
+    const confidence = (mainStageFullConfidence || forfeitFullConfidence) ? 1 :
+      voteConfidence(
+          judgeWeight,
+          match.settings?.fullConfidenceVotes,
+      );
 
     if (ratable && winnerId === match.player1Id) {
       p1NewRating = applyEloChange(p1Rating, p2Rating, 1, confidence);

@@ -32,6 +32,8 @@ const {
   MAX_SKIPS_PER_DAY,
   applyLeave,
   leaveOutcome,
+  battleForfeitDecision,
+  BATTLE_FORFEIT_STALE_MS,
 } = require("../matchmaking");
 
 const NOW = 1_700_000_000_000;
@@ -582,6 +584,99 @@ test("ranked battle STARTED: both leaving still cancels", () => {
   const r = leaveOutcome({...RANKED_LIVE, leftPlayerIds: ["a"]}, "b");
   assert.strictEqual(r.end, true);
   assert.strictEqual(r.reason, "both-left");
+});
+
+// --- battleForfeitDecision: ranked mid-battle forfeit, server-verified ---
+const T0 = 2_000_000_000_000;
+const STALE = BATTLE_FORFEIT_STALE_MS + 1000;
+function rankedBattle(over = {}) {
+  return {
+    player1Id: "a", player2Id: "b", mode: "ranked", status: "pending",
+    readyPlayerIds: ["a", "b"], battleStartedAt: T0, // round has started
+    lastSeenAt: {a: T0, b: T0}, leftPlayerIds: [],
+    ...over,
+  };
+}
+
+test("forfeit: opponent present (fresh heartbeat) -> no forfeit", () => {
+  const d = battleForfeitDecision({match: rankedBattle(), uid: "a", nowMs: T0 + 1000});
+  assert.strictEqual(d.ok, false);
+  assert.strictEqual(d.reason, "opponent-present");
+});
+
+test("forfeit: opponent's heartbeat went stale -> caller wins", () => {
+  const d = battleForfeitDecision({
+    match: rankedBattle({lastSeenAt: {a: T0 + STALE, b: T0}}),
+    uid: "a", nowMs: T0 + STALE});
+  assert.strictEqual(d.ok, true);
+  assert.strictEqual(d.winnerId, "a");
+});
+
+test("forfeit: opponent explicitly left -> caller wins immediately (no wait)", () => {
+  const d = battleForfeitDecision({
+    match: rankedBattle({leftPlayerIds: ["b"]}), uid: "a", nowMs: T0 + 1000});
+  assert.strictEqual(d.ok, true);
+  assert.strictEqual(d.winnerId, "a");
+});
+
+test("forfeit: BOTH gone -> no-contest (winnerId null)", () => {
+  const d = battleForfeitDecision({
+    match: rankedBattle({leftPlayerIds: ["a", "b"]}), uid: "a", nowMs: T0 + 1000});
+  assert.strictEqual(d.ok, true);
+  assert.strictEqual(d.winnerId, null);
+  assert.strictEqual(d.reason, "both-gone");
+});
+
+test("forfeit: a caller cannot fake it - opponent's own fresh heartbeat blocks it", () => {
+  // Caller is stale but opponent is fresh: no forfeit (you can't win by going
+  // absent yourself, and you can't move the opponent's signal).
+  const d = battleForfeitDecision({
+    match: rankedBattle({lastSeenAt: {a: T0, b: T0 + STALE}}),
+    uid: "a", nowMs: T0 + STALE});
+  assert.strictEqual(d.ok, false);
+  assert.strictEqual(d.reason, "opponent-present");
+});
+
+test("forfeit: only applies to a STARTED battle", () => {
+  const d = battleForfeitDecision({
+    match: rankedBattle({readyPlayerIds: ["a"], leftPlayerIds: ["b"]}),
+    uid: "a", nowMs: T0 + 1000});
+  assert.strictEqual(d.ok, false);
+  assert.strictEqual(d.reason, "not-started");
+});
+
+test("forfeit: never fires in a friend battle (no rating to forfeit)", () => {
+  const d = battleForfeitDecision({
+    match: rankedBattle({mode: "friend", leftPlayerIds: ["b"]}),
+    uid: "a", nowMs: T0 + 1000});
+  assert.strictEqual(d.ok, false);
+  assert.strictEqual(d.reason, "mode");
+});
+
+test("forfeit: leaving during WARM-UP (round not started) is a no-contest, not a loss", () => {
+  // battleStartedAt absent -> opponent gone settles as no-contest (no winner).
+  const d = battleForfeitDecision({
+    match: rankedBattle({battleStartedAt: undefined, leftPlayerIds: ["b"]}),
+    uid: "a", nowMs: T0 + 1000});
+  assert.strictEqual(d.ok, true);
+  assert.strictEqual(d.winnerId, null);
+  assert.strictEqual(d.reason, "warmup-noncontest");
+});
+
+test("forfeit: once the ROUND has started, the same departure IS a loss", () => {
+  const d = battleForfeitDecision({
+    match: rankedBattle({battleStartedAt: T0, leftPlayerIds: ["b"]}),
+    uid: "a", nowMs: T0 + 1000});
+  assert.strictEqual(d.winnerId, "a");
+  assert.strictEqual(d.reason, "forfeit");
+});
+
+test("forfeit: a missing heartbeat is NOT treated as absence", () => {
+  // No lastSeenAt for b at all, and not in leftPlayerIds -> not evidence.
+  const d = battleForfeitDecision({
+    match: rankedBattle({lastSeenAt: {a: T0}}), uid: "a", nowMs: T0 + STALE});
+  assert.strictEqual(d.ok, false);
+  assert.strictEqual(d.reason, "opponent-present");
 });
 
 console.log(`matchmaking: ${passed} checks passed`);

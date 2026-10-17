@@ -244,6 +244,14 @@ class MatchmakingService {
 
         switch (data['status'] as String?) {
           case 'matched':
+            // KEEP the matched queue entry (don't let the finally remove it).
+            // getActiveMatch recovers a ranked match a player force-closed /
+            // crashed out of DURING the bio reveal or battle by finding their
+            // matched queue entry - removing it here destroyed that recovery
+            // (the Home "Rejoin" banner had nothing to find). getActiveMatch
+            // itself clears the entry once the match is no longer pending, so
+            // it does not leak.
+            keepEntry = true;
             return MatchPairing.fromMap(data, fallbackMode: mode);
           case 'not_queued':
             // The entry was pruned as stale (a long background suspend, a
@@ -340,6 +348,41 @@ class MatchmakingService {
       await _call('setMatchReady', {'matchId': matchId, 'ready': false});
     } catch (_) {
       // Best-effort by design.
+    }
+  }
+
+  /// Claims a ranked battle whose opponent has gone (Leave or crash). The
+  /// server verifies the opponent is genuinely absent (their own heartbeat
+  /// stale / explicit leave), so this cannot be faked.
+  ///
+  /// Returns `(settled, won)`:
+  ///  - settled false -> refused (opponent still present); keep waiting.
+  ///  - settled true, won true -> the match ended in the caller's favour (a
+  ///    round had started = a real forfeit win).
+  ///  - settled true, won false -> the match ended as a NO-CONTEST (both gone,
+  ///    or the opponent left during the warm-up before any round).
+  Future<({bool settled, bool won})> claimBattleForfeit(String matchId) async {
+    try {
+      final result = await _functions
+          .httpsCallable('claimBattleForfeit')
+          .call<Map<String, dynamic>>({'matchId': matchId});
+      final settled = result.data['settled'] == true;
+      return (settled: settled, won: settled && result.data['winnerId'] != null);
+    } catch (_) {
+      return (settled: false, won: false);
+    }
+  }
+
+  /// The host stamps when the first round begins - before it, a mid-match
+  /// departure is a no-contest; after it, a forfeit. Best-effort, idempotent.
+  Future<void> markBattleStarted(String matchId) async {
+    try {
+      await _functions
+          .httpsCallable('markBattleStarted')
+          .call<Map<String, dynamic>>({'matchId': matchId});
+    } catch (_) {
+      // Best-effort: if it fails, a departure errs toward a no-contest, which
+      // is the lenient direction.
     }
   }
 

@@ -146,6 +146,19 @@ class _MatchScreenState extends State<MatchScreen>
   // Home, or by _joinRematch tearing it down early). Guards against a double
   // release and against disposing already-disposed notifiers.
   bool _videoTornDown = false;
+  // RANKED forfeit: a battle-phase presence heartbeat (so the server can tell
+  // a crash from a blip), and a grace timer that claims the win if the
+  // opponent's video stays gone. Ranked only - friend battles end on one leave.
+  Timer? _battleHeartbeat;
+  Timer? _forfeitTimer;
+  bool _wonByForfeit = false;
+  bool _noContest = false;
+  // True while waiting out the grace after the opponent's video dropped, so the
+  // frozen battle shows an "opponent disconnected - settling…" overlay.
+  bool _opponentDisconnecting = false;
+  // Stamped once when the first round begins (ranked), so the server knows a
+  // departure from here on is a forfeit rather than a warm-up no-contest.
+  bool _battleStartSent = false;
   // Plays the Fart ability's sound locally (never recorded).
   final FartPlayer _fartPlayer = FartPlayer();
 
@@ -250,6 +263,7 @@ class _MatchScreenState extends State<MatchScreen>
     _videoCallService.localAudioLevel.addListener(_onLocalAudioLevel);
     _videoCallService.localUid.addListener(_maybeElectHost);
     _videoCallService.remoteUid.addListener(_maybeElectHost);
+    _videoCallService.remoteUid.addListener(_onRemotePresence);
     _maybeElectHost();
   }
 
@@ -398,6 +412,10 @@ class _MatchScreenState extends State<MatchScreen>
     // (the engine itself is keyed by Firebase uid). Deterministic: the lower
     // uid (player1) hosts.
     _isHost = myUid < oppUid;
+    // Both devices heartbeat through the ranked battle so the server can tell
+    // a crash/force-quit (heartbeat stops) from a brief RTC blip (app alive,
+    // heartbeat continues). Friend battles don't forfeit, so they don't need it.
+    if (widget.pairing.mode == 'ranked') _startBattleHeartbeat();
     if (_isHost!) {
       // Started here rather than at pairing because host election is the
       // first moment both players are provably in the channel - starting
@@ -410,6 +428,80 @@ class _MatchScreenState extends State<MatchScreen>
       // highlight renders full-length.
       unawaited(_matchmakingService.startRecording(widget.pairing.matchId));
       unawaited(_runHostSequence());
+    }
+  }
+
+  /// Ranked only: keep a presence heartbeat going through the battle so the
+  /// server can distinguish a crash (heartbeat stops) from a blip (continues).
+  void _startBattleHeartbeat() {
+    if (_battleHeartbeat != null) return;
+    _matchmakingService.sendPresence(widget.pairing.matchId);
+    _battleHeartbeat = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted || _phase == _Phase.verdict || _violationEnded) return;
+      _matchmakingService.sendPresence(widget.pairing.matchId);
+    });
+  }
+
+  /// Ranked only: tell the server the first round has begun, so a departure
+  /// from here is a forfeit rather than a warm-up no-contest. Once only;
+  /// idempotent server-side too.
+  void _markBattleStartedOnce() {
+    if (_battleStartSent || widget.pairing.mode != 'ranked') return;
+    _battleStartSent = true;
+    unawaited(_matchmakingService.markBattleStarted(widget.pairing.matchId));
+  }
+
+  /// Watches the opponent's Agora presence. In a RANKED battle, if their video
+  /// stays gone past the grace, claim the forfeit - the server double-checks
+  /// their own heartbeat is genuinely stale, so a blip (app still alive) is
+  /// refused and we just keep waiting.
+  void _onRemotePresence() {
+    if (widget.pairing.mode != 'ranked') return;
+    if (!mounted || _phase == _Phase.verdict || _violationEnded) {
+      _forfeitTimer?.cancel();
+      _forfeitTimer = null;
+      return;
+    }
+    final remoteGone = _videoCallService.remoteUid.value == null;
+    final inBattle = _phase == _Phase.warmup || _phase == _Phase.battle;
+    if (remoteGone && inBattle) {
+      if (_forfeitTimer == null) {
+        // Show "Opponent disconnected - settling..." instead of a frozen clock.
+        setState(() => _opponentDisconnecting = true);
+        _forfeitTimer = Timer(const Duration(seconds: 15), _tryForfeit);
+      }
+    } else {
+      _forfeitTimer?.cancel();
+      _forfeitTimer = null;
+      if (_opponentDisconnecting) setState(() => _opponentDisconnecting = false);
+    }
+  }
+
+  Future<void> _tryForfeit() async {
+    _forfeitTimer = null;
+    if (!mounted || _phase == _Phase.verdict || _violationEnded) return;
+    // Came back in the meantime - no forfeit.
+    if (_videoCallService.remoteUid.value != null) {
+      if (_opponentDisconnecting) setState(() => _opponentDisconnecting = false);
+      return;
+    }
+    final r =
+        await _matchmakingService.claimBattleForfeit(widget.pairing.matchId);
+    if (!mounted) return;
+    if (r.settled) {
+      // Either a forfeit win (round had started) or a no-contest (warm-up
+      // departure / both gone). Either way the match is over.
+      setState(() {
+        _wonByForfeit = r.won;
+        _noContest = !r.won;
+        _opponentDisconnecting = false;
+      });
+      _goToVerdict();
+    } else if (_videoCallService.remoteUid.value == null &&
+        (_phase == _Phase.warmup || _phase == _Phase.battle)) {
+      // Refused (their app is still alive / heartbeat fresh), but their video
+      // is still gone - check again shortly in case they then crash out.
+      _forfeitTimer = Timer(const Duration(seconds: 15), _tryForfeit);
     }
   }
 
@@ -477,6 +569,7 @@ class _MatchScreenState extends State<MatchScreen>
         _battle = MainStageBattleState.fromMap(Map<String, dynamic>.from(s));
         if (_phase != _Phase.battle && !_battle!.isOver) {
           setState(() => _phase = _Phase.battle);
+          _markBattleStartedOnce();
         }
         _afterBattleState(broadcast: false);
       }
@@ -619,6 +712,7 @@ class _MatchScreenState extends State<MatchScreen>
     b = b.reduce(MsEvent.open, by: firstFloor, atMs: _nowMs);
     _battle = b;
     if (mounted) setState(() => _phase = _Phase.battle);
+    _markBattleStartedOnce();
     _afterBattleState(broadcast: true);
     _battleTick = Timer.periodic(const Duration(milliseconds: 300), (_) {
       if (_battle == null || _battle!.isOver || _violationEnded) return;
@@ -850,6 +944,8 @@ class _MatchScreenState extends State<MatchScreen>
     if (_phase == _Phase.verdict || _violationEnded) return;
     _ticker?.cancel();
     _battleTick?.cancel();
+    _battleHeartbeat?.cancel();
+    _forfeitTimer?.cancel();
     if (mounted) setState(() => _phase = _Phase.verdict);
     _videoCallService.muteLocalAudio(true);
     unawaited(_videoCallService.leaveChannel());
@@ -880,11 +976,14 @@ class _MatchScreenState extends State<MatchScreen>
   Future<void> _tearDownVideo() async {
     if (_videoTornDown) return;
     _videoTornDown = true;
+    _battleHeartbeat?.cancel();
+    _forfeitTimer?.cancel();
     _frameSampleSub?.cancel();
     _localFrameSub?.cancel();
     _videoCallService.localAudioLevel.removeListener(_onLocalAudioLevel);
     _videoCallService.localUid.removeListener(_maybeElectHost);
     _videoCallService.remoteUid.removeListener(_maybeElectHost);
+    _videoCallService.remoteUid.removeListener(_onRemotePresence);
     await _videoCallService.dispose();
   }
 
@@ -1095,7 +1194,34 @@ class _MatchScreenState extends State<MatchScreen>
             ),
           ),
         if (_stealFlash) Positioned.fill(child: _buildStealFlash()),
+        // Opponent's video dropped - settling rather than frozen-and-broken.
+        if (_opponentDisconnecting) Positioned.fill(child: _buildDisconnectOverlay()),
       ],
+    );
+  }
+
+  Widget _buildDisconnectOverlay() {
+    return ColoredBox(
+      color: Colors.black.withValues(alpha: 0.72),
+      child: const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+                width: 30, height: 30,
+                child: CircularProgressIndicator(strokeWidth: 2.5)),
+            SizedBox(height: 16),
+            Text('Opponent disconnected',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold)),
+            SizedBox(height: 6),
+            Text('Settling the result…',
+                style: TextStyle(color: Colors.white70)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1649,7 +1775,14 @@ class _MatchScreenState extends State<MatchScreen>
           children: [
             const Icon(Icons.emoji_events_outlined, size: 48),
             const SizedBox(height: 16),
-            Text(_opponentLeft ? 'Your opponent left' : 'Match complete!',
+            Text(
+                _wonByForfeit
+                    ? 'You win!'
+                    : _noContest
+                        ? 'No contest'
+                        : _opponentLeft
+                            ? 'Your opponent left'
+                            : 'Match complete!',
                 style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 12),
             if (isFriend) ...[
@@ -1689,6 +1822,21 @@ class _MatchScreenState extends State<MatchScreen>
                     foregroundColor: scheme.onSecondary,
                   ),
                 ),
+            ] else if (_wonByForfeit) ...[
+              // Forfeit win: the opponent bailed (left or crashed) mid-battle,
+              // so it's already settled in this player's favour - no crowd vote.
+              const Text(
+                'Your opponent left the battle, so the win is yours. '
+                'The rating has already been settled.',
+                textAlign: TextAlign.center,
+              ),
+            ] else if (_noContest) ...[
+              // The opponent left before a round finished - no loss for anyone.
+              const Text(
+                'The battle ended before a round got going, so it\'s a '
+                'no-contest - no rating change either way.',
+                textAlign: TextAlign.center,
+              ),
             ] else ...[
               // The reciprocal ask, made at the highest-intent moment in the
               // app: they're invested, waiting on their own verdict, and
