@@ -652,6 +652,7 @@ class _IncomingChallengeBannerState extends State<_IncomingChallengeBanner>
     with WidgetsBindingObserver {
   Map<String, dynamic>? _challenge;
   Timer? _poll;
+  bool _busy = false;
 
   @override
   void initState() {
@@ -709,6 +710,56 @@ class _IncomingChallengeBannerState extends State<_IncomingChallengeBanner>
     }
   }
 
+  /// Accept the challenge and go STRAIGHT into the pre-match check - no detour
+  /// through the full Challenge screen to tap Accept a second time. The banner
+  /// already names who it is from, so one tap here is the whole decision.
+  Future<void> _accept() async {
+    final id = _challenge?['challengeId'] as String?;
+    if (id == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      final r = await FirebaseFunctions.instance
+          .httpsCallable('respondToChallenge')
+          .call<Map<String, dynamic>>({'challengeId': id, 'accept': true});
+      final matchId = r.data['matchId'] as String?;
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _challenge = null; // clear it - it's answered
+      });
+      if (matchId != null) {
+        await startChallengeMatch(context, matchId);
+        if (mounted) _load();
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'Could not accept that.')),
+      );
+      _load();
+    }
+  }
+
+  Future<void> _decline() async {
+    final id = _challenge?['challengeId'] as String?;
+    if (id == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('respondToChallenge')
+          .call<Map<String, dynamic>>({'challengeId': id, 'accept': false});
+    } catch (_) {
+      // Best-effort; the reload below reflects the real state either way.
+    }
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _challenge = null;
+    });
+    _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -734,14 +785,20 @@ class _IncomingChallengeBannerState extends State<_IncomingChallengeBanner>
               ],
             ),
             const SizedBox(height: 10),
-            FilledButton.tonal(
-              onPressed: () async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ChallengeScreen()),
-                );
-                if (mounted) _load();
-              },
-              child: const Text('Accept challenge'),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _busy ? null : _accept,
+                    child: Text(_busy ? 'Starting…' : 'Accept challenge'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _busy ? null : _decline,
+                  child: const Text('Decline'),
+                ),
+              ],
             ),
           ],
         ),

@@ -30,6 +30,8 @@ const {
   REPEAT_OPPONENT_COOLDOWN_MS,
   STALE_ENTRY_MS,
   MAX_SKIPS_PER_DAY,
+  applyLeave,
+  leaveOutcome,
 } = require("../matchmaking");
 
 const NOW = 1_700_000_000_000;
@@ -522,6 +524,64 @@ test("an entry with no priority field pairs exactly as before", () => {
   const q = queueOf(entry("me"), entry("old", {joinedAt: NOW - 5000}),
       entry("newer", {joinedAt: NOW}));
   assert.strictEqual(selectOpponent(q, "me", NOW).uid, "old");
+});
+
+// --- applyLeave: both-exit cancels, one-exit keeps alive ---
+const M = {player1Id: "a", player2Id: "b"};
+
+test("one player leaving does NOT abandon the match", () => {
+  const r = applyLeave(M, "a");
+  assert.deepStrictEqual(r.leftPlayerIds, ["a"]);
+  assert.strictEqual(r.abandon, false);
+});
+
+test("the SECOND player leaving abandons it", () => {
+  const r = applyLeave({...M, leftPlayerIds: ["a"]}, "b");
+  assert.strictEqual(r.abandon, true);
+  assert.ok(r.leftPlayerIds.includes("a") && r.leftPlayerIds.includes("b"));
+});
+
+test("the same player leaving twice never abandons (no phantom second leaver)", () => {
+  // A double-tap or a retry must not count one person as both.
+  const r = applyLeave({...M, leftPlayerIds: ["a"]}, "a");
+  assert.strictEqual(r.abandon, false);
+  assert.deepStrictEqual(r.leftPlayerIds, ["a"]);
+});
+
+test("a missing leftPlayerIds field is treated as nobody-left-yet", () => {
+  const r = applyLeave(M, "a");
+  assert.strictEqual(r.abandon, false);
+});
+
+// --- leaveOutcome: phase- and mode-aware ---
+const FRIEND_SETUP = {player1Id: "a", player2Id: "b", mode: "friend", readyPlayerIds: []};
+const FRIEND_LIVE = {player1Id: "a", player2Id: "b", mode: "friend", readyPlayerIds: ["a", "b"]};
+const RANKED_LIVE = {player1Id: "a", player2Id: "b", mode: "ranked", readyPlayerIds: ["a", "b"]};
+
+test("friend SETUP: one leaving keeps it alive (can come back)", () => {
+  assert.strictEqual(leaveOutcome(FRIEND_SETUP, "a").end, false);
+});
+
+test("friend SETUP: both leaving cancels it", () => {
+  const r = leaveOutcome({...FRIEND_SETUP, leftPlayerIds: ["a"]}, "b");
+  assert.strictEqual(r.end, true);
+  assert.strictEqual(r.reason, "both-left");
+});
+
+test("friend battle STARTED: one leaving ends it immediately", () => {
+  const r = leaveOutcome(FRIEND_LIVE, "a");
+  assert.strictEqual(r.end, true);
+  assert.strictEqual(r.reason, "opponent-left");
+});
+
+test("ranked battle STARTED: one leaving does NOT no-contest it (forfeit is a separate task)", () => {
+  assert.strictEqual(leaveOutcome(RANKED_LIVE, "a").end, false);
+});
+
+test("ranked battle STARTED: both leaving still cancels", () => {
+  const r = leaveOutcome({...RANKED_LIVE, leftPlayerIds: ["a"]}, "b");
+  assert.strictEqual(r.end, true);
+  assert.strictEqual(r.reason, "both-left");
 });
 
 console.log(`matchmaking: ${passed} checks passed`);

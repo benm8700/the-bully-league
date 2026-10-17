@@ -16,6 +16,7 @@ const {
   completeMatch,
   startMatchRecording,
   getActiveMatch,
+  leaveMatch,
   setMatchReady,
   skipMatch,
   getSkipAllowance,
@@ -1028,6 +1029,13 @@ exports.startDebateRecording = onCall({secrets: recordingSecrets}, (request) => 
  * player is stranded on Home with a live pairing they can't reach.
  */
 exports.getActiveMatch = onCall((request) => getActiveMatch(request.auth));
+
+/**
+ * A player deliberately leaves a live match. One leaving keeps it alive; both
+ * leaving cancels it as a no-contest so it stops lingering as pending. See
+ * leaveMatch in matchmaking.js.
+ */
+exports.leaveMatch = onCall((request) => leaveMatch(request.auth, request.data));
 
 /**
  * User-initiated account and data deletion (CCPA - see CLAUDE.md's

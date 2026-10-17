@@ -1012,6 +1012,103 @@ async function getActiveMatch(auth) {
 }
 
 /**
+ * Records that [uid] has left [match], and decides whether that leaves the
+ * match abandoned. PURE so the rule is testable without Firestore.
+ *
+ * THE RULE (developer's, for a battle that has already started): one person
+ * leaving keeps the match alive - the other may still be there or may rejoin -
+ * but when BOTH have left there is nothing to keep alive, so it is cancelled.
+ * Abandonment here is always a NO-CONTEST: no winner, no rating change, for
+ * every mode. That is unconditionally safe - it can never wrongly penalise
+ * anyone - unlike a one-sided forfeit, which is a separate decision this does
+ * not touch.
+ */
+function applyLeave(match, uid) {
+  const prev = Array.isArray(match.leftPlayerIds) ? match.leftPlayerIds : [];
+  const left = new Set(prev);
+  left.add(uid);
+  const abandon = left.has(match.player1Id) && left.has(match.player2Id);
+  return {leftPlayerIds: [...left], abandon};
+}
+
+/**
+ * Decides what a leave does, by mode and phase. PURE.
+ *
+ *  - SETUP (not both readied yet): one leaving keeps the match alive so they
+ *    can come back; only BOTH leaving cancels it. This is the bio-reveal /
+ *    pre-match phase, where there is no live battle state to lose.
+ *  - A FRIEND battle that has STARTED (both readied): one leaving ends it
+ *    immediately. A 1v1 can't continue solo, the Leave dialog already says it
+ *    ends, and there is no rating to forfeit - so it ends as a clean
+ *    no-contest and the other player gets a "they left" screen with a rematch.
+ *  - A RANKED battle that has started: NOT handled here. One leaving must be a
+ *    FORFEIT (a loss), not a no-contest, or leaving becomes a free escape from
+ *    a losing match - that is its own task (battle-presence + forfeit), so a
+ *    single ranked leave falls through to the both-left rule for now.
+ */
+function leaveOutcome(match, uid) {
+  const {leftPlayerIds, abandon: bothLeft} = applyLeave(match, uid);
+  const ready = Array.isArray(match.readyPlayerIds) ? match.readyPlayerIds : [];
+  const battleUnderway = ready.length >= 2;
+  const friendMidBattle = match.mode === "friend" && battleUnderway;
+  return {
+    leftPlayerIds,
+    end: bothLeft || friendMidBattle,
+    reason: bothLeft ? "both-left" : "opponent-left",
+  };
+}
+
+/**
+ * A player deliberately leaves a live match (the confirm-leave path in
+ * MatchScreen). Records the leave; if BOTH players have now left, cancels the
+ * match as a no-contest so it stops lingering as "pending" (which otherwise
+ * waits on the 24h sweep, and which getActiveMatch would keep offering as a
+ * rejoinable battle nobody is in).
+ *
+ * Best-effort from the client's point of view: it fires this and pops
+ * regardless, because leaving must never be blocked on a network call. The
+ * recording, if any, is left to Agora's maxIdleTime (both players leaving
+ * empties the channel) and the runaway-recording watchdog - no explicit stop,
+ * so a slow vendor call can never wedge the leave.
+ */
+async function leaveMatch(auth, data) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const matchId = typeof data?.matchId === "string" ? data.matchId : "";
+  if (!matchId) {
+    throw new HttpsError("invalid-argument", "matchId is required.");
+  }
+  const db = getFirestore();
+  const ref = db.collection("matches").doc(matchId);
+  let abandoned = false;
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return;
+    const m = snap.data();
+    if (m.player1Id !== auth.uid && m.player2Id !== auth.uid) {
+      throw new HttpsError("permission-denied", "That isn't your match.");
+    }
+    // Only a live (pending) match can be left - a completed or already
+    // abandoned one is settled, and a normal verdict never routes here.
+    if (m.status !== "pending") return;
+    const {leftPlayerIds, end, reason} = leaveOutcome(m, auth.uid);
+    if (end) {
+      tx.update(ref, {
+        leftPlayerIds,
+        status: "abandoned",
+        abandonedReason: reason,
+        voteFinalized: true,
+        winnerId: null,
+        completedAt: new Date(),
+      });
+      abandoned = true;
+    } else {
+      tx.update(ref, {leftPlayerIds});
+    }
+  });
+  return {abandoned};
+}
+
+/**
  * Marks a paired match finished. Server-side so a client can't mark a
  * match it isn't in as complete (which would push it into the voting
  * pipeline and, for ranked, eventually into real rating changes).
@@ -1459,6 +1556,9 @@ module.exports = {
   completeMatch,
   startMatchRecording,
   getActiveMatch,
+  leaveMatch,
+  applyLeave,
+  leaveOutcome,
   RECORDED_MODES,
   sanitiseRoundBoundaries,
   // Every queue that exists, so the online-count publisher (presence.js)

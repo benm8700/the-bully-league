@@ -103,6 +103,9 @@ class _MatchScreenState extends State<MatchScreen>
   // disqualification.
   bool _violationEnded = false;
   bool _violationIAmReporter = false;
+  // Set when the match doc shows the OTHER player left mid-battle, so the
+  // verdict screen says "they bailed" rather than "good battle".
+  bool _opponentLeft = false;
 
   _Phase _phase = _Phase.waitingForOpponent;
   int _secondsRemaining = 0; // warmup countdown only
@@ -822,10 +825,18 @@ class _MatchScreenState extends State<MatchScreen>
   /// end-of-battle transition does.
   void _onMatchDoc(DocumentSnapshot<Map<String, dynamic>> snap) {
     if (!mounted) return;
-    final status = snap.data()?['status'] as String?;
+    final data = snap.data();
+    final status = data?['status'] as String?;
     const terminal = {'completed', 'abandoned', 'disqualified'};
     if (status == null || !terminal.contains(status)) return;
     if (_phase == _Phase.verdict || _violationEnded) return;
+    // If the opponent left the battle, say so on the verdict screen rather
+    // than "Good battle. Run it back?" - they didn't finish a battle, the
+    // other person bailed.
+    if (status == 'abandoned' &&
+        data?['abandonedReason'] == 'opponent-left') {
+      _opponentLeft = true;
+    }
     _goToVerdict();
   }
 
@@ -972,7 +983,25 @@ class _MatchScreenState extends State<MatchScreen>
         ],
       ),
     );
-    return result ?? false;
+    final leaving = result ?? false;
+    // Tell the server we left. One leaving keeps the match alive (the other
+    // can stay or rejoin); both leaving cancels it as a no-contest so it does
+    // not linger as pending. Fire-and-forget: leaving must never be blocked on
+    // a network call, and the request still completes after we pop (popping
+    // the screen does not kill the app).
+    if (leaving) unawaited(_notifyLeft());
+    return leaving;
+  }
+
+  /// Best-effort "I left this battle" ping (see leaveMatch on the server).
+  Future<void> _notifyLeft() async {
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('leaveMatch')
+          .call<Map<String, dynamic>>({'matchId': widget.pairing.matchId});
+    } catch (_) {
+      // Best-effort - the 24h sweep still cleans a match nobody settled.
+    }
   }
 
   Widget _buildViolationEndedUi() {
@@ -1620,10 +1649,16 @@ class _MatchScreenState extends State<MatchScreen>
           children: [
             const Icon(Icons.emoji_events_outlined, size: 48),
             const SizedBox(height: 16),
-            Text('Match complete!', style: Theme.of(context).textTheme.headlineSmall),
+            Text(_opponentLeft ? 'Your opponent left' : 'Match complete!',
+                style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 12),
             if (isFriend) ...[
-              const Text('Good battle. Run it back?', textAlign: TextAlign.center),
+              Text(
+                  _opponentLeft
+                      ? 'They bailed on the battle. No harm - want to run it '
+                          'back?'
+                      : 'Good battle. Run it back?',
+                  textAlign: TextAlign.center),
               const SizedBox(height: 24),
               if (_rematchJoining)
                 const Column(mainAxisSize: MainAxisSize.min, children: [
