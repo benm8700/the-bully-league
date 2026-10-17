@@ -23,6 +23,7 @@ import '../../widgets/home/home_quick_actions.dart';
 import '../../widgets/home/home_featured.dart';
 import '../../widgets/home/main_stage_card.dart';
 import '../../widgets/home/friend_battle_card.dart';
+import '../../widgets/home/improv_station_card.dart';
 import '../../widgets/home/daily_window_strip.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/pre_match_screen.dart';
@@ -178,6 +179,12 @@ class HomeScreen extends StatelessWidget {
                     // because friend challenges drive growth (and seed the
                     // invite-by-text loop). Purple, distinct from pink/gold.
                     const FriendBattleCard(),
+                    const SizedBox(height: 12),
+                    // Improv Station - the prompt-based showcase mode. Teal,
+                    // distinct from the other three. Runs the same start flow
+                    // as a roast (entitlement -> consent -> pre-match), then
+                    // queues the improv pool.
+                    ImprovStationCard(onStart: () => _startMatch(context, 'improv')),
                     const SizedBox(height: 14),
                     // Quick Actions row (Home overhaul): Daily Challenges /
                     // Free Rewards / Current Streak. The Daily Challenges card
@@ -453,7 +460,9 @@ Future<void> _showBlockedSheet(
 /// own enterQueue gate has the final say - a transient read shouldn't block
 /// someone who is actually ready.
 Future<bool> _ensureIntroReady(BuildContext context, String mode) async {
-  if (mode == 'exhibition') return true;
+  // Exhibition and IMPROV are exempt: improv riffs a prompt, not the opponent,
+  // so there's no ammo to study (matches enterQueue's server-side exemption).
+  if (mode == 'exhibition' || mode == 'improv') return true;
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return true;
   try {
@@ -732,7 +741,7 @@ class _IncomingChallengeBannerState extends State<_IncomingChallengeBanner>
                 );
                 if (mounted) _load();
               },
-              child: const Text('Answer'),
+              child: const Text('Accept challenge'),
             ),
           ],
         ),

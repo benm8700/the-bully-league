@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -17,6 +18,7 @@ import '../../core/services/visual_moderation_service.dart';
 import '../../widgets/badges/badge_case.dart';
 import '../../widgets/belt_flair.dart';
 import '../../widgets/emoji_stats_card.dart';
+import '../../widgets/home/rank_badges.dart';
 import '../../widgets/social_links_editor.dart';
 import '../account/delete_account_screen.dart';
 import 'emoji_scrub_sheet.dart';
@@ -62,6 +64,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   bool _loading = true;
   bool _saving = false;
+  // Brief "Saved ✓" confirmation after a successful save (reverts to "Save").
+  bool _justSaved = false;
+  Timer? _savedTimer;
   bool _signingOut = false;
 
   /// Listed unless explicitly opted out, mirroring the server's rule that
@@ -186,7 +191,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'profile.favoriteFood': _favoriteFoodController.text.trim(),
         'profile.ammoText': _ammoTextController.text.trim(),
       });
-      if (mounted) setState(() => _statusMessage = 'Profile saved.');
+      if (mounted) {
+        setState(() {
+          _statusMessage = 'Profile saved.';
+          _justSaved = true;
+        });
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Color(0xFF2E7D4F),
+            duration: Duration(seconds: 2),
+            content: Row(children: [
+              Icon(Icons.check_circle, color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Text('Profile saved',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold)),
+            ]),
+          ));
+        // Settle back to the normal button after a beat.
+        _savedTimer?.cancel();
+        _savedTimer = Timer(const Duration(seconds: 2), () {
+          if (mounted) setState(() => _justSaved = false);
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _statusMessage = 'Failed to save: $e');
     } finally {
@@ -265,6 +294,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
+    _savedTimer?.cancel();
     _professionController.dispose();
     _educationController.dispose();
     _hometownController.dispose();
@@ -531,14 +561,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 16),
                     ],
                     FilledButton(
-                      onPressed: _saving ? null : _save,
+                      onPressed: (_saving || _justSaved) ? null : _save,
+                      style: _justSaved
+                          ? FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF2E7D4F),
+                              disabledBackgroundColor: const Color(0xFF2E7D4F),
+                              disabledForegroundColor: Colors.white)
+                          : null,
                       child: _saving
                           ? const SizedBox(
                               height: 20,
                               width: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Save'),
+                          : _justSaved
+                              ? const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check, size: 18),
+                                    SizedBox(width: 6),
+                                    Text('Saved'),
+                                  ],
+                                )
+                              : const Text('Save'),
                     ),
                     const SizedBox(height: 28),
                     const Divider(),
@@ -688,14 +733,32 @@ class _IdentityHeader extends StatelessWidget {
         ),
         if (rankTitle != null && rankTitle!.isNotEmpty) ...[
           const SizedBox(height: 4),
-          Text(
-            rankTitle!,
-            style: text.titleSmall?.copyWith(
-              color: prestige
-                  ? const Color(0xFFF4C838)
-                  : scheme.onSurfaceVariant,
-              fontWeight: prestige ? FontWeight.w800 : null,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                rankTitle!,
+                style: text.titleSmall?.copyWith(
+                  color: prestige
+                      ? const Color(0xFFF4C838)
+                      : scheme.onSurfaceVariant,
+                  fontWeight: prestige ? FontWeight.w800 : null,
+                ),
+              ),
+              // The ladder rung as a Roman numeral ("· V"), matching Home.
+              if (rankTierNumeral(rankTitle) != null) ...[
+                Text('  ·  ',
+                    style: text.titleSmall?.copyWith(
+                        color: scheme.onSurfaceVariant.withValues(alpha: 0.6))),
+                Text(
+                  rankTierNumeral(rankTitle)!,
+                  style: text.titleSmall?.copyWith(
+                    color: rankTierColor(rankTitle) ?? const Color(0xFFF4C838),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
         // The featured award used to sit here, but it duplicated the Awards

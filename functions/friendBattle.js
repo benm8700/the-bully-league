@@ -1,5 +1,6 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
+const {normalizeE164} = require("./phoneSignup");
 
 /**
  * Challenge a specific person to a battle (CLAUDE.md's Friend Battles).
@@ -98,27 +99,103 @@ function friendMatchId(challengeId) {
 }
 
 /**
- * Send a challenge to a player, by username.
+ * Challenging a phone number that has no account yet: stash a pending invite
+ * keyed by the normalized number, and tell the client to text them a download
+ * link. When they sign up and verify that number, finalizePhoneSignup finds
+ * this record and mints the real challenge. De-duped per (from, number) so a
+ * double-tap doesn't pile up invites.
+ */
+async function inviteByPhone(db, fromUid, phone, nowMs) {
+  const fromSnap = await db.collection("users").doc(fromUid).get();
+  const fromUsername = fromSnap.data()?.username ?? "A player";
+  const existing = await db.collection("phoneChallenges")
+      .where("fromUid", "==", fromUid)
+      .where("phone", "==", phone)
+      .where("status", "==", "pending")
+      .limit(1).get();
+  if (existing.empty) {
+    await db.collection("phoneChallenges").add({
+      fromUid, fromUsername, phone, status: "pending", createdAtMs: nowMs,
+    });
+  }
+  return {needsInvite: true, phone, fromUsername};
+}
+
+/**
+ * The people this user has recently challenged (distinct, newest first), so
+ * the challenge screen can offer a tap-to-rechallenge quick-pick instead of
+ * making them retype a name every time.
+ */
+async function getRecentChallengeTargets(auth) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const db = getFirestore();
+  const snap = await db.collection("challenges")
+      .where("fromUid", "==", auth.uid).get();
+  // Sorted in memory by expiry (newest challenge expires latest) to avoid a
+  // composite index; distinct target, capped.
+  const sorted = snap.docs
+      .map((d) => d.data())
+      .filter((c) => c.toUid)
+      .sort((a, b) => (Number(b.expiresAtMs) || 0) - (Number(a.expiresAtMs) || 0));
+  const seen = new Set();
+  const uids = [];
+  for (const c of sorted) {
+    if (seen.has(c.toUid)) continue;
+    seen.add(c.toUid);
+    uids.push(c.toUid);
+    if (uids.length >= 8) break;
+  }
+  const people = await Promise.all(uids.map(async (id) => {
+    const s = await db.collection("users").doc(id).get();
+    return s.exists ? {uid: id, username: s.data()?.username ?? "Unknown"} : null;
+  }));
+  return {recent: people.filter((p) => p !== null)};
+}
+
+/**
+ * Send a challenge to a player - by username, by uid (rematch), or by phone
+ * number (resolving to an account, or falling back to an SMS invite).
  */
 async function challengeFriend(auth, data) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-  const username = typeof data?.username === "string" ?
-    data.username.trim() : "";
-  if (!username) {
-    throw new HttpsError("invalid-argument", "Who do you want to challenge?");
-  }
 
   const db = getFirestore();
   const fromUid = auth.uid;
   const nowMs = Date.now();
 
-  // Resolved through usernameLower, the same field the player directory
-  // and referrals use, so a friend renaming themselves later breaks
-  // nothing - only the resolved uid is ever stored.
-  const found = await db.collection("users")
-      .where("usernameLower", "==", username.toLowerCase())
-      .limit(1).get();
-  const target = found.empty ? null : found.docs[0];
+  const username = typeof data?.username === "string" ? data.username.trim() : "";
+  const toUidInput = typeof data?.toUid === "string" ? data.toUid.trim() : "";
+  const phoneInput = typeof data?.phone === "string" ? data.phone.trim() : "";
+  if (!username && !toUidInput && !phoneInput) {
+    throw new HttpsError("invalid-argument", "Who do you want to challenge?");
+  }
+
+  // Resolve the target three ways:
+  //  - toUid: a direct uid (used by Rematch, where we already know the person)
+  //  - username: resolved through usernameLower (renames break nothing)
+  //  - phone: an account on that number - or, if nobody is here yet, an SMS
+  //    invite instead (finalizePhoneSignup turns a pending phoneChallenge into
+  //    a real challenge the moment they sign up with that number).
+  let target = null;
+  if (toUidInput) {
+    const snap = await db.collection("users").doc(toUidInput).get();
+    target = snap.exists ? snap : null;
+  } else if (username) {
+    const found = await db.collection("users")
+        .where("usernameLower", "==", username.toLowerCase())
+        .limit(1).get();
+    target = found.empty ? null : found.docs[0];
+  } else {
+    const phone = normalizeE164(phoneInput);
+    if (!phone) {
+      throw new HttpsError("invalid-argument",
+          "That doesn't look like a valid phone number.");
+    }
+    const found = await db.collection("users")
+        .where("phoneNumber", "==", phone).limit(1).get();
+    if (found.empty) return inviteByPhone(db, fromUid, phone, nowMs);
+    target = found.docs[0];
+  }
 
   const [fromSnap, outstandingSnap] = await Promise.all([
     db.collection("users").doc(fromUid).get(),
@@ -367,17 +444,25 @@ async function getMyChallenges(auth) {
   return {
     incoming: incomingLive.map((c) => ({
       challengeId: c.id,
+      // fromUid lets a client match an incoming challenge to a specific
+      // opponent (the rematch flow needs this to know a challenge is from the
+      // person it just battled, not some other pending challenge).
+      fromUid: c.fromUid,
       fromUsername: c.fromUsername ?? "A player",
       expiresAtMs: c.expiresAtMs,
     })),
     outgoing: outgoingLive.map((c) => ({
       challengeId: c.id,
+      toUid: c.toUid,
       toUsername: names.get(c.toUid) ?? "Unknown",
       expiresAtMs: c.expiresAtMs,
     })),
     // The challenger's way into an accepted battle - only while it is live.
     accepted: acceptedLive.map((c) => ({
       challengeId: c.id,
+      // toUid so the rematch poll can confirm the accepted battle is against
+      // the opponent it is waiting on.
+      toUid: c.toUid,
       toUsername: names.get(c.toUid) ?? "Unknown",
       matchId: c.matchId ?? friendMatchId(c.id),
     })),
@@ -418,6 +503,7 @@ module.exports = {
   respondToChallenge,
   getMyChallenges,
   getChallengeMatch,
+  getRecentChallengeTargets,
   // Exported for tests.
   challengeProblem,
   isPending,

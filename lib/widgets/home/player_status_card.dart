@@ -133,6 +133,10 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
     final prestige = prestigeTitles.contains(title);
     final titleColor = prestige ? gold : Colors.white;
 
+    // The ladder rung as a Roman numeral, shown after the title. Null for GOAT
+    // (unnumbered throne) and unknown titles.
+    final numeral = rankTierNumeral(title);
+
     // Rank title + XP bar + XP number.
     final rankColumn = Column(
       mainAxisSize: MainAxisSize.min,
@@ -164,6 +168,27 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
                     color: titleColor, // gold for Legend/GOAT, else white
                   ),
                 ),
+                // The rung as a Roman numeral ("· V"), counting up. Gold, to
+                // match the card's "gold on the data" treatment, and it reads
+                // as a rank insignia rather than a video-game level. Absent for
+                // GOAT (the unnumbered throne above the ladder).
+                if (numeral != null) ...[
+                  Text('  ·  ',
+                      style: text.titleMedium?.copyWith(
+                        fontSize: 19,
+                        color: const Color(0xFF7A7A7A), // dim separator
+                      )),
+                  Text(
+                    numeral,
+                    style: text.titleMedium?.copyWith(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      // Bronze/silver/gold by tier band so the rung reads as
+                      // progression; falls back to gold.
+                      color: rankTierColor(title) ?? gold,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

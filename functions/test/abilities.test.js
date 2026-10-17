@@ -1,6 +1,7 @@
 const assert = require("assert");
 const {
-  resolveAbilityConfig, purchasePlan, freeAllowance, DEFAULTS, ABILITY_CATALOG,
+  resolveAbilityConfig, purchasePlan, freeAllowance, isUnlocked,
+  DEFAULTS, ABILITY_CATALOG,
 } = require("../abilities");
 
 let passed = 0;
@@ -23,14 +24,51 @@ check("every catalog ability resolves config + has a deploy surface", () => {
   const c = resolveAbilityConfig(undefined);
   const ids = Object.keys(ABILITY_CATALOG);
   assert.deepStrictEqual(ids.sort(),
-      ["extend", "goFirst", "instantInterrupt", "interrupt", "tomato"].sort());
+      ["extend", "fart", "goFirst", "goSecond", "instantInterrupt", "interrupt",
+        "skipWarmup", "tomato"].sort());
   for (const id of ids) {
     assert.ok(c[id], `${id} resolves`);
     assert.strictEqual(typeof c[id].cost, "number");
-    assert.ok(["controls", "bar", "prematch"].includes(ABILITY_CATALOG[id].deploy),
+    assert.strictEqual(typeof c[id].unlockXp, "number");
+    assert.ok(["controls", "bar", "prematch", "warmup"].includes(ABILITY_CATALOG[id].deploy),
         `${id} has a valid deploy surface`);
   }
   assert.strictEqual(c.goFirst.maxPerMatch, 1, "go-first is one-per-match");
+  assert.strictEqual(c.skipWarmup.maxPerMatch, 1, "skip-warmup is one-per-match");
+});
+
+check("unlockXp overrides are bounds-checked", () => {
+  assert.strictEqual(resolveAbilityConfig({tomato: {unlockXp: 25}}).tomato.unlockXp, 25);
+  // Negative/garbage -> the default.
+  assert.strictEqual(
+      resolveAbilityConfig({tomato: {unlockXp: -10}}).tomato.unlockXp,
+      DEFAULTS.tomato.unlockXp);
+});
+
+check("rank gate: locked below unlockXp, unlocked at/above it (every mode)", () => {
+  const interrupt = resolveAbilityConfig(undefined).interrupt; // unlockXp 1200
+  assert.strictEqual(isUnlocked({points: 0}, interrupt), false);
+  assert.strictEqual(isUnlocked({points: 1199}, interrupt), false);
+  assert.strictEqual(isUnlocked({points: 1200}, interrupt), true);
+  assert.strictEqual(isUnlocked({points: 9999}, interrupt), true);
+  // Missing/garbage XP reads as 0 (locked), never crashes.
+  assert.strictEqual(isUnlocked({}, interrupt), false);
+});
+
+check("friend battles do NOT unlock locked abilities (rank gate still binds)", () => {
+  // Reversed 2026-10-16: friend mode no longer auto-unlocks. The gate is
+  // mode-independent; friend mode only makes UNLOCKED ones free (below).
+  const interrupt = resolveAbilityConfig(undefined).interrupt; // unlockXp 1200
+  assert.strictEqual(isUnlocked({points: 0}, interrupt), false);
+  assert.strictEqual(isUnlocked({points: 2000}, interrupt), true);
+});
+
+check("friend mode frees the per-match stock (for UNLOCKED abilities)", () => {
+  const cfg = resolveAbilityConfig(undefined).tomato; // max 5
+  assert.strictEqual(freeAllowance({points: 0}, now, cfg, 14, true), cfg.maxPerMatch);
+  // Ranked, lapsed (past trial, no sub) -> no free allowance.
+  assert.strictEqual(
+      freeAllowance({createdAt: now - 100 * DAY}, now, cfg, 14, false), 0);
 });
 
 check("config overrides are applied and bounds-checked", () => {

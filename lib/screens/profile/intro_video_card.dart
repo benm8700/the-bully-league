@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -31,6 +32,7 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
   bool _loading = true;
   bool _busy = false;
   String? _status;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _sub;
 
   DocumentReference<Map<String, dynamic>> get _userRef => FirebaseFirestore
       .instance
@@ -40,18 +42,28 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
   @override
   void initState() {
     super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final snap = await _userRef.get();
-    final profile = snap.data()?['profile'] as Map<String, dynamic>? ?? {};
-    if (mounted) {
+    // LIVE, not a one-time read: the card is mounted inside the profile tab,
+    // which is built once in the background (IndexedStack), so a one-shot load
+    // in initState would cache "no video" if it ran before the upload saved -
+    // and the video would look lost even though it is safely in Firestore.
+    // Watching the doc means the card always reflects what is actually saved,
+    // immediately after recording and whenever the profile is reopened.
+    _sub = _userRef.snapshots().listen((snap) {
+      if (!mounted) return;
+      final profile = snap.data()?['profile'] as Map<String, dynamic>? ?? {};
       setState(() {
         _videoUrl = profile['introVideoUrl'] as String?;
         _loading = false;
       });
-    }
+    }, onError: (_) {
+      if (mounted) setState(() => _loading = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
   }
 
   Future<void> _record() async {
@@ -153,12 +165,22 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
         Text(
           hasVideo
               ? 'Your 60-second "tell me about yourself". Opponents watch it '
-                  'before your battle to find their angle.'
+                  'before your battle to find their angle. It is saved - you '
+                  'can leave and come back.'
               : 'Record a 60-second "tell me about yourself". This is what '
                   'your opponent studies for ammo - you cannot battle without '
                   'it. Funnier if it is honest.',
           style: text.bodySmall,
         ),
+        if (!hasVideo) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Tip: in the camera, tap "Use"/the ✓ to keep your take - backing '
+            'out there throws it away. Once it is here, it is saved on its '
+            'own, even if you have not filled in the rest yet.',
+            style: text.labelSmall?.copyWith(color: scheme.primary),
+          ),
+        ],
         const SizedBox(height: 12),
         if (_loading)
           const Center(child: CircularProgressIndicator())

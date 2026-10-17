@@ -8,6 +8,7 @@ const {STARTING_RATING, RANK_TIERS} = require("./rating");
 const {getMatchSettings} = require("./matchSettings");
 const {readEventWindowConfig, qualifiesForWindow} = require("./eventWindow");
 const {readMonetizationConfig, battleEntitlement, toMillis} = require("./entitlement");
+const {pickImprovPrompts} = require("./improv");
 const {shouldBecomeStanding, isLive} = require("./standingChallenge");
 const {stopRecording, writeRecordingState} = require("./cloudRecording");
 
@@ -24,7 +25,7 @@ const {stopRecording, writeRecordingState} = require("./cloudRecording");
 // judged, not clippable - a casual structured scrimmage. That also removes the
 // recording-consent step (nothing is recorded) and simplifies the flow. If a
 // crowd verdict or a clip is wanted, that is what ranked is for.
-const RECORDED_MODES = ["ranked", "tournament"];
+const RECORDED_MODES = ["ranked", "tournament", "improv"];
 
 /**
  * Real matchmaking (Build Order step 4's missing half). Replaces the
@@ -59,7 +60,11 @@ const RECORDED_MODES = ["ranked", "tournament"];
  * *notification*, keeping these callables for the pairing itself.
  */
 
-const MODES = ["exhibition", "ranked"];
+// "improv" = Improv Station (2026-10-15): a recorded, crowd-voted SHOWCASE
+// mode with its OWN hidden Elo (improvRating) and its OWN queue, feeding the
+// SAME career XP but NOT roast rating / the leaderboard / Main Stage
+// qualification. See functions/improv.js.
+const MODES = ["exhibition", "ranked", "improv"];
 
 /** Each widen interval of waiting widens the acceptable tier gap by one,
  * per CLAUDE.md's matchmaking fallback decision ("gradually widen the tier
@@ -275,7 +280,9 @@ async function enterQueue(auth, data) {
   // when they are ready to battle for real. Ranked and tournament are never
   // exempt (tournament is gated separately at check-in); friend battles do
   // not run through this function and are exempt too.
-  if (mode !== "exhibition") {
+  // IMPROV is also exempt: you riff a PROMPT, not the opponent, so there's no
+  // ammo to study - a 60s intro recording would be friction for nothing.
+  if (mode !== "exhibition" && mode !== "improv") {
     const introVideoUrl = user.profile && user.profile.introVideoUrl;
     if (typeof introVideoUrl !== "string" || introVideoUrl.length === 0) {
       throw new HttpsError(
@@ -320,11 +327,20 @@ async function enterQueue(auth, data) {
   // starts populating the map form).
   const recent = user.recentOpponentIds ?? {};
 
+  // Band by the rating for THIS mode: improv has its own hidden Elo, so an
+  // improv queue entry carries improvRating (and its tier) rather than the
+  // roast rating. The queues are separate nodes, so this only affects
+  // improv-vs-improv pairing and leaves roast matchmaking untouched.
+  const ratingForMode = mode === "improv" ?
+    (Number.isFinite(Number(user.improvRating)) ?
+      Number(user.improvRating) : STARTING_RATING) :
+    (user.rating ?? STARTING_RATING);
+
   await queueRef(mode).child(auth.uid).set({
     uid: auth.uid,
     username: user.username ?? "Roaster",
-    rating: user.rating ?? STARTING_RATING,
-    tierIndex: tierIndexFor(user),
+    rating: ratingForMode,
+    tierIndex: tierIndexFor({rating: ratingForMode}),
     blockedUserIds: user.blockedUserIds ?? [],
     recentOpponentIds: recent,
     joinedAt: Date.now(),
@@ -713,10 +729,20 @@ async function pollMatchmaking(auth, data) {
   // the window being renamed, retimed, or switched off entirely.
   const eventWindow = await resolveEventWindow(now, earliestQueuedAt(paired));
 
+  // Improv picks its shared prompts here, server-side, so BOTH clients show
+  // the identical set, stamped on the document like the settings are. The
+  // prompt COUNT comes from config (perMatch), NOT settings.roundCount: the
+  // match plays N prompts but the crowd casts ONE overall vote, which is why
+  // the improv voting roundCount is 1. Null (field omitted) for other modes.
+  const improvPrompts = mode === "improv" ?
+    await pickImprovPrompts(getFirestore()) :
+    null;
+
   try {
     await matchRef.set({
       player1Id: uid,
       player2Id: paired.opponentId,
+      ...(improvPrompts ? {improvPrompts} : {}),
       // Both ratings as they stood at pairing.
       //
       // Recorded because a player can DELETE THEIR ACCOUNT before the
@@ -901,6 +927,12 @@ async function getActiveMatch(auth) {
   // beat. Also used as a grace window from creation, so a freshly accepted
   // match (nobody has heartbeat'd yet) is never ended out from under them.
   const FRIEND_PRESENCE_STALE_MS = 75000;
+  // A friend match is only "clearly dead" once it is older than any plausible
+  // setup + battle. Pre-match camera check (no heartbeat) + bio reveal + warmup
+  // + 3 chess-clock rounds runs several minutes, and a player can linger in the
+  // camera check; 15 min is comfortably past all of it, so a slow setup or a
+  // live battle is never swept, but a genuinely abandoned match still clears.
+  const FRIEND_SETUP_GRACE_MS = 15 * 60 * 1000;
   const nowMs = Date.now();
 
   for (const field of ["player1Id", "player2Id"]) {
@@ -915,44 +947,51 @@ async function getActiveMatch(auth) {
       const opponentId = m.player1Id === auth.uid ? m.player2Id : m.player1Id;
 
       // BOTH-OUT ENDS THE BATTLE; ONE-OUT KEEPS IT ALIVE (developer's rule).
-      // The caller is on Home polling this, so the CALLER is out. If the
-      // OPPONENT is also out (no recent bio-reveal heartbeat, past the grace
-      // from creation) AND the battle has not actually started, both have
-      // left - end it so it stops offering a dead "Battle now". If the
-      // opponent is still present, hand the match back so the caller (who
-      // backed out, maybe by accident) can rejoin a battle that is still on.
+      // The caller is on Home polling this, so the CALLER is out.
+      //
+      // The ONLY safe time to auto-cancel is when the match is CLEARLY DEAD:
+      // the battle never started (readyPlayerIds < 2), nobody has heartbeated
+      // in a while, AND it is OLD enough that setup cannot still be running.
+      // That last clause is the fix for a real bug: the bio reveal is the only
+      // thing that heartbeats, so a player lingering in the pre-match camera
+      // check sends nothing - and the old 75s grace then read "normal setup in
+      // progress" as "both left" and abandoned a battle that was still being
+      // set up (seen live: a match ended "both-left" with readyPlayerIds=[] and
+      // no heartbeats before either player had even readied). The grace is now
+      // generous (longer than any setup + battle), so a slow setup or a live
+      // battle is never killed; only a genuinely stale match is swept.
       const ready = Array.isArray(m.readyPlayerIds) ? m.readyPlayerIds : [];
       const battleUnderway = ready.length >= 2;
-      if (!battleUnderway) {
-        const seen = m.lastSeenAt || {};
-        const oppLastSeen = Number(seen[opponentId]) || 0;
-        const createdMs = m.createdAt?.toMillis?.() ?? 0;
-        const oppPresent =
-            (nowMs - oppLastSeen < FRIEND_PRESENCE_STALE_MS) ||
-            (nowMs - createdMs < FRIEND_PRESENCE_STALE_MS);
-        if (!oppPresent) {
-          // Guarded in a transaction: two backed-out clients may both poll
-          // and reach here, and the match must only be settled once (and
-          // never if a battle has meanwhile started).
-          await db.runTransaction(async (tx) => {
-            const fresh = await tx.get(doc.ref);
-            const fm = fresh.data();
-            const fready = Array.isArray(fm?.readyPlayerIds) ?
-              fm.readyPlayerIds : [];
-            if (fresh.exists && fm.status === "pending" && fready.length < 2) {
-              tx.update(doc.ref, {
-                status: "abandoned",
-                voteFinalized: true,
-                winnerId: null,
-                abandonedReason: "both-left",
-                completedAt: new Date(),
-              });
-            }
-          }).catch(() => {});
-          continue; // both out - do not hand back a dead match
-        }
+      const seen = m.lastSeenAt || {};
+      const oppLastSeen = Number(seen[opponentId]) || 0;
+      const createdMs = m.createdAt?.toMillis?.() ?? 0;
+      const oppHeartbeatRecent = nowMs - oppLastSeen < FRIEND_PRESENCE_STALE_MS;
+      const stillYoung = nowMs - createdMs < FRIEND_SETUP_GRACE_MS;
+
+      if (!battleUnderway && !oppHeartbeatRecent && !stillYoung) {
+        // Guarded in a transaction: two backed-out clients may both poll and
+        // reach here, and the match must only be settled once (and never if a
+        // battle has meanwhile started).
+        await db.runTransaction(async (tx) => {
+          const fresh = await tx.get(doc.ref);
+          const fm = fresh.data();
+          const fready = Array.isArray(fm?.readyPlayerIds) ?
+            fm.readyPlayerIds : [];
+          if (fresh.exists && fm.status === "pending" && fready.length < 2) {
+            tx.update(doc.ref, {
+              status: "abandoned",
+              voteFinalized: true,
+              winnerId: null,
+              abandonedReason: "both-left",
+              completedAt: new Date(),
+            });
+          }
+        }).catch(() => {});
+        continue; // clearly dead - do not hand back
       }
 
+      // Otherwise hand the match back so the caller (who backed out, maybe by
+      // accident, or is still setting up) can rejoin.
       return {
         found: true,
         matchId: doc.id,
@@ -1174,7 +1213,12 @@ async function completeMatch(auth, data, creds = null) {
     // than paying the participation award it used to; friend was already
     // excluded, for the farm reason above. Tournament stays in because it
     // is genuinely competitive, staked play.
-    if (match.mode === "ranked" || match.mode === "tournament") try {
+    // IMPROV is included: it feeds the SAME career XP (the decided hybrid -
+    // playing it climbs your one title ladder), so it earns the participation
+    // award like ranked. It just can't be farmed the way a friend battle can,
+    // because improv pairs you with a random stranger, not a chosen buddy.
+    if (match.mode === "ranked" || match.mode === "tournament" ||
+        match.mode === "improv") try {
       const {awardPoints, pointsSettings, awardAmount} = require("./points");
       const rates = await pointsSettings();
       const multiplier = match.eventWindow?.qualified === true ?

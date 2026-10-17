@@ -71,6 +71,13 @@ abstract class VideoCallService {
 
   Future<void> muteLocalAudio(bool muted);
 
+  /// Mutes/unmutes the REMOTE participant's audio on THIS device only - the
+  /// other side keeps broadcasting (so the recording and any spectators still
+  /// hear them). Used by Improv Station's blind performance: the waiting
+  /// comedian mustn't hear the performer, or going second would be an unfair
+  /// edge. Default no-op so other modes/impls are unaffected.
+  Future<void> muteRemoteAudio(bool muted) async {}
+
   /// Sends a small JSON-encodable state message to the other participant
   /// over the provider's low-latency data channel - used to synchronize
   /// round/turn/timer state between the two devices (no backend match

@@ -111,12 +111,15 @@ class _LoadoutPanelState extends State<LoadoutPanel> {
             ),
             const SizedBox(height: 2),
             Text(
-              'Bring weapons to throw them off. Tap to deploy mid-battle.',
+              l.friendFree
+                  ? "It's a friend battle - everything's free. Bring anything."
+                  : 'Bring weapons to throw them off. Unlock more as you rank up.',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
             for (final a in l.abilities) _AbilityRow(
               ability: a,
+              friendFree: l.friendFree,
               busy: _busyId == a.id,
               onBuy: () => _buy(a),
             ),
@@ -130,11 +133,13 @@ class _LoadoutPanelState extends State<LoadoutPanel> {
 class _AbilityRow extends StatelessWidget {
   const _AbilityRow({
     required this.ability,
+    required this.friendFree,
     required this.busy,
     required this.onBuy,
   });
 
   final AbilityOption ability;
+  final bool friendFree;
   final bool busy;
   final VoidCallback onBuy;
 
@@ -142,64 +147,101 @@ class _AbilityRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(abilityIcon(ability.id), size: 22, color: scheme.primary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(ability.name, style: theme.textTheme.titleSmall),
-                    if (ability.total > 0) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: scheme.primary.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(10),
+    // Locked abilities are dimmed - visible as a goal, not usable yet.
+    final locked = !ability.unlocked;
+    return Opacity(
+      opacity: locked ? 0.45 : 1,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(locked ? Icons.lock_outline : abilityIcon(ability.id),
+                size: 22, color: scheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(ability.name, style: theme.textTheme.titleSmall),
+                      if (ability.total > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: scheme.primary.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text('×${ability.total}',
+                              style: theme.textTheme.labelMedium
+                                  ?.copyWith(color: scheme.primary)),
                         ),
-                        child: Text('×${ability.total}',
-                            style: theme.textTheme.labelMedium
-                                ?.copyWith(color: scheme.primary)),
-                      ),
+                      ],
                     ],
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(ability.description, style: theme.textTheme.bodySmall),
-                if (ability.free > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      '${ability.free} included with your membership',
-                      style: theme.textTheme.labelSmall
-                          ?.copyWith(color: scheme.primary),
-                    ),
                   ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(ability.description, style: theme.textTheme.bodySmall),
+                  if (friendFree)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text('Free in this friend battle',
+                          style: theme.textTheme.labelSmall
+                              ?.copyWith(color: scheme.primary)),
+                    )
+                  else if (ability.free > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        '${ability.free} included with your membership',
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: scheme.primary),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          _buyControl(context),
-        ],
+            const SizedBox(width: 10),
+            _buyControl(context),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buyControl(BuildContext context) {
+    final theme = Theme.of(context);
+    // Locked: show the rank it unlocks at instead of a buy button.
+    if (!ability.unlocked) {
+      return SizedBox(
+        width: 92,
+        child: Text(
+          ability.unlockTitle != null
+              ? 'Unlock at\n${ability.unlockTitle}'
+              : 'Locked',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.labelSmall,
+        ),
+      );
+    }
+    // Friend battle: everything's already yours, free.
+    if (friendFree) {
+      return SizedBox(
+        width: 92,
+        child: Text('Free',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.labelMedium
+                ?.copyWith(color: theme.colorScheme.primary)),
+      );
+    }
     if (ability.atCap) {
       return SizedBox(
         width: 92,
         child: Text('Maxed',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelMedium),
+            style: theme.textTheme.labelMedium),
       );
     }
     // No spinner: the count bumps optimistically on tap, so the button just

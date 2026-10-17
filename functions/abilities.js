@@ -1,6 +1,7 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {isSubscriber, isInTrial, readMonetizationConfig} = require("./entitlement");
+const {computeTitleFromXp} = require("./rating");
 
 /**
  * Match ABILITIES (power-ups) for the regular/qualifier mode - a paid, fun edge
@@ -76,6 +77,14 @@ const ABILITY_CATALOG = {
     description: "Splat a tomato across your opponent's screen to rattle them.",
     deploy: "bar",
   },
+  fart: {
+    id: "fart",
+    name: "Fart",
+    description:
+      "Rip a random fart on your opponent's phone to throw them off. They " +
+      "hear it; it never lands in the recording.",
+    deploy: "bar",
+  },
   extend: {
     id: "extend",
     name: "+5 Seconds",
@@ -89,21 +98,55 @@ const ABILITY_CATALOG = {
     description: "Take the floor first. If you both bring it, it's a coin flip.",
     deploy: "prematch",
   },
+  goSecond: {
+    id: "goSecond",
+    name: "Go Second",
+    description:
+      "Let your opponent go first - you take the floor second. If you both " +
+      "want the same slot, it's a coin flip.",
+    deploy: "prematch",
+  },
+  skipWarmup: {
+    id: "skipWarmup",
+    name: "Skip Warm-Up",
+    description:
+      "End the warm-up for BOTH players the instant you tap - no waiting " +
+      "for them to agree. Get straight to the battle.",
+    deploy: "warmup",
+  },
 };
 
 // Per-ability economy defaults, overridable per field from config/abilities.
 // PLACEHOLDERS (advisor review): interrupt is the priciest (biggest edge);
 // go-first is capped at one (you either lead or you don't).
+//
+// `unlockXp` is the RANK GATE (developer's 2026-10-15 design): each ability
+// unlocks at a rank, cheaper/lower-impact ones first, so climbing the ladder
+// hands you the toys one by one - a progression carrot that rewards playing.
+// The thresholds are the XP_TIERS mins from rating.js: 50 Open Micer, 150
+// Class Clown, 350 The Funny Friend, 700 Door Guy, 1200 Regular, 2000
+// Headliner. In Challenge-a-Friend EVERYTHING is unlocked and free regardless
+// (taste freely); the gate + cost only bite in ranked/qualifier play.
 const DEFAULTS = {
-  interrupt: {cost: 500, subFree: 1, maxPerMatch: 3, enabled: true},
+  interrupt: {cost: 500, subFree: 1, maxPerMatch: 3, enabled: true, unlockXp: 1200},
   // Deliberately expensive and never free - the no-grace cut is the biggest
   // edge in the game, so it costs a TON of points and even subscribers buy it.
-  instantInterrupt: {cost: 2000, subFree: 0, maxPerMatch: 1, enabled: true},
-  tomato: {cost: 150, subFree: 2, maxPerMatch: 5, enabled: true},
-  extend: {cost: 250, subFree: 1, maxPerMatch: 3, enabled: true},
-  goFirst: {cost: 300, subFree: 1, maxPerMatch: 1, enabled: true},
+  instantInterrupt: {cost: 2000, subFree: 0, maxPerMatch: 1, enabled: true, unlockXp: 2000},
+  tomato: {cost: 150, subFree: 2, maxPerMatch: 5, enabled: true, unlockXp: 50},
+  // A cheap, early, purely-for-fun rattle like the tomato. Ephemeral (plays
+  // locally on the target, never recorded).
+  fart: {cost: 150, subFree: 2, maxPerMatch: 5, enabled: true, unlockXp: 50},
+  extend: {cost: 250, subFree: 1, maxPerMatch: 3, enabled: true, unlockXp: 150},
+  goFirst: {cost: 300, subFree: 1, maxPerMatch: 1, enabled: true, unlockXp: 350},
+  // Go Second unlocks AFTER Go First (developer's call): same price/cap, a
+  // higher rank. You either lead or you don't, so it's one per match.
+  goSecond: {cost: 300, subFree: 1, maxPerMatch: 1, enabled: true, unlockXp: 700},
+  // Expensive and never free - one person ends the warm-up for both, so it's a
+  // real "I'm ready, let's go" power rather than a freebie.
+  skipWarmup: {cost: 1500, subFree: 0, maxPerMatch: 1, enabled: true, unlockXp: 700},
 };
-const ABILITY_FALLBACK = {cost: 500, subFree: 0, maxPerMatch: 3, enabled: true};
+const ABILITY_FALLBACK =
+  {cost: 500, subFree: 0, maxPerMatch: 3, enabled: true, unlockXp: 0};
 
 function clampInt(v, min, max, fallback) {
   const n = Math.floor(Number(v));
@@ -121,6 +164,7 @@ function resolveAbilityConfig(doc) {
       cost: clampInt(cfg.cost, 0, 100000, base.cost),
       subFree: clampInt(cfg.subFree, 0, 10, base.subFree),
       maxPerMatch: clampInt(cfg.maxPerMatch, 0, 20, base.maxPerMatch),
+      unlockXp: clampInt(cfg.unlockXp, 0, 100000, base.unlockXp),
       enabled: cfg.enabled !== undefined ? cfg.enabled !== false : base.enabled,
     };
   }
@@ -141,8 +185,28 @@ function spendableBalance(user) {
     Math.max(0, raw) : Math.max(0, Number((user && user.points) || 0));
 }
 
-/** The FREE per-match allowance for an ability (a subscriber/trial perk). */
-function freeAllowance(user, nowMs, abilityCfg, trialDays) {
+/** Career XP (the lifetime `points` total that drives the rank title) - the
+ * signal the unlock gate reads. A missing/garbage value is 0. */
+function careerXp(user) {
+  const n = Number(user && user.points);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+/** Whether this ability is UNLOCKED for the player - gated on reaching the
+ * ability's unlockXp rank, in EVERY mode. Friend battles make unlocked
+ * abilities FREE (see freeAllowance) but do NOT unlock locked ones: the
+ * progression chase has to mean something (developer's call 2026-10-16,
+ * reversing the earlier friend-mode auto-unlock). PURE. */
+function isUnlocked(user, abilityCfg) {
+  return careerXp(user) >= (abilityCfg.unlockXp || 0);
+}
+
+/** The FREE per-match allowance for an ability. In a friend battle EVERYTHING
+ * is free and fully stocked (the per-match cap). Otherwise it's the
+ * subscriber/trial perk. The UNLOCK gate is applied at the call sites, not
+ * here, so this stays a pure "how many are free" question. */
+function freeAllowance(user, nowMs, abilityCfg, trialDays, friendMode) {
+  if (friendMode) return abilityCfg.maxPerMatch;
   const entitled = isSubscriber(user, nowMs) || isInTrial(user, nowMs, trialDays);
   return entitled ? abilityCfg.subFree : 0;
 }
@@ -192,7 +256,8 @@ async function getLoadout(auth, data) {
   const matchId = data && data.matchId;
   if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
   const db = getFirestore();
-  await requireParticipant(db, matchId, auth.uid);
+  const match = await requireParticipant(db, matchId, auth.uid);
+  const friendMode = match.mode === "friend";
   const nowMs = Date.now();
   const [cfg, mon, userSnap, loadoutSnap] = await Promise.all([
     abilityConfig(db),
@@ -204,19 +269,28 @@ async function getLoadout(auth, data) {
   const user = userSnap.data() || {};
   const balance = spendableBalance(user);
   const bought = boughtOf(loadoutSnap.data());
+  // Locked abilities are still SHOWN (grayed, with "Unlock at <rank>") rather
+  // than hidden - they're the progression carrot, so a player should see what
+  // they're climbing toward.
   const abilities = Object.values(ABILITY_CATALOG)
       .filter((a) => cfg.enabled && cfg[a.id].enabled)
       .map((a) => {
         const c = cfg[a.id];
-        const free = freeAllowance(user, nowMs, c, mon.trialDays);
+        const unlocked = isUnlocked(user, c);
+        const free = unlocked ? freeAllowance(user, nowMs, c, mon.trialDays, friendMode) : 0;
         const b = bought[a.id];
         return {
           id: a.id, name: a.name, description: a.description, deploy: a.deploy,
           cost: c.cost, free, bought: b, total: free + b, max: c.maxPerMatch,
-          canBuy: free + b < c.maxPerMatch && balance >= c.cost,
+          unlocked,
+          unlockXp: c.unlockXp,
+          unlockTitle: computeTitleFromXp(c.unlockXp),
+          // Nothing to buy when it's free (friend mode) or locked.
+          canBuy: unlocked && !friendMode &&
+            free + b < c.maxPerMatch && balance >= c.cost,
         };
       });
-  return {enabled: cfg.enabled, balance, matchId, abilities};
+  return {enabled: cfg.enabled, balance, matchId, friendFree: friendMode, abilities};
 }
 
 /**
@@ -231,13 +305,21 @@ async function purchaseAbility(auth, data) {
     throw new HttpsError("invalid-argument", "Unknown ability.");
   }
   const db = getFirestore();
-  await requireParticipant(db, matchId, auth.uid);
+  const match = await requireParticipant(db, matchId, auth.uid);
+  const friendMode = match.mode === "friend";
   const [cfg, mon] = await Promise.all([abilityConfig(db), readMonetizationConfig(db)]);
   if (!cfg.enabled || !cfg[abilityId].enabled) {
     throw new HttpsError("failed-precondition", "That ability isn't available.");
   }
   const c = cfg[abilityId];
   const nowMs = Date.now();
+
+  // Friend battles hand out everything free and fully stocked, so there is
+  // nothing to buy - the client won't offer it, but short-circuit cleanly if
+  // it's called anyway rather than charging or refusing.
+  if (friendMode) {
+    return {ok: true, friendFree: true, abilityId, bought: 0};
+  }
 
   const rid = (typeof requestId === "string" && requestId.length > 0 &&
       requestId.length <= 128) ?
@@ -260,7 +342,12 @@ async function purchaseAbility(auth, data) {
       return {ok: true, duplicate: true, abilityId,
         bought: bought[abilityId], balance: spendableBalance(user)};
     }
-    const free = freeAllowance(user, nowMs, c, mon.trialDays);
+    // Rank gate: can't buy an ability you haven't unlocked yet (ranked only;
+    // friend mode already returned above).
+    if (!isUnlocked(user, c)) {
+      return {ok: false, reason: "locked", balance: spendableBalance(user)};
+    }
+    const free = freeAllowance(user, nowMs, c, mon.trialDays, friendMode);
     const balance = spendableBalance(user);
     const plan = purchasePlan({
       free, bought: bought[abilityId], maxPerMatch: c.maxPerMatch,
@@ -285,6 +372,7 @@ async function purchaseAbility(auth, data) {
     const messages = {
       max: "You've brought the max of this one.",
       insufficient: `That costs ${c.cost} points - you don't have enough.`,
+      locked: `Reach ${computeTitleFromXp(c.unlockXp)} to unlock this.`,
     };
     throw new HttpsError("failed-precondition",
         messages[result.reason] || "Couldn't buy that.", {reason: result.reason});
@@ -309,6 +397,7 @@ async function getMatchAbilities(auth, data) {
   if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
   const db = getFirestore();
   const m = await requireParticipant(db, matchId, auth.uid);
+  const friendMode = m.mode === "friend";
   const nowMs = Date.now();
   const [cfg, mon] = await Promise.all([abilityConfig(db), readMonetizationConfig(db)]);
   const uids = [m.player1Id, m.player2Id];
@@ -323,11 +412,13 @@ async function getMatchAbilities(auth, data) {
     const bought = boughtOf(loadouts[i].data());
     const counts = {};
     for (const id of Object.keys(ABILITY_CATALOG)) {
-      if (!cfg.enabled || !cfg[id].enabled) {
+      // Off, or not yet unlocked for THIS player's rank -> they bring none.
+      if (!cfg.enabled || !cfg[id].enabled ||
+          !isUnlocked(user, cfg[id])) {
         counts[id] = 0;
         continue;
       }
-      const free = freeAllowance(user, nowMs, cfg[id], mon.trialDays);
+      const free = freeAllowance(user, nowMs, cfg[id], mon.trialDays, friendMode);
       counts[id] = Math.min(free + bought[id], cfg[id].maxPerMatch);
     }
     players[uid] = counts;
@@ -342,6 +433,8 @@ module.exports = {
   resolveAbilityConfig,
   purchasePlan,
   freeAllowance,
+  isUnlocked,
+  careerXp,
   boughtOf,
   ABILITY_CATALOG,
   DEFAULTS,

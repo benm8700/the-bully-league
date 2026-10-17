@@ -51,6 +51,9 @@ dependencies:
   url_launcher: ^6.3.2
   sensors_plus: ^7.1.0
   share_plus: ^10.1.4
+  # Local sound effects (the fart ability). Plays bundled assets only - never
+  # touches the Agora stream, so effects stay out of the recording.
+  audioplayers: ^6.1.0
   path_provider: ^2.1.5
   package_info_plus: ^8.0.0
 dev_dependencies:
@@ -111,6 +114,10 @@ flutter:
     # one PNG per badge id, shown in the profile badge case + featured chip.
     # Mapped by id in lib/core/badges/badges.dart via lib/widgets/badges/.
     - assets/badges/
+    # Fart ability sound effects (fart1.mp3 .. fart4.mp3). Played locally on the
+    # target's device - a random one per use - and NEVER sent through Agora, so
+    # they stay out of the recording (same client-only rule as the tomato).
+    - assets/audio/farts/
 
   # BUNDLED rather than fetched through the google_fonts package, for two
   # reasons. It adds no dependency to a toolchain this project documents

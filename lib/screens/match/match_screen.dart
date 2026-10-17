@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +16,7 @@ import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/capture_quality.dart';
+import '../../core/services/fart_player.dart';
 import '../../core/services/video_call_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../core/services/yuv_to_jpeg.dart';
@@ -23,6 +25,7 @@ import '../../widgets/match/ability_deploy_bar.dart';
 import '../../widgets/match/tomato_splat.dart';
 import '../vote/my_battles_screen.dart';
 import '../vote/vote_queue_screen.dart';
+import 'pre_match_screen.dart';
 
 /// Round/turn/timer state machine (Build Order step 4).
 ///
@@ -107,10 +110,16 @@ class _MatchScreenState extends State<MatchScreen>
 
   // Warm-up skip: BOTH players must agree to end the warmup early. Each sends
   // a skipWarmup message when they tap; the HOST (which drives the timeline)
-  // ends the warmup the moment it holds both agreements. A future purchasable
-  // ability could bypass the mutual rule and let one person force it.
+  // ends the warmup the moment it holds both agreements. The Skip Warm-Up
+  // ABILITY (below) bypasses the mutual rule: one person ends it for both.
   bool _mySkipRequested = false;
   bool _oppSkipRequested = false;
+  // The Skip Warm-Up ability (a paid power-up; free in friend battles). Loaded
+  // at warmup start so the button can appear; _skipWarmupUsed is the one-shot
+  // guard (maxPerMatch is 1). Both players' counts come from the server.
+  MatchAbilities? _matchAbilities;
+  bool _loadingAbilities = false;
+  bool _skipWarmupUsed = false;
   // The host's warmup wait resolves EITHER on the full timer OR early when
   // both agree to skip - a single place that opens the engine, so the skip
   // never races a second _openEngine against _runHostSequence.
@@ -122,6 +131,20 @@ class _MatchScreenState extends State<MatchScreen>
   bool _matchCompleted = false;
   bool _completeRequested = false;
   String? _matchSaveError;
+  // Friend-battle rematch: re-challenge the same opponent from the end screen.
+  bool _rematchSending = false;
+  bool _rematchSent = false;
+  // While a rematch is out, poll for the opponent accepting (or sending their
+  // own), so the sender is pulled straight into the new battle without having
+  // to go back to Home - the "both tap Rematch, reconnect automatically" rule.
+  Timer? _rematchPoll;
+  bool _rematchJoining = false;
+  // Set once the Agora engine has been torn down (either by dispose() going
+  // Home, or by _joinRematch tearing it down early). Guards against a double
+  // release and against disposing already-disposed notifiers.
+  bool _videoTornDown = false;
+  // Plays the Fart ability's sound locally (never recorded).
+  final FartPlayer _fartPlayer = FartPlayer();
 
   // The chess-clock battle. The host owns the engine and drives it on a
   // ~300ms tick, broadcasting the whole state; the guest renders it and sends
@@ -416,12 +439,26 @@ class _MatchScreenState extends State<MatchScreen>
       }
       return;
     }
+    if (message['type'] == 'forceSkipWarmup') {
+      // The opponent SPENT a Skip Warm-Up ability: end the warmup for both
+      // NOW, no mutual agreement. Only the host drives the timeline, so only
+      // it acts; the guest flips to battle on the host's first ms_state.
+      if (message['by'] != _myFirebaseUid) _forceEndWarmup();
+      return;
+    }
     final t = message['t'];
     if (t == 'ability' && message['id'] == 'tomato') {
       // A tomato splats on the RECEIVER's screen. Ephemeral and client-only -
       // it renders over the Flutter UI, never into the Agora stream, so it can
       // never reach the recording (the heckle-graphics welfare rule).
       _showTomatoSplat();
+      return;
+    }
+    if (t == 'ability' && message['id'] == 'fart') {
+      // A random fart plays on the RECEIVER's phone - locally, through the
+      // device audio, NEVER through Agora, so it's a live hindrance but is not
+      // captured in the recording (same client-only rule as the tomato).
+      _fartPlayer.playRandom();
       return;
     }
     if (t == 'fx' && message['id'] == 'instantSteal') {
@@ -523,8 +560,13 @@ class _MatchScreenState extends State<MatchScreen>
     Map<String, int>? extendsBy;
     var myGoFirst = false;
     var oppGoFirst = false;
+    var myGoSecond = false;
+    var oppGoSecond = false;
     try {
-      final ab = await AbilitiesService.getMatchAbilities(widget.pairing.matchId);
+      // Reuse the counts already loaded at warmup start when present.
+      final ab = _matchAbilities ??
+          await AbilitiesService.getMatchAbilities(widget.pairing.matchId);
+      _matchAbilities = ab;
       if (ab.enabled) {
         steals = {
           _myFirebaseUid: ab.count(_myFirebaseUid, 'interrupt'),
@@ -540,18 +582,25 @@ class _MatchScreenState extends State<MatchScreen>
         };
         myGoFirst = ab.count(_myFirebaseUid, 'goFirst') > 0;
         oppGoFirst = ab.count(_oppFirebaseUid, 'goFirst') > 0;
+        myGoSecond = ab.count(_myFirebaseUid, 'goSecond') > 0;
+        oppGoSecond = ab.count(_oppFirebaseUid, 'goSecond') > 0;
       }
     } catch (_) {
       // Base format.
     }
     if (!mounted || _violationEnded) return;
 
-    // Go First: exactly one player brought it -> they lead; both or neither ->
-    // the coin flip.
+    // Who takes the floor first, honouring BOTH abilities: Go First claims the
+    // first slot; Go Second claims the second slot (i.e. hands the opponent
+    // first). A player "wants first" if they brought Go First OR their opponent
+    // brought Go Second. If exactly one side ends up wanting first, they lead;
+    // a conflict (both want the same slot) or neither -> the coin flip.
+    final meWantsFirst = myGoFirst || oppGoSecond;
+    final oppWantsFirst = oppGoFirst || myGoSecond;
     final String firstFloor;
-    if (myGoFirst && !oppGoFirst) {
+    if (meWantsFirst && !oppWantsFirst) {
       firstFloor = _myFirebaseUid;
-    } else if (oppGoFirst && !myGoFirst) {
+    } else if (oppWantsFirst && !meWantsFirst) {
       firstFloor = _oppFirebaseUid;
     } else {
       firstFloor = _hostGoesFirst() ? _myFirebaseUid : _oppFirebaseUid;
@@ -652,6 +701,25 @@ class _MatchScreenState extends State<MatchScreen>
     });
     _videoCallService.muteLocalAudio(false);
     _startWarmupTicker(seconds);
+    // Load both players' ability counts now so the Skip Warm-Up button can
+    // appear during the warmup (the engine reuses this cache at battle start).
+    _loadMatchAbilities();
+  }
+
+  /// Fetch both players' resolved ability counts (server-authoritative) once.
+  /// Fire-and-forget: a failure just means no Skip Warm-Up button, never a
+  /// blocked warmup.
+  Future<void> _loadMatchAbilities() async {
+    if (_matchAbilities != null || _loadingAbilities) return;
+    _loadingAbilities = true;
+    try {
+      final ab = await AbilitiesService.getMatchAbilities(widget.pairing.matchId);
+      if (mounted) setState(() => _matchAbilities = ab);
+    } catch (_) {
+      // No button; fine.
+    } finally {
+      _loadingAbilities = false;
+    }
   }
 
   /// This player taps "Skip warm-up". Announces it to the opponent and, if the
@@ -687,6 +755,29 @@ class _MatchScreenState extends State<MatchScreen>
   void _maybeEndWarmupEarly() {
     if (_phase != _Phase.warmup || _isHost != true) return;
     if (!_mySkipRequested || !_oppSkipRequested) return;
+    _forceEndWarmup();
+  }
+
+  /// Spend a Skip Warm-Up ABILITY: end the warmup for BOTH players right now,
+  /// with no mutual agreement (unlike _requestSkipWarmup). One-shot per match.
+  void _deploySkipWarmup() {
+    if (_phase != _Phase.warmup || _skipWarmupUsed) return;
+    setState(() => _skipWarmupUsed = true);
+    _toast('Skipping warm-up');
+    if (_isHost == true) {
+      _forceEndWarmup();
+    } else {
+      // The host owns the timeline; ask it to end and broadcast battle start.
+      _videoCallService
+          .sendMatchMessage({'type': 'forceSkipWarmup', 'by': _myFirebaseUid});
+    }
+  }
+
+  /// HOST: end the warmup now, through the SAME single Completer path
+  /// _runHostSequence awaits - so the engine still opens exactly once, whether
+  /// the end came from the full timer, a mutual skip, or a Skip Warm-Up ability.
+  void _forceEndWarmup() {
+    if (_isHost != true || _phase != _Phase.warmup) return;
     _ticker?.cancel();
     _skipResend?.cancel();
     if (_warmupSkip != null && !_warmupSkip!.isCompleted) {
@@ -770,6 +861,22 @@ class _MatchScreenState extends State<MatchScreen>
     });
   }
 
+  /// Removes every listener/subscription on the video service and releases the
+  /// Agora engine. Idempotent via [_videoTornDown]. Awaitable, because the
+  /// rematch path MUST finish releasing the native engine before the next
+  /// pre-match check initializes a new one (one native engine per process -
+  /// skipping the await leaves the camera/mic dead on the next screen).
+  Future<void> _tearDownVideo() async {
+    if (_videoTornDown) return;
+    _videoTornDown = true;
+    _frameSampleSub?.cancel();
+    _localFrameSub?.cancel();
+    _videoCallService.localAudioLevel.removeListener(_onLocalAudioLevel);
+    _videoCallService.localUid.removeListener(_maybeElectHost);
+    _videoCallService.remoteUid.removeListener(_maybeElectHost);
+    await _videoCallService.dispose();
+  }
+
   @override
   void dispose() {
     _ticker?.cancel();
@@ -777,15 +884,14 @@ class _MatchScreenState extends State<MatchScreen>
     _skipResend?.cancel();
     _splatTimer?.cancel();
     _stealTimer?.cancel();
+    _rematchPoll?.cancel();
     _pulse.dispose();
     _msgSub?.cancel();
     _matchDocSub?.cancel();
-    _frameSampleSub?.cancel();
-    _localFrameSub?.cancel();
-    _videoCallService.localAudioLevel.removeListener(_onLocalAudioLevel);
-    _videoCallService.localUid.removeListener(_maybeElectHost);
-    _videoCallService.remoteUid.removeListener(_maybeElectHost);
-    _videoCallService.dispose();
+    _fartPlayer.dispose();
+    // Fire-and-forget here (State.dispose can't await); already a no-op if
+    // _joinRematch tore it down first.
+    _tearDownVideo();
     super.dispose();
   }
 
@@ -979,6 +1085,12 @@ class _MatchScreenState extends State<MatchScreen>
         _videoCallService
             .sendMatchMessage({'t': 'ability', 'id': 'tomato', 'by': _myFirebaseUid});
         _toast('Tomato thrown');
+      case 'fart':
+        // Fires a random fart on the opponent's phone (local sound only, never
+        // recorded). Nothing plays on this device - it's their hindrance.
+        _videoCallService
+            .sendMatchMessage({'t': 'ability', 'id': 'fart', 'by': _myFirebaseUid});
+        _toast('Fart deployed');
     }
   }
 
@@ -1121,10 +1233,34 @@ class _MatchScreenState extends State<MatchScreen>
                 ),
               ],
               const SizedBox(height: 4),
+              _buildWarmupSkipAbility(),
               _buildWarmupSkip(),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// The Skip Warm-Up ability button: shown only when this player actually
+  /// holds a charge (bought it in ranked, or free in a friend battle) and
+  /// hasn't spent it. One tap ends the warmup for both - no waiting on the
+  /// opponent, unlike the mutual control below.
+  Widget _buildWarmupSkipAbility() {
+    final have = (_matchAbilities?.count(_myFirebaseUid, 'skipWarmup') ?? 0) > 0;
+    if (!have || _skipWarmupUsed) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: FilledButton.tonalIcon(
+        onPressed: _deploySkipWarmup,
+        icon: const Icon(Icons.bolt, size: 16),
+        style: FilledButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          minimumSize: const Size(0, 30),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        label: const Text('Skip for both now', style: TextStyle(fontSize: 12)),
       ),
     );
   }
@@ -1350,7 +1486,132 @@ class _MatchScreenState extends State<MatchScreen>
     );
   }
 
+  /// Re-challenge the same opponent (friend battles only), and converge both
+  /// sides onto ONE new battle with no trip back to Home.
+  ///
+  /// If the opponent has ALREADY sent me a rematch (they tapped first), accept
+  /// theirs and go straight in. Otherwise send my own and start polling: when
+  /// they accept it - whether from this screen or from Home - the poll pulls me
+  /// into the new battle. This is the "both tap Rematch, reconnect them
+  /// automatically" rule, and also fixes the sender being stranded on "Match
+  /// complete" after the other person accepts.
+  Future<void> _sendRematch() async {
+    if (_rematchSending || _rematchSent || _rematchJoining) return;
+    setState(() => _rematchSending = true);
+    final oppId = widget.pairing.opponentId;
+    final fns = FirebaseFunctions.instance;
+    try {
+      // Did they beat me to it? Accept their incoming rematch instead of
+      // creating a second, competing challenge.
+      final mine = await fns.httpsCallable('getMyChallenges')
+          .call<Map<String, dynamic>>();
+      final incoming = (mine.data['incoming'] as List?) ?? const [];
+      final theirs = incoming.cast<dynamic>().firstWhere(
+            (c) => (c as Map)['fromUid'] == oppId,
+            orElse: () => null,
+          );
+      if (theirs != null) {
+        final r = await fns.httpsCallable('respondToChallenge')
+            .call<Map<String, dynamic>>({
+          'challengeId': (theirs as Map)['challengeId'],
+          'accept': true,
+        });
+        final matchId = r.data['matchId'] as String?;
+        if (matchId != null) {
+          await _joinRematch(matchId);
+          return;
+        }
+      }
+
+      // Nobody's waiting yet - send mine and poll for them to take it up.
+      await fns.httpsCallable('challengeFriend')
+          .call<Map<String, dynamic>>({'toUid': oppId});
+      if (!mounted) return;
+      setState(() {
+        _rematchSent = true;
+        _rematchSending = false;
+      });
+      _rematchPoll?.cancel();
+      _rematchPoll = Timer.periodic(
+          const Duration(seconds: 3), (_) => _pollRematch());
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _rematchSending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not send the rematch - try again.')),
+      );
+    }
+  }
+
+  /// While my rematch is out: join the moment they accept it, or - if we both
+  /// sent at the same instant and neither saw the other - have exactly ONE side
+  /// (the lower uid, a stable tiebreak) accept the other's so we don't create
+  /// two matches.
+  Future<void> _pollRematch() async {
+    if (_rematchJoining || !mounted) return;
+    final oppId = widget.pairing.opponentId;
+    final fns = FirebaseFunctions.instance;
+    try {
+      final r =
+          await fns.httpsCallable('getMyChallenges').call<Map<String, dynamic>>();
+      final accepted = (r.data['accepted'] as List?) ?? const [];
+      final taken = accepted.cast<dynamic>().firstWhere(
+            (c) => (c as Map)['toUid'] == oppId,
+            orElse: () => null,
+          );
+      if (taken != null) {
+        await _joinRematch((taken as Map)['matchId'] as String);
+        return;
+      }
+      // Simultaneous double-send: the lower uid accepts the other's incoming.
+      if (_myFirebaseUid.compareTo(oppId) < 0) {
+        final incoming = (r.data['incoming'] as List?) ?? const [];
+        final theirs = incoming.cast<dynamic>().firstWhere(
+              (c) => (c as Map)['fromUid'] == oppId,
+              orElse: () => null,
+            );
+        if (theirs != null) {
+          final resp = await fns.httpsCallable('respondToChallenge')
+              .call<Map<String, dynamic>>({
+            'challengeId': (theirs as Map)['challengeId'],
+            'accept': true,
+          });
+          final matchId = resp.data['matchId'] as String?;
+          if (matchId != null) await _joinRematch(matchId);
+        }
+      }
+    } catch (_) {
+      // Transient - the next tick retries.
+    }
+  }
+
+  /// Replace this finished match's screen with the new battle's pre-match
+  /// check, so finishing the rematch returns Home rather than to a stale
+  /// "Match complete" screen.
+  Future<void> _joinRematch(String matchId) async {
+    if (_rematchJoining || !mounted) return;
+    _rematchPoll?.cancel();
+    setState(() => _rematchJoining = true);
+    // Fully release THIS match's Agora engine before the new pre-match check
+    // initializes a fresh one. createAgoraRtcEngine() is one native engine per
+    // process, so a new initialize() while this one is still releasing left the
+    // camera dead and the mic-gated Ready button unreachable (seen on device
+    // after a rematch). Awaiting the teardown is the documented fix.
+    await _tearDownVideo();
+    if (!mounted) return;
+    await Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) =>
+            PreMatchScreen(mode: 'friend', challengeMatchId: matchId),
+      ),
+    );
+  }
+
   Widget _buildVerdictUi() {
+    // A FRIEND battle is a private scrimmage - not judged, not with the crowd -
+    // so it gets a rematch offer instead of the vote flow.
+    final isFriend = widget.pairing.mode == 'friend';
+    final scheme = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -1361,53 +1622,101 @@ class _MatchScreenState extends State<MatchScreen>
             const SizedBox(height: 16),
             Text('Match complete!', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 12),
-            // The reciprocal ask, made at the highest-intent moment in the
-            // app: they're invested, waiting on their own verdict, and
-            // already looking at this screen. Asking here converts far
-            // better than a cold notification later, and framing it as
-            // "judge while you're judged" makes it plainly fair rather
-            // than extractive. It also directly feeds the vote confidence
-            // that now determines how much any result moves rating.
-            const Text(
-              'Your battle is now with the crowd. They have 24 hours to call it.\n\n'
-              'Vote on a few others while you wait - the more people who vote '
-              'on a battle, the more it counts.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            if (_matchCompleted)
-              FilledButton.icon(
-                onPressed: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const VoteQueueScreen()),
+            if (isFriend) ...[
+              const Text('Good battle. Run it back?', textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              if (_rematchJoining)
+                const Column(mainAxisSize: MainAxisSize.min, children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 10),
+                  Text('Starting the rematch…', textAlign: TextAlign.center),
+                ])
+              else if (_rematchSent)
+                const Column(mainAxisSize: MainAxisSize.min, children: [
+                  SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  SizedBox(height: 10),
+                  Text("Rematch sent - waiting for them to jump back in…",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Color(0xFF4FD69A))),
+                ])
+              else
+                FilledButton.icon(
+                  onPressed: _rematchSending ? null : _sendRematch,
+                  icon: const Icon(Icons.replay),
+                  label: Text(_rematchSending ? 'Sending…' : 'Rematch'),
+                  // Purple (secondary), distinct from the pink Back-to-home.
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(200, 48),
+                    backgroundColor: scheme.secondary,
+                    foregroundColor: scheme.onSecondary,
+                  ),
                 ),
-                icon: const Icon(Icons.how_to_vote_outlined),
-                label: const Text('Vote on a battle'),
-              )
-            else if (_matchSaveError != null)
-              Text(_matchSaveError!,
-                  style: TextStyle(
-                      color: Theme.of(context).colorScheme.error))
-            else
-              const CircularProgressIndicator(),
-            if (_matchCompleted) ...[
-              const SizedBox(height: 8),
-              // The other half of the wait: watching your own count climb.
-              // Participants can't vote on their own match, so there's no
-              // judgement of theirs left to bias and the scoreboard is open
-              // to them from the first ballot.
-              TextButton.icon(
-                onPressed: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const MyBattlesScreen()),
-                ),
-                icon: const Icon(Icons.leaderboard_outlined, size: 18),
-                label: const Text('Watch the votes come in'),
+            ] else ...[
+              // The reciprocal ask, made at the highest-intent moment in the
+              // app: they're invested, waiting on their own verdict, and
+              // already looking at this screen. Asking here converts far
+              // better than a cold notification later.
+              const Text(
+                'Your battle is now with the crowd. They have 24 hours to call it.\n\n'
+                'Vote on a few others while you wait - the more people who vote '
+                'on a battle, the more it counts.',
+                textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 24),
+              if (_matchCompleted)
+                FilledButton.icon(
+                  onPressed: () => Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const VoteQueueScreen()),
+                  ),
+                  icon: const Icon(Icons.how_to_vote_outlined),
+                  label: const Text('Vote on a battle'),
+                )
+              else if (_matchSaveError != null)
+                Text(_matchSaveError!,
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.error))
+              else
+                const CircularProgressIndicator(),
+              if (_matchCompleted) ...[
+                const SizedBox(height: 8),
+                // The other half of the wait: watching your own count climb.
+                TextButton.icon(
+                  onPressed: () => Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const MyBattlesScreen()),
+                  ),
+                  icon: const Icon(Icons.leaderboard_outlined, size: 18),
+                  label: const Text('Watch the votes come in'),
+                ),
+              ],
             ],
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
-              child: const Text('Back to Home'),
-            ),
+            const SizedBox(height: 16),
+            // A big, easy-to-hit way home (the small arrow was hard to tap).
+            // In a friend battle it's the PINK primary (paired with the purple
+            // Rematch); in ranked it stays tonal so it doesn't fight the pink
+            // "Vote on a battle" CTA above it.
+            if (isFriend)
+              FilledButton.icon(
+                onPressed: () =>
+                    Navigator.of(context).popUntil((route) => route.isFirst),
+                icon: const Icon(Icons.home_outlined),
+                label: const Text('Back to home'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(200, 48),
+                  backgroundColor: scheme.primary,
+                  foregroundColor: scheme.onPrimary,
+                ),
+              )
+            else
+              FilledButton.tonalIcon(
+                onPressed: () =>
+                    Navigator.of(context).popUntil((route) => route.isFirst),
+                icon: const Icon(Icons.home_outlined),
+                label: const Text('Back to home'),
+                style: FilledButton.styleFrom(minimumSize: const Size(200, 48)),
+              ),
           ],
         ),
       ),

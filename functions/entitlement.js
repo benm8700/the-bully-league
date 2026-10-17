@@ -179,7 +179,15 @@ function battleEntitlement({user, mode, nowMs, windowConfig, config}) {
   // subscriber feature. Challenging a name you already know is not.
   if (mode === "friend") return allow();
 
-  const isPractice = mode !== "ranked";
+  // IMPROV STATION is treated like ranked here (developer's call 2026-10-15):
+  // it is NOT "practice", so the window rule below does NOT close it during the
+  // nightly window, and a lapsed player gets it free in the window like ranked.
+  // NOTE: the developer wants improv closed ONLY during the live Thursday Main
+  // Stage semis/finals - that narrower rule needs live tournament state and is
+  // a FOLLOW-UP (monetization is off, so none of this is active yet; this is
+  // advisor-review territory - see the economy-needs-advisor-review memory).
+  const isRankedLike = mode === "ranked" || mode === "improv";
+  const isPractice = !isRankedLike;
 
   // Rule that binds everyone, subscribers included: the window is
   // ranked-only.
@@ -214,8 +222,9 @@ function battleEntitlement({user, mode, nowMs, windowConfig, config}) {
 
   if (subscriber || trial || dayPass) return allow();
 
-  // Lapsed. Ranked inside the window is theirs forever; nothing else is.
-  if (mode === "ranked" && inWindow) return allow();
+  // Lapsed. Ranked (and ranked-like improv) inside the window is theirs
+  // forever; nothing else is.
+  if (isRankedLike && inWindow) return allow();
 
   return {
     allowed: false,

@@ -230,6 +230,22 @@ class _RankChangeDialog extends StatelessWidget {
                 ),
               ),
             ),
+            // The ladder rung as a Roman numeral ("· V"), matching Home/Profile
+            // so the climb reads consistently. Absent for GOAT (unnumbered
+            // throne) and unknown titles.
+            if (rankTierNumeral(rankTitle) != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '· ${rankTierNumeral(rankTitle)} ·',
+                style: text.titleLarge?.copyWith(
+                  // Bronze/silver/gold by tier band; the demotion case dims to
+                  // the cool accent.
+                  color: up ? (rankTierColor(rankTitle) ?? _gold) : accent,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             // The one-liner sits BELOW the badge.
             Text(

@@ -93,10 +93,12 @@ async function seed() {
   // one, which counts toward the cap and would shift the math.
   const old = Timestamp.fromMillis(Date.now() - 100 * 24 * 60 * 60 * 1000);
   const batch = db.batch();
+  // points (career XP) >= the highest ability unlockXp (2000) so the rank gate
+  // added 2026-10-15 doesn't lock these probes out of buying interrupt etc.
   batch.set(db.collection("users").doc(PA),
-      {username: "AbilityPA", pointsBalance: 5000, rating: 1200, createdAt: old});
+      {username: "AbilityPA", pointsBalance: 5000, points: 5000, rating: 1200, createdAt: old});
   batch.set(db.collection("users").doc(PB),
-      {username: "AbilityPB", pointsBalance: 5000, rating: 1200, createdAt: old});
+      {username: "AbilityPB", pointsBalance: 5000, points: 5000, rating: 1200, createdAt: old});
   batch.set(db.collection("matches").doc(MATCH), {
     player1Id: PA, player2Id: PB, mode: "ranked", status: "pending",
     createdAt: FieldValue.serverTimestamp(),

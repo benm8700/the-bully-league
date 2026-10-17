@@ -13,10 +13,14 @@ IconData abilityIcon(String id) {
       return Icons.bolt;
     case 'tomato':
       return Icons.sports_baseball;
+    case 'fart':
+      return Icons.air;
     case 'extend':
       return Icons.more_time;
     case 'goFirst':
       return Icons.flag;
+    case 'goSecond':
+      return Icons.flag_outlined;
     default:
       return Icons.flash_on;
   }

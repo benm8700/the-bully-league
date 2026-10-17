@@ -53,6 +53,14 @@ service cloud.firestore {
           'emojiCounts', 'votesCast', 'emojiTopAwards', 'emojiScrub',
           'tournamentWins', 'tournamentRunnerUps', 'pendingTournamentFinale',
           'editorsChoicePicks', 'mainStagePanelsServed',
+          // Written only by finalizePhoneSignup from the verified token claim,
+          // never the client - a modified app must not assert a number it did
+          // not verify (it's the invite-loop attribution key).
+          'phoneNumber', 'phoneVerifiedAt',
+          // Improv Station's separate hidden Elo + its W-L, written only by
+          // finalizeMatch (Admin SDK). Server-only like roast rating/wins/
+          // losses - a client that could write it would fake its improv skill.
+          'improvRating', 'improvWins', 'improvLosses',
         ]);
 
       // Uses .get(field, default) rather than direct field access - a
@@ -72,6 +80,11 @@ service cloud.firestore {
         request.resource.data.get('rankedMatchesPlayed', null) == resource.data.get('rankedMatchesPlayed', null) &&
         request.resource.data.get('wins', null) == resource.data.get('wins', null) &&
         request.resource.data.get('losses', null) == resource.data.get('losses', null) &&
+        // Improv Station's separate hidden Elo + its W-L, written only by
+        // finalizeMatch. Immutable to the client like roast rating/wins/losses.
+        request.resource.data.get('improvRating', null) == resource.data.get('improvRating', null) &&
+        request.resource.data.get('improvWins', null) == resource.data.get('improvWins', null) &&
+        request.resource.data.get('improvLosses', null) == resource.data.get('improvLosses', null) &&
         // accountStatus (active/banned/flagged) must be just as protected -
         // otherwise a banned client could simply write itself back to
         // 'active' and bypass the ban entirely. Only admin action via the
@@ -230,6 +243,15 @@ service cloud.firestore {
         // the ⭐ without ever being picked.
         request.resource.data.get('editorsChoicePicks', null) ==
           resource.data.get('editorsChoicePicks', null) &&
+        // The verified phone number and when it was verified, written only by
+        // finalizePhoneSignup from the token's phone_number claim. Immutable to
+        // the client so a modified app can't swap in a number it never verified
+        // - it's the invite-loop attribution key and the one-account-per-phone
+        // signal.
+        request.resource.data.get('phoneNumber', null) ==
+          resource.data.get('phoneNumber', null) &&
+        request.resource.data.get('phoneVerifiedAt', null) ==
+          resource.data.get('phoneVerifiedAt', null) &&
         // The username, and its lowercased search copy. Written only by
         // setUsername, which filters it, claims it for uniqueness and
         // enforces the change cooldown.
@@ -286,6 +308,15 @@ service cloud.firestore {
     // what the silence protects against. getMyChallenges serves each side
     // only what is theirs.
     match /challenges/{challengeId} {
+      allow read, write: if false;
+    }
+
+    // Pending invite-by-phone challenges, keyed by the invitee's number. Both
+    // sides are server-only: written by the invite loop (Cloud Function) and
+    // read/attached by finalizePhoneSignup (Admin SDK) when that number later
+    // verifies. Client read would leak who invited which numbers; client write
+    // would let anyone forge an inviter.
+    match /phoneChallenges/{id} {
       allow read, write: if false;
     }
 

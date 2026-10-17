@@ -47,7 +47,10 @@ class Entitlement {
     windowName: null,
   );
 
-  bool allows(String mode) => mode == 'ranked' ? rankedAllowed : practiceAllowed;
+  // Improv Station is ranked-like (open during the window, not practice-gated),
+  // mirroring entitlement.js. Keep in sync with the server.
+  bool allows(String mode) =>
+      (mode == 'ranked' || mode == 'improv') ? rankedAllowed : practiceAllowed;
 
   /// Whole days remaining, or null when the trial has no known end. Rounded
   /// UP so the last partial day reads as "1 day left" rather than "0".

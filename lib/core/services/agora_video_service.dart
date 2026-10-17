@@ -250,6 +250,13 @@ class AgoraVideoCallService implements VideoCallService {
   Future<void> muteLocalAudio(bool muted) => _engine.muteLocalAudioStream(muted);
 
   @override
+  // Mutes every remote stream on this device (a 2-person channel = just the
+  // opponent). The performer keeps publishing, so the cloud recording and
+  // spectators are unaffected - only this client stops hearing them.
+  Future<void> muteRemoteAudio(bool muted) =>
+      _engine.muteAllRemoteAudioStreams(muted);
+
+  @override
   Future<void> sendMatchMessage(Map<String, dynamic> data) async {
     final streamId = _dataStreamId;
     if (streamId == null) return;

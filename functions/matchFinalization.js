@@ -6,6 +6,11 @@ const {
   applyEloChange,
   computeTitleFromXp,
   voteConfidence,
+  // Was USED but never imported - a latent bug the roast path never hit
+  // because `p1.rating ?? STARTING_RATING` short-circuits (rating is always
+  // set at signup). Improv's initially-unset improvRating evaluates the
+  // right side and threw ReferenceError until this import was added.
+  STARTING_RATING,
 } = require("./rating");
 
 const VOTE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -229,18 +234,27 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     // rating change is skipped rather than computed against a guess - a
     // fabricated opponent rating could hand somebody a large undeserved
     // gain or loss, which is worse than no change at all.
+    // IMPROV STATION moves its OWN hidden Elo (improvRating), never roast
+    // rating - a separate ladder so the two skills stay honest and improv can
+    // never feed the roast leaderboard or Main Stage qualification. Everything
+    // below reads/writes the mode-appropriate field; the stamped fallback is
+    // the pairing-time rating for THIS mode either way (enterQueue stamps the
+    // mode's rating), so a departed player is handled the same.
+    const isImprov = match.mode === "improv";
     const p1Stamped = Number(match.player1Rating);
     const p2Stamped = Number(match.player2Rating);
-    const p1Rating = p1Gone ? p1Stamped : (p1.rating ?? STARTING_RATING);
-    const p2Rating = p2Gone ? p2Stamped : (p2.rating ?? STARTING_RATING);
+    const p1Current = isImprov ? p1.improvRating : p1.rating;
+    const p2Current = isImprov ? p2.improvRating : p2.rating;
+    const p1Rating = p1Gone ? p1Stamped : (p1Current ?? STARTING_RATING);
+    const p2Rating = p2Gone ? p2Stamped : (p2Current ?? STARTING_RATING);
     const ratable = Number.isFinite(p1Rating) && Number.isFinite(p2Rating);
 
     let p1NewRating = p1Rating;
     let p2NewRating = p2Rating;
-    let p1Wins = p1.wins ?? 0;
-    let p1Losses = p1.losses ?? 0;
-    let p2Wins = p2.wins ?? 0;
-    let p2Losses = p2.losses ?? 0;
+    let p1Wins = (isImprov ? p1.improvWins : p1.wins) ?? 0;
+    let p1Losses = (isImprov ? p1.improvLosses : p1.losses) ?? 0;
+    let p2Wins = (isImprov ? p2.improvWins : p2.wins) ?? 0;
+    let p2Losses = (isImprov ? p2.improvLosses : p2.losses) ?? 0;
 
     // How much this result should move rating, given how many people
     // actually judged it. A match decided by one friendly vote barely
@@ -285,20 +299,36 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     // matchmaking number. The win bonus (awardPoints below) and the
     // participation award (at completeMatch) are what move the title, and
     // syncGoatTier still overlays GOAT from this hidden rating.
-    if (!p1Gone) tx.update(player1Ref, {
-      rating: p1NewRating,
-      wins: p1Wins,
-      losses: p1Losses,
-      rankedMatchesPlayed: p1Matches,
-      careerRankedMatches: p1Career,
-    });
-    if (!p2Gone) tx.update(player2Ref, {
-      rating: p2NewRating,
-      wins: p2Wins,
-      losses: p2Losses,
-      rankedMatchesPlayed: p2Matches,
-      careerRankedMatches: p2Career,
-    });
+    // IMPROV writes its OWN fields and DELIBERATELY leaves the roast ladder
+    // counters (rankedMatchesPlayed / careerRankedMatches) untouched - those
+    // gate GOAT eligibility and the new-player carve-out, and improv must not
+    // inflate them. It keeps a separate improvWins/improvLosses record.
+    if (!p1Gone) {
+      tx.update(player1Ref, isImprov ? {
+        improvRating: p1NewRating,
+        improvWins: p1Wins,
+        improvLosses: p1Losses,
+      } : {
+        rating: p1NewRating,
+        wins: p1Wins,
+        losses: p1Losses,
+        rankedMatchesPlayed: p1Matches,
+        careerRankedMatches: p1Career,
+      });
+    }
+    if (!p2Gone) {
+      tx.update(player2Ref, isImprov ? {
+        improvRating: p2NewRating,
+        improvWins: p2Wins,
+        improvLosses: p2Losses,
+      } : {
+        rating: p2NewRating,
+        wins: p2Wins,
+        losses: p2Losses,
+        rankedMatchesPlayed: p2Matches,
+        careerRankedMatches: p2Career,
+      });
+    }
     // RECORDED HERE, INSIDE THE SAME TRANSACTION, and this is the only
     // chance to do it. A rating update overwrites the previous value, so
     // any history not written at this moment is gone permanently - it can
@@ -330,12 +360,17 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     // would resurrect personal data beneath a document erased on
     // request, and leave exactly the kind of orphan the deletion flow
     // has already had to be fixed once for missing.
-    if (!p1Gone) {
+    // ratingHistory is the ROAST rating record (the FormCard, and the raw
+    // material the weekly Main Stage qualifier reads). Improv deliberately
+    // writes NONE of it - that's the belt half of keeping improv out of roast
+    // skill and out of qualification (the other half is the NON_LADDER_MODES
+    // denylist).
+    if (!isImprov && !p1Gone) {
       tx.set(player1Ref.collection("ratingHistory").doc(matchId),
           historyEntry(p1Rating, p1NewRating, match.player2Id,
               winnerId === match.player1Id));
     }
-    if (!p2Gone) {
+    if (!isImprov && !p2Gone) {
       tx.set(player2Ref.collection("ratingHistory").doc(matchId),
           historyEntry(p2Rating, p2NewRating, match.player1Id,
               winnerId === match.player2Id));

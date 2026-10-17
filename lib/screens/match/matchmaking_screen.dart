@@ -10,6 +10,7 @@ import '../../core/services/matchmaking_service.dart';
 import '../../core/services/presence.dart';
 import '../practice/solo_practice_screen.dart';
 import 'bio_reveal_screen.dart';
+import 'improv_match_screen.dart';
 
 /// The "finding you an opponent" step (Build Order step 4's missing half).
 ///
@@ -58,8 +59,16 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
       if (!mounted || pairing == null) return;
       // pushReplacement so Back from the match returns Home rather than
       // dropping the player into a search for another opponent.
+      //
+      // IMPROV skips the bio reveal entirely - there's no opponent ammo to
+      // study (you riff a prompt), and the prompts are revealed in-match. It
+      // goes straight to its own performance screen.
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => BioRevealScreen(pairing: pairing)),
+        MaterialPageRoute(
+          builder: (_) => pairing.mode == 'improv'
+              ? ImprovMatchScreen(pairing: pairing)
+              : BioRevealScreen(pairing: pairing),
+        ),
       );
     } catch (e) {
       if (!mounted) return;

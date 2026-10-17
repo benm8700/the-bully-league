@@ -89,6 +89,7 @@ class Loadout {
     required this.enabled,
     required this.balance,
     required this.matchId,
+    required this.friendFree,
     required this.abilities,
   });
 
@@ -98,6 +99,10 @@ class Loadout {
   /// Spendable points (career total is never touched by spending).
   final int balance;
   final String matchId;
+
+  /// True in a Challenge-a-Friend battle: everything is unlocked and free, so
+  /// there's nothing to buy - the panel just shows what you've got to try.
+  final bool friendFree;
   final List<AbilityOption> abilities;
 
   factory Loadout.fromMap(Map<String, dynamic> m) {
@@ -106,6 +111,7 @@ class Loadout {
       enabled: m['enabled'] == true,
       balance: _asInt(m['balance']),
       matchId: m['matchId']?.toString() ?? '',
+      friendFree: m['friendFree'] == true,
       abilities: raw.map((e) => AbilityOption.fromMap(_asMap(e))).toList(),
     );
   }
@@ -125,11 +131,13 @@ class Loadout {
       return a.copyWith(
         bought: b,
         total: total,
-        canBuy: total < a.max && balance >= a.cost,
+        // A locked ability can never be bought, whatever the balance.
+        canBuy: a.unlocked && !friendFree && total < a.max && balance >= a.cost,
       );
     }).toList();
     return Loadout(
-      enabled: enabled, balance: balance, matchId: matchId, abilities: updated);
+      enabled: enabled, balance: balance, matchId: matchId,
+      friendFree: friendFree, abilities: updated);
   }
 }
 
@@ -146,6 +154,8 @@ class AbilityOption {
     required this.total,
     required this.max,
     required this.canBuy,
+    required this.unlocked,
+    required this.unlockTitle,
   });
 
   final String id;
@@ -175,6 +185,14 @@ class AbilityOption {
   /// Whether one more can be bought right now (under the cap, affordable).
   final bool canBuy;
 
+  /// Whether this ability is unlocked for the player's rank. Locked ones are
+  /// shown grayed with [unlockTitle] as the carrot to climb toward.
+  final bool unlocked;
+
+  /// The rank title that unlocks this ability (e.g. "Regular"), for the
+  /// "Unlock at X" label. Null only on malformed data.
+  final String? unlockTitle;
+
   bool get atCap => total >= max;
 
   AbilityOption copyWith({int? bought, int? total, bool? canBuy}) => AbilityOption(
@@ -188,6 +206,8 @@ class AbilityOption {
         total: total ?? this.total,
         max: max,
         canBuy: canBuy ?? this.canBuy,
+        unlocked: unlocked,
+        unlockTitle: unlockTitle,
       );
 
   factory AbilityOption.fromMap(Map<String, dynamic> m) => AbilityOption(
@@ -201,5 +221,9 @@ class AbilityOption {
         total: _asInt(m['total']),
         max: _asInt(m['max']),
         canBuy: m['canBuy'] == true,
+        // Back-compat: older server responses without `unlocked` read as
+        // unlocked (the gate simply isn't enforced), never as locked.
+        unlocked: m['unlocked'] != false,
+        unlockTitle: m['unlockTitle']?.toString(),
       );
 }

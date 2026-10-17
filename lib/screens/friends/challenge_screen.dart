@@ -1,9 +1,15 @@
 import 'dart:async';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../match/pre_match_screen.dart';
+
+/// Where an SMS invite points. Placeholder until a real store listing exists
+/// (same as the website's download CTA); swap when the app ships.
+const String _appDownloadUrl = 'https://the-bully-league.vercel.app';
 
 /// Challenge someone by name, and answer challenges sent to you.
 ///
@@ -29,6 +35,7 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
   List<Map<String, dynamic>> _incoming = const [];
   List<Map<String, dynamic>> _outgoing = const [];
   List<Map<String, dynamic>> _accepted = const [];
+  List<Map<String, dynamic>> _recent = const [];
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -39,6 +46,7 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
   void initState() {
     super.initState();
     _load();
+    _loadRecent();
     // Poll so the challenger learns their challenge was accepted WITHOUT
     // reloading the screen. Accepting is server-side and instant on the
     // target's device; without this, the challenger's "Waiting on X" just
@@ -80,9 +88,97 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
     }
   }
 
+  Future<void> _loadRecent() async {
+    try {
+      final r = await FirebaseFunctions.instance
+          .httpsCallable('getRecentChallengeTargets')
+          .call<Map<String, dynamic>>();
+      if (!mounted) return;
+      setState(() => _recent = ((r.data['recent'] as List?) ?? const [])
+          .map((e) => (e as Map).cast<String, dynamic>())
+          .toList());
+    } catch (_) {/* no recents, no chips */}
+  }
+
   Future<void> _send() async {
-    final name = _controller.text.trim();
-    if (name.isEmpty) return;
+    final input = _controller.text.trim();
+    if (input.isEmpty) return;
+    // Phone vs username: a value that's (almost) all phone characters with
+    // enough digits is treated as a number; anything else is a username.
+    final digits = input.replaceAll(RegExp(r'[^0-9]'), '');
+    final looksPhone =
+        digits.length >= 7 && RegExp(r'^[+0-9 ()\-.]+$').hasMatch(input);
+    setState(() {
+      _busy = true;
+      _error = null;
+      _sent = null;
+    });
+    try {
+      final r = await FirebaseFunctions.instance
+          .httpsCallable('challengeFriend')
+          .call<Map<String, dynamic>>(
+              looksPhone ? {'phone': input} : {'username': input});
+      if (!mounted) return;
+      // No account on that number yet - fire an SMS invite; the challenge is
+      // stashed and auto-delivered when they sign up with that number.
+      if (r.data['needsInvite'] == true) {
+        await _inviteBySms(
+            r.data['phone'] as String? ?? input,
+            r.data['fromUsername'] as String?);
+        if (!mounted) return;
+        _controller.clear();
+        setState(() {
+          _busy = false;
+          _sent = "No account on that number yet - we opened a text invite. "
+              "When they join, your challenge is waiting.";
+        });
+        return;
+      }
+      _controller.clear();
+      setState(() {
+        _busy = false;
+        _sent = 'Challenge sent. They have an hour to answer.';
+      });
+      _confirm('Challenge sent!');
+      await _load();
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      // The server's message is shown verbatim: it knows whether this was an
+      // unknown name, a block, or the outstanding cap, and it phrases a block
+      // indistinguishably from a missing player on purpose.
+      setState(() {
+        _busy = false;
+        _error = e.message ?? 'Could not send that.';
+      });
+    }
+  }
+
+  /// A clear, moving confirmation that the send actually happened - the quiet
+  /// bottom-of-screen text was too easy to miss.
+  void _confirm(String message) {
+    if (!mounted) return;
+    final scheme = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        backgroundColor: scheme.primary,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Text(message,
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold))),
+          ],
+        ),
+      ));
+  }
+
+  /// Re-challenge a recent opponent by uid - one tap, no typing.
+  Future<void> _sendToUid(String uid, String username) async {
     setState(() {
       _busy = true;
       _error = null;
@@ -91,24 +187,53 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
     try {
       await FirebaseFunctions.instance
           .httpsCallable('challengeFriend')
-          .call<Map<String, dynamic>>({'username': name});
+          .call<Map<String, dynamic>>({'toUid': uid});
       if (!mounted) return;
-      _controller.clear();
       setState(() {
         _busy = false;
-        _sent = "Challenge sent to $name. They have an hour to answer.";
+        _sent = 'Challenge sent to $username.';
       });
+      _confirm('Challenge sent to $username!');
       await _load();
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
-      // The server's message is shown verbatim: it is the one that knows
-      // whether this was an unknown name, a block, or the outstanding cap,
-      // and it phrases a block indistinguishably from a missing player on
-      // purpose.
       setState(() {
         _busy = false;
         _error = e.message ?? 'Could not send that.';
       });
+    }
+  }
+
+  /// Opens the phone's own SMS app pre-filled with an invite + download link.
+  Future<void> _inviteBySms(String phone, String? fromUsername) async {
+    final who = (fromUsername != null && fromUsername.isNotEmpty)
+        ? fromUsername
+        : 'A friend';
+    final body = '$who challenged you to a roast battle on The Bully League! '
+        'Download and your challenge will be waiting: $_appDownloadUrl';
+    // iOS (the real release platform) and Android disagree on how a prefilled
+    // body is attached to an sms: link: iOS/iMessage expects it after a `&`
+    // (sms:<number>&body=...), Android after a `?` (sms:<number>?body=...).
+    // Uri(queryParameters:) always emits `?`, which iOS silently drops - the
+    // Messages app opens with no text. Build the URI string by platform so the
+    // invite is prefilled on both. (We're testing on Android; this is so the
+    // iOS build Just Works when it ships.)
+    final sep = defaultTargetPlatform == TargetPlatform.iOS ? '&' : '?';
+    final uri = Uri.parse(
+        'sms:${Uri.encodeComponent(phone)}${sep}body=${Uri.encodeComponent(body)}');
+    try {
+      final ok = await launchUrl(uri);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't open your messages app.")),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't open your messages app.")),
+        );
+      }
     }
   }
 
@@ -250,19 +375,39 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                 Text('Challenge someone', style: text.titleMedium),
                 const SizedBox(height: 4),
                 Text(
-                  // Friend battles are a PRIVATE scrimmage now: it does not
-                  // count, and it is NOT recorded, judged, or clipped - just
-                  // you two, for fun.
-                  'Type their username. It is a private battle just for fun - '
-                  'it does not affect your rank, and it is not recorded, '
-                  'judged, or clipped.',
+                  // Friend battles are a PRIVATE scrimmage: it does not count,
+                  // and it is NOT recorded, judged, or clipped - just you two.
+                  'Enter their username or phone number. A number that has no '
+                  'account yet gets a text invite - and your challenge is '
+                  'waiting when they join. Private, just for fun: it does not '
+                  'affect your rank and is never recorded or judged.',
                   style: text.bodySmall,
                 ),
                 const SizedBox(height: 12),
+                // Recent opponents - tap to re-challenge without retyping.
+                if (_recent.isNotEmpty) ...[
+                  Text('Recent', style: text.labelMedium),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: _recent
+                        .map((p) => ActionChip(
+                              avatar: const Icon(Icons.replay, size: 16),
+                              label: Text(p['username'] as String? ?? 'Player'),
+                              onPressed: _busy
+                                  ? null
+                                  : () => _sendToUid(p['uid'] as String,
+                                      p['username'] as String? ?? 'them'),
+                            ))
+                        .toList(),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 TextField(
                   controller: _controller,
                   decoration: const InputDecoration(
-                    labelText: 'Their username',
+                    labelText: 'Username or phone number',
                     border: OutlineInputBorder(),
                   ),
                   onSubmitted: (_) => _send(),
@@ -287,7 +432,26 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                 ],
                 if (_sent != null) ...[
                   const SizedBox(height: 12),
-                  Text(_sent!, style: text.bodySmall),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: scheme.primary.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(10),
+                      border:
+                          Border.all(color: scheme.primary.withValues(alpha: 0.5)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: scheme.primary, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                            child: Text(_sent!,
+                                style: text.bodyMedium
+                                    ?.copyWith(color: scheme.primary))),
+                      ],
+                    ),
+                  ),
                 ],
                 if (_outgoing.isNotEmpty) ...[
                   const SizedBox(height: 24),

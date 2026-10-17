@@ -126,6 +126,22 @@ class PerformerProfileScreen extends StatelessWidget {
                               fontWeight: FontWeight.w600,
                             ),
                       ),
+                      // The ladder rung as a Roman numeral ("· V"), matching
+                      // Home/Profile. Absent for GOAT and unknown titles.
+                      if (rankTierNumeral(rankTitle) != null) ...[
+                        Text('  ·  ',
+                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                )),
+                        Text(
+                          rankTierNumeral(rankTitle)!,
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: rankTierColor(rankTitle) ??
+                                    const Color(0xFFF4C838),
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

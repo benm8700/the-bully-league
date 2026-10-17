@@ -501,7 +501,7 @@ class _BattleCard extends StatelessWidget {
                     // Top row: type pill (left), date (right).
                     Row(
                       children: [
-                        _typePill(context, isTournament, gold, pink),
+                        _typePill(context, mode, gold, pink),
                         const Spacer(),
                         Text(
                           when,
@@ -584,8 +584,15 @@ class _BattleCard extends StatelessWidget {
   }
 
   Widget _typePill(
-      BuildContext context, bool isTournament, Color gold, Color pink) {
-    final color = isTournament ? gold : pink;
+      BuildContext context, String mode, Color gold, Color pink) {
+    // Categorised by mode so Roast and Improv battles are told apart (improv
+    // is teal, matching its Home pill). "IMPROV" is a working label - the final
+    // name is still being chosen.
+    final (String label, Color color) = switch (mode) {
+      'tournament' => ('TOURNAMENT', gold),
+      'improv' => ('IMPROV', const Color(0xFF2BC4B0)),
+      _ => ('ROAST', pink),
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -593,7 +600,7 @@ class _BattleCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        isTournament ? 'TOURNAMENT' : 'ROAST',
+        label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: color,
               fontWeight: FontWeight.bold,

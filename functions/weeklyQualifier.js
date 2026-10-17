@@ -29,7 +29,11 @@ const DEFAULT_MIN_GAMES = 5;
 // next week's qualifying per the decision record. A denylist (not an
 // allowlist) so a future ladder-moving mode is included by default rather than
 // silently dropped.
-const NON_LADDER_MODES = new Set(["friend", "exhibition", "practice"]);
+// "improv" (Improv Station) is explicitly NON-ladder: it feeds career XP but
+// has its own separate Elo and must NEVER grant Main Stage qualification
+// (developer's hard requirement). Improv also writes no ratingHistory, so it
+// produces no entries here anyway - this is the declarative belt-and-braces.
+const NON_LADDER_MODES = new Set(["friend", "exhibition", "practice", "improv"]);
 
 const THURSDAY = 4; // 0=Sun .. 6=Sat
 

@@ -1373,6 +1373,11 @@ exports.setUsername = onCall((request) => {
   return setUsername(request.data, request.auth);
 });
 
+exports.finalizePhoneSignup = onCall((request) => {
+  const {finalizePhoneSignup} = require("./phoneSignup");
+  return finalizePhoneSignup(request.auth);
+});
+
 exports.getUsernameState = onCall((request) => {
   const {getUsernameState} = require("./username");
   return getUsernameState(request.auth);
@@ -1400,6 +1405,11 @@ exports.getMyChallenges = onCall((request) => {
 exports.getChallengeMatch = onCall((request) => {
   const {getChallengeMatch} = require("./friendBattle");
   return getChallengeMatch(request.auth, request.data);
+});
+
+exports.getRecentChallengeTargets = onCall((request) => {
+  const {getRecentChallengeTargets} = require("./friendBattle");
+  return getRecentChallengeTargets(request.auth);
 });
 
 /**
