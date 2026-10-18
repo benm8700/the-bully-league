@@ -441,6 +441,242 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
   return args;
 }
 
+/**
+ * FACE-OFF (improv) renders are a DIFFERENT shape, and must be.
+ *
+ * A roast battle is two players taking turns, one muted at a time, so the
+ * stacked composite above works - both faces on screen, their lines
+ * interleaved. A Face-Off is the opposite: both comedians perform the SAME
+ * prompts SIMULTANEOUSLY and BLIND to each other, so stacking them plays two
+ * people talking over each other at once - unwatchable and, worse,
+ * unjudgeable. The crowd has to see one whole set, then the other, to decide
+ * who was funnier.
+ *
+ * So a Face-Off clip is SEQUENTIAL: player 1's full set (red gel border),
+ * a short black beat, then player 2's full set (blue gel border). The gel
+ * colours are the exact ones the vote UI, live tally and judges' table use
+ * (House.gelRed / House.gelBlue), so the border tells a judge whose set they
+ * are watching and maps straight onto the red/blue winner buttons.
+ *
+ * Each performer's set is built on its OWN timeline (rebased to that
+ * performer's first segment), then the sets are concatenated. That reuses
+ * the same adelay/tpad alignment the composite uses - a performer's audio
+ * is padded to their video length (apad) so the next set starts cleanly
+ * rather than inheriting a within-set a/v mismatch.
+ */
+const GEL_RED = "0xC4485E";
+const GEL_BLUE = "0x5E93A8";
+const IMPROV_BORDER_COLORS = [GEL_RED, GEL_BLUE];
+/** A black beat between the two sets, so "set one done, set two now" reads
+ * without a caption. */
+const IMPROV_GAP_SECONDS = 0.75;
+/** Border thickness as a fraction of canvas width, so it is proportionate. */
+const IMPROV_BORDER_RATIO = 0.012;
+
+/**
+ * Splits a flat recording file list into ONE timeline per performer, each
+ * rebased to that performer's own first segment (so every set starts at 0).
+ *
+ * Pure, like buildTimeline, so the whole Face-Off layout can be exercised
+ * without ffmpeg or Storage.
+ */
+function buildImprovTimelines(files) {
+  const byUid = new Map();
+  const dropped = [];
+  for (const entry of files) {
+    const p = typeof entry === "string" ? entry : entry.path;
+    const sizeBytes = typeof entry === "string" ? null : entry.sizeBytes;
+    const {name, uid, kind, isPlaylist} = classifyFile(p);
+    if (isPlaylist || !uid || !kind) continue;
+    const startMs = parseSegmentTimeMs(name);
+    if (startMs === null) continue;
+    if (sizeBytes !== null && sizeBytes < MIN_SEGMENT_BYTES) {
+      dropped.push({path: p, sizeBytes});
+      continue;
+    }
+    if (!byUid.has(uid)) byUid.set(uid, []);
+    byUid.get(uid).push({path: p, uid, kind, startMs});
+  }
+
+  const performers = [];
+  for (const uid of [...byUid.keys()].sort()) {
+    const segs = byUid.get(uid);
+    const t0 = Math.min(...segs.map((s) => s.startMs));
+    for (const s of segs) s.offsetMs = s.startMs - t0;
+    segs.sort((a, b) => a.offsetMs - b.offsetMs || a.kind.localeCompare(b.kind));
+    performers.push({uid, segments: segs});
+  }
+  return {performers, dropped};
+}
+
+/**
+ * The total video duration of one performer's set, in ms: where their first
+ * video segment starts, plus every segment's length, plus any dropout holes
+ * filled with black. Needs per-segment durations (from the playlist); returns
+ * null without them, and the caller then skips the audio-length padding.
+ */
+function improvSetVideoDurationMs(performer) {
+  const vids = performer.segments
+      .filter((s) => s.kind === "video")
+      .sort((a, b) => a.offsetMs - b.offsetMs);
+  if (vids.length === 0) return 0;
+  if (vids.some((s) => s.durationMs == null)) return null;
+  let total = vids[0].offsetMs;
+  for (let i = 0; i < vids.length; i++) {
+    if (i > 0) {
+      const gap = vids[i].offsetMs - (vids[i - 1].offsetMs + vids[i - 1].durationMs);
+      if (gap > VIDEO_GAP_THRESHOLD_MS) total += gap;
+    }
+    total += vids[i].durationMs;
+  }
+  return total;
+}
+
+/**
+ * Builds the ffmpeg invocation for a sequential Face-Off render: each
+ * performer's full set, full-frame, in their gel colour, concatenated with a
+ * black beat between.
+ *
+ * Pure (no fs, no spawn) so the filter graph can be asserted in a unit test -
+ * the same discipline the composite builder follows, and it matters more here
+ * because there is no roast-style footage to eyeball until a real 2-device
+ * Face-Off is recorded.
+ */
+function buildImprovFfmpegArgs(performers, localDir, outputPath, options = {}) {
+  const canvas = options.canvas ?? RENDITIONS.vertical.canvas;
+  const gapSec = options.gapSeconds ?? IMPROV_GAP_SECONDS;
+  const border = Math.max(2, Math.round(canvas.width * IMPROV_BORDER_RATIO));
+  const inputs = [];
+  const filters = [];
+  const concatParts = []; // interleaved [v][a] labels, in play order
+  let inputIndex = 0;
+
+  performers.forEach((perf, pi) => {
+    const color = IMPROV_BORDER_COLORS[pi % IMPROV_BORDER_COLORS.length];
+    const vids = perf.segments
+        .filter((s) => s.kind === "video")
+        .sort((a, b) => a.offsetMs - b.offsetMs);
+    if (vids.length === 0) return;
+
+    // Video: each segment filled to the FULL canvas (not a tile), holes
+    // filled with black, concatenated in order, positioned at the set's own
+    // first-video offset, then bordered in the performer's gel colour.
+    const parts = [];
+    for (let i = 0; i < vids.length; i++) {
+      const seg = vids[i];
+      if (i > 0 && vids[i - 1].durationMs != null) {
+        const gapMs = seg.offsetMs - (vids[i - 1].offsetMs + vids[i - 1].durationMs);
+        if (gapMs > VIDEO_GAP_THRESHOLD_MS) {
+          const glabel = `[igap${pi}_${i}]`;
+          filters.push(
+              `color=c=black:s=${canvas.width}x${canvas.height}:r=${OUTPUT_FPS}:` +
+            `d=${(gapMs / 1000).toFixed(3)},format=yuv420p,setsar=1${glabel}`);
+          parts.push(glabel);
+        }
+      }
+      const index = inputIndex++;
+      inputs.push("-i", path.join(localDir, seg.path.split("/").pop()));
+      filters.push(
+          `[${index}:v]scale=${canvas.width}:${canvas.height}:force_original_aspect_ratio=increase,` +
+        `crop=${canvas.width}:${canvas.height},setsar=1,fps=${OUTPUT_FPS},format=yuv420p[ivp${pi}_${index}]`);
+      parts.push(`[ivp${pi}_${index}]`);
+    }
+    const pad = (vids[0].offsetMs / 1000).toFixed(3);
+    if (parts.length === 1) {
+      filters.push(`${parts[0]}tpad=start_duration=${pad}:color=black[ivj${pi}]`);
+    } else {
+      filters.push(`${parts.join("")}concat=n=${parts.length}:v=1:a=0[ivc${pi}]`);
+      filters.push(`[ivc${pi}]tpad=start_duration=${pad}:color=black[ivj${pi}]`);
+    }
+    // The gel border, drawn INSIDE the frame so it never changes the canvas
+    // size (concat needs every segment identical).
+    filters.push(`[ivj${pi}]drawbox=x=0:y=0:w=iw:h=ih:color=${color}@1:t=${border}[iv${pi}]`);
+
+    // Audio: each of the performer's audio segments delayed to its own
+    // within-set offset, mixed, then PADDED to the video length so the set's
+    // audio and video end together - otherwise the next concatenated set
+    // would start with the two streams out of step.
+    const auds = perf.segments.filter((s) => s.kind === "audio");
+    const setDurMs = improvSetVideoDurationMs(perf);
+    const setDurSec = setDurMs != null ? (setDurMs / 1000) : null;
+    if (auds.length === 0) {
+      // A silent set still has to carry an audio stream, or concat (v=1:a=1)
+      // cannot line the sets up.
+      const d = setDurSec != null ? setDurSec.toFixed(3) : "0.1";
+      filters.push(`anullsrc=channel_layout=stereo:sample_rate=44100,` +
+        `atrim=duration=${d},asetpts=PTS-STARTPTS[ia${pi}]`);
+    } else {
+      const aLabels = [];
+      for (const seg of auds) {
+        const index = inputIndex++;
+        inputs.push("-i", path.join(localDir, seg.path.split("/").pop()));
+        const delay = Math.round(seg.offsetMs);
+        filters.push(`[${index}:a]adelay=${delay}|${delay}[iad${pi}_${index}]`);
+        aLabels.push(`[iad${pi}_${index}]`);
+      }
+      const mix = `[iam${pi}]`;
+      filters.push(`${aLabels.join("")}amix=inputs=${aLabels.length}:` +
+        `normalize=0:dropout_transition=0${mix}`);
+      // aresample+aformat so every set's audio shares one format for concat;
+      // apad to the video length when it is known.
+      const padTo = setDurSec != null ? `,apad=whole_dur=${setDurSec.toFixed(3)}` : "";
+      filters.push(`${mix}aresample=44100,` +
+        `aformat=sample_fmts=fltp:channel_layouts=stereo${padTo}[ia${pi}]`);
+    }
+
+    concatParts.push(`[iv${pi}]`, `[ia${pi}]`);
+    // A black beat between sets (not after the last).
+    if (pi < performers.length - 1 && gapSec > 0) {
+      filters.push(`color=c=black:s=${canvas.width}x${canvas.height}:r=${OUTPUT_FPS}:` +
+        `d=${gapSec},format=yuv420p,setsar=1[ibv${pi}]`);
+      filters.push(`anullsrc=channel_layout=stereo:sample_rate=44100,` +
+        `atrim=duration=${gapSec},asetpts=PTS-STARTPTS,` +
+        `aformat=sample_fmts=fltp:channel_layouts=stereo[iba${pi}]`);
+      concatParts.push(`[ibv${pi}]`, `[iba${pi}]`);
+    }
+  });
+
+  if (concatParts.length === 0) throw new Error("no performer set to render");
+
+  const segCount = concatParts.length / 2;
+  const vOut = options.logoPath ? "[ivcat]" : "[vout]";
+  if (segCount === 1) {
+    // Only one performer published anything - rename the single pair rather
+    // than concat=n=1, which some ffmpeg builds reject.
+    filters.push(`${concatParts[0]}null${vOut}`);
+    filters.push(`${concatParts[1]}anull[aout]`);
+  } else {
+    filters.push(`${concatParts.join("")}concat=n=${segCount}:v=1:a=1${vOut}[aout]`);
+  }
+
+  if (options.logoPath) {
+    const logoIndex = inputIndex++;
+    inputs.push("-i", options.logoPath);
+    const logoW = Math.round(canvas.width * WATERMARK_LOGO_WIDTH_RATIO);
+    const marginX = Math.round(canvas.width * WATERMARK_LOGO_MARGIN_X_RATIO);
+    const marginY = Math.round(canvas.width * WATERMARK_LOGO_MARGIN_Y_RATIO);
+    filters.push(`[${logoIndex}:v]scale=${logoW}:-1,format=rgba,` +
+      `colorchannelmixer=aa=${WATERMARK_LOGO_ALPHA}[iwm]`);
+    filters.push(`[ivcat][iwm]overlay=W-w-${marginX}:H-h-${marginY}[vout]`);
+  }
+
+  return [
+    "-y",
+    ...inputs,
+    "-filter_complex", filters.join(";"),
+    "-map", "[vout]",
+    "-map", "[aout]",
+    "-c:v", "libx264",
+    "-preset", "veryfast",
+    "-crf", "23",
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    "-b:a", "128k",
+    "-movflags", "+faststart",
+    outputPath,
+  ];
+}
+
 function runFfmpeg(binary, args) {
   return new Promise((resolve, reject) => {
     const proc = spawn(binary, args);
@@ -473,6 +709,13 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
   const matchRef = db.collection("matches").doc(matchId);
   const snap = await matchRef.get();
   if (!snap.exists) throw new Error("Match not found.");
+
+  // Face-Off is a different shape (sequential, not stacked) - see
+  // buildImprovFfmpegArgs. Delegated whole rather than branched inline so the
+  // composite path below stays untouched.
+  if (snap.data()?.mode === "improv") {
+    return renderImprovHighlight(matchId, matchRef, bucket);
+  }
 
   const [objects] = await bucket.getFiles({prefix: `match_recordings/${matchId}/`});
   if (objects.length === 0) throw new Error("No recording found for this match.");
@@ -699,9 +942,109 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
   }
 }
 
+/**
+ * Renders a Face-Off (improv) match into one sequential vertical clip: each
+ * performer's full set, full-frame, in their gel colour, back to back.
+ *
+ * Deliberately NO captions and NO landscape cut. Captions would have to be
+ * remapped across the concat boundary (a later pass if improv clips are ever
+ * posted); landscape makes no sense for a portrait single-performer cut.
+ * Produces only `renditions.vertical`, which is what the judge feed, publish
+ * and download paths all prefer anyway.
+ */
+async function renderImprovHighlight(matchId, matchRef, bucket) {
+  const [objects] = await bucket.getFiles({prefix: `match_recordings/${matchId}/`});
+  if (objects.length === 0) throw new Error("No recording found for this match.");
+
+  const {performers, dropped} = buildImprovTimelines(
+      objects.map((o) => ({path: o.name, sizeBytes: Number(o.metadata?.size ?? 0)})),
+  );
+  const withVideo = performers.filter((p) =>
+    p.segments.some((s) => s.kind === "video"));
+  if (withVideo.length === 0) {
+    throw new Error("No usable segments in the recording.");
+  }
+
+  const warnings = [];
+  if (dropped.length > 0) {
+    warnings.push(`skipped ${dropped.length} truncated segment(s) too small to decode`);
+  }
+
+  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), `improv-${matchId}-`));
+  try {
+    await Promise.all(objects.map((o) =>
+      bucket.file(o.name).download({destination: path.join(workDir, o.name.split("/").pop())}),
+    ));
+
+    // Per-segment video durations, so a mid-set camera dropout is filled with
+    // black and each set's audio is padded to the right length. Best-effort:
+    // without a readable playlist the set still renders, just without the
+    // gap-fill / audio pad.
+    for (const perf of performers) {
+      const plObj = objects.find((o) => o.name.endsWith(".m3u8") &&
+          o.name.includes(`__uid_s_${perf.uid}__uid_e_video`));
+      if (!plObj) continue;
+      try {
+        const text = await fs.readFile(
+            path.join(workDir, plObj.name.split("/").pop()), "utf8");
+        const durByName = parsePlaylistDurations(text);
+        for (const s of perf.segments) {
+          if (s.kind === "video") {
+            const d = durByName.get(s.path.split("/").pop());
+            if (d != null) s.durationMs = d;
+          }
+        }
+      } catch (e) {
+        warnings.push(`could not read video playlist for player ${perf.uid}`);
+      }
+    }
+
+    const ffmpegPath = require("ffmpeg-static");
+    const rendition = RENDITIONS.vertical;
+    const outputPath = path.join(workDir, rendition.fileName);
+    await runFfmpeg(ffmpegPath, buildImprovFfmpegArgs(withVideo, workDir, outputPath, {
+      canvas: rendition.canvas,
+      logoPath: WATERMARK_LOGO,
+    }));
+
+    const destination = `${HIGHLIGHT_PREFIX}/${matchId}/${rendition.fileName}`;
+    await bucket.upload(outputPath, {destination, metadata: {contentType: "video/mp4"}});
+    const out = {
+      vertical: {
+        path: destination,
+        sizeBytes: (await fs.stat(outputPath)).size,
+        width: rendition.canvas.width,
+        height: rendition.canvas.height,
+      },
+    };
+
+    await matchRef.set({
+      highlight: {
+        renditions: out,
+        // Marks this as the sequential Face-Off cut, so the client and any
+        // later tooling know not to treat it as a top/bottom composite.
+        layout: "sequential",
+        renderedAt: FieldValue.serverTimestamp(),
+        captioned: false,
+        reviewStatus: "pending",
+        published: false,
+        ...(warnings.length > 0 ? {warnings} : {}),
+      },
+    }, {merge: true});
+
+    return {rendered: true, renditions: out, warnings};
+  } finally {
+    await fs.rm(workDir, {recursive: true, force: true}).catch(() => {});
+  }
+}
+
 module.exports = {
   sumExtinfSeconds,
   renderMatchHighlight,
+  renderImprovHighlight,
+  buildImprovTimelines,
+  buildImprovFfmpegArgs,
+  improvSetVideoDurationMs,
   parseSegmentTimeMs,
   classifyFile,
   buildTimeline,

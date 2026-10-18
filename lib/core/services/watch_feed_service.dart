@@ -16,6 +16,7 @@ class FeedMatch {
     required this.videoUrl,
     required this.verdict,
     required this.roundCount,
+    this.mode = 'ranked',
   });
 
   final String matchId;
@@ -50,6 +51,11 @@ class FeedMatch {
   /// Defaults to the standard 3 when the feed doesn't carry it.
   final int roundCount;
 
+  /// Match mode - "ranked" / "tournament" / "improv" (Face-Off). The vote UI
+  /// branches on it: a Face-Off clip is sequential (one full set then the
+  /// other), not a stacked composite, so it gets a different winner-pick flow.
+  final String mode;
+
   /// A copy marked as judged by this viewer: no longer votable, and flagged
   /// alreadyVoted so a rebuilt feed page shows the tally instead of the green
   /// pick controls. Used right after a successful vote so scrolling away and
@@ -68,6 +74,7 @@ class FeedMatch {
         videoUrl: videoUrl,
         verdict: verdict,
         roundCount: roundCount,
+        mode: mode,
       );
 
   static FeedMatch fromMap(Map<String, dynamic> m) => FeedMatch(
@@ -84,6 +91,7 @@ class FeedMatch {
         videoUrl: m['videoUrl'] as String?,
         verdict: FeedVerdict.fromMap(m['verdict']),
         roundCount: (m['roundCount'] as num?)?.toInt() ?? 3,
+        mode: m['mode'] as String? ?? 'ranked',
       );
 }
 

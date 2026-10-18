@@ -94,6 +94,13 @@ class _FeedPageState extends State<FeedPage> {
 
   int get _roundCount => widget.match.roundCount.clamp(1, 12);
 
+  /// Face-Off (improv): a blind simultaneous prompt battle. Its clip plays one
+  /// performer's whole set then the other's (sequential, full-frame, red then
+  /// blue gel border), so the tap-top/tap-bottom winner pick and the
+  /// pinned-to-half emoji bars don't apply - it gets explicit winner buttons
+  /// and a combined emoji panel instead.
+  bool get _isImprov => widget.match.mode == 'improv';
+
   /// Can this viewer act on this battle - cast a real vote, or make a private
   /// "call" on a settled battle with a decisive result? If not (already voted,
   /// a participant watching their own, a tie), there is nothing to pick and it
@@ -253,6 +260,224 @@ class _FeedPageState extends State<FeedPage> {
         _selectedWinner = _selectedWinner == playerId ? null : playerId);
   }
 
+  /// Face-Off winner pick: select (switchable), never toggle-off - the pick
+  /// comes from an explicit button, so re-tapping the chosen one should keep
+  /// it, not clear it.
+  void _selectWinner(String playerId) {
+    if (!_canAct || _chosenPlayerId != null) return;
+    setState(() => _selectedWinner = playerId);
+  }
+
+  /// The whole Face-Off vote flow, in one bottom panel over the sequential
+  /// clip:
+  ///   1. before most of the clip has played: a quiet "watch both sets" hint;
+  ///   2. revealed, no winner yet: "Who was funnier?" + a red P1 / blue P2
+  ///      button (the gel colours match the clip's borders);
+  ///   3. winner picked, open ballot: both emoji rows + a Submit bar gated on
+  ///      rating both;
+  ///   4. winner picked, settled battle: a "Call it" button (no rating).
+  Widget _improvVotePanel(BuildContext context) {
+    final m = widget.match;
+    final insetBottom = MediaQuery.of(context).padding.bottom;
+    final winner = _selectedWinner;
+
+    // Still watching - a quiet, non-blocking nudge, nothing to tap yet.
+    if (!_revealed) {
+      return Positioned(
+        left: 0,
+        right: 0,
+        bottom: insetBottom + 16,
+        child: IgnorePointer(
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text('Watch both sets, then vote',
+                  style: TextStyle(color: Colors.white, fontSize: 13)),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + insetBottom),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0x00000000), Color(0xCC000000)],
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Who was funnier?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                    child: _improvWinnerButton(
+                        m.player1Id, m.player1Username, House.gelRed)),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: _improvWinnerButton(
+                        m.player2Id, m.player2Username, House.gelBlue)),
+              ],
+            ),
+            // Open ballot: once a winner is chosen, rate both, then submit.
+            if (m.canVote && winner != null) ...[
+              const SizedBox(height: 14),
+              _improvEmojiRow(m.player1Username, _emojiP1,
+                  (k) => setState(() => _emojiP1 = k), House.gelRed),
+              const SizedBox(height: 8),
+              _improvEmojiRow(m.player2Username, _emojiP2,
+                  (k) => setState(() => _emojiP2 = k), House.gelBlue),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _pickGreen.withValues(alpha: 0.9),
+                    foregroundColor: Colors.black,
+                    disabledBackgroundColor: Colors.white.withValues(alpha: 0.14),
+                    disabledForegroundColor: Colors.white70,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    textStyle:
+                        const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  onPressed: (_submitting || !_bothRated) ? null : _submit,
+                  child: _submitting
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.black))
+                      : Text(_bothRated ? 'Submit vote' : 'Rate both to submit'),
+                ),
+              ),
+            ],
+            // Settled battle: a private "call", no rating.
+            if (!m.canVote && winner != null) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _pickGreen.withValues(alpha: 0.48),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    textStyle:
+                        const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  onPressed: _submitting ? null : _submit,
+                  child: Text('Call it: '
+                      '${winner == m.player1Id ? m.player1Username : m.player2Username}'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// One of the two Face-Off winner buttons. Filled in that performer's gel
+  /// colour when chosen, outlined otherwise - the same red/blue used on the
+  /// clip's border, so "the red one" is unambiguous.
+  Widget _improvWinnerButton(String playerId, String name, Color gel) {
+    final selected = _selectedWinner == playerId;
+    return GestureDetector(
+      onTap: () => _selectWinner(playerId),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        decoration: BoxDecoration(
+          color: selected ? gel : Colors.black.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: gel, width: 2),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (selected)
+              const Padding(
+                padding: EdgeInsets.only(right: 6),
+                child: Icon(Icons.check_circle, color: Colors.white, size: 18),
+              ),
+            Flexible(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A compact "Rating for {name}" + four emoji row, for the Face-Off panel.
+  /// Same choices as the stacked-clip emoji bar, laid out inline rather than
+  /// pinned to a half of the video.
+  Widget _improvEmojiRow(String name, String? selected,
+      ValueChanged<String> onSelect, Color accent) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withValues(alpha: 0.9), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text('Rating for $name',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: accent, fontSize: 13, fontWeight: FontWeight.w800)),
+          ),
+          for (final r in kEmojiRatings)
+            GestureDetector(
+              onTap: () => onSelect(r.key),
+              child: Container(
+                margin: const EdgeInsets.only(left: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: selected == r.key
+                      ? accent.withValues(alpha: 0.9)
+                      : Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(r.emoji, style: const TextStyle(fontSize: 19)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   void _submit() {
     final winner = _selectedWinner;
     if (winner == null || _submitting) return;
@@ -335,14 +560,20 @@ class _FeedPageState extends State<FeedPage> {
           ),
           // Tap a roaster's HALF of the clip to pick the overall winner - the
           // selection IS the video box, so nothing covers the faces. Sits
-          // under the buttons below (they win their own taps).
-          if (_canAct && _chosenPlayerId == null) _winnerSelectLayer(context),
+          // under the buttons below (they win their own taps). FACE-OFF skips
+          // this: its clip is SEQUENTIAL (one full-frame set then the other),
+          // so there are no top/bottom halves to tap - it uses explicit
+          // red/blue winner buttons in the panel below instead.
+          if (!_isImprov && _canAct && _chosenPlayerId == null)
+            _winnerSelectLayer(context),
           // Per-player emoji bars, revealed only AFTER a winner is picked, so
           // the watching screen stays clean. Each sits on that roaster's half
           // of the stacked clip (top = P1 red, bottom = P2 blue) and is
           // changeable until you submit; the docked submit bar below is gated
-          // on both being rated.
-          if (widget.match.canVote &&
+          // on both being rated. (Face-Off shows both bars together in its own
+          // panel - the clip is not split into halves.)
+          if (!_isImprov &&
+              widget.match.canVote &&
               _chosenPlayerId == null &&
               _selectedWinner != null)
             _emojiBars(context),
@@ -354,9 +585,17 @@ class _FeedPageState extends State<FeedPage> {
           if (controller != null) _rewindButton(context),
           _followButton(context),
           // The compact winner-confirm + Submit pill, once a half is picked.
-          _voteBox(context),
+          // Face-Off uses its own bottom panel (sequential clip, explicit
+          // winner buttons) instead of the tap-the-half flow.
+          if (!_isImprov) _voteBox(context),
+          if (_isImprov && _canAct && _chosenPlayerId == null)
+            _improvVotePanel(context),
           if (_resultShown) _resultBox(context),
           _header(context),
+          // Only while judging (canVote hides the top-left _header, so no
+          // overlap); on an archive clip the vote-count chip takes that corner.
+          if (_isImprov && widget.match.canVote && _chosenPlayerId == null)
+            _improvBadge(context),
           _reportButton(context),
         ],
       ),
@@ -881,6 +1120,31 @@ class _FeedPageState extends State<FeedPage> {
       _controller?.play();
       if (mounted) setState(() {});
     }
+  }
+
+  /// A small teal "FACE-OFF" chip, top-left, so a judge knows this clip is a
+  /// blind simultaneous prompt battle shown one set at a time (not a broken
+  /// one-person roast). Teal is the Face-Off accent used on the Home card.
+  Widget _improvBadge(BuildContext context) {
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 8,
+      left: 16,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFF0E7C86).withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: Text('FACE-OFF',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.0)),
+        ),
+      ),
+    );
   }
 
   Widget _header(BuildContext context) {
