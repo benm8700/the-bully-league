@@ -14,6 +14,24 @@ enum MainStageRole { finalist, alternate, judge, none }
 /// The viewer's invite answer, read from the doc's `invites` map.
 enum InviteStatus { pending, accepted, declined, notInvited }
 
+/// Where a finalist stands DURING the live show, so the screen routes them
+/// without dumping them back to Home to re-find a banner:
+///  - playNow: their matchup is ready and unplayed - step on stage.
+///  - awaitingVerdict: they finished their battle; the judges are deciding.
+///  - advancedWaiting: they won and are through, but their next opponent isn't
+///    settled yet (the other semifinal is still going) - watch it.
+///  - eliminated: they lost - watch the rest.
+///  - champion: they won the final.
+///  - spectate: not a player in any live matchup (crowd / judge / waiting).
+enum MainStageLiveStage {
+  playNow,
+  awaitingVerdict,
+  advancedWaiting,
+  eliminated,
+  champion,
+  spectate,
+}
+
 @immutable
 class MainStageView {
   const MainStageView({
@@ -28,6 +46,8 @@ class MainStageView {
     this.wildCardUid,
     this.myMatchupRound,
     this.myMatchupIndex,
+    this.myMatchupIsFinal = false,
+    this.liveStage = MainStageLiveStage.spectate,
     this.liveBattleMatchId,
   });
 
@@ -59,11 +79,18 @@ class MainStageView {
   /// Empty unless [isTopSeed] and the callout is open (status == locked).
   final List<String> candidates;
 
-  /// The viewer's ready, unsettled bracket matchup (both players known, no
-  /// winner), once the show is live - null if they have no battle to play
-  /// right now (eliminated, waiting, a bye, or not a finalist).
+  /// The viewer's READY, UNPLAYED matchup (both players known, no winner, and
+  /// NOT yet started - no matchId), once the show is live. Only set when
+  /// [liveStage] is playNow; null otherwise.
   final int? myMatchupRound;
   final int? myMatchupIndex;
+
+  /// Whether [myMatchupRound] is the final round (the last bracket round), so
+  /// the screen can say "the FINAL" rather than "your match".
+  final bool myMatchupIsFinal;
+
+  /// Where the viewer stands in the live show (see [MainStageLiveStage]).
+  final MainStageLiveStage liveStage;
 
   /// The battle currently ON STAGE, if any - the one matchup with a started
   /// match (a stamped matchId) and no winner yet. Main Stage runs one battle
@@ -72,8 +99,8 @@ class MainStageView {
   final String? liveBattleMatchId;
 
   bool get calloutOpen => isTopSeed && status == 'locked';
-  bool get hasBattleToPlay =>
-      status == 'live' && myMatchupRound != null && myMatchupIndex != null;
+  bool get hasBattleToPlay => liveStage == MainStageLiveStage.playNow &&
+      myMatchupRound != null && myMatchupIndex != null;
 }
 
 /// Reads the Main Stage tournament and drives its two player-facing callables
@@ -156,35 +183,74 @@ class MainStageService {
     final candidates =
         isTopSeed ? field.where((u) => u != uid).toList() : const <String>[];
 
-    // The viewer's ready matchup + the one battle currently on stage, if the
-    // show is live. The bracket is the Firestore-safe shape:
-    // {rounds: [{matches: [{a, b, winner, matchId?}]}]}. A matchup gets a
-    // matchId stamped on it once someone starts it (mainStagePlay.js).
+    // The viewer's live standing + the one battle currently on stage. The
+    // bracket is the Firestore-safe shape {rounds: [{matches: [{a, b, winner,
+    // matchId?}]}]}; a matchup gets a matchId once someone starts it
+    // (mainStagePlay.js) and a winner once the judges decide.
     int? myRound;
     int? myIdx;
+    var myIsFinal = false;
+    var liveStage = MainStageLiveStage.spectate;
     String? liveBattleMatchId;
     if (status == 'live') {
       final rounds = (t['bracket'] as Map?)?['rounds'];
-      if (rounds is List) {
+      if (rounds is List && rounds.isNotEmpty) {
+        final lastRound = rounds.length - 1;
+        // The battle on stage to WATCH/JUDGE (started = has a matchId, no
+        // winner), across the whole bracket.
+        for (final r in rounds) {
+          final matches = (r as Map?)?['matches'];
+          if (matches is! List) continue;
+          for (final m in matches) {
+            if (m is! Map) continue;
+            final mid = m['matchId'];
+            if (m['winner'] == null && mid is String && mid.isNotEmpty) {
+              liveBattleMatchId = mid;
+            }
+          }
+        }
+        // Where the VIEWER stands: the HIGHEST round they appear in is their
+        // current position (winning a round places them in the next one).
+        int? hiR;
+        int? hiM;
         for (var ri = 0; ri < rounds.length; ri++) {
           final matches = (rounds[ri] as Map?)?['matches'];
           if (matches is! List) continue;
           for (var mi = 0; mi < matches.length; mi++) {
             final m = matches[mi];
-            if (m is! Map) continue;
-            final unsettled =
-                m['a'] != null && m['b'] != null && m['winner'] == null;
-            if (!unsettled) continue;
-            // My own battle to PLAY (take the first one I'm in).
-            if (myRound == null && (m['a'] == uid || m['b'] == uid)) {
-              myRound = ri;
-              myIdx = mi;
+            if (m is Map && (m['a'] == uid || m['b'] == uid)) {
+              hiR = ri;
+              hiM = mi;
             }
-            // The battle on stage to WATCH/JUDGE (started = has a matchId).
-            final mid = m['matchId'];
-            if (liveBattleMatchId == null && mid is String && mid.isNotEmpty) {
-              liveBattleMatchId = mid;
-            }
+          }
+        }
+        if (hiR != null) {
+          final m = (rounds[hiR] as Map)['matches'][hiM] as Map;
+          final winner = m['winner'];
+          final mid = m['matchId'];
+          final opponent = m['a'] == uid ? m['b'] : m['a'];
+          final started = mid is String && mid.isNotEmpty;
+          if (winner != null) {
+            liveStage = winner == uid
+                ? (hiR == lastRound
+                    ? MainStageLiveStage.champion
+                    // Won a non-final round but not yet placed in the next -
+                    // transient; show "through, waiting".
+                    : MainStageLiveStage.advancedWaiting)
+                : MainStageLiveStage.eliminated;
+          } else if (started) {
+            // Battle in progress or played and awaiting the verdict - NOT a
+            // fresh "Play your match" (that was the stale-banner bug).
+            liveStage = MainStageLiveStage.awaitingVerdict;
+          } else if (opponent == null) {
+            // Through to this round, opponent not settled yet (the other
+            // semifinal is still going).
+            liveStage = MainStageLiveStage.advancedWaiting;
+          } else {
+            liveStage = MainStageLiveStage.playNow;
+            myRound = hiR;
+            myIdx = hiM;
+            myIsFinal = hiR == lastRound;
           }
         }
       }
@@ -202,6 +268,8 @@ class MainStageService {
       wildCardUid: t['wildCardUid'] as String?,
       myMatchupRound: myRound,
       myMatchupIndex: myIdx,
+      myMatchupIsFinal: myIsFinal,
+      liveStage: liveStage,
       liveBattleMatchId: liveBattleMatchId,
     );
   }

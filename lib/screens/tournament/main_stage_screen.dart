@@ -201,69 +201,126 @@ class _MainStageScreenState extends State<MainStageScreen> {
 
   List<Widget> _body(MainStageView v) {
     if (v.status == 'live') {
+      // Judge + live is rendered chat-dominant by _layout; this fallback keeps
+      // the same header.
+      if (v.role == MainStageRole.judge) return _judgeLiveHeader(v);
       final gold = context.palette.reward;
-      if (v.hasBattleToPlay) {
-        return [
-          _headline("You're up on the Main Stage", context.palette.live),
-          const SizedBox(height: 8),
-          Text('Your semifinal is ready. Step on stage when you are.',
-              style: _muted()),
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(_error!, style: TextStyle(color: context.palette.live)),
-          ],
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: gold,
-              foregroundColor: Colors.black,
-              minimumSize: const Size(0, 54),
-            ),
-            icon: const Icon(Icons.mic),
-            label: const Text('Play your match'),
-            onPressed: _startingBattle ? null : () => _startBattle(v),
-          ),
-          const SizedBox(height: 8),
-          Center(child: _rulesLink('New to this? How a Main Stage battle works')),
-        ];
-      }
-      if (v.role == MainStageRole.judge) {
-        // Judge + live is rendered chat-dominant by _layout; this is a
-        // fallback that keeps the same header.
-        return _judgeLiveHeader(v);
-      }
-      // Finalist waiting their turn, or the crowd: watch the battle on stage.
       final battle = v.liveBattleMatchId;
-      return [
-        _headline('The Main Stage is LIVE', context.palette.live),
-        const SizedBox(height: 8),
-        Text(
-            v.role == MainStageRole.finalist
-                ? "You're in the bracket — watch the battle on stage while you "
-                    'wait for your turn.'
-                : 'The finals are happening now — watch the battles live.',
-            style: _muted()),
-        const SizedBox(height: 20),
-        if (battle != null)
-          FilledButton.icon(
+
+      Widget watchBtn(String label) => FilledButton.icon(
             style: FilledButton.styleFrom(
               backgroundColor: context.palette.live,
               foregroundColor: Colors.white,
               minimumSize: const Size(0, 54),
             ),
             icon: const Icon(Icons.visibility),
-            label: const Text('Watch the battle'),
+            label: Text(label),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => LiveViewerScreen(matchId: battle),
+                builder: (_) => LiveViewerScreen(matchId: battle!),
               ),
             ),
-          )
-        else
-          _statusPill(Icons.hourglass_top, 'Between battles',
-              'The next battle is being set up — hang tight.',
-              Theme.of(context).colorScheme.onSurfaceVariant),
-      ];
+          );
+
+      switch (v.liveStage) {
+        case MainStageLiveStage.playNow:
+          final isFinal = v.myMatchupIsFinal;
+          return [
+            _headline(
+                isFinal ? "You're in the FINAL" : "You're up on the Main Stage",
+                context.palette.live),
+            const SizedBox(height: 8),
+            Text(
+                isFinal
+                    ? 'This is it - the final. Step on stage when you are.'
+                    : 'Your semifinal is ready. Step on stage when you are.',
+                style: _muted()),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: TextStyle(color: context.palette.live)),
+            ],
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: gold,
+                foregroundColor: Colors.black,
+                minimumSize: const Size(0, 54),
+              ),
+              icon: const Icon(Icons.mic),
+              label: Text(isFinal ? 'Play the final' : 'Play your match'),
+              onPressed: _startingBattle ? null : () => _startBattle(v),
+            ),
+            const SizedBox(height: 8),
+            Center(
+                child: _rulesLink('New to this? How a Main Stage battle works')),
+          ];
+
+        case MainStageLiveStage.awaitingVerdict:
+          // Just battled - the judges are deciding. No play button (that was
+          // the stale "already played" banner bug).
+          return [
+            _headline('Battle done', context.palette.reward),
+            const SizedBox(height: 8),
+            Text("Nice work. The judges are deciding the winner - hang tight, "
+                "you'll find out here.", style: _muted()),
+            const SizedBox(height: 20),
+            _statusPill(Icons.gavel, 'Judges are deciding',
+                'The verdict lands here in a moment.',
+                Theme.of(context).colorScheme.onSurfaceVariant),
+          ];
+
+        case MainStageLiveStage.advancedWaiting:
+          // Won and through, but the next opponent isn't settled yet.
+          return [
+            _headline('You advanced!', context.palette.reward),
+            const SizedBox(height: 8),
+            Text(
+                'You won your battle and you are through to the next round. '
+                'Waiting on the other matchup to finish - then your next '
+                'battle starts right here.',
+                style: _muted()),
+            const SizedBox(height: 20),
+            if (battle != null)
+              watchBtn('Watch the other battle')
+            else
+              _statusPill(Icons.hourglass_top, 'Standing by',
+                  'Your next opponent is being decided.',
+                  Theme.of(context).colorScheme.onSurfaceVariant),
+          ];
+
+        case MainStageLiveStage.champion:
+          return [
+            _headline('You won the Main Stage! 🏆', context.palette.reward),
+            const SizedBox(height: 8),
+            Text('You took the whole thing. Champion of the night.',
+                style: _muted()),
+          ];
+
+        case MainStageLiveStage.eliminated:
+          return [
+            _headline('Your run is over', context.palette.live),
+            const SizedBox(height: 8),
+            Text('You got knocked out - but the show goes on. Watch who takes '
+                'the crown.', style: _muted()),
+            const SizedBox(height: 20),
+            if (battle != null) watchBtn('Watch the rest'),
+          ];
+
+        case MainStageLiveStage.spectate:
+          return [
+            _headline('The Main Stage is LIVE', context.palette.live),
+            const SizedBox(height: 8),
+            Text('The finals are happening now - watch the battles live.',
+                style: _muted()),
+            const SizedBox(height: 20),
+            if (battle != null)
+              watchBtn('Watch the battle')
+            else
+              _statusPill(Icons.hourglass_top, 'Between battles',
+                  'The next battle is being set up - hang tight.',
+                  Theme.of(context).colorScheme.onSurfaceVariant),
+          ];
+      }
     }
     // The announced field (with the wild-card reveal) shows below the viewer's
     // own status in both the locked and accepting states.

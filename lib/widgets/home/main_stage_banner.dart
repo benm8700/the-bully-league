@@ -88,14 +88,55 @@ class MainStageBanner extends StatelessWidget {
 
   ({String title, String sub, IconData icon, bool urgent})? _copy(
       MainStageView v) {
-    // Live - everyone involved should get to the show.
+    // Live - the copy tracks where the viewer stands so it never invites them
+    // back into a battle they've already played (the stale-banner bug).
     if (v.status == 'live') {
-      return (
-        title: 'The Main Stage is LIVE',
-        sub: 'Tap to join the finals.',
-        icon: Icons.sensors,
-        urgent: true,
-      );
+      switch (v.liveStage) {
+        case MainStageLiveStage.playNow:
+          return (
+            title: "You're up on the Main Stage",
+            sub: v.myMatchupIsFinal
+                ? 'Tap to play the final.'
+                : 'Tap to play your match.',
+            icon: Icons.mic,
+            urgent: true,
+          );
+        case MainStageLiveStage.awaitingVerdict:
+          return (
+            title: 'The judges are deciding',
+            sub: 'Tap for the verdict of your battle.',
+            icon: Icons.gavel,
+            urgent: false,
+          );
+        case MainStageLiveStage.advancedWaiting:
+          return (
+            title: 'You advanced!',
+            sub: 'Tap to watch while your next battle is set up.',
+            icon: Icons.emoji_events,
+            urgent: true,
+          );
+        case MainStageLiveStage.champion:
+          return (
+            title: 'You won the Main Stage! 🏆',
+            sub: 'Tap to see it.',
+            icon: Icons.emoji_events,
+            urgent: true,
+          );
+        case MainStageLiveStage.eliminated:
+          return (
+            title: 'The Main Stage is LIVE',
+            sub: 'Tap to watch who takes the crown.',
+            icon: Icons.sensors,
+            urgent: false,
+          );
+        case MainStageLiveStage.spectate:
+          return (
+            title: 'The Main Stage is LIVE',
+            sub: 'Tap to join the finals.',
+            icon: Icons.sensors,
+            urgent: true,
+          );
+      }
     }
     if (v.status == 'locked') {
       if (v.calloutOpen) {
