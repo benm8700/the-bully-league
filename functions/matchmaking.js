@@ -887,8 +887,19 @@ async function getActiveMatch(auth) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
   const db = getFirestore();
 
+  // A WAITING/STANDING queue entry (no opponent yet) so Home can show a
+  // "you're in the queue" banner. Captured during the matched-entry scan so it
+  // costs no extra reads; only reported when no actual match is found below.
+  let queued = null;
+
   for (const mode of MODES) {
     const entry = (await queueRef(mode).child(auth.uid).get()).val();
+    if (entry && entry.status !== "matched" &&
+        (entry.status === "waiting" || entry.status === "standing")) {
+      if (!queued) {
+        queued = {mode, joinedAtMs: Number(entry.joinedAt) || Date.now()};
+      }
+    }
     if (!entry || entry.status !== "matched" || !entry.matchId) continue;
 
     const snap = await db.collection("matches").doc(entry.matchId).get();
@@ -1008,7 +1019,9 @@ async function getActiveMatch(auth) {
     }
   }
 
-  return {found: false};
+  // No match to rejoin, but the caller may be sitting in a queue with no
+  // opponent yet - report it so Home can show the "in the queue" banner.
+  return {found: false, queued};
 }
 
 /**

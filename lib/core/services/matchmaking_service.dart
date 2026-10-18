@@ -125,6 +125,22 @@ class MatchPairing {
   }
 }
 
+/// A queue entry with no opponent yet, so Home can show a "you're in the
+/// queue" banner that counts up from when you joined.
+class QueueStatus {
+  const QueueStatus({required this.mode, required this.joinedAtMs});
+  final String mode;
+  final int joinedAtMs;
+}
+
+/// What getActiveMatch found: a rejoinable match, a waiting queue entry,
+/// both, or neither.
+class ActiveStatus {
+  const ActiveStatus({this.pairing, this.queued});
+  final MatchPairing? pairing;
+  final QueueStatus? queued;
+}
+
 /// Progress while still queued, so the UI can explain what's happening
 /// rather than showing an indefinite spinner - [tierBand] is how far the
 /// search has widened past the player's own tier (0 = same tier only).
@@ -293,23 +309,33 @@ class MatchmakingService {
 
 
 
-  /// Recovers a match this player was paired into but never collected -
-  /// the cold-start case after tapping a match-found push, where the queue
-  /// entry and match document both exist but the app has no idea about
-  /// either. Returns null if there's nothing waiting.
-  Future<MatchPairing?> activeMatch() async {
+  /// Recovers a match this player was paired into but never collected, AND/OR
+  /// reports a queue entry with no opponent yet (so Home can show an "in the
+  /// queue" banner). One callable returns both.
+  Future<ActiveStatus> activeStatus() async {
     try {
       final result =
           await _functions.httpsCallable('getActiveMatch').call<Map<String, dynamic>>();
       final data = result.data;
-      if (data['found'] != true) return null;
-      return MatchPairing.fromMap(data);
+      final pairing = data['found'] == true ? MatchPairing.fromMap(data) : null;
+      final q = (data['queued'] as Map?)?.cast<String, dynamic>();
+      final queued = q == null
+          ? null
+          : QueueStatus(
+              mode: q['mode'] as String? ?? 'ranked',
+              joinedAtMs: (q['joinedAtMs'] as num?)?.toInt() ??
+                  DateTime.now().millisecondsSinceEpoch,
+            );
+      return ActiveStatus(pairing: pairing, queued: queued);
     } catch (_) {
       // Purely additive UI - if this check fails the player just doesn't
       // see the banner, which is no worse than before it existed.
-      return null;
+      return const ActiveStatus();
     }
   }
+
+  /// Back-compat: just the rejoinable match, if any.
+  Future<MatchPairing?> activeMatch() async => (await activeStatus()).pairing;
 
   /// Asks the backend to start recording this match. Called once by the
   /// host device as the match begins.

@@ -27,6 +27,7 @@ import '../../widgets/home/improv_station_card.dart';
 import '../../widgets/home/daily_window_strip.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/improv_match_screen.dart';
+import '../match/matchmaking_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import '../profile/profile_screen.dart';
@@ -833,13 +834,21 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
     with WidgetsBindingObserver {
   final _service = MatchmakingService();
   MatchPairing? _pending;
+  QueueStatus? _queued;
   Timer? _poll;
+  Timer? _tick;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _check();
+    // A light 1s ticker so the "in the queue" banner's elapsed time counts up
+    // smoothly between the 4s network polls. Local only - no network, and it
+    // only repaints while that banner is actually showing.
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _queued != null && _pending == null) setState(() {});
+    });
     // POLL, not just initState + resume. Home lives in MainShell's
     // IndexedStack and is built ONCE, and backing out of pre-match/bio-reveal
     // is an in-app pop (not an app-lifecycle resume), so without a poll the
@@ -855,6 +864,7 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
   @override
   void dispose() {
     _poll?.cancel();
+    _tick?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -865,9 +875,12 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
   }
 
   Future<void> _check() async {
-    final pairing = await _service.activeMatch();
+    final status = await _service.activeStatus();
     if (!mounted) return;
-    setState(() => _pending = pairing);
+    setState(() {
+      _pending = status.pairing;
+      _queued = status.queued;
+    });
   }
 
   void _rejoin() {
@@ -892,8 +905,91 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
         .then((_) => _check());
   }
 
+  /// Human label for a queue mode.
+  static String _modeLabel(String mode) => switch (mode) {
+        'improv' => 'Face-Off',
+        'exhibition' => 'Practice',
+        _ => 'Ranked',
+      };
+
+  /// Elapsed since joining the queue, compact: 45s, 3m, 1h 12m.
+  static String _elapsed(int joinedAtMs) {
+    final s = ((DateTime.now().millisecondsSinceEpoch - joinedAtMs) / 1000)
+        .floor()
+        .clamp(0, 1 << 30);
+    if (s < 60) return '${s}s';
+    final m = s ~/ 60;
+    if (m < 60) return '${m}m';
+    return '${m ~/ 60}h ${m % 60}m';
+  }
+
+  /// Returns to the search screen so they can keep waiting or cancel.
+  void _resumeQueue() {
+    final q = _queued;
+    if (q == null) return;
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+          builder: (_) => MatchmakingScreen(mode: q.mode),
+        ))
+        .then((_) => _check());
+  }
+
+  /// A calm "you're in the queue" banner that counts up from when you joined,
+  /// shown when there's no opponent yet (a rejoinable match takes priority).
+  Widget _queueBanner(BuildContext context) {
+    final q = _queued!;
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Material(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: _resumeQueue,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2.5, color: scheme.primary),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'In the ${_modeLabel(q.mode)} queue · ${_elapsed(q.joinedAtMs)}',
+                        style: TextStyle(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Waiting for an opponent — we'll notify you.",
+                        style: TextStyle(
+                            color: scheme.onSurfaceVariant, fontSize: 12.5),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_pending == null && _queued != null) return _queueBanner(context);
     if (_pending == null) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     // Deliberately LOUD and distinct from the neutral Home cards around it -
