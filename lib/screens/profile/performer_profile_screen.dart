@@ -10,16 +10,19 @@ import '../../widgets/social_links_section.dart';
 import '../moderation/report_screen.dart';
 import '../../widgets/follow_button.dart';
 import '../../widgets/home/rank_badges.dart';
+import '../../widgets/looping_video.dart';
 import '../../widgets/match_clip_player.dart';
 
 /// A comedian's public fame page: name / face / rank / follower count / a
-/// Follow button / their published clips.
+/// Follow button / their published clips / a STUDY CARD (their intro video +
+/// "about me").
 ///
-/// PUBLIC FIELDS ONLY. It shows exactly what a fan may see - name, face, rank
-/// title, follower count, and clips already made public - and never the
-/// private profile fields (hometown, ammo, etc.), which stay hidden per the
-/// existing privacy rules. This is where following happens and where a
-/// performer sees their own follower count.
+/// The study card is deliberate (2026-10-17): the intro video is now the real
+/// ammo, and someone recorded it KNOWING opponents study it, so letting anyone
+/// watch it here - reachable from Ranks and The Cut, so finalists can prep -
+/// is the point. "About me" is volunteered text, so it's fair game too. CITY &
+/// STATE stays OFF this page (the one bit of real-world location data; it's
+/// shown only to a matched opponent in the bio reveal).
 ///
 /// Fame is its OWN axis, so it wears the brand PINK (follow/social), distinct
 /// from the skill Ranks board and the gold tournament/event surfaces.
@@ -152,6 +155,7 @@ class PerformerProfileScreen extends StatelessWidget {
               const SizedBox(height: 18),
               if (!isMe) FollowButton(uid: uid) else const _ThisIsYou(),
               const SizedBox(height: 26),
+              _StudyCard(user: user),
               EmojiStatsCard(
                 counts: (user?['emojiCounts'] as Map?)?.cast<String, dynamic>(),
               ),
@@ -177,6 +181,68 @@ class PerformerProfileScreen extends StatelessWidget {
       }
     }
     return null;
+  }
+}
+
+/// The study material opponents can look up: the intro video (looping, sound
+/// on - it's a performance) and the volunteered "about me". Renders nothing if
+/// the player has neither. City & State is deliberately NOT here.
+class _StudyCard extends StatelessWidget {
+  const _StudyCard({required this.user});
+
+  final Map<String, dynamic>? user;
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = user?['profile'];
+    final intro = profile is Map ? profile['introVideoUrl'] as String? : null;
+    final about = profile is Map ? profile['ammoText'] as String? : null;
+    final hasIntro = intro != null && intro.trim().isNotEmpty;
+    final hasAbout = about != null && about.trim().isNotEmpty;
+    if (!hasIntro && !hasAbout) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Icon(Icons.menu_book_outlined,
+              color: Colors.white70, size: 18),
+          const SizedBox(width: 6),
+          Text('Study them',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  )),
+        ]),
+        const SizedBox(height: 4),
+        Text(
+          "Their intro and what they want you to know - fair game before you "
+          'face off.',
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: Colors.white54),
+        ),
+        const SizedBox(height: 12),
+        if (hasIntro)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 340),
+            child: Align(child: LoopingVideo(url: intro)),
+          ),
+        if (hasAbout) ...[
+          if (hasIntro) const SizedBox(height: 14),
+          Card(
+            color: Colors.white.withValues(alpha: 0.06),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Text(about,
+                  style: const TextStyle(color: Colors.white)),
+            ),
+          ),
+        ],
+        const SizedBox(height: 30),
+      ],
+    );
   }
 }
 

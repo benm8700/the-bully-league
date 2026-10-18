@@ -466,14 +466,12 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     // Rank/rating is deliberately absent - CLAUDE.md keeps it out of the
     // bio reveal so the focus stays on comedy material rather than
     // skill intimidation or sandbagging psychology.
+    // The structured questions were cut (2026-10-17) - the intro video is the
+    // real ammo. All that is left is City & State (shown here, to the matched
+    // opponent only - never on the public study profile) and the volunteered
+    // "about me" below.
     const fields = <String, String>{
-      'profession': 'Profession',
-      'education': 'Education',
-      'hometown': 'Hometown',
-      'interests': 'Interests',
-      'relationshipStatus': 'Relationship status',
-      'pets': 'Pets',
-      'favoriteFood': 'Favorite food',
+      'hometown': 'City & State',
     };
 
     final rows = <Widget>[];
@@ -518,7 +516,7 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
                   const Icon(Icons.local_fire_department_outlined, size: 18),
                   const SizedBox(width: 6),
                   Text(
-                    'They volunteered this',
+                    'About them',
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
                 ],

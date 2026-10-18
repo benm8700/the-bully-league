@@ -303,13 +303,11 @@ Future<void> _startMatch(BuildContext context, String mode) async {
     return;
   }
 
-  // The forced practice round is GONE (developer's call, 2026-09-22): it
-  // made capable people feel talked down to. The tutorial still exists as a
-  // replayable practice round, reachable from Rules. What a player genuinely
-  // must do before a ranked/tournament battle is record an intro video (the
-  // ammo the opponent studies, and the enterQueue gate) - so if it's
-  // missing, route them straight to their profile to record it and fill in a
-  // few details, rather than letting them walk to the queue and be refused.
+  // The one thing a player must do before a ranked/tournament battle is record
+  // an intro video (the ammo the opponent studies, and the enterQueue gate) -
+  // so if it's missing, route them straight to their profile to record it
+  // rather than letting them walk to the queue and be refused. (The old
+  // required text fields were cut 2026-10-17; the intro is the only gate.)
   if (!await _ensureIntroReady(context, mode)) return;
   if (!context.mounted) return;
 
@@ -494,14 +492,9 @@ Future<bool> _ensureIntroReady(BuildContext context, String mode) async {
     final profile = snap.data()?['profile'] as Map<String, dynamic>?;
     final introUrl = profile?['introVideoUrl'] as String?;
     final hasIntro = introUrl != null && introUrl.isNotEmpty;
-    // The four fields ProfileScreen marks "Required" - the opponent's ammo.
-    bool filled(String key) =>
-        (profile?[key] as String?)?.trim().isNotEmpty ?? false;
-    final hasProfile = filled('profession') &&
-        filled('education') &&
-        filled('hometown') &&
-        filled('interests');
-    if (hasIntro && hasProfile) return true;
+    // The intro video is the ONLY ranked requirement now - the structured
+    // profile fields were cut (2026-10-17), so the gate no longer checks them.
+    if (hasIntro) return true;
   } catch (_) {
     return true;
   }

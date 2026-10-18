@@ -53,13 +53,11 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  final _professionController = TextEditingController();
-  final _educationController = TextEditingController();
+  // City & State (opponent-only) and an open "about me" box are all the text
+  // the profile collects now - the intro video is the real ammo. (The old
+  // profession/education/interests/relationship/pets/favoriteFood controllers
+  // were removed 2026-10-17.)
   final _hometownController = TextEditingController();
-  final _interestsController = TextEditingController();
-  final _relationshipStatusController = TextEditingController();
-  final _petsController = TextEditingController();
-  final _favoriteFoodController = TextEditingController();
   final _ammoTextController = TextEditingController();
 
   bool _loading = true;
@@ -101,13 +99,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final snapshot = await _userRef.get();
     final data = snapshot.data();
     final profile = data?['profile'] as Map<String, dynamic>? ?? {};
-    _professionController.text = profile['profession'] as String? ?? '';
-    _educationController.text = profile['education'] as String? ?? '';
     _hometownController.text = profile['hometown'] as String? ?? '';
-    _interestsController.text = profile['interests'] as String? ?? '';
-    _relationshipStatusController.text = profile['relationshipStatus'] as String? ?? '';
-    _petsController.text = profile['pets'] as String? ?? '';
-    _favoriteFoodController.text = profile['favoriteFood'] as String? ?? '';
     _ammoTextController.text = profile['ammoText'] as String? ?? '';
     final photoUrls = (profile['photoUrls'] as List<dynamic>?)?.cast<String>() ?? [];
     final listed = data?['directoryListed'];
@@ -182,13 +174,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // rankTitle/rankedMatchesPlayed/wins/losses/accountStatus, so this
       // update is otherwise unrestricted for the owning user.
       await _userRef.update({
-        'profile.profession': _professionController.text.trim(),
-        'profile.education': _educationController.text.trim(),
         'profile.hometown': _hometownController.text.trim(),
-        'profile.interests': _interestsController.text.trim(),
-        'profile.relationshipStatus': _relationshipStatusController.text.trim(),
-        'profile.pets': _petsController.text.trim(),
-        'profile.favoriteFood': _favoriteFoodController.text.trim(),
         'profile.ammoText': _ammoTextController.text.trim(),
       });
       if (mounted) {
@@ -295,13 +281,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     _savedTimer?.cancel();
-    _professionController.dispose();
-    _educationController.dispose();
     _hometownController.dispose();
-    _interestsController.dispose();
-    _relationshipStatusController.dispose();
-    _petsController.dispose();
-    _favoriteFoodController.dispose();
     _ammoTextController.dispose();
     super.dispose();
   }
@@ -509,7 +489,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Optional. Your first photo is the one other players see when they find you.',
+                      'Your first photo is the one other players see when they find you.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 12),
@@ -520,39 +500,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onRemove: _removePhoto,
                     ),
                     const SizedBox(height: 24),
-                    Text('Required', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 12),
-                    _requiredField(_professionController, 'Profession'),
-                    const SizedBox(height: 16),
-                    _requiredField(_educationController, 'Education'),
-                    const SizedBox(height: 16),
-                    _requiredField(_hometownController, 'Hometown / location'),
-                    const SizedBox(height: 16),
-                    _requiredField(_interestsController, 'Interests'),
-                    const SizedBox(height: 24),
-                    Text('Optional', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 12),
-                    _optionalField(_relationshipStatusController, 'Relationship status'),
-                    const SizedBox(height: 16),
-                    _optionalField(_petsController, 'Pets'),
-                    const SizedBox(height: 16),
-                    _optionalField(_favoriteFoodController, 'Favorite food'),
-                    const SizedBox(height: 16),
-                    // Sat forty lines above this, directly under the
-                    // invite card, where it read as a caption for
-                    // inviting people. A label belongs next to the thing
-                    // it labels.
+                    // The structured questions (profession, education,
+                    // interests, relationship, pets, favorite food) were cut
+                    // (2026-10-17): self-reported blanks make weak ammo and add
+                    // friction. The INTRO VIDEO is the real ammo; this leaves
+                    // just where you live (opponent-only) and an open "about
+                    // you" box people can volunteer. Nothing is labelled
+                    // "optional" even though only the intro gates ranked -
+                    // labels suppress fill-in.
+                    Text('City & State', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 4),
                     Text(
-                      'Give opponents some ammo - it\'s funnier if it\'s true.',
+                      'Gives your opponent something local to work with. Only '
+                      "shown to the person you're matched against.",
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _hometownController,
+                      decoration: const InputDecoration(
+                        labelText: 'City & State',
+                        hintText: 'e.g. San Diego, CA',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text('About you', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Anything you want people to know - it's funnier if it's "
+                      'true. This is what opponents study before a battle.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _ammoTextController,
-                      maxLines: 3,
+                      maxLines: 4,
                       decoration: const InputDecoration(
-                        labelText: 'Ammo (optional)',
-                        hintText: 'Something embarrassing, or anything else you want opponents to have material on',
+                        labelText: 'About me',
+                        hintText: 'Who you are, what you do, something '
+                            'embarrassing - whatever you want them to have.',
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -680,20 +666,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // No setState after: signing out swaps this whole tree out via AuthGate.
   }
 
-  Widget _requiredField(TextEditingController controller, String label) {
-    return TextFormField(
-      controller: controller,
-      decoration: InputDecoration(labelText: label),
-      validator: (value) => (value == null || value.trim().isEmpty) ? '$label is required' : null,
-    );
-  }
-
-  Widget _optionalField(TextEditingController controller, String label) {
-    return TextFormField(
-      controller: controller,
-      decoration: InputDecoration(labelText: label),
-    );
-  }
 }
 
 /// The read-only identity at the top of the profile: avatar, username and
