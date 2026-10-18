@@ -134,6 +134,60 @@ async function lockDueTournaments(db, now = Date.now()) {
   return results;
 }
 
+/** How long past 6pm the #1 gets to make the dramatic callout before the show
+ * auto-starts without them. Soft enforcement: the show opens at ~6 regardless
+ * of whether the #1 acts, but it is never longer than this + the sweep cadence.
+ * It only auto-opens the STAGE (builds the bracket, goes live) - the battles
+ * themselves stay player-initiated, with the forfeit sweep for no-shows. */
+const AUTO_START_GRACE_MS = 3 * 60 * 1000;
+
+/**
+ * Whether a locked show is overdue to start: 6pm + the grace has passed and
+ * the #1 still hasn't called out (status is still "locked", not "live"). PURE.
+ */
+function shouldAutoStart(doc, now) {
+  return !!doc && doc.status === "locked" &&
+    Number.isFinite(doc.showAtMs) &&
+    now >= doc.showAtMs + AUTO_START_GRACE_MS &&
+    Array.isArray(doc.field) && doc.field.length === 4;
+}
+
+/**
+ * The time-enforcement backstop: start any locked show whose 6pm (+grace) has
+ * passed without the #1's callout, so the semis begin at ~6 even if the #1
+ * ghosts. Auto-uses standard seeding - #1 (field[0]) vs the bottom seed - and
+ * goes live, then nudges everyone in via notifyShowLive. Idempotent (only acts
+ * on "locked"). Reuses the format+status index lockDueTournaments already has.
+ */
+async function autoStartDueShows(db, now = Date.now()) {
+  const due = await db.collection("tournaments")
+      .where("format", "==", "mainstage")
+      .where("status", "==", "locked")
+      .get();
+  const results = [];
+  for (const d of due.docs) {
+    const doc = d.data();
+    if (!shouldAutoStart(doc, now)) continue;
+    const field = doc.field;
+    const r = calloutResult(doc, field[0], field[field.length - 1]);
+    if (!r.ok) {
+      results.push({id: d.id, error: r.error});
+      continue;
+    }
+    await d.ref.update({
+      bracket: storeBracket(r.bracket), status: "live", autoStarted: true,
+    });
+    try {
+      const {notifyShowLive} = require("./mainStageNotify");
+      await notifyShowLive(d.id, {...doc, status: "live"});
+    } catch (e) {
+      console.error("auto-start notifyShowLive failed:", e.message);
+    }
+    results.push({id: d.id, autoStarted: true});
+  }
+  return results;
+}
+
 /** The scheduled sweep: create tonight's tournament, lock the field at the
  * cutoff, and finish any battle the panel already DECIDED whose 30s grace has
  * elapsed (a backstop, in case every client left before nudging the settle) -
@@ -146,9 +200,12 @@ async function sweepMainStage(now = Date.now()) {
   if (!tournamentEnabled(cfg)) return {skipped: "disabled"};
   const created = await createFromSnapshot(db, now);
   const locked = await lockDueTournaments(db, now);
+  // Backstop AFTER locking, so a show locked and overdue in the same tick can
+  // still auto-start this run.
+  const autoStarted = await autoStartDueShows(db, now);
   const {settleDecidedBattles} = require("./mainStagePlay");
   const settled = await settleDecidedBattles(db, now);
-  return {created, locked, settled};
+  return {created, locked, autoStarted, settled};
 }
 
 /** A finalist/alternate confirms or declines (callable body). */
@@ -282,4 +339,7 @@ module.exports = {
   setJudges,
   callout,
   recordBattleResult,
+  autoStartDueShows,
+  shouldAutoStart,
+  AUTO_START_GRACE_MS,
 };

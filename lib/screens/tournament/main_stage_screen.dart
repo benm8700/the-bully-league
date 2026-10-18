@@ -419,19 +419,45 @@ class _MainStageScreenState extends State<MainStageScreen> {
     );
   }
 
+  /// Time-to-showtime, coarse ("2h 14m" / "6m"), or null once 6pm has passed.
+  String? _untilShow(int showAtMs) {
+    final ms = showAtMs - DateTime.now().millisecondsSinceEpoch;
+    if (ms <= 0) return null;
+    final h = ms ~/ 3600000;
+    final m = (ms % 3600000) ~/ 60000;
+    return h > 0 ? '${h}h ${m}m' : '${m}m';
+  }
+
   List<Widget> _locked(MainStageView v) {
     final gold = context.palette.reward;
+    final until = v.showAtMs == null ? null : _untilShow(v.showAtMs!);
+    final isShowtime = v.showAtMs != null && until == null;
     final widgets = <Widget>[
       _headline('The field is locked', gold),
       const SizedBox(height: 8),
       Text('Four finalists. Single elimination. One battle at a time.',
           style: _muted()),
+      const SizedBox(height: 12),
+      // The scheduled start - the stage opens at 6pm PT whether or not the #1
+      // has made the callout (the backstop auto-starts it).
+      _statusPill(
+        isShowtime ? Icons.sensors : Icons.schedule,
+        isShowtime ? "It's showtime" : 'The stage opens at 6pm PT',
+        isShowtime
+            ? 'The semis are starting now.'
+            : 'Starts in $until - be ready.',
+        isShowtime ? context.palette.live : gold,
+      ),
       const SizedBox(height: 20),
     ];
     if (v.calloutOpen) {
       widgets.addAll([
         _statusPill(Icons.campaign, "You're the #1 seed",
-            'You pick who you want in your semifinal. Make the call.', gold),
+            isShowtime
+                ? "It's showtime - call out your opponent NOW, or the show "
+                    'starts with a default matchup.'
+                : 'You pick who you want in your semifinal. Make the call.',
+            isShowtime ? context.palette.live : gold),
         const SizedBox(height: 16),
         FilledButton.icon(
           style: FilledButton.styleFrom(
@@ -440,7 +466,7 @@ class _MainStageScreenState extends State<MainStageScreen> {
             minimumSize: const Size(0, 52),
           ),
           icon: const Icon(Icons.campaign),
-          label: const Text('Make your callout'),
+          label: Text(isShowtime ? 'Call out now' : 'Make your callout'),
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => MainStageCalloutScreen(

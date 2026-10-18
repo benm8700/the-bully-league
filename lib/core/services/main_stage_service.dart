@@ -44,6 +44,7 @@ class MainStageView {
     required this.field,
     required this.candidates,
     this.wildCardUid,
+    this.showAtMs,
     this.myMatchupRound,
     this.myMatchupIndex,
     this.myMatchupIsFinal = false,
@@ -74,6 +75,11 @@ class MainStageView {
   /// The seat-4 WILD CARD uid (drawn from the field by engagement), or null if
   /// the field was too small to draw one. Mark whichever seed matches this.
   final String? wildCardUid;
+
+  /// When the stage opens (6pm PT show instant, ms). Drives the countdown while
+  /// locked; after it, the #1's callout turns urgent and the backstop auto-
+  /// starts. Null on older docs.
+  final int? showAtMs;
 
   /// The opponents the #1 may call out: the locked field minus themselves.
   /// Empty unless [isTopSeed] and the callout is open (status == locked).
@@ -266,6 +272,7 @@ class MainStageService {
       field: field,
       candidates: candidates,
       wildCardUid: t['wildCardUid'] as String?,
+      showAtMs: (t['showAtMs'] as num?)?.toInt(),
       myMatchupRound: myRound,
       myMatchupIndex: myIdx,
       myMatchupIsFinal: myIsFinal,
