@@ -83,15 +83,25 @@ class EntitlementService {
 
   final FirebaseFunctions _functions;
 
-  /// Fails OPEN. A network blip must never look like a paywall - the
-  /// server still enforces, so the worst case is that someone is shown an
+  /// Fails OPEN, and FAST. A network blip must never look like a paywall -
+  /// the server still enforces, so the worst case is that someone is shown an
   /// action they then get refused for, which is far better than being told
   /// they must pay when they need not.
+  ///
+  /// The timeout is load-bearing, not belt-and-braces: this call is awaited
+  /// behind a non-dismissible spinner when a battle is tapped, and the
+  /// Firebase SDK BLOCKS a callable waiting for an App Check token before it
+  /// even sends the request. On a device whose Play Integrity attestation is
+  /// throttled ("Too many attempts" - common on a heavily sideloaded test
+  /// phone), that wait runs the SDK's full ~70s timeout, so Home sits frozen.
+  /// A hang is not an error, so the catch below never fired. A short timeout
+  /// turns the hang into the same fail-open as any other failure.
   Future<Entitlement> current() async {
     try {
       final result = await _functions
           .httpsCallable('getMyEntitlement')
-          .call<Map<String, dynamic>>();
+          .call<Map<String, dynamic>>()
+          .timeout(const Duration(seconds: 6));
       return Entitlement.fromMap(result.data);
     } catch (_) {
       return Entitlement.permissive;
