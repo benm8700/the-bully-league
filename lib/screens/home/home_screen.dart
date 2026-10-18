@@ -26,6 +26,7 @@ import '../../widgets/home/friend_battle_card.dart';
 import '../../widgets/home/improv_station_card.dart';
 import '../../widgets/home/daily_window_strip.dart';
 import '../match/bio_reveal_screen.dart';
+import '../match/improv_match_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import '../profile/profile_screen.dart';
@@ -875,7 +876,16 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
     setState(() => _pending = null);
     Navigator.of(context)
         .push(
-          MaterialPageRoute(builder: (_) => BioRevealScreen(pairing: pairing)),
+          MaterialPageRoute(
+            // Face-Off (improv) has no bio reveal - you riff a prompt, blind to
+            // the opponent - so a rejoined improv pairing goes straight to its
+            // own performance screen, same branch the matchmaking screen uses.
+            // Without this, taking up a Face-Off standing challenge showed the
+            // opponent-ammo page.
+            builder: (_) => pairing.mode == 'improv'
+                ? ImprovMatchScreen(pairing: pairing)
+                : BioRevealScreen(pairing: pairing),
+          ),
         )
         // The match may have ended while they were away, so re-check on
         // the way back rather than leaving a stale banner behind.

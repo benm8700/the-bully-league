@@ -61,6 +61,11 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
   bool _violationEnded = false;
   bool _violationIAmReporter = false;
 
+  /// The match ended WITHOUT a real battle - the opponent never made it and
+  /// the match was abandoned. Distinct from a genuine finish: there is nothing
+  /// for the crowd to judge, so the done screen must not claim there is.
+  bool _noContest = false;
+
   _Phase _phase = _Phase.connecting;
   List<String> _prompts = const [];
   int _roundCount = 3;
@@ -263,17 +268,33 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
   void _onMatchDoc(DocumentSnapshot<Map<String, dynamic>> snap) {
     if (!mounted) return;
     final status = snap.data()?['status'] as String?;
-    const terminal = {'completed', 'abandoned', 'disqualified'};
-    if (status != null && terminal.contains(status)) _goToDone();
+    if (status == null) return;
+    // A real finish is a completion. An abandon/disqualify means the battle
+    // did not happen (most often: the opponent never connected and a sweep or
+    // their client gave up) - end as a NO-CONTEST so the done screen tells the
+    // truth instead of celebrating a battle that never occurred.
+    if (status == 'completed') {
+      _goToDone();
+    } else if (status == 'abandoned' || status == 'disqualified') {
+      _goToDone(noContest: true);
+    }
   }
 
-  void _goToDone() {
+  void _goToDone({bool noContest = false}) {
     if (_phase == _Phase.done || _violationEnded) return;
     _displayTicker?.cancel();
-    if (mounted) setState(() => _phase = _Phase.done);
+    if (mounted) {
+      setState(() {
+        _noContest = noContest;
+        _phase = _Phase.done;
+      });
+    }
     _video.muteLocalAudio(true);
     unawaited(_video.leaveChannel());
-    _complete();
+    // Only settle a REAL finish. A no-contest match is already terminal
+    // (something abandoned it), so completing it would try to settle a battle
+    // that never happened as if it were judged.
+    if (!noContest) _complete();
   }
 
   Future<void> _complete() async {
@@ -361,6 +382,16 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
       );
     }
     if (_phase == _Phase.done) {
+      if (_noContest) {
+        return _centered(
+          icon: Icons.person_off_outlined,
+          title: 'No battle this time',
+          body: "Your opponent didn't make it, so this one didn't happen. "
+              'No harm done - jump back in and find another.',
+          buttonLabel: 'Back to home',
+          onButton: _home,
+        );
+      }
       return _centered(
         icon: Icons.theater_comedy,
         title: 'Sets are in!',
