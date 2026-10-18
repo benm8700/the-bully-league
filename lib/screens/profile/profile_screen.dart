@@ -509,12 +509,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // "optional" even though only the intro gates ranked -
                     // labels suppress fill-in.
                     Text('City & State', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Gives your opponent something local to work with. Only '
-                      "shown to the person you're matched against.",
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _hometownController,
@@ -525,12 +519,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 24),
                     Text('About you', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Anything you want people to know - it's funnier if it's "
-                      'true. This is what opponents study before a battle.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _ammoTextController,
