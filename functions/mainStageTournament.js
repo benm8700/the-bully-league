@@ -202,13 +202,21 @@ async function callout(auth, data) {
   }
   const db = getFirestore();
   const ref = db.collection("tournaments").doc(tournamentId);
-  return db.runTransaction(async (tx) => {
+  const result = await db.runTransaction(async (tx) => {
     const doc = (await tx.get(ref)).data();
     const r = calloutResult(doc, auth.uid, pickUid);
     if (!r.ok) throw httpsError("failed-precondition", r.error);
     tx.update(ref, {bracket: storeBracket(r.bracket), status: "live"});
-    return {ok: true, bracket: r.bracket};
+    return {ok: true, bracket: r.bracket, doc};
   });
+  // The show is now live - pull the finalists and judges in (best-effort).
+  try {
+    const {notifyShowLive} = require("./mainStageNotify");
+    await notifyShowLive(tournamentId, result.doc);
+  } catch (e) {
+    console.error("notifyShowLive failed:", e.message);
+  }
+  return {ok: true, bracket: result.bracket};
 }
 
 /**
@@ -220,7 +228,7 @@ async function callout(auth, data) {
  */
 async function recordBattleResult(db, tournamentId, roundIdx, matchIdx, winnerUid) {
   const ref = db.collection("tournaments").doc(tournamentId);
-  return db.runTransaction(async (tx) => {
+  const result = await db.runTransaction(async (tx) => {
     const doc = (await tx.get(ref)).data();
     if (!doc || doc.status !== "live" || !doc.bracket) {
       return {ok: false, reason: "not-live"};
@@ -238,6 +246,19 @@ async function recordBattleResult(db, tournamentId, roundIdx, matchIdx, winnerUi
     tx.update(ref, update);
     return {ok: true, completed, champion: next.champion || null};
   });
+  // If advancing just made the FINAL ready (both semis done), carry the two
+  // finalists to the final. Best-effort + deduped; skipped if the bracket is
+  // already complete.
+  if (result.ok && !result.completed) {
+    try {
+      const {notifyFinalReady} = require("./mainStageNotify");
+      const fresh = (await ref.get()).data();
+      await notifyFinalReady(tournamentId, fresh);
+    } catch (e) {
+      console.error("notifyFinalReady failed:", e.message);
+    }
+  }
+  return result;
 }
 
 // A tiny HttpsError shim so the callable bodies can live here (pure-ish) and

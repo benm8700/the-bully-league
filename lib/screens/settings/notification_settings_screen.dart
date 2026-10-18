@@ -47,6 +47,12 @@ class NotificationSettingsScreen extends StatelessWidget {
       description: 'Bracket starts, your next round, and results.',
     ),
     _Category(
+      key: 'main_stage',
+      title: 'The Main Stage',
+      description: 'When the weekly finals go live, when your battle is up, '
+          'and when a battle needs your verdict.',
+    ),
+    _Category(
       key: 'followed_performer',
       title: 'Comedians you follow',
       description: 'When someone you follow is up in the gauntlet, or drops '

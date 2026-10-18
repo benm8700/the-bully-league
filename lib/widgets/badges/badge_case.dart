@@ -29,10 +29,21 @@ class BadgeCase extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    // Most important first (Champion leads); common ones fall to the end.
-    final slots = [...badgeSlots(stats, earnedIds)]
-      ..sort((a, b) => b.def.prestige.compareTo(a.def.prestige));
+    // EARNED first (best -> worst), then the locked/greyed ones (best -> worst)
+    // - so what you've won leads, top-left, and the chase sits after it
+    // (developer's call, 2026-10-17). Within each group, higher prestige wins.
+    final slots = [...badgeSlots(stats, earnedIds)]..sort((a, b) {
+        if (a.earned != b.earned) return a.earned ? -1 : 1;
+        return b.def.prestige.compareTo(a.def.prestige);
+      });
     final earnedCount = slots.where((s) => s.earned).length;
+
+    // Two rows, scrolling sideways: each "column" is two tiles stacked, so a
+    // phone shows ~3 columns (6 badges) and you swipe right for the rest.
+    final columns = <List<BadgeSlot>>[];
+    for (var i = 0; i < slots.length; i += 2) {
+      columns.add(slots.sublist(i, (i + 2).clamp(0, slots.length)));
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,6 +59,15 @@ class BadgeCase extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
+            const Spacer(),
+            if (columns.length > 3)
+              Row(children: [
+                Text('swipe',
+                    style: text.bodySmall
+                        ?.copyWith(color: const Color(0xFF6E6A78))),
+                const Icon(Icons.chevron_right,
+                    size: 16, color: Color(0xFF6E6A78)),
+              ]),
           ],
         ),
         const SizedBox(height: 4),
@@ -56,17 +76,36 @@ class BadgeCase extends StatelessWidget {
           style: text.bodySmall?.copyWith(color: const Color(0xFF9A96A2)),
         ),
         const SizedBox(height: 14),
-        Wrap(
-          spacing: 8,
-          runSpacing: 16,
-          children: [
-            for (final s in slots) _BadgeTile(slot: s),
-          ],
+        SizedBox(
+          height: _tileHeight * 2 + 16, // two rows + the gap between them
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.zero,
+            itemCount: columns.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, c) {
+              final col = columns[c];
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _BadgeTile(slot: col[0]),
+                  const SizedBox(height: 16),
+                  if (col.length > 1)
+                    _BadgeTile(slot: col[1])
+                  else
+                    const SizedBox(width: _tileWidth, height: _tileHeight),
+                ],
+              );
+            },
+          ),
         ),
       ],
     );
   }
 }
+
+const double _tileWidth = 104;
+const double _tileHeight = 116;
 
 class _BadgeTile extends StatelessWidget {
   const _BadgeTile({required this.slot});
@@ -90,11 +129,12 @@ class _BadgeTile extends StatelessWidget {
     }
 
     return SizedBox(
-      width: 104,
+      width: _tileWidth,
+      height: _tileHeight,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          BadgeArt(def: def, earned: slot.earned, size: 62),
+          BadgeArt(def: def, earned: slot.earned, size: 58),
           const SizedBox(height: 6),
           Text(
             def.title,

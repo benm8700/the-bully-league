@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/badges/badge_popup.dart';
 import '../../widgets/fame_milestone_popup.dart';
+import '../../widgets/main_stage_alert_bar.dart';
 import '../../widgets/rank_change_popup.dart';
 import '../../widgets/service_status_banner.dart';
 import '../../widgets/tournament_finale_popup.dart';
@@ -94,6 +95,10 @@ class _MainShellState extends State<MainShell> {
       body: Column(
         children: [
           const ServiceStatusBanner(),
+          // Pulls key Main Stage people (a finalist whose battle is up, a judge
+          // while a battle is on stage) in from any tab - the in-app half of
+          // the Main Stage pushes. Renders nothing for everyone else.
+          const MainStageAlertBar(),
           // The Sixes and Sevens live cue (WindowLiveBar) is REMOVED for now
           // (developer's call, 2026-09-14) - the red top bar during the window
           // was getting in the way of Home design review. The widget still

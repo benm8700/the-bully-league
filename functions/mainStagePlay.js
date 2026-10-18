@@ -123,6 +123,15 @@ async function startMainStageBattle(auth, data) {
     return id;
   });
 
+  // A battle is now on stage - pull the judges in to judge it (best-effort,
+  // deduped per matchId so a rejoin doesn't re-push).
+  try {
+    const {notifyBattleOnStage} = require("./mainStageNotify");
+    await notifyBattleOnStage(tournamentId, matchId);
+  } catch (e) {
+    console.error("notifyBattleOnStage failed:", e.message);
+  }
+
   const match = (await db.collection("matches").doc(matchId).get()).data();
   return pairingFor(match, matchId, auth.uid);
 }
