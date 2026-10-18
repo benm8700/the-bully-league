@@ -39,14 +39,17 @@ const {renderMatchHighlight} = require("../highlightRender");
 (async () => {
   let matchId = process.argv[2];
   if (!matchId) {
+    // Reuse the existing (status, completedAt) index and filter mode in code,
+    // so this ad-hoc script needs no new composite index.
     const snap = await db.collection("matches")
-        .where("mode", "==", "improv")
         .where("status", "==", "completed")
         .orderBy("completedAt", "desc")
-        .limit(10)
+        .limit(40)
         .get();
     for (const doc of snap.docs) {
-      const files = doc.data().recording?.files;
+      const d = doc.data();
+      if (d.mode !== "improv") continue;
+      const files = d.recording?.files;
       if (Array.isArray(files) && files.length > 0) {
         matchId = doc.id;
         console.log(`Latest improv match with a recording: ${matchId}`);
