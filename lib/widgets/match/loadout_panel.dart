@@ -112,7 +112,8 @@ class _LoadoutPanelState extends State<LoadoutPanel> {
             const SizedBox(height: 2),
             Text(
               l.friendFree
-                  ? "It's a friend battle - everything's free. Bring anything."
+                  ? "Friend battle - every power-up is yours, free and already "
+                      "loaded. Deploy them DURING the fight."
                   : 'Bring weapons to throw them off. Unlock more as you rank up.',
               style: theme.textTheme.bodySmall,
             ),
@@ -226,11 +227,13 @@ class _AbilityRow extends StatelessWidget {
         ),
       );
     }
-    // Friend battle: everything's already yours, free.
+    // Friend battle: everything's already yours, free and loaded - there's
+    // nothing to buy, so the control just confirms it's ready (the x N badge
+    // beside the name shows how many you're bringing).
     if (friendFree) {
       return SizedBox(
         width: 92,
-        child: Text('Free',
+        child: Text('Loaded · free',
             textAlign: TextAlign.center,
             style: theme.textTheme.labelMedium
                 ?.copyWith(color: theme.colorScheme.primary)),

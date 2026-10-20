@@ -11,6 +11,12 @@ import '../match/pre_match_screen.dart';
 /// (same as the website's download CTA); swap when the app ships.
 const String _appDownloadUrl = 'https://the-bully-league.vercel.app';
 
+/// In-session cache of the recent-challenge chips, so re-opening the screen
+/// shows them INSTANTLY rather than waiting on the callable each time. The
+/// very first open of a session still fetches once; this is a cheap win with
+/// no new storage dependency (persisting across launches would need one).
+List<Map<String, dynamic>> _cachedRecentTargets = const [];
+
 /// Challenge someone by name, and answer challenges sent to you.
 ///
 /// THIS IS THE ONLY PATH THAT WORKS WITH FIVE USERS. Every other way into
@@ -35,7 +41,7 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
   List<Map<String, dynamic>> _incoming = const [];
   List<Map<String, dynamic>> _outgoing = const [];
   List<Map<String, dynamic>> _accepted = const [];
-  List<Map<String, dynamic>> _recent = const [];
+  List<Map<String, dynamic>> _recent = _cachedRecentTargets;
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -93,10 +99,12 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
       final r = await FirebaseFunctions.instance
           .httpsCallable('getRecentChallengeTargets')
           .call<Map<String, dynamic>>();
-      if (!mounted) return;
-      setState(() => _recent = ((r.data['recent'] as List?) ?? const [])
+      final recent = ((r.data['recent'] as List?) ?? const [])
           .map((e) => (e as Map).cast<String, dynamic>())
-          .toList());
+          .toList();
+      _cachedRecentTargets = recent; // instant on the next open
+      if (!mounted) return;
+      setState(() => _recent = recent);
     } catch (_) {/* no recents, no chips */}
   }
 
