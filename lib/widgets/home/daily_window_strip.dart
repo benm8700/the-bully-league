@@ -56,8 +56,10 @@ class _DailyWindowStripState extends State<DailyWindowStrip> {
         // family as the Basement hero rather than the gold Main Stage.
         final accent = context.palette.accent;
 
+        // "PT" rather than "Pacific" so the one-line strip (name + 2x points +
+        // hours) fits without ellipsis on a narrow phone.
         final hours =
-            '${_h(config.startHourPacific)}-${_h(config.endHourPacific)} Pacific';
+            '${_h(config.startHourPacific)}-${_h(config.endHourPacific)} PT';
         final String right = live
             ? '${_mins(window.end, now)} left'
             : 'in ${_remaining(window.start, now)}';
@@ -80,8 +82,14 @@ class _DailyWindowStripState extends State<DailyWindowStrip> {
                   child: Text.rich(
                     TextSpan(
                       children: [
+                        // Lead with the window's NAME (live config, e.g. "Happy
+                        // Hour"), then the draw (2x points) and the hours - the
+                        // strip used to show only the mechanic, so the name
+                        // never appeared anywhere a player would look.
                         TextSpan(
-                          text: live ? '2X POINTS LIVE' : '2X POINTS',
+                          text: live
+                              ? '${config.name.toUpperCase()} LIVE'
+                              : config.name.toUpperCase(),
                           style: TextStyle(
                             color: accent,
                             fontWeight: FontWeight.w900,
@@ -90,7 +98,7 @@ class _DailyWindowStripState extends State<DailyWindowStrip> {
                           ),
                         ),
                         TextSpan(
-                          text: '  ·  $hours',
+                          text: live ? '  ·  2x points' : '  ·  2x points  ·  $hours',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.75),
                             fontWeight: FontWeight.w600,
