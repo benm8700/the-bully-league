@@ -55,10 +55,15 @@ const STYLE = {
   // text on the seam between the players rather than over either face,
   // and clear of the platform UI that crowds the bottom of the screen.
   alignment: 5,
-  // Per-speaker colour so a viewer can tell who is talking without
-  // relying on the video alone. ASS colours are &HAABBGGRR (reversed).
-  player1Colour: "&H00FFFFFF", // white
-  player2Colour: "&H0000E5FF", // amber
+  // Per-speaker colour matching the app's player scheme ("red = this person,
+  // blue = that person"), carried into the shareable clip for brand
+  // consistency. ASS colours are &HAABBGGRR (reversed). P1 is the brand red
+  // (House.gelRed #C4485E); P2 is a BRIGHTER blue than the muted UI gel
+  // (#40C4FF rather than #5E93A8) so it stays legible on light backgrounds -
+  // captions' first job is readability on muted social, and the UI gel is too
+  // desaturated for text. The heavy black outline (below) carries both.
+  player1Colour: "&H005E48C4", // red #C4485E
+  player2Colour: "&H00FFC440", // blue #40C4FF
 };
 
 const MAX_WORDS_PER_CUE = 4;
