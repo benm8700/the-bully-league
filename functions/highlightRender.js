@@ -73,7 +73,7 @@ const OUTPUT_FPS = 30;
 
 /**
  * The burned-in brand watermark: the home-page logo (the wordmark), overlaid
- * small in the BOTTOM-LEFT of every clip.
+ * small in the BOTTOM-RIGHT of every clip.
  *
  * An image OVERLAY of the real logo rather than the old ASS "THE BULLY LEAGUE"
  * text, which read as clunky. `overlay` is a core ffmpeg filter and needs no
@@ -95,13 +95,14 @@ const OUTPUT_FPS = 30;
  */
 const WATERMARK_LOGO_PATH = path.join(__dirname, "assets", "watermark.png");
 const WATERMARK_LOGO_WIDTH_RATIO = 0.17;
-// Tightened toward the corner (developer's call, 2026-09-23 - "more neatly
-// lined up in the corner"). Still a small inset rather than flush to the edge:
-// the posted/downloaded clip - the watermark's real job - reads as a clean
-// corner mark, and the ~7% keeps most of the wordmark inside the in-app feed's
-// side-crop too (the logo PNG carries its own right-edge padding on top).
-const WATERMARK_LOGO_MARGIN_X_RATIO = 0.07;
-const WATERMARK_LOGO_MARGIN_Y_RATIO = 0.03;
+// Tightened toward the corner again (developer's call, 2026-10-20 - wants it
+// hugging the bottom-right). Still a small inset, not flush: the posted clip -
+// the watermark's real job - reads as a clean corner mark, and the inset plus
+// the logo PNG's own right-edge padding keeps most of the wordmark inside the
+// in-app feed's ~9-12% side-crop. Prioritises the posted/downloaded clip (no
+// crop) over the in-app feed look, per the developer.
+const WATERMARK_LOGO_MARGIN_X_RATIO = 0.05;
+const WATERMARK_LOGO_MARGIN_Y_RATIO = 0.02;
 const WATERMARK_LOGO_ALPHA = 0.9;
 // Resolved once at load. If the asset ever fails to deploy, this is null and
 // renders proceed WITHOUT a watermark rather than failing outright - a missing
