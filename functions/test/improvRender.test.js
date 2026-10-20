@@ -13,6 +13,7 @@ const {
   buildImprovTimelines,
   buildImprovFfmpegArgs,
   improvSetVideoDurationMs,
+  mergeImprovCues,
 } = require("../highlightRender");
 
 let passed = 0;
@@ -196,6 +197,51 @@ test("multiple video segments in one set are concatenated in order", () => {
   const graph = args[args.indexOf("-filter_complex") + 1];
   assert.ok(/concat=n=2:v=1:a=0/.test(graph),
       "player 1's two video segments concatenate");
+});
+
+// --- captions: cue merge + subtitle threading ----------------------------
+
+test("mergeImprovCues offsets P2's set past P1's set plus the beat", () => {
+  const merged = mergeImprovCues([
+    {durationSec: 40, cues: [{uid: "1", start: 2, end: 4, text: "a"}]},
+    {durationSec: 42, cues: [{uid: "2", start: 1, end: 3, text: "b"}]},
+  ], 0.75);
+  assert.strictEqual(merged.length, 2);
+  // P1's cue is unchanged (set 0, offset 0).
+  assert.strictEqual(merged[0].uid, "1");
+  assert.strictEqual(merged[0].start, 2);
+  assert.strictEqual(merged[0].end, 4);
+  // P2's cue is shifted by 40 + 0.75 = 40.75, so it lands over P2's set.
+  assert.strictEqual(merged[1].uid, "2");
+  assert.ok(Math.abs(merged[1].start - 41.75) < 1e-9, `${merged[1].start}`);
+  assert.ok(Math.abs(merged[1].end - 43.75) < 1e-9, `${merged[1].end}`);
+});
+
+test("mergeImprovCues tolerates a null duration / empty set", () => {
+  const merged = mergeImprovCues([
+    {durationSec: null, cues: null},
+    {durationSec: 30, cues: [{uid: "2", start: 0, end: 1, text: "x"}]},
+  ], 0.75);
+  // A null first-set duration counts as 0, so set 1 offsets by just the beat.
+  assert.strictEqual(merged.length, 1);
+  assert.ok(Math.abs(merged[0].start - 0.75) < 1e-9, `${merged[0].start}`);
+});
+
+test("a subtitlePath threads a subtitles filter UNDER the watermark", () => {
+  const {performers} = buildImprovTimelines([
+    seg("1", "video", "20260813234113000"),
+    seg("1", "audio", "20260813234113000"),
+    seg("2", "video", "20260813234113000"),
+    seg("2", "audio", "20260813234113000"),
+  ]);
+  const args = buildImprovFfmpegArgs(performers, "/tmp/work", "/tmp/out.mp4",
+      {logoPath: "/tmp/wm.png", subtitlePath: "/tmp/cap.ass"});
+  assertGraphConnected(args);
+  const graph = args[args.indexOf("-filter_complex") + 1];
+  assert.ok(/\[ivcat\]subtitles=.*\[ivsub\]/.test(graph),
+      "subtitles are burned after the concat");
+  assert.ok(/\[ivsub\]\[iwm\]overlay=.*\[vout\]/.test(graph),
+      "the watermark overlays the subtitled video, so the logo sits above captions");
 });
 
 console.log(`\n${passed} passed`);

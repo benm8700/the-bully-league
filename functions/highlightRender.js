@@ -534,6 +534,35 @@ function improvSetVideoDurationMs(performer) {
 }
 
 /**
+ * Places each performer's caption cues onto the CONCATENATED Face-Off
+ * timeline. Each performer is transcribed on their own rebased timeline, so
+ * their cues are 0-based within their set; this shifts set i by the cumulative
+ * duration of the earlier sets plus the black beat between each, so P2's
+ * captions land over P2's set rather than on top of P1's.
+ *
+ * Pure, so the offset maths - the whole reason captions were deferred on this
+ * cut - can be tested without ffmpeg or transcription.
+ *
+ * `sets` is in play order: [{durationSec, cues:[{uid,start,end,text}]}].
+ */
+function mergeImprovCues(sets, gapSeconds) {
+  const out = [];
+  let offset = 0;
+  for (const set of sets) {
+    for (const c of set.cues || []) {
+      out.push({
+        uid: c.uid,
+        start: c.start + offset,
+        end: c.end + offset,
+        text: c.text,
+      });
+    }
+    offset += (Number(set.durationSec) || 0) + gapSeconds;
+  }
+  return out;
+}
+
+/**
  * Builds the ffmpeg invocation for a sequential Face-Off render: each
  * performer's full set, full-frame, in their gel colour, concatenated with a
  * black beat between.
@@ -640,14 +669,26 @@ function buildImprovFfmpegArgs(performers, localDir, outputPath, options = {}) {
   if (concatParts.length === 0) throw new Error("no performer set to render");
 
   const segCount = concatParts.length / 2;
-  const vOut = options.logoPath ? "[ivcat]" : "[vout]";
+  // Concat always lands in [ivcat]; the optional subtitles stage and the
+  // optional watermark are threaded after it, ending at [vout].
   if (segCount === 1) {
     // Only one performer published anything - rename the single pair rather
     // than concat=n=1, which some ffmpeg builds reject.
-    filters.push(`${concatParts[0]}null${vOut}`);
+    filters.push(`${concatParts[0]}null[ivcat]`);
     filters.push(`${concatParts[1]}anull[aout]`);
   } else {
-    filters.push(`${concatParts.join("")}concat=n=${segCount}:v=1:a=1${vOut}[aout]`);
+    filters.push(`${concatParts.join("")}concat=n=${segCount}:v=1:a=1[ivcat][aout]`);
+  }
+
+  // Burned-in captions (posting-only), BEFORE the watermark so the logo sits
+  // above the text. Cues are already placed on the concatenated timeline by
+  // the caller (P2's set offset past P1's set + the black beat).
+  let vlabel = "[ivcat]";
+  if (options.subtitlePath) {
+    const escaped = options.subtitlePath
+        .replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
+    filters.push(`${vlabel}subtitles='${escaped}'[ivsub]`);
+    vlabel = "[ivsub]";
   }
 
   if (options.logoPath) {
@@ -658,7 +699,9 @@ function buildImprovFfmpegArgs(performers, localDir, outputPath, options = {}) {
     const marginY = Math.round(canvas.width * WATERMARK_LOGO_MARGIN_Y_RATIO);
     filters.push(`[${logoIndex}:v]scale=${logoW}:-1,format=rgba,` +
       `colorchannelmixer=aa=${WATERMARK_LOGO_ALPHA}[iwm]`);
-    filters.push(`[ivcat][iwm]overlay=W-w-${marginX}:H-h-${marginY}[vout]`);
+    filters.push(`${vlabel}[iwm]overlay=W-w-${marginX}:H-h-${marginY}[vout]`);
+  } else {
+    filters.push(`${vlabel}null[vout]`);
   }
 
   return [
@@ -715,7 +758,7 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
   // buildImprovFfmpegArgs. Delegated whole rather than branched inline so the
   // composite path below stays untouched.
   if (snap.data()?.mode === "improv") {
-    return renderImprovHighlight(matchId, matchRef, bucket);
+    return renderImprovHighlight(matchId, matchRef, bucket, {captions});
   }
 
   const [objects] = await bucket.getFiles({prefix: `match_recordings/${matchId}/`});
@@ -947,13 +990,14 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
  * Renders a Face-Off (improv) match into one sequential vertical clip: each
  * performer's full set, full-frame, in their gel colour, back to back.
  *
- * Deliberately NO captions and NO landscape cut. Captions would have to be
- * remapped across the concat boundary (a later pass if improv clips are ever
- * posted); landscape makes no sense for a portrait single-performer cut.
- * Produces only `renditions.vertical`, which is what the judge feed, publish
- * and download paths all prefer anyway.
+ * Two stages, like the roast path. Stage 1 (captions=false) is the uncaptioned
+ * cut the judge feed plays. Stage 2 (captions=true, on request for posting)
+ * transcribes each performer separately - free speaker attribution, since
+ * improv records per-player - and burns red/blue captions placed onto the
+ * concatenated timeline (mergeImprovCues shifts P2's set past P1's + the beat).
+ * NO landscape cut: a portrait single-performer sequence has no good 16:9 form.
  */
-async function renderImprovHighlight(matchId, matchRef, bucket) {
+async function renderImprovHighlight(matchId, matchRef, bucket, {captions = false} = {}) {
   const [objects] = await bucket.getFiles({prefix: `match_recordings/${matchId}/`});
   if (objects.length === 0) throw new Error("No recording found for this match.");
 
@@ -1002,6 +1046,71 @@ async function renderImprovHighlight(matchId, matchRef, bucket) {
 
     const ffmpegPath = require("ffmpeg-static");
     const rendition = RENDITIONS.vertical;
+
+    // STAGE 2: the captioned POSTING cut. Written to a SEPARATE file beside
+    // the uncaptioned one (captions are posting-only, like the roast path), so
+    // the judge feed keeps playing the uncaptioned `.path` while the posted
+    // download is the captioned cut.
+    if (captions) {
+      const {transcribeSegments, groupWordsIntoCues, buildAssFile} =
+        require("./captions");
+      // Transcribe each performer SEPARATELY on their own rebased timeline, so
+      // every word is attributed to the right player and timed within that
+      // player's set; mergeImprovCues then offsets P2's set onto the concat.
+      const sets = [];
+      for (const perf of withVideo) {
+        const audioSegs = perf.segments.filter((s) => s.kind === "audio");
+        const {words, failures} = await transcribeSegments(
+            audioSegs, workDir, ffmpegPath, workDir);
+        if (failures.length > 0) {
+          warnings.push(
+              `${failures.length} audio segment(s) could not be transcribed`);
+        }
+        const durMs = improvSetVideoDurationMs(perf);
+        sets.push({
+          durationSec: durMs != null ? durMs / 1000 : 0,
+          cues: groupWordsIntoCues(words),
+        });
+      }
+      const merged = mergeImprovCues(sets, IMPROV_GAP_SECONDS);
+      if (merged.length === 0) {
+        warnings.push("no speech was transcribed, so the clip has no captions");
+      }
+      const subtitlePath = path.join(workDir, "improv-captions.ass");
+      await fs.writeFile(
+          subtitlePath, buildAssFile(merged, rendition.canvas), "utf8");
+
+      const capName = rendition.fileName.replace(/\.mp4$/, "_captioned.mp4");
+      const capPath = path.join(workDir, capName);
+      await runFfmpeg(ffmpegPath, buildImprovFfmpegArgs(withVideo, workDir, capPath, {
+        canvas: rendition.canvas,
+        logoPath: WATERMARK_LOGO,
+        subtitlePath,
+      }));
+      const capDest = `${HIGHLIGHT_PREFIX}/${matchId}/${capName}`;
+      await bucket.upload(capPath, {destination: capDest, metadata: {contentType: "video/mp4"}});
+
+      // Deep-merge the captioned path into the existing vertical rendition so
+      // `.path` (what the judge feed serves) is preserved. reviewStatus /
+      // published are left untouched, so re-captioning never un-publishes.
+      await matchRef.set({
+        highlight: {
+          renditions: {
+            vertical: {
+              captionedPath: capDest,
+              captionedSizeBytes: (await fs.stat(capPath)).size,
+            },
+          },
+          captioned: merged.length > 0,
+          captionedRenderedAt: FieldValue.serverTimestamp(),
+          ...(warnings.length > 0 ? {captionWarnings: warnings} : {}),
+        },
+      }, {merge: true});
+
+      return {rendered: true, captioned: merged.length > 0, warnings};
+    }
+
+    // STAGE 1: the uncaptioned cut the judge feed plays.
     const outputPath = path.join(workDir, rendition.fileName);
     await runFfmpeg(ffmpegPath, buildImprovFfmpegArgs(withVideo, workDir, outputPath, {
       canvas: rendition.canvas,
@@ -1046,6 +1155,7 @@ module.exports = {
   buildImprovTimelines,
   buildImprovFfmpegArgs,
   improvSetVideoDurationMs,
+  mergeImprovCues,
   parseSegmentTimeMs,
   classifyFile,
   buildTimeline,
