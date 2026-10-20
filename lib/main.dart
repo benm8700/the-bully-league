@@ -38,18 +38,19 @@ void main() async {
 /// attest still works normally, and letting attestation failure stop the
 /// app from starting would be a far worse bug than the one it prevents.
 Future<void> _activateAppCheck() async {
+  // ANDROID APP CHECK IS DISABLED FOR NOW, and this is deliberate. App Check is
+  // unenforced everywhere (no callable requires a token), and a sideloaded
+  // Android build can NEVER pass Play Integrity - it only fails, and repeated
+  // attempts across reinstalls hit a "Too many attempts" throttle that then
+  // HANGS every callable, because the Firebase SDK blocks a call waiting for a
+  // token that never comes (seen as a frozen Home and a match that won't
+  // start). Since it buys nothing while unenforced and breaks the test devices,
+  // skip it on Android. The real iOS beta keeps App Attest below. Re-enable
+  // Android (Play Integrity) when the app actually ships from Google Play and
+  // App Check is about to be enforced.
+  if (defaultTargetPlatform == TargetPlatform.android) return;
   try {
     await FirebaseAppCheck.instance.activate(
-      // Play Integrity verifies the app was installed from Google Play, so
-      // a debug or sideloaded build cannot pass it - by design. Debug
-      // builds therefore use the debug provider, which prints a token to
-      // the console to be registered once per device. Without this split,
-      // every emulator would fail attestation the moment enforcement went
-      // on, and it would look like a backend fault rather than the
-      // expected behaviour of a build that did not come from the store.
-      providerAndroid: kDebugMode
-          ? const AndroidDebugProvider()
-          : const AndroidPlayIntegrityProvider(),
       providerApple: kDebugMode
           ? const AppleDebugProvider()
           : const AppleAppAttestProvider(),
