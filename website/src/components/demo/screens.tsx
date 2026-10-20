@@ -264,7 +264,7 @@ export function ScreenBattle() {
       {/* top overlay: round + timer */}
       <div className="relative z-10 flex items-center justify-between px-4 pb-2 pt-9">
         <span className="rounded-full bg-black/45 px-3 py-1 text-[11px] font-bold text-foreground/90 backdrop-blur">
-          Round 1 of 3
+          You have the floor
         </span>
         <span className="flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1 text-[13px] font-bold tabular-nums backdrop-blur" style={{ color: "var(--live)" }}>
           <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--live)" }} />
@@ -284,7 +284,7 @@ export function ScreenBattle() {
         <span className="text-[12px] font-semibold drop-shadow">RoastdePapi</span>
         <span className="ml-auto flex items-center gap-1 rounded-full bg-black/50 px-2 py-1 text-[10px] text-muted">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 3l18 18M9 9v3a3 3 0 0 0 4.5 2.6M12 4a3 3 0 0 1 3 3v2" /></svg>
-          muted on your turn
+          muted off the floor
         </span>
       </div>
 
@@ -298,7 +298,7 @@ export function ScreenBattle() {
       {/* end turn */}
       <div className="relative z-10 px-4 pb-5 pt-3">
         <button className="w-full rounded-2xl py-3.5 text-[15px] font-bold text-white" style={{ background: "var(--primary)", boxShadow: "0 8px 24px rgba(234,76,109,0.4)" }}>
-          End My Turn
+          Yield the floor
         </button>
       </div>
     </div>
@@ -437,7 +437,7 @@ export const DEMO_SCREENS: DemoScreen[] = [
   { id: "home", label: "Home", tagline: "Your rank, your quests, and one button to start.", render: () => <ScreenHomeReal /> },
   { id: "prematch", label: "Pre-match", tagline: "Camera and mic check before you go live.", render: () => <ScreenPreMatch /> },
   { id: "opponent", label: "Opponent", tagline: "Study your opponent. Load up on ammo.", render: () => <ScreenOpponent /> },
-  { id: "battle", label: "Battle", tagline: "Three rounds. One mic at a time. No mercy.", render: () => <ScreenBattle /> },
+  { id: "battle", label: "Battle", tagline: "Hold the floor, steal the mic. No mercy.", render: () => <ScreenBattle /> },
   { id: "vote", label: "Vote", tagline: "The crowd judges every battle.", render: () => <ScreenVote /> },
   { id: "mainstage", label: "The Main Stage", tagline: "The weekly finals. Win the belt.", render: () => <ScreenMainStage /> },
 ];

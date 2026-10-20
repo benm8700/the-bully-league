@@ -1,11 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
-import '../tournament/live_viewer_screen.dart';
 import 'vote_screen.dart';
 
 /// The matches most in need of a vote, fewest votes first.
@@ -85,9 +81,6 @@ class _VoteQueueScreenState extends State<VoteQueueScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Tournament battles first, labelled, live-stream judging.
-            const _LiveTournamentSection(),
-            // Then the ordinary clip-based queue.
             ..._queueSection(),
           ],
         ),
@@ -164,133 +157,6 @@ class _VoteQueueScreenState extends State<VoteQueueScreen> {
           if (mounted) _load();
         },
       ),
-    );
-  }
-}
-
-/// The live tournament battles happening across the app right now, surfaced
-/// at the top of the Judge tab so anyone - not just a gauntlet entrant - can
-/// find them and vote. Judged on the live stream via the viewer, which is why
-/// they don't flow through the clip queue below.
-///
-/// Reads `tournaments` where status == in_progress (a single-field query, no
-/// composite index) and pulls the live battles out of each climb's
-/// `climb.climbers`. Renders nothing when there are none.
-class _LiveTournamentSection extends StatelessWidget {
-  const _LiveTournamentSection();
-
-  @override
-  Widget build(BuildContext context) {
-    final myUid = FirebaseAuth.instance.currentUser?.uid;
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('tournaments')
-          .where('status', isEqualTo: 'in_progress')
-          .snapshots(),
-      builder: (context, snapshot) {
-        final battles = <_LiveBattle>[];
-        for (final doc in snapshot.data?.docs ?? const []) {
-          final t = doc.data();
-          if (t['format'] != 'climb') continue; // live format tonight
-          final name = t['name'] as String? ?? 'Daily Gauntlet';
-          final climbers =
-              ((t['climb'] as Map<String, dynamic>?)?['climbers'] as List?) ??
-                  const [];
-          final seen = <String>{};
-          for (final raw in climbers) {
-            final c = raw as Map;
-            if (c['status'] != 'in_match') continue;
-            if (c['uid'] == myUid) continue; // can't judge your own
-            final m = c['currentMatchId'] as String?;
-            if (m == null || !seen.add(m)) continue;
-            battles.add(_LiveBattle(
-              matchId: m,
-              winTier: (c['wins'] as num?)?.toInt() ?? 0,
-              tournamentName: name,
-            ));
-          }
-        }
-        if (battles.isEmpty) return const SizedBox.shrink();
-        battles.sort((a, b) => b.winTier.compareTo(a.winTier));
-        final scheme = Theme.of(context).colorScheme;
-        final text = Theme.of(context).textTheme;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.sensors, size: 18, color: context.palette.live),
-                const SizedBox(width: 6),
-                Text('Tournament - live now',
-                    style:
-                        text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text('Judge these first - a live battle with no votes ends in a tie.',
-                style: text.bodySmall),
-            const SizedBox(height: 10),
-            for (final b in battles) ...[
-              Card(
-                color: scheme.surfaceContainerHigh,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(
-                      color: context.palette.live.withValues(alpha: 0.5)),
-                ),
-                child: ListTile(
-                  leading: Icon(Icons.sensors, color: context.palette.live),
-                  title: Text(
-                    b.winTier == 0
-                        ? 'Opening battle'
-                        : '${b.winTier}-win battle',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text('${b.tournamentName} · watch & vote live'),
-                  trailing: _LiveTag(color: context.palette.live),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => LiveViewerScreen(matchId: b.matchId),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-            const Divider(height: 24),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _LiveBattle {
-  const _LiveBattle({
-    required this.matchId,
-    required this.winTier,
-    required this.tournamentName,
-  });
-  final String matchId;
-  final int winTier;
-  final String tournamentName;
-}
-
-class _LiveTag extends StatelessWidget {
-  const _LiveTag({required this.color});
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text('LIVE',
-          style: TextStyle(
-              color: color, fontWeight: FontWeight.w800, fontSize: 11)),
     );
   }
 }
