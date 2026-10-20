@@ -31,7 +31,7 @@ class NotificationSettingsScreen extends StatelessWidget {
     ),
     _Category(
       key: 'event_window',
-      title: 'Happy Hour',
+      title: 'Basement Happy Hour',
       description: 'When the daily prime-time hour starts, and a last call '
           'before it ends.',
     ),

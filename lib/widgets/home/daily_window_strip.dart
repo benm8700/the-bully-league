@@ -56,10 +56,8 @@ class _DailyWindowStripState extends State<DailyWindowStrip> {
         // family as the Basement hero rather than the gold Main Stage.
         final accent = context.palette.accent;
 
-        // "PT" rather than "Pacific" so the one-line strip (name + 2x points +
-        // hours) fits without ellipsis on a narrow phone.
         final hours =
-            '${_h(config.startHourPacific)}-${_h(config.endHourPacific)} PT';
+            '${_h(config.startHourPacific)} to ${_h(config.endHourPacific)}';
         final String right = live
             ? '${_mins(window.end, now)} left'
             : 'in ${_remaining(window.start, now)}';
@@ -78,37 +76,41 @@ class _DailyWindowStripState extends State<DailyWindowStrip> {
                 Icon(live ? Icons.bolt : Icons.bolt_outlined,
                     size: 18, color: accent),
                 const SizedBox(width: 8),
+                // One line, with the DRAW first: "2X POINTS - Basement Happy
+                // Hour - 6pm to 7pm". 2x points leads (the value), the named
+                // window gives the venue context, then the hours; if the strip
+                // is too narrow it clips the trailing hours, never the draw.
                 Expanded(
-                  child: Text.rich(
-                    TextSpan(
-                      children: [
-                        // Lead with the window's NAME (live config, e.g. "Happy
-                        // Hour"), then the draw (2x points) and the hours - the
-                        // strip used to show only the mechanic, so the name
-                        // never appeared anywhere a player would look.
-                        TextSpan(
-                          text: live
-                              ? '${config.name.toUpperCase()} LIVE'
-                              : config.name.toUpperCase(),
-                          style: TextStyle(
-                            color: accent,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
-                            fontSize: 13,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: live ? '2X POINTS LIVE' : '2X POINTS',
+                            style: TextStyle(
+                              color: accent,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.3,
+                              fontSize: 13,
+                            ),
                           ),
-                        ),
-                        TextSpan(
-                          text: live ? '  ·  2x points' : '  ·  2x points  ·  $hours',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.75),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
+                          TextSpan(
+                            text: live
+                                ? ' - ${config.name}'
+                                : ' - ${config.name} - $hours',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.75),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                      maxLines: 1,
+                      softWrap: false,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 8),

@@ -10,7 +10,7 @@ const PACIFIC = "America/Los_Angeles";
 /** Defaults mirror lib/core/services/event_window.dart. */
 const DEFAULTS = {
   enabled: true,
-  name: "Happy Hour",
+  name: "Basement Happy Hour",
   startHourPacific: 18,
   endHourPacific: 19,
 };
