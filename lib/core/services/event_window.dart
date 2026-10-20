@@ -31,7 +31,7 @@ const Duration _pacificDaylightOffset = Duration(hours: -7);
 class EventWindowConfig {
   const EventWindowConfig({
     this.enabled = true,
-    this.name = 'Daily Gauntlet',
+    this.name = 'Happy Hour',
     this.startHourPacific = 18,
     this.endHourPacific = 19,
   });

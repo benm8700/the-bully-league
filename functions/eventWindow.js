@@ -10,7 +10,7 @@ const PACIFIC = "America/Los_Angeles";
 /** Defaults mirror lib/core/services/event_window.dart. */
 const DEFAULTS = {
   enabled: true,
-  name: "Daily Gauntlet",
+  name: "Happy Hour",
   startHourPacific: 18,
   endHourPacific: 19,
 };

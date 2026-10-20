@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getTopRoasters } from "@/lib/leaderboard";
 import { StoreCta } from "@/components/StoreCta";
 import { PhoneFrame } from "@/components/demo/PhoneFrame";
-import { ScreenBattle, ScreenGauntlet } from "@/components/demo/screens";
+import { ScreenBattle, ScreenMainStage } from "@/components/demo/screens";
 
 // Revalidate rather than force-dynamic: this page has no per-request input
 // (no cookies/params), so Next would otherwise statically render it once at
@@ -19,7 +19,7 @@ export default async function Home() {
     <main className="flex-1">
       <Hero />
       <HowItWorks />
-      <DailyGauntlet />
+      <MainStageSection />
       <Rules />
       <Leaderboard roasters={topRoasters} />
     </main>
@@ -106,32 +106,31 @@ function HowItWorks() {
   );
 }
 
-/* ------------------------------------------------------ Daily Gauntlet */
-function DailyGauntlet() {
+/* -------------------------------------------------------- The Main Stage */
+function MainStageSection() {
   return (
     <section className="border-y border-outline-soft" style={{ background: "linear-gradient(180deg, rgba(232,184,75,0.05), transparent)" }}>
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-20 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="order-2 lg:order-1">
           <PhoneFrame>
-            <ScreenGauntlet />
+            <ScreenMainStage />
           </PhoneFrame>
         </div>
         <div className="order-1 lg:order-2">
           <span className="eyebrow inline-block" style={{ color: "var(--reward)" }}>
             The main event
           </span>
-          <h2 className="mt-3 text-4xl sm:text-5xl">The Daily Gauntlet</h2>
+          <h2 className="mt-3 text-4xl sm:text-5xl">The Main Stage</h2>
           <p className="mt-4 text-[15px] leading-relaxed text-muted">
-            Every night, 6–7pm Pacific, the whole app battles at once. It&apos;s
-            the nightly tournament — and the busiest hour of the day, so it&apos;s
-            the fastest place to find a fight. Points count double while the
-            lights are on.
+            Battle all week to climb the leaderboard. The top four earn a spot
+            on the Main Stage — one night, one live bracket, one belt. It&apos;s
+            the weekly finals, and every ranked battle is your road to it.
           </p>
           <div className="mt-6 space-y-3">
             {[
-              ["Join anytime in the hour", "No bracket to be late for. Drop in and you start at zero wins."],
-              ["Win to climb", "Beat someone on your win-count and you move up a tier."],
-              ["Lose once, you're out", "Single elimination. Last comic standing takes the night."],
+              ["Earn your spot", "A week of ranked battles decides the top four. No buy-in — just wins."],
+              ["Live, judged finals", "Semis and a final, back to back, called live by a five-judge panel."],
+              ["Winner takes the belt", "The champion wears it until someone takes it off them next week."],
             ].map(([t, b]) => (
               <div key={t} className="flex gap-3">
                 <span className="mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full" style={{ background: "rgba(232,184,75,0.18)", color: "var(--reward)" }}>
@@ -150,7 +149,7 @@ function DailyGauntlet() {
               className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-base font-bold text-black"
               style={{ background: "linear-gradient(180deg, #f4d27a, #e8b84b 60%, #cf9a2e)" }}
             >
-              Watch the climb
+              Watch the finals
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
             </Link>
           </div>

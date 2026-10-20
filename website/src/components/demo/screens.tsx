@@ -72,16 +72,16 @@ export function ScreenHome() {
         </div>
       </div>
 
-      {/* Daily Gauntlet */}
+      {/* Happy Hour */}
       <div
         className="mt-3 rounded-2xl border p-4"
         style={{ borderColor: "rgba(232,184,75,0.35)", background: "linear-gradient(160deg, rgba(232,184,75,0.10), rgba(255,255,255,0.02))" }}
       >
         <div className="flex items-center gap-1.5">
-          <span className="eyebrow" style={{ color: "var(--reward)" }}>Daily Gauntlet</span>
+          <span className="eyebrow" style={{ color: "var(--reward)" }}>Happy Hour</span>
         </div>
         <p className="mt-1.5 text-[13px] font-semibold leading-snug">
-          The nightly tournament — win prestige &amp; prizes
+          Prime time — the whole room shows up at once
         </p>
         <div className="mt-1 flex items-center gap-2 text-[11px] text-muted">
           <span>6pm–7pm Pacific</span>
@@ -96,7 +96,7 @@ export function ScreenHome() {
           className="mt-3 w-full rounded-xl py-2 text-[13px] font-bold text-black"
           style={{ background: "linear-gradient(180deg, #f4d27a, #e8b84b 60%, #cf9a2e)" }}
         >
-          Tonight&apos;s Tournament
+          Jump in at 6pm
         </button>
         <div className="mt-2 flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2">
           <span className="text-[11px] text-muted">I&apos;m in tonight</span>
@@ -358,82 +358,66 @@ export function ScreenVote() {
   );
 }
 
-// -- 6. DAILY GAUNTLET — THE CLIMB ----------------------------------------
-export function ScreenGauntlet() {
-  const ladder = [
-    ["Champion", "1 left"],
-    ["3 wins", "2 left"],
-    ["2 wins", "4 left"],
-    ["1 win", "7 left"],
-    ["0 wins", "12 in"],
-  ];
+// -- 6. THE MAIN STAGE — THE WEEKLY FINALS --------------------------------
+export function ScreenMainStage() {
   return (
     <ScreenShell>
       <div className="flex items-center justify-between pb-2 pt-3">
-        <span className="display text-[19px]" style={{ color: "var(--reward)" }}>Daily Gauntlet</span>
+        <span className="display text-[19px]" style={{ color: "var(--reward)" }}>The Main Stage</span>
         <span className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold" style={{ background: "rgba(255,59,71,0.14)", color: "var(--live)" }}>
           <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--live)" }} /> LIVE
         </span>
       </div>
 
-      {/* your standing */}
+      {/* the prize */}
       <div className="rounded-2xl border p-4" style={{ borderColor: "rgba(232,184,75,0.3)", background: "linear-gradient(160deg, rgba(232,184,75,0.10), transparent)" }}>
-        <div className="eyebrow text-muted">You&apos;re in the climb</div>
+        <div className="eyebrow text-muted">This week&apos;s finals — top 4</div>
         <div className="mt-1 flex items-baseline gap-2">
-          <span className="display text-[30px]" style={{ color: "var(--reward)" }}>2</span>
-          <span className="text-[13px] text-foreground/80">wins in</span>
-        </div>
-        <div className="mt-3 flex items-center gap-2 text-[12px] text-foreground/80">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70" style={{ background: "var(--reward)" }} />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: "var(--reward)" }} />
-          </span>
-          Finding your next opponent — 4 climbers left
+          <span className="display text-[26px]" style={{ color: "var(--reward)" }}>🏆 The Belt</span>
         </div>
         <p className="mt-2 text-[11px] leading-snug text-muted">
-          Win to climb. Lose once and you&apos;re out.
+          Four earned it off a week of battles. Win the stage, take the belt.
         </p>
       </div>
 
-      {/* ladder */}
-      <div className="mt-3 space-y-1.5">
-        {ladder.map(([tier, count], i) => {
-          const mine = tier === "2 wins";
-          return (
-            <div
-              key={tier}
-              className="flex items-center gap-2 rounded-lg px-3 py-2"
-              style={{
-                background: mine ? "rgba(232,184,75,0.14)" : "var(--surface)",
-                border: mine ? "1px solid rgba(232,184,75,0.4)" : "1px solid transparent",
-              }}
-            >
-              <span className="w-4 text-[11px] font-bold tabular-nums text-muted">{ladder.length - i}</span>
-              <span className="text-[12px] font-semibold">{tier}</span>
-              {mine && <span className="rounded px-1.5 py-0.5 text-[9px] font-bold text-black" style={{ background: "var(--reward)" }}>YOU</span>}
-              <span className="ml-auto text-[11px] text-muted">{count}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* live now */}
-      <div className="mt-4">
-        <div className="eyebrow text-muted">Live now — watch &amp; vote</div>
+      {/* the bracket */}
+      <div className="mt-3">
+        <div className="eyebrow text-muted">The bracket</div>
         <div className="mt-2 space-y-1.5">
           {[
-            ["MicDropMandy", "vs", "SickBurnSam"],
-            ["LaughTrackLuis", "vs", "PunniferLopez"],
-          ].map(([a, , b]) => (
-            <div key={a} className="flex items-center gap-2 rounded-xl bg-surface px-3 py-2.5">
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--live)" }} />
-              <span className="text-[11px] font-semibold" style={{ color: "var(--gel-a)" }}>{a}</span>
+            { round: "Semifinal", a: "MicDropMandy", b: "SickBurnSam", live: true },
+            { round: "Semifinal", a: "LaughTrackLuis", b: "PunniferLopez", live: false },
+          ].map((m) => (
+            <div key={m.a} className="flex items-center gap-2 rounded-xl bg-surface px-3 py-2.5">
+              <span className="w-[62px] text-[10px] font-bold uppercase tracking-wide text-muted">{m.round}</span>
+              <span className="text-[11px] font-semibold" style={{ color: "var(--gel-a)" }}>{m.a}</span>
               <span className="text-[10px] text-muted">vs</span>
-              <span className="text-[11px] font-semibold" style={{ color: "var(--gel-b)" }}>{b}</span>
-              <span className="ml-auto rounded-full px-2 py-0.5 text-[9px] font-bold" style={{ background: "rgba(234,76,109,0.16)", color: "var(--primary-soft)" }}>Watch</span>
+              <span className="text-[11px] font-semibold" style={{ color: "var(--gel-b)" }}>{m.b}</span>
+              <span
+                className="ml-auto rounded-full px-2 py-0.5 text-[9px] font-bold"
+                style={
+                  m.live
+                    ? { background: "rgba(234,76,109,0.16)", color: "var(--primary-soft)" }
+                    : { background: "var(--surface)", color: "var(--muted)" }
+                }
+              >
+                {m.live ? "Watch" : "Up next"}
+              </span>
             </div>
           ))}
+          <div className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ border: "1px solid rgba(232,184,75,0.3)", background: "rgba(232,184,75,0.06)" }}>
+            <span className="w-[62px] text-[10px] font-bold uppercase tracking-wide" style={{ color: "var(--reward)" }}>Final</span>
+            <span className="text-[11px] font-semibold text-muted">Winners meet for the belt</span>
+          </div>
         </div>
+      </div>
+
+      {/* the judges */}
+      <div className="mt-4">
+        <div className="eyebrow text-muted">The panel decides</div>
+        <p className="mt-2 text-[11px] leading-snug text-muted">
+          Five judges call it live — the founder plus four of the week&apos;s top voters.
+        </p>
       </div>
 
       <div className="h-3" />
@@ -455,5 +439,5 @@ export const DEMO_SCREENS: DemoScreen[] = [
   { id: "opponent", label: "Opponent", tagline: "Study your opponent. Load up on ammo.", render: () => <ScreenOpponent /> },
   { id: "battle", label: "Battle", tagline: "Three rounds. One mic at a time. No mercy.", render: () => <ScreenBattle /> },
   { id: "vote", label: "Vote", tagline: "The crowd judges every battle.", render: () => <ScreenVote /> },
-  { id: "gauntlet", label: "Daily Gauntlet", tagline: "The nightly tournament.", render: () => <ScreenGauntlet /> },
+  { id: "mainstage", label: "The Main Stage", tagline: "The weekly finals. Win the belt.", render: () => <ScreenMainStage /> },
 ];

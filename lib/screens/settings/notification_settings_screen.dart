@@ -31,7 +31,7 @@ class NotificationSettingsScreen extends StatelessWidget {
     ),
     _Category(
       key: 'event_window',
-      title: 'The Daily Gauntlet',
+      title: 'Happy Hour',
       description: 'When the daily prime-time hour starts, and a last call '
           'before it ends.',
     ),
@@ -55,7 +55,7 @@ class NotificationSettingsScreen extends StatelessWidget {
     _Category(
       key: 'followed_performer',
       title: 'Comedians you follow',
-      description: 'When someone you follow is up in the gauntlet, or drops '
+      description: 'When someone you follow is performing, or drops '
           'a new clip.',
     ),
     _Category(
