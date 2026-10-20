@@ -618,7 +618,7 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
               textAlign: TextAlign.center,
             )
           // No skipping in tournament play (developer's call, 2026-10-07):
-          // a bracket/gauntlet opponent is the one you were drawn against, and
+          // a Main Stage opponent is the one you were drawn against, and
           // dodging them would break the format. The only way out is the
           // opponent-gone escape above, which the forfeit sweep backs up.
           else if (widget.pairing.mode == 'tournament')

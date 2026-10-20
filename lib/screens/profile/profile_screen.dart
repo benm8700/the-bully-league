@@ -413,7 +413,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       rankTitle: _rankTitle,
                       photoUrl: _photoUrls.isNotEmpty ? _photoUrls.first : null,
                     ),
-                    // The Belt (if you hold it) - the reigning Daily Gauntlet
+                    // The Belt (if you hold it) - the reigning Main Stage
                     // champion wears it on their own profile too. Renders
                     // nothing when you don't hold it.
                     if (FirebaseAuth.instance.currentUser != null) ...[

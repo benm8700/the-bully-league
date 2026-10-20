@@ -162,9 +162,9 @@ class LeaderboardScreen extends StatelessWidget {
             SafeArea(
               child: Column(
                 children: [
-                  // The reigning champion of the Daily Gauntlet - the belt is
-                  // the top prize of the whole competition, so it sits above
-                  // all three boards. Renders nothing until someone holds it.
+                  // The reigning Main Stage champion - the belt is the top
+                  // prize of the whole competition, so it sits above all three
+                  // boards. Renders nothing until someone holds it.
                   const _BeltBanner(),
                   Expanded(
                     child: TabBarView(

@@ -35,11 +35,14 @@ class GoatThroneBanner extends StatelessWidget {
         final title = isDefender
             ? 'Your throne is under threat'
             : 'A GOAT throne is in reach';
+        // GOAT is a top-5 hidden-Elo spot, won and lost by WINNING RANKED
+        // BATTLES (The Basement) - not by any tournament. The copy used to send
+        // players to the "Daily Gauntlet", a tournament that no longer exists.
         final body = isDefender
             ? '${d['challengerName'] ?? 'A challenger'} is closing in. '
-                'Defend it in the Daily Gauntlet.'
+                'Keep winning in The Basement to hold your spot.'
             : "You're closing in on ${d['goatName'] ?? 'a GOAT'}. "
-                'Win the Daily Gauntlet to take it.';
+                'Keep winning in The Basement to take it.';
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
