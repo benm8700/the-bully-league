@@ -14,7 +14,7 @@ export function ScreenHomeReal() {
       <Image
         src="/demo/home.png"
         width={1080}
-        height={2244}
+        height={2085}
         alt="The Bully League home screen"
         className="block h-auto w-full"
         priority

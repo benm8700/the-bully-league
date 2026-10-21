@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { getTopRoasters } from "@/lib/leaderboard";
 import { StoreCta } from "@/components/StoreCta";
 import { PhoneFrame } from "@/components/demo/PhoneFrame";
@@ -19,6 +20,7 @@ export default async function Home() {
     <main className="flex-1">
       <Hero />
       <HowItWorks />
+      <Modes />
       <MainStageSection />
       <Rules />
       <Leaderboard roasters={topRoasters} />
@@ -103,6 +105,57 @@ function HowItWorks() {
           </li>
         ))}
       </ol>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------- Two ways to play */
+function Modes() {
+  const modes = [
+    {
+      img: "/demo/basement.png",
+      h: 430,
+      tag: "Everyday",
+      name: "The Basement",
+      color: "var(--primary)",
+      blurb:
+        "Get matched 1-on-1 with a random stranger, roast them live, and let the crowd vote. Climb the ranks battle by battle — and every ranked battle is your qualifier for the finals.",
+    },
+    {
+      img: "/demo/mainstage.png",
+      h: 440,
+      tag: "Weekly finals",
+      name: "The Main Stage",
+      color: "var(--reward)",
+      blurb:
+        "Each week the top four earn a spot on the Main Stage — one night, one live judged bracket, one belt. The whole League watches.",
+    },
+  ];
+  return (
+    <section className="mx-auto max-w-6xl px-6 py-20">
+      <SectionHead
+        eyebrow="Two ways to play"
+        title="The Basement & the Main Stage"
+        sub="Grind the everyday ladder. Earn the weekly spotlight."
+      />
+      <div className="mt-12 grid gap-8 md:grid-cols-2">
+        {modes.map((m) => (
+          <div key={m.name}>
+            <Image
+              src={m.img}
+              width={1060}
+              height={m.h}
+              alt={m.name}
+              className="block h-auto w-full rounded-2xl"
+            />
+            <div className="mt-4">
+              <span className="eyebrow" style={{ color: m.color }}>{m.tag}</span>
+              <h3 className="mt-1 display text-2xl">{m.name}</h3>
+              <p className="mt-2 text-[14px] leading-relaxed text-muted">{m.blurb}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

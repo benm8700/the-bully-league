@@ -20,7 +20,7 @@ export default function DemoPage() {
         <h1 className="mt-2 text-4xl sm:text-5xl">See it in action</h1>
         <p className="mt-3 max-w-md text-sm text-muted">
           No Android? No problem. Click through the real screens — from the
-          first tap to the nightly tournament.
+          first tap to the weekly finals.
         </p>
       </div>
 
