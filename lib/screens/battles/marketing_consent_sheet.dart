@@ -3,19 +3,19 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
-/// A battler's MARKETING-USE consent for one of their battles.
+/// A battler's MARKETING-USE preference for one of their battles.
 ///
-/// Deliberately SEPARATE from the two consents that already exist: recording
-/// consent (given before every match, covers recording + in-app judging) and
-/// the takedown / objection window (opt-out before a clip is published to our
-/// OWN surfaces). This is the explicit "yes, The Bully League can feature THIS
-/// clip in its own promos / official socials (TikTok, IG, YouTube)".
+/// Promo use is okayed UPFRONT (the recording-consent acknowledgement), so a
+/// clip is IN by default. Here they can, per clip:
+///   - "Blur my face" - the easy opt-out: their opponent's clip still runs, but
+///     their own panel is blurred in any posted version (face hidden, audio
+///     kept). Most people are fine with this.
+///   - "Remove it entirely" - a quiet, secondary (but one-tap, so withdrawal
+///     stays easy) full pull: the clip is not posted at all.
 ///
-/// The official-posting strategy needs it from BOTH battlers before a clip goes
-/// out as the company's advertising - being cast in someone's ad is a different
-/// ask from playing a judged match. The /admin Post Studio surfaces the ✅/⚠️/❌
-/// flag off these answers. Writes via functions/marketingConsent.js
-/// (participant-only); clients read the field straight off the match doc.
+/// Writes via functions/marketingConsent.js (participant-only), stored at
+/// match.marketingConsent.{uid}={mode,at}; the Post Studio renders the blurred
+/// cut for "blur" and skips "out".
 class MarketingConsentSheet extends StatefulWidget {
   const MarketingConsentSheet({super.key, required this.matchId});
 
@@ -38,8 +38,8 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
   bool _loading = true;
   bool _busy = false;
   String? _error;
-  bool? _consent; // my answer: true = yes, false = no, null = not answered
-  bool _posted = false; // this clip is already up on our socials
+  String _mode = 'in'; // in | blur | out
+  bool _posted = false; // already up on our socials
 
   @override
   void initState() {
@@ -60,11 +60,11 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
           .get();
       final data = snap.data();
       final mc = (data?['marketingConsent'] as Map?) ?? const {};
-      final mine = mc[uid] as Map?;
+      final mode = (mc[uid] as Map?)?['mode'] as String?;
       final posted = (data?['postStudio'] as Map?)?['status'] == 'posted';
       if (mounted) {
         setState(() {
-          _consent = mine == null ? null : mine['consent'] == true;
+          _mode = (mode == 'blur' || mode == 'out') ? mode! : 'in';
           _posted = posted;
           _loading = false;
         });
@@ -74,7 +74,7 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
     }
   }
 
-  Future<void> _set(bool consent) async {
+  Future<void> _set(String mode) async {
     setState(() {
       _busy = true;
       _error = null;
@@ -82,10 +82,10 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
     try {
       await FirebaseFunctions.instance
           .httpsCallable('setMatchMarketingConsent')
-          .call({'matchId': widget.matchId, 'consent': consent});
+          .call({'matchId': widget.matchId, 'mode': mode});
       if (mounted) {
         setState(() {
-          _consent = consent;
+          _mode = mode;
           _busy = false;
         });
       }
@@ -106,15 +106,13 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
     }
   }
 
-  // An opt-out is one tap + one confirm - deliberately easy (withdrawing
-  // promo use must be as simple as it was given). The confirm is an honest
-  // reminder of the upside, NOT a guilt-trip: both great and terrible sets can
-  // blow up, which is the whole point of being here.
-  Future<void> _confirmAndOptOut() async {
+  // The FULL pull. Easy (one tap + one confirm), honest upside reminder - not
+  // a guilt-trip - because this is where they actually give up the exposure.
+  Future<void> _confirmRemoveEntirely() async {
     final body = _posted
         ? "You don't have to win to go viral. Are you sure you want to give up "
             "your chance to get seen?\n\nThis clip is already up on our socials "
-            "- opt out and we'll take it down from our accounts."
+            "- remove it and we'll take it down from our accounts."
         : "You don't have to win to go viral. Are you sure you want to give up "
             "your chance to get seen?";
     final ok = await showDialog<bool>(
@@ -123,8 +121,6 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
         title: const Text('Hold up'),
         content: Text(body),
         actions: [
-          // "Make me famous" = don't opt out (keep the clip in our promos);
-          // "Keep me off the stage" = go through with the opt-out.
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Make me famous'),
@@ -136,13 +132,18 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
         ],
       ),
     );
-    if (ok == true) await _set(false);
+    if (ok == true) await _set('out');
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final (String stateLine, Color stateColor) = switch (_mode) {
+      'blur' => ('Your face is blurred in this clip.', scheme.primary),
+      'out' => ('This clip is kept out of our promos.', scheme.error),
+      _ => ('This clip is in our promos.', scheme.primary),
+    };
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -156,57 +157,62 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
                 padding: EdgeInsets.all(28),
                 child: Center(child: CircularProgressIndicator()),
               )
-            : Builder(builder: (context) {
-                // Default IN: when you joined, you okayed us featuring your
-                // battles in our promos, so a clip is in by default. Only an
-                // explicit opt-out (consent == false) keeps THIS one out.
-                final optedOut = _consent == false;
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Use this in our promos',
-                        style: theme.textTheme.titleLarge),
-                    const SizedBox(height: 8),
-                    Text(
-                      "When you joined, you okayed us featuring your battles in "
-                      "The Bully League's promos - so this one's in by default. "
-                      "If you'd rather we didn't use THIS clip, keep it out "
-                      "below. You can flip it back any time.",
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Use this in our promos',
+                      style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  Text(
+                    "When you joined, you okayed us featuring your battles in our "
+                    "promos. If you'd rather not be seen in THIS one, blur your "
+                    "face - your opponent's clip still runs - or pull it "
+                    "entirely.",
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(stateLine,
+                        style: theme.textTheme.labelLarge
+                            ?.copyWith(color: stateColor)),
+                  ),
+                  if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(
-                        optedOut
-                            ? "This clip is kept OUT of our promos."
-                            : "This clip is in our promos.",
-                        style: theme.textTheme.labelLarge?.copyWith(
-                            color: optedOut ? scheme.error : scheme.primary),
+                      child:
+                          Text(_error!, style: TextStyle(color: scheme.error)),
+                    ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: switch (_mode) {
+                      'out' => FilledButton(
+                          onPressed: _busy ? null : () => _set('in'),
+                          child: const Text('Allow it in our promos'),
+                        ),
+                      'blur' => OutlinedButton(
+                          onPressed: _busy ? null : () => _set('in'),
+                          child: const Text('Show my face again'),
+                        ),
+                      _ => OutlinedButton(
+                          onPressed: _busy ? null : () => _set('blur'),
+                          child: const Text('Blur my face'),
+                        ),
+                    },
+                  ),
+                  if (_mode != 'out')
+                    Align(
+                      alignment: Alignment.center,
+                      child: TextButton(
+                        onPressed: _busy ? null : _confirmRemoveEntirely,
+                        style: TextButton.styleFrom(
+                            foregroundColor: scheme.onSurfaceVariant),
+                        child: const Text('Remove it entirely'),
                       ),
                     ),
-                    if (_error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child:
-                            Text(_error!, style: TextStyle(color: scheme.error)),
-                      ),
-                    SizedBox(
-                      width: double.infinity,
-                      child: optedOut
-                          ? FilledButton(
-                              onPressed: _busy ? null : () => _set(true),
-                              child: const Text('Allow it in our promos'),
-                            )
-                          : OutlinedButton(
-                              onPressed: _busy ? null : _confirmAndOptOut,
-                              child: const Text('Keep this one out'),
-                            ),
-                    ),
-                  ],
-                );
-              }),
+                ],
+              ),
       ),
     );
   }

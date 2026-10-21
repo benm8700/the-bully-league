@@ -1123,7 +1123,7 @@ exports.previewClip = onCall(async (request) => {
   const {previewClip} = require("./editorsChoice");
   const matchId = request.data?.matchId;
   if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
-  return previewClip(matchId);
+  return previewClip(matchId, {blurred: request.data?.blurred === true});
 });
 
 /** Match abilities (power-ups) for regular/qualifier play - the pre-match
@@ -1183,6 +1183,29 @@ exports.setMatchMarketingConsent = onCall((request) => {
   const {setMatchMarketingConsent} = require("./marketingConsent");
   return setMatchMarketingConsent(request.auth, request.data);
 });
+
+// Admin: render the post-only BLURRED cut of a clip (blurring the panel of any
+// battler who opted to "blur me"). Heavy like the scheduled render, so same
+// resources. Stored under highlight.blurRenditions, never touching the in-app
+// clip or publish state.
+exports.renderBlurredClip = onCall(
+    {memory: "4GiB", cpu: 2, timeoutSeconds: 540},
+    async (request) => {
+      await requireAdmin(request.auth);
+      const matchId = request.data && request.data.matchId;
+      if (!matchId) throw new HttpsError("invalid-argument", "matchId required.");
+      const {blurPanelUidsFor} = require("./marketingConsent");
+      const snap = await getFirestore().collection("matches").doc(matchId).get();
+      if (!snap.exists) throw new HttpsError("not-found", "Match not found.");
+      const blurUids = blurPanelUidsFor(snap.data());
+      if (blurUids.length === 0) {
+        throw new HttpsError(
+            "failed-precondition", "No one opted to blur on this clip.");
+      }
+      const {renderMatchHighlight} = require("./highlightRender");
+      const r = await renderMatchHighlight(matchId, {captions: true, blurUids});
+      return {ok: true, rendered: r.rendered};
+    });
 exports.skipMatch = onCall((request) => skipMatch(request.auth, request.data));
 exports.getSkipAllowance = onCall((request) => getSkipAllowance(request.auth));
 

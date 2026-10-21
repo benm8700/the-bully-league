@@ -114,18 +114,20 @@ async function publishBattle(matchId, published) {
  * unpublished render is signed on demand (same approach as the in-app feed's
  * clipUrl). Admin-only, so serving an unreviewed render here is fine.
  */
-async function previewClip(matchId) {
+async function previewClip(matchId, {blurred = false} = {}) {
   const db = getFirestore();
   const snap = await db.collection("matches").doc(matchId).get();
   if (!snap.exists) throw new HttpsError("not-found", "Match not found.");
   const hl = (snap.data() || {}).highlight || {};
   const published = hl.published === true;
   const pub = hl.publicUrls || {};
-  const rends = hl.renditions || {};
+  // The blurred cut is a post-only, never-published render, so it is always
+  // served by a signed URL from its own blurRenditions set.
+  const rends = blurred ? (hl.blurRenditions || {}) : (hl.renditions || {});
   // Both renditions, so the dashboard can toggle landscape (side-by-side, the
   // website cut) vs vertical (stacked, the in-app / TikTok cut) with no refetch.
   async function urlFor(name) {
-    if (published && pub[name]) return pub[name];
+    if (!blurred && published && pub[name]) return pub[name];
     const rend = rends[name];
     if (rend && rend.path) {
       const [url] = await getStorage().bucket().file(rend.path).getSignedUrl({

@@ -1024,24 +1024,42 @@ Raised by the developer: what protects someone who is unhappy that their match f
     to the platforms (needs each platform's posting API + OAuth + TikTok
     approval) — once wired, real posting drops onto the same "Mark posted"
     control; until then the flow is download → upload → mark posted.
-  - **MARKETING-USE CONSENT MODEL — DECIDED + BUILT (2026-10-20, the developer's
-    call, after rejecting the first design).** A per-clip OPT-IN consent step was
-    built first and the developer rightly called it "ridiculous" / over-built.
-    Final model: **blanket consent UPFRONT (default IN), per-clip OPT-OUT.**
-    (1) The recording-consent screen now explicitly grants that The Bully League
-    may use/post the recording in its promos/marketing incl. social media - so
-    every battler has okayed promo use before they play. (2) In My Battles, a
-    "Use in our promos - on by default, tap to opt this clip out" sheet
-    (`marketing_consent_sheet.dart`) lets anyone keep a SPECIFIC clip out (or
-    allow it back) - the withdrawal path (the existing takedown/objection flow
-    also serves withdrawal). (3) The Post Studio defaults every clip to cleared
-    and only flags **🚫 opted out** when a battler explicitly backed out, warning
-    on Mark-posted only then. Stored at `match.marketingConsent.{uid}={consent,at}`
-    via the `setMatchMarketingConsent` callable (`functions/marketingConsent.js`,
-    participant-only; match docs are write:false so it is the only writer).
-    Absent = IN. The narrow exception that still wants its OWN specific consent:
-    the surprise comedian-STUNT (roasting someone who did not knowingly sign up)
-    - already a separate guardrail, not the normal flow.
+  - **MARKETING-USE CONSENT MODEL — DECIDED + BUILT (2026-10-20, iterated hard
+    with the developer).** A per-clip OPT-IN was built first and rightly called
+    over-built; then default-in opt-out; the FINAL model is **blanket consent
+    UPFRONT + a per-clip THREE-WAY choice: in / blur / out.**
+    - **Upfront:** the recording-consent screen explicitly grants The Bully
+      League may use/post the recording in its promos/marketing incl. social
+      media - so promo use is okayed before anyone plays (the legal basis).
+    - **Per clip, in My Battles** (`marketing_consent_sheet.dart`): `in`
+      (default), **`blur`** (the EASY opt-out - their opponent's clip still runs
+      but the opted-out player's whole PANEL is blurred in any posted cut, face
+      hidden, audio kept), or **`out`** (a quiet, SECONDARY but still one-tap
+      full pull - not posted at all). The "Remove it entirely" link fires the
+      developer's honest-upside confirm ("You don't have to win to go viral... /
+      Make me famous / Keep me off the stage"). Full withdrawal stays easy
+      (GDPR 7(3)); blur is the low-friction default most people accept. Caveat
+      kept on record: blur hides the FACE but the VOICE is still an identifier,
+      so "out" is the clean answer for anyone who wants fully out.
+    - **The blur render** (`highlightRender.js` `buildFfmpegArgs` `blurUids`):
+      because each player is their OWN panel (individual recording), blurring is
+      one `boxblur=40:3` filter on that panel - NO face detection. Stored as a
+      POST-ONLY `highlight.blurRenditions` (verified on a real frame: opted-out
+      panel unrecognizable, opponent crisp, audio + watermark intact), never
+      touching the in-app `renditions` (judging) or publish state. Rendered on
+      demand by the admin `renderBlurredClip` callable (maps blur-consent -> the
+      "1"/"2" panel uids via `blurPanelUidsFor`). `previewClip` serves the
+      blurred cut with `{blurred:true}`.
+    - **Post Studio** shows the clip-level status (`clipConsentStatus`): `ok`
+      (no badge, post normally), **`blur`** (👤 badge; "Prepare blurred cut"
+      button if not yet rendered, then preview/download serve the BLURRED
+      version; Publish-to-site is withheld so the unblurred face never goes
+      public on our own surfaces), **`out`** (🚫 pulled; Mark-posted warns). A
+      posted clip whose consent later changes flags "take down from socials".
+    - Stored at `match.marketingConsent.{uid}={mode,at}` via
+      `setMatchMarketingConsent` (participant-only; match docs write:false so it
+      is the only writer). Absent = `in`. The surprise comedian-STUNT still
+      wants its OWN specific consent - separate guardrail, not the normal flow.
   - **OFFICIAL-POST COMPLIANCE RULES — decided (2026-10-20).** External posts go
     out ONLY from the company's own marketing accounts, curated + human-reviewed
     by the developer (not users' personal accounts; the developer explicitly

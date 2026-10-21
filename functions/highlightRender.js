@@ -265,6 +265,7 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
   const rendition = options.rendition ?? RENDITIONS.vertical;
   const canvas = rendition.canvas;
   const tile = rendition.tile;
+  const blurUids = options.blurUids ?? [];
   const {uids, segments} = timeline;
   const inputs = [];
   const filters = [];
@@ -330,7 +331,17 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
       filters.push(`${parts.join("")}concat=n=${parts.length}:v=1:a=0[vc${uid}]`);
       filters.push(`[vc${uid}]tpad=start_duration=${pad}:color=black[v${uid}]`);
     }
-    videoLabels.push(`[v${uid}]`);
+    // MARKETING-CONSENT BLUR: a player who opted to "blur me" (keep the clip
+    // alive for their opponent, hide their own face) gets their WHOLE panel
+    // heavily blurred - no face detection needed because each player is their
+    // own panel. Their audio is untouched, so the exchange still plays. Only
+    // applied to the marketing/post render, never the in-app judging clip.
+    if (blurUids.includes(uid)) {
+      filters.push(`[v${uid}]boxblur=40:3[vb${uid}]`);
+      videoLabels.push(`[vb${uid}]`);
+    } else {
+      videoLabels.push(`[v${uid}]`);
+    }
   }
 
   for (const seg of segments.filter((s) => s.kind === "audio")) {
@@ -747,7 +758,11 @@ function runFfmpeg(binary, args) {
  * matches never become highlights, and rendering each one would burn
  * compute on clips nobody will post.
  */
-async function renderMatchHighlight(matchId, {captions = true} = {}) {
+async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = {}) {
+  // A BLUR render is a separate, post-only output: it blurs the opted-out
+  // player(s)' panel and is stored under highlight.blurRenditions, never
+  // touching the normal renditions (in-app judging) or the publish state.
+  const isBlur = blurUids.length > 0;
   const db = getFirestore();
   const bucket = getStorage().bucket();
   const matchRef = db.collection("matches").doc(matchId);
@@ -917,15 +932,20 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
       // would leak them into in-app judging. Keeping the captioned cut
       // beside it also means the untrimmed full clip stays available for
       // judging while the posted/download cut is the trimmed, captioned one.
-      const outFileName = captions ?
+      const baseName = captions ?
         rendition.fileName.replace(/\.mp4$/, "_captioned.mp4") :
         rendition.fileName;
+      const outFileName = isBlur ?
+        baseName.replace(/\.mp4$/, "_blurred.mp4") : baseName;
       const outputPath = path.join(workDir, outFileName);
       await runFfmpeg(ffmpegPath, buildFfmpegArgs(timeline, workDir, outputPath, {
         subtitlePath, rendition, trimFilters, logoPath: WATERMARK_LOGO,
+        blurUids: isBlur ? blurUids : undefined,
       }));
 
-      const destination = `${HIGHLIGHT_PREFIX}/${matchId}/${outFileName}`;
+      const destination = isBlur ?
+        `${HIGHLIGHT_PREFIX}/${matchId}/blurred/${outFileName}` :
+        `${HIGHLIGHT_PREFIX}/${matchId}/${outFileName}`;
       await bucket.upload(outputPath, {destination, metadata: {contentType: "video/mp4"}});
       outputs[name] = {
         path: destination,
@@ -935,7 +955,19 @@ async function renderMatchHighlight(matchId, {captions = true} = {}) {
       };
     }
 
-    if (captions) {
+    if (isBlur) {
+      // A post-only blurred cut. Stored under its own key so it NEVER reaches
+      // in-app judging (renditions) and never changes reviewStatus/published -
+      // publishing/posting the blurred version is still the admin's call.
+      await matchRef.set({
+        highlight: {
+          blurRenditions: outputs,
+          blurUids,
+          blurRenderedAt: FieldValue.serverTimestamp(),
+          ...(warnings.length > 0 ? {blurWarnings: warnings} : {}),
+        },
+      }, {merge: true});
+    } else if (captions) {
       // Record the captioned files ALONGSIDE the uncaptioned renditions,
       // not in place of them. `renditions[name].captionedPath` is deep-
       // merged into each existing rendition, so `.path` (what the judge

@@ -268,10 +268,11 @@ export type PostClip = {
   votes: number;
   positiveEmoji: number; // 🔥 fire + 🧠 clever received this match
   score: number;
-  // Marketing-use consent. DEFAULT is "ok" - battlers okay promo use in the
-  // join acknowledgement, so a clip is cleared unless someone explicitly opted
-  // THIS one out (consent === false) from My Battles, which flags "optedout".
-  consent: "ok" | "optedout";
+  // Marketing-use consent. DEFAULT "ok" (promo use okayed in the join
+  // acknowledgement). "blur" = a battler opted to blur their own panel (post
+  // the blurred cut); "out" = a battler pulled it entirely (don't post).
+  consent: "ok" | "blur" | "out";
+  blurReady: boolean; // the blurred cut has been rendered
   status: "candidate" | "posted" | "dismissed";
   platforms: { tiktok: boolean; instagram: boolean; youtube: boolean } | null;
   actedAtMs: number | null; // posted/dismissed timestamp, for archive ordering
@@ -365,12 +366,17 @@ async function postStudioClips(): Promise<{
     const plat = (ps.platforms as Record<string, boolean> | undefined) ?? null;
     const votes = Number(x.voteCount) || 0;
     const mc =
-      (x.marketingConsent as Record<string, { consent?: boolean }> | undefined) ?? {};
-    const c1 = mc[String(x.player1Id ?? "")]?.consent;
-    const c2 = mc[String(x.player2Id ?? "")]?.consent;
-    // Default IN: only an explicit opt-out (false) by either battler flags it.
-    const consent: "ok" | "optedout" =
-      c1 === false || c2 === false ? "optedout" : "ok";
+      (x.marketingConsent as Record<string, { mode?: string }> | undefined) ?? {};
+    const m1 = mc[String(x.player1Id ?? "")]?.mode;
+    const m2 = mc[String(x.player2Id ?? "")]?.mode;
+    // "out" (don't post) wins; then "blur" (post the blurred cut); else "ok".
+    const consent: "ok" | "blur" | "out" =
+      m1 === "out" || m2 === "out"
+        ? "out"
+        : m1 === "blur" || m2 === "blur"
+          ? "blur"
+          : "ok";
+    const blurReady = !!(h.blurRenditions as Record<string, unknown> | undefined);
     return {
       id: d.id,
       player1Name: nameByUid.get(String(x.player1Id ?? "")) ?? "Unknown",
@@ -382,6 +388,7 @@ async function postStudioClips(): Promise<{
       positiveEmoji,
       score: votes + positiveEmoji * 2,
       consent,
+      blurReady,
       status,
       platforms: plat
         ? { tiktok: !!plat.tiktok, instagram: !!plat.instagram, youtube: !!plat.youtube }

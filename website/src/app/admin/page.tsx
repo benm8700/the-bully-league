@@ -54,7 +54,8 @@ type PostClip = {
   votes: number;
   positiveEmoji: number;
   score: number;
-  consent: "ok" | "optedout";
+  consent: "ok" | "blur" | "out";
+  blurReady: boolean;
   status: "candidate" | "posted" | "dismissed";
   platforms: { tiktok: boolean; instagram: boolean; youtube: boolean } | null;
   actedAtMs: number | null;
@@ -405,25 +406,25 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
   const [showPosted, setShowPosted] = useState(false);
   const [showAside, setShowAside] = useState(false);
 
-  async function getClipUrl(id: string): Promise<string | null> {
+  async function getClipUrl(id: string, blurred: boolean): Promise<string | null> {
     try {
-      const res = await httpsCallable(functions, "previewClip")({ matchId: id });
+      const res = await httpsCallable(functions, "previewClip")({ matchId: id, blurred });
       const d = (res.data ?? {}) as { landscape?: string | null; vertical?: string | null };
       return d.vertical ?? d.landscape ?? null; // vertical = the TikTok/Reels cut
     } catch {
       return null;
     }
   }
-  async function togglePreview(id: string) {
-    if (preview?.id === id) { setPreview(null); return; }
-    setLoadingClip(id);
-    const url = await getClipUrl(id);
+  async function togglePreview(c: PostClip) {
+    if (preview?.id === c.id) { setPreview(null); return; }
+    setLoadingClip(c.id);
+    const url = await getClipUrl(c.id, c.consent === "blur");
     setLoadingClip(null);
-    if (url) setPreview({ id, url });
+    if (url) setPreview({ id: c.id, url });
   }
-  async function download(id: string) {
-    setLoadingClip(id);
-    const url = await getClipUrl(id);
+  async function download(c: PostClip) {
+    setLoadingClip(c.id);
+    const url = await getClipUrl(c.id, c.consent === "blur");
     setLoadingClip(null);
     if (url) window.open(url, "_blank");
   }
@@ -466,18 +467,29 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
                 ) : (
                   <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-300">reel ready</span>
                 )}
-                {c.consent === "optedout" && (
-                  <span title="A battler opted this clip out of promos — don't post it" className="rounded bg-red-500/15 px-1.5 py-0.5 text-xs text-red-300">🚫 opted out</span>
+                {c.consent === "blur" && (
+                  <span title="A battler opted to blur their face — post the BLURRED cut" className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">👤 face blurred{c.blurReady ? "" : " · prep needed"}</span>
+                )}
+                {c.consent === "out" && (
+                  <span title="A battler pulled this clip entirely — don't post it" className="rounded bg-red-500/15 px-1.5 py-0.5 text-xs text-red-300">🚫 pulled</span>
                 )}
                 <span className="font-mono text-xs text-zinc-600">#{c.id.slice(-6)}</span>
                 <div className="ml-auto flex flex-wrap items-center gap-2">
-                  <button onClick={() => togglePreview(c.id)} disabled={loadingClip === c.id} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
-                    {loadingClip === c.id ? "…" : preview?.id === c.id ? "Hide" : "▶ Preview"}
-                  </button>
-                  <button onClick={() => download(c.id)} disabled={loadingClip === c.id} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
-                    ⬇ Clip
-                  </button>
-                  {!c.published && c.rendered && (
+                  {c.consent === "blur" && !c.blurReady ? (
+                    <button disabled={busy} onClick={() => callFn("renderBlurredClip", { matchId: c.id }, "Rendering the blurred cut - give it a minute")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600 disabled:opacity-50">
+                      Prepare blurred cut
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={() => togglePreview(c)} disabled={loadingClip === c.id} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
+                        {loadingClip === c.id ? "…" : preview?.id === c.id ? "Hide" : "▶ Preview"}
+                      </button>
+                      <button onClick={() => download(c)} disabled={loadingClip === c.id} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
+                        ⬇ Clip{c.consent === "blur" ? " (blurred)" : ""}
+                      </button>
+                    </>
+                  )}
+                  {c.consent === "ok" && !c.published && c.rendered && (
                     <button disabled={busy} onClick={() => callFn("publishBattle", { matchId: c.id, published: true }, "Published")} className="rounded bg-green-600/80 px-2 py-1 text-xs text-white hover:bg-green-600 disabled:opacity-50">
                       Publish to site
                     </button>
@@ -496,7 +508,7 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
                   );
                 })}
                 <button disabled={busy} onClick={() => {
-                  if (c.consent === "optedout" && !confirm("A battler OPTED this clip OUT of promos. Posting it is against their wishes. Mark posted anyway?")) return;
+                  if (c.consent === "out" && !confirm("A battler PULLED this clip entirely. Posting it is against their wishes. Mark posted anyway?")) return;
                   act({ type: "markClipPosted", matchId: c.id, platforms: platOf(c.id) }, "Marked posted");
                 }} className="rounded bg-pink-600/80 px-2 py-1 text-xs text-white hover:bg-pink-600 disabled:opacity-50">
                   Mark posted
@@ -559,8 +571,8 @@ function ArchiveRow({ clip, accent, busy, onRestore }: { clip: PostClip; accent:
       {accent === "pink" && plats.length > 0 && (
         <span className="text-pink-300">{plats.map((p) => (p === "tiktok" ? "TikTok" : p === "instagram" ? "IG" : "YT")).join(" · ")}</span>
       )}
-      {accent === "pink" && clip.consent === "optedout" && (
-        <span title="A battler opted out after this was posted — take it down from your socials" className="rounded bg-red-500/15 px-1.5 py-0.5 text-red-300">🚫 take down from socials</span>
+      {accent === "pink" && clip.consent !== "ok" && (
+        <span title="A battler changed their mind after this was posted — take it down from your socials" className="rounded bg-red-500/15 px-1.5 py-0.5 text-red-300">🚫 take down from socials</span>
       )}
       <span className="text-zinc-600">{clip.actedAtMs ? new Date(clip.actedAtMs).toLocaleDateString() : ""}</span>
       <button disabled={busy} onClick={onRestore} className="ml-auto rounded border border-zinc-700 px-2 py-0.5 text-zinc-400 hover:bg-zinc-800 disabled:opacity-50">
