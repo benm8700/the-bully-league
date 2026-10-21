@@ -123,13 +123,15 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
         title: const Text('Hold up'),
         content: Text(body),
         actions: [
+          // "Make me famous" = don't opt out (keep the clip in our promos);
+          // "Keep me off the stage" = go through with the opt-out.
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep it in'),
+            child: const Text('Make me famous'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Opt out'),
+            child: const Text('Keep me off the stage'),
           ),
         ],
       ),
