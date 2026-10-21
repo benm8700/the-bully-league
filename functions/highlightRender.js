@@ -337,7 +337,7 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
     // own panel. Their audio is untouched, so the exchange still plays. Only
     // applied to the marketing/post render, never the in-app judging clip.
     if (blurUids.includes(uid)) {
-      filters.push(`[v${uid}]boxblur=40:3[vb${uid}]`);
+      filters.push(`[v${uid}]boxblur=30:2[vb${uid}]`);
       videoLabels.push(`[vb${uid}]`);
     } else {
       videoLabels.push(`[v${uid}]`);
