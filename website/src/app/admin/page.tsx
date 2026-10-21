@@ -30,6 +30,7 @@ type Metrics = {
   prizes: PrizeItem[];
   recentBattles: BattleItem[];
   handled: { reports: HandledItem[]; support: HandledItem[]; appeals: HandledItem[] };
+  postStudio: { candidates: PostClip[]; posted: PostClip[]; dismissed: PostClip[] };
 };
 
 type BattleItem = {
@@ -41,6 +42,21 @@ type BattleItem = {
   rendered: boolean;
   hasClip: boolean;
   clipUrl: string | null;
+};
+
+type PostClip = {
+  id: string;
+  player1Name: string;
+  player2Name: string;
+  completedAtMs: number | null;
+  rendered: boolean;
+  published: boolean;
+  votes: number;
+  positiveEmoji: number;
+  score: number;
+  status: "candidate" | "posted" | "dismissed";
+  platforms: { tiktok: boolean; instagram: boolean; youtube: boolean } | null;
+  actedAtMs: number | null;
 };
 
 type HandledItem = {
@@ -293,6 +309,7 @@ export default function AdminPage() {
             </div>
           </div>
 
+          <PostStudio metrics={metrics} callFn={callFn} act={act} busy={busy} />
           <EditorsChoice metrics={metrics} callFn={callFn} busy={busy} />
           <Prizes metrics={metrics} act={act} />
           <Queues metrics={metrics} act={act} busy={busy} />
@@ -377,6 +394,170 @@ function prizeAge(wonAtMs: number | null): string {
   const days = Math.floor((Date.now() - wonAtMs) / 86400000);
   const ago = days <= 0 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`;
   return `won ${d.toLocaleDateString()} · ${ago}`;
+}
+
+function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: (name: string, data: Record<string, unknown>, label: string) => void; act: (p: Record<string, unknown>, l: string) => void; busy: boolean }) {
+  const ps = metrics.postStudio ?? { candidates: [], posted: [], dismissed: [] };
+  const [preview, setPreview] = useState<{ id: string; url: string } | null>(null);
+  const [loadingClip, setLoadingClip] = useState<string | null>(null);
+  const [plat, setPlat] = useState<Record<string, { tiktok: boolean; instagram: boolean; youtube: boolean }>>({});
+  const [showPosted, setShowPosted] = useState(false);
+  const [showAside, setShowAside] = useState(false);
+
+  async function getClipUrl(id: string): Promise<string | null> {
+    try {
+      const res = await httpsCallable(functions, "previewClip")({ matchId: id });
+      const d = (res.data ?? {}) as { landscape?: string | null; vertical?: string | null };
+      return d.vertical ?? d.landscape ?? null; // vertical = the TikTok/Reels cut
+    } catch {
+      return null;
+    }
+  }
+  async function togglePreview(id: string) {
+    if (preview?.id === id) { setPreview(null); return; }
+    setLoadingClip(id);
+    const url = await getClipUrl(id);
+    setLoadingClip(null);
+    if (url) setPreview({ id, url });
+  }
+  async function download(id: string) {
+    setLoadingClip(id);
+    const url = await getClipUrl(id);
+    setLoadingClip(null);
+    if (url) window.open(url, "_blank");
+  }
+  const platOf = (id: string) => plat[id] ?? { tiktok: false, instagram: false, youtube: false };
+  const togglePlat = (id: string, key: "tiktok" | "instagram" | "youtube") =>
+    setPlat((s) => ({ ...s, [id]: { ...platOf(id), [key]: !platOf(id)[key] } }));
+
+  const PLATFORMS: { key: "tiktok" | "instagram" | "youtube"; label: string }[] = [
+    { key: "tiktok", label: "TikTok" },
+    { key: "instagram", label: "IG" },
+    { key: "youtube", label: "YT" },
+  ];
+
+  return (
+    <div className="mb-8">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+        Post Studio <span className="text-zinc-500">({ps.candidates.length} to review)</span>
+      </h2>
+      <p className="mb-3 text-xs text-zinc-600">
+        The best finalized clips, ranked by <span className="text-zinc-400">votes + 🔥/🧠 received</span>, best first.
+        For each: <span className="text-zinc-400">⬇ download the vertical cut, upload it to your socials, tick where it went, and Mark posted.</span>{" "}
+        (True one-click auto-posting to TikTok/IG/YT needs those platform apps connected — once they are, it drops onto this same button.)
+        Posted and set-aside clips move to the archives below.
+      </p>
+
+      {ps.candidates.length === 0 ? (
+        <p className="text-xs text-zinc-600">No clips ready to post yet — they appear here once a battle is judged and its reel has rendered.</p>
+      ) : (
+        <div className="space-y-2">
+          {ps.candidates.map((c, i) => (
+            <div key={c.id} className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-zinc-800 text-xs font-bold text-zinc-300">{i + 1}</span>
+                <span className="font-semibold text-white">{c.player1Name} vs {c.player2Name}</span>
+                <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-300" title="postability score">★ {c.score}</span>
+                <span className="rounded bg-zinc-800/60 px-1.5 py-0.5 text-xs text-zinc-400">👍 {c.votes}</span>
+                <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-xs text-orange-300">🔥 {c.positiveEmoji}</span>
+                {c.published ? (
+                  <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">on site</span>
+                ) : (
+                  <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-300">reel ready</span>
+                )}
+                <span className="font-mono text-xs text-zinc-600">#{c.id.slice(-6)}</span>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <button onClick={() => togglePreview(c.id)} disabled={loadingClip === c.id} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
+                    {loadingClip === c.id ? "…" : preview?.id === c.id ? "Hide" : "▶ Preview"}
+                  </button>
+                  <button onClick={() => download(c.id)} disabled={loadingClip === c.id} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
+                    ⬇ Clip
+                  </button>
+                  {!c.published && c.rendered && (
+                    <button disabled={busy} onClick={() => callFn("publishBattle", { matchId: c.id, published: true }, "Published")} className="rounded bg-green-600/80 px-2 py-1 text-xs text-white hover:bg-green-600 disabled:opacity-50">
+                      Publish to site
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-zinc-500">Posted to:</span>
+                {PLATFORMS.map((p) => {
+                  const on = platOf(c.id)[p.key];
+                  return (
+                    <button key={p.key} onClick={() => togglePlat(c.id, p.key)} className={`rounded border px-2 py-0.5 text-xs ${on ? "border-pink-500/60 bg-pink-500/15 text-pink-200" : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"}`}>
+                      {on ? "✓ " : ""}{p.label}
+                    </button>
+                  );
+                })}
+                <button disabled={busy} onClick={() => act({ type: "markClipPosted", matchId: c.id, platforms: platOf(c.id) }, "Marked posted")} className="rounded bg-pink-600/80 px-2 py-1 text-xs text-white hover:bg-pink-600 disabled:opacity-50">
+                  Mark posted
+                </button>
+                <button disabled={busy} onClick={() => act({ type: "setAsideClip", matchId: c.id }, "Set aside")} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-50">
+                  Set aside
+                </button>
+              </div>
+
+              {preview?.id === c.id && (
+                <div className="mt-3">
+                  <video key={preview.url} src={preview.url} controls autoPlay className="block max-h-[70vh] rounded border border-zinc-800 bg-black" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* archives */}
+      <div className="mt-4 space-y-2">
+        <ArchiveBlock title="Posted" count={ps.posted.length} open={showPosted} onToggle={() => setShowPosted((v) => !v)}>
+          {ps.posted.map((c) => (
+            <ArchiveRow key={c.id} clip={c} accent="pink" busy={busy} onRestore={() => act({ type: "restoreClip", matchId: c.id }, "Back to queue")} />
+          ))}
+        </ArchiveBlock>
+        <ArchiveBlock title="Set aside" count={ps.dismissed.length} open={showAside} onToggle={() => setShowAside((v) => !v)}>
+          {ps.dismissed.map((c) => (
+            <ArchiveRow key={c.id} clip={c} accent="zinc" busy={busy} onRestore={() => act({ type: "restoreClip", matchId: c.id }, "Back to queue")} />
+          ))}
+        </ArchiveBlock>
+      </div>
+    </div>
+  );
+}
+
+function ArchiveBlock({ title, count, open, onToggle, children }: { title: string; count: number; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40">
+      <button onClick={onToggle} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200">
+        <span>{open ? "▾" : "▸"}</span>
+        {title} <span className="text-zinc-600">({count})</span>
+      </button>
+      {open && (
+        <div className="space-y-1.5 px-3 pb-3">
+          {count === 0 ? <p className="text-xs text-zinc-600">Nothing here.</p> : children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArchiveRow({ clip, accent, busy, onRestore }: { clip: PostClip; accent: "pink" | "zinc"; busy: boolean; onRestore: () => void }) {
+  const plats = clip.platforms
+    ? (["tiktok", "instagram", "youtube"] as const).filter((k) => clip.platforms![k])
+    : [];
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded border border-zinc-800 bg-black/20 px-2.5 py-1.5 text-xs">
+      <span className="font-medium text-zinc-200">{clip.player1Name} vs {clip.player2Name}</span>
+      {accent === "pink" && plats.length > 0 && (
+        <span className="text-pink-300">{plats.map((p) => (p === "tiktok" ? "TikTok" : p === "instagram" ? "IG" : "YT")).join(" · ")}</span>
+      )}
+      <span className="text-zinc-600">{clip.actedAtMs ? new Date(clip.actedAtMs).toLocaleDateString() : ""}</span>
+      <button disabled={busy} onClick={onRestore} className="ml-auto rounded border border-zinc-700 px-2 py-0.5 text-zinc-400 hover:bg-zinc-800 disabled:opacity-50">
+        Move back
+      </button>
+    </div>
+  );
 }
 
 function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (name: string, data: Record<string, unknown>, label: string) => void; busy: boolean }) {

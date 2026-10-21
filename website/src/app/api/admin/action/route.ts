@@ -146,6 +146,58 @@ export async function POST(request: Request) {
       // featuring can reuse the real publish gate - which the web route can't,
       // since it can't safely import firebase-admin/storage on Vercel.
 
+      // Post Studio curation. These only move a clip between the queue and the
+      // archives (status + platform tracking); making the clip public is still
+      // the separate publishBattle Cloud Function (it runs the objection gate).
+      case "markClipPosted": {
+        const matchId = String(body.matchId ?? "");
+        if (!matchId) return bad("matchId required");
+        const p = (body.platforms ?? {}) as Record<string, unknown>;
+        const platforms = {
+          tiktok: p.tiktok === true,
+          instagram: p.instagram === true,
+          youtube: p.youtube === true,
+        };
+        await db.collection("matches").doc(matchId).set(
+          {
+            postStudio: {
+              status: "posted",
+              platforms,
+              postedAt: FieldValue.serverTimestamp(),
+              ...stamp,
+            },
+          },
+          { merge: true },
+        );
+        return Response.json({ ok: true, matchId });
+      }
+
+      case "setAsideClip": {
+        const matchId = String(body.matchId ?? "");
+        if (!matchId) return bad("matchId required");
+        await db.collection("matches").doc(matchId).set(
+          {
+            postStudio: {
+              status: "dismissed",
+              dismissedAt: FieldValue.serverTimestamp(),
+              ...stamp,
+            },
+          },
+          { merge: true },
+        );
+        return Response.json({ ok: true, matchId });
+      }
+
+      case "restoreClip": {
+        const matchId = String(body.matchId ?? "");
+        if (!matchId) return bad("matchId required");
+        await db.collection("matches").doc(matchId).set(
+          { postStudio: { status: "candidate", ...stamp } },
+          { merge: true },
+        );
+        return Response.json({ ok: true, matchId });
+      }
+
       default:
         return bad(`unknown action: ${type}`);
     }

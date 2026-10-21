@@ -256,6 +256,140 @@ async function recentlyHandled(
   });
 }
 
+// ---- Post Studio: rank the best finalized clips for the founder to post ----
+
+export type PostClip = {
+  id: string;
+  player1Name: string;
+  player2Name: string;
+  completedAtMs: number | null;
+  rendered: boolean;
+  published: boolean;
+  votes: number;
+  positiveEmoji: number; // 🔥 fire + 🧠 clever received this match
+  score: number;
+  status: "candidate" | "posted" | "dismissed";
+  platforms: { tiktok: boolean; instagram: boolean; youtube: boolean } | null;
+  actedAtMs: number | null; // posted/dismissed timestamp, for archive ordering
+};
+
+const POSITIVE_EMOJI = new Set(["fire", "clever"]);
+
+// Sum the positive emoji (🔥/🧠) a match's two roasters received, across all
+// ballots. Bounded to the handful of top candidates, so the per-match ballot
+// read is cheap; wrapped in safe() by the caller so a miss just scores 0.
+async function positiveEmojiForMatch(matchId: string): Promise<number> {
+  const db = getAdminFirestore();
+  const snap = await db
+    .collection("votes")
+    .doc(matchId)
+    .collection("ballots")
+    .get();
+  let n = 0;
+  for (const d of snap.docs) {
+    const er = (d.data().emojiRatings as Record<string, string> | undefined) ?? {};
+    for (const k of Object.values(er)) if (POSITIVE_EMOJI.has(k)) n++;
+  }
+  return n;
+}
+
+// Candidates = finalized, rendered, recorded-mode battles not yet posted or set
+// aside, ranked best-first (votes + positive emoji). Posted/dismissed are the
+// two archives, read by their explicit status so they never clutter the queue.
+async function postStudioClips(): Promise<{
+  candidates: PostClip[];
+  posted: PostClip[];
+  dismissed: PostClip[];
+}> {
+  const db = getAdminFirestore();
+  const [recentSnap, postedSnap, dismissedSnap] = await Promise.all([
+    db.collection("matches").orderBy("completedAt", "desc").limit(60).get(),
+    db.collection("matches").where("postStudio.status", "==", "posted").limit(40).get(),
+    db.collection("matches").where("postStudio.status", "==", "dismissed").limit(40).get(),
+  ]);
+
+  const candDocs = recentSnap.docs.filter((d) => {
+    const x = d.data();
+    const ps = (x.postStudio as Record<string, unknown> | undefined) ?? {};
+    const h = (x.highlight as Record<string, unknown> | undefined) ?? {};
+    const rends = (h.renditions as Record<string, unknown> | undefined) ?? {};
+    return (
+      x.status === "completed" &&
+      RECORDED_MODES.has(String(x.mode)) &&
+      x.voteFinalized === true &&
+      Object.keys(rends).length > 0 &&
+      ps.status !== "posted" &&
+      ps.status !== "dismissed"
+    );
+  });
+  // Rank by raw popularity first to pick which to spend ballot-reads on, cap 20.
+  candDocs.sort(
+    (a, b) => (Number(b.data().voteCount) || 0) - (Number(a.data().voteCount) || 0),
+  );
+  const topCand = candDocs.slice(0, 20);
+  const emojiCounts = await Promise.all(
+    topCand.map((d) => safe(() => positiveEmojiForMatch(d.id)).then((v) => v ?? 0)),
+  );
+
+  const all = [
+    ...topCand.map((d) => d),
+    ...postedSnap.docs,
+    ...dismissedSnap.docs,
+  ];
+  const uids = [
+    ...new Set(
+      all
+        .flatMap((d) => [String(d.data().player1Id ?? ""), String(d.data().player2Id ?? "")])
+        .filter(Boolean),
+    ),
+  ];
+  const nameByUid = new Map<string, string>();
+  if (uids.length) {
+    const udocs = await db.getAll(...uids.map((u) => db.collection("users").doc(u)));
+    udocs.forEach((d) => nameByUid.set(d.id, String(d.data()?.username ?? "Unknown")));
+  }
+
+  function build(
+    d: FirebaseFirestore.QueryDocumentSnapshot,
+    positiveEmoji: number,
+    status: "candidate" | "posted" | "dismissed",
+  ): PostClip {
+    const x = d.data();
+    const h = (x.highlight as Record<string, unknown> | undefined) ?? {};
+    const rends = (h.renditions as Record<string, unknown> | undefined) ?? {};
+    const ps = (x.postStudio as Record<string, unknown> | undefined) ?? {};
+    const plat = (ps.platforms as Record<string, boolean> | undefined) ?? null;
+    const votes = Number(x.voteCount) || 0;
+    return {
+      id: d.id,
+      player1Name: nameByUid.get(String(x.player1Id ?? "")) ?? "Unknown",
+      player2Name: nameByUid.get(String(x.player2Id ?? "")) ?? "Unknown",
+      completedAtMs: tsToMs(x.completedAt),
+      rendered: Object.keys(rends).length > 0,
+      published: h.published === true,
+      votes,
+      positiveEmoji,
+      score: votes + positiveEmoji * 2,
+      status,
+      platforms: plat
+        ? { tiktok: !!plat.tiktok, instagram: !!plat.instagram, youtube: !!plat.youtube }
+        : null,
+      actedAtMs: tsToMs(ps.postedAt) ?? tsToMs(ps.dismissedAt),
+    };
+  }
+
+  const candidates = topCand
+    .map((d, i) => build(d, emojiCounts[i], "candidate"))
+    .sort((a, b) => b.score - a.score);
+  const posted = postedSnap.docs
+    .map((d) => build(d, 0, "posted"))
+    .sort((a, b) => (b.actedAtMs ?? 0) - (a.actedAtMs ?? 0));
+  const dismissed = dismissedSnap.docs
+    .map((d) => build(d, 0, "dismissed"))
+    .sort((a, b) => (b.actedAtMs ?? 0) - (a.actedAtMs ?? 0));
+  return { candidates, posted, dismissed };
+}
+
 export type AdminMetrics = Awaited<ReturnType<typeof collectMetrics>>;
 
 export async function collectMetrics() {
@@ -294,6 +428,7 @@ export async function collectMetrics() {
     handledReports,
     handledSupport,
     handledAppeals,
+    postStudioData,
   ] = await Promise.all([
     count(users),
     count(users.where("subscription.active", "==", true)),
@@ -330,6 +465,7 @@ export async function collectMetrics() {
     safe(() => recentlyHandled("reports")),
     safe(() => recentlyHandled("supportRequests")),
     safe(() => recentlyHandled("banAppeals")),
+    safe(() => postStudioClips()),
   ]);
 
   return {
@@ -378,5 +514,10 @@ export async function collectMetrics() {
       support: (handledSupport as HandledItem[] | null) ?? [],
       appeals: (handledAppeals as HandledItem[] | null) ?? [],
     },
+    postStudio: (postStudioData as {
+      candidates: PostClip[];
+      posted: PostClip[];
+      dismissed: PostClip[];
+    } | null) ?? { candidates: [], posted: [], dismissed: [] },
   };
 }
