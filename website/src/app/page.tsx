@@ -43,9 +43,10 @@ function Hero() {
             Get even.
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-[15px] leading-relaxed text-muted lg:mx-0">
-            The Bully League drops you into a live, timed 1-on-1 roast battle
-            with a total stranger. Three rounds. Fifteen seconds a turn. The
-            crowd votes the winner — and you climb the ranks or eat the loss.
+            The Bully League drops you into a live 1-on-1 roast battle with a
+            total stranger. Grab the mic, hold the floor, and talk while the
+            clock&apos;s on you. The crowd votes the winner — and you climb the
+            ranks or eat the loss.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:items-start lg:justify-start">
             <StoreCta />
@@ -81,7 +82,7 @@ function HowItWorks() {
   const steps = [
     ["Get paired", "Tap once and you're matched 1-on-1 with a random stranger who's online right now."],
     ["Study the target", "Watch their 60-second intro and read their card. That's your ammo — use it."],
-    ["Battle live", "Three rounds, ~15 seconds a turn. Your turn, your mic; theirs is muted. Then you swap."],
+    ["Battle live", "Hold the floor and roast while your 30-second clock runs — you're live, they're muted. Hand it over when you've landed your shot, then it's their clock."],
     ["Crowd decides", "The battle goes to the community. Judges have 24 hours to vote. Win, and your rank climbs."],
   ];
   return (
