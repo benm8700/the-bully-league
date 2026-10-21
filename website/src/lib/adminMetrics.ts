@@ -116,7 +116,7 @@ type BattleItem = {
   clipUrl: string | null;
 };
 
-const RECORDED_MODES = new Set(["ranked", "tournament", "friend", "elite"]);
+const RECORDED_MODES = new Set(["ranked", "tournament", "friend", "elite", "improv"]);
 
 type MatchRow = {
   id: string;

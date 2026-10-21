@@ -1043,13 +1043,20 @@ Raised by the developer: what protects someone who is unhappy that their match f
       so "out" is the clean answer for anyone who wants fully out.
     - **The blur render** (`highlightRender.js` `buildFfmpegArgs` `blurUids`):
       because each player is their OWN panel (individual recording), blurring is
-      one `boxblur=40:3` filter on that panel - NO face detection. Stored as a
-      POST-ONLY `highlight.blurRenditions` (verified on a real frame: opted-out
-      panel unrecognizable, opponent crisp, audio + watermark intact), never
-      touching the in-app `renditions` (judging) or publish state. Rendered on
-      demand by the admin `renderBlurredClip` callable (maps blur-consent -> the
-      "1"/"2" panel uids via `blurPanelUidsFor`). `previewClip` serves the
-      blurred cut with `{blurred:true}`.
+      one `boxblur=30:2` filter on that panel - NO face detection (strength
+      30:2 chosen by the developer after comparing 40:3 / 20:2 / 30:2 on real
+      frames). Stored as a POST-ONLY `highlight.blurRenditions` (verified on a
+      real frame: opted-out panel unrecognizable, opponent crisp, audio +
+      watermark intact), never touching the in-app `renditions` (judging) or
+      publish state. **Face-Off (improv) is covered too** (`buildImprovFfmpegArgs`
+      blurs the opted-out performer's full-frame SET before the gel border, since
+      that cut is sequential-in-time not a spatial panel; same 30:2; verified on
+      a real Face-Off recording - blurred performer's blue-border set smeared,
+      the other performer's red-border set crisp). Rendered on demand by the
+      admin `renderBlurredClip` callable (maps blur-consent -> the "1"/"2" panel
+      uids via `blurPanelUidsFor`). `previewClip` serves the blurred cut with
+      `{blurred:true}`. NOTE the admin `adminMetrics.RECORDED_MODES` now includes
+      `improv`, so Face-Off clips appear in the Post Studio at all.
     - **Post Studio** shows the clip-level status (`clipConsentStatus`): `ok`
       (no badge, post normally), **`blur`** (👤 badge; "Prepare blurred cut"
       button if not yet rendered, then preview/download serve the BLURRED

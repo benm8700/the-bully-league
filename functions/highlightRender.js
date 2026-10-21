@@ -587,6 +587,7 @@ function buildImprovFfmpegArgs(performers, localDir, outputPath, options = {}) {
   const canvas = options.canvas ?? RENDITIONS.vertical.canvas;
   const gapSec = options.gapSeconds ?? IMPROV_GAP_SECONDS;
   const border = Math.max(2, Math.round(canvas.width * IMPROV_BORDER_RATIO));
+  const blurUids = options.blurUids ?? [];
   const inputs = [];
   const filters = [];
   const concatParts = []; // interleaved [v][a] labels, in play order
@@ -629,9 +630,18 @@ function buildImprovFfmpegArgs(performers, localDir, outputPath, options = {}) {
       filters.push(`${parts.join("")}concat=n=${parts.length}:v=1:a=0[ivc${pi}]`);
       filters.push(`[ivc${pi}]tpad=start_duration=${pad}:color=black[ivj${pi}]`);
     }
+    // MARKETING-CONSENT BLUR: if this performer opted to blur, blur their whole
+    // (full-frame) set - audio untouched - before the gel border so the border
+    // stays sharp. Face-Off is sequential, so this blurs their SEGMENT in time
+    // rather than a spatial panel; same boxblur strength as the composite.
+    let gelSrc = `[ivj${pi}]`;
+    if (blurUids.includes(perf.uid)) {
+      filters.push(`[ivj${pi}]boxblur=30:2[ivbl${pi}]`);
+      gelSrc = `[ivbl${pi}]`;
+    }
     // The gel border, drawn INSIDE the frame so it never changes the canvas
     // size (concat needs every segment identical).
-    filters.push(`[ivj${pi}]drawbox=x=0:y=0:w=iw:h=ih:color=${color}@1:t=${border}[iv${pi}]`);
+    filters.push(`${gelSrc}drawbox=x=0:y=0:w=iw:h=ih:color=${color}@1:t=${border}[iv${pi}]`);
 
     // Audio: each of the performer's audio segments delayed to its own
     // within-set offset, mixed, then PADDED to the video length so the set's
@@ -773,7 +783,7 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
   // buildImprovFfmpegArgs. Delegated whole rather than branched inline so the
   // composite path below stays untouched.
   if (snap.data()?.mode === "improv") {
-    return renderImprovHighlight(matchId, matchRef, bucket, {captions});
+    return renderImprovHighlight(matchId, matchRef, bucket, {captions, blurUids});
   }
 
   const [objects] = await bucket.getFiles({prefix: `match_recordings/${matchId}/`});
@@ -1029,7 +1039,10 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
  * concatenated timeline (mergeImprovCues shifts P2's set past P1's + the beat).
  * NO landscape cut: a portrait single-performer sequence has no good 16:9 form.
  */
-async function renderImprovHighlight(matchId, matchRef, bucket, {captions = false} = {}) {
+async function renderImprovHighlight(matchId, matchRef, bucket, {captions = false, blurUids = []} = {}) {
+  // A blur render is a post-only, captioned, blurred cut stored under
+  // highlight.blurRenditions - never the in-app clip or the publish state.
+  const isBlur = blurUids.length > 0;
   const [objects] = await bucket.getFiles({prefix: `match_recordings/${matchId}/`});
   if (objects.length === 0) throw new Error("No recording found for this match.");
 
@@ -1112,15 +1125,40 @@ async function renderImprovHighlight(matchId, matchRef, bucket, {captions = fals
       await fs.writeFile(
           subtitlePath, buildAssFile(merged, rendition.canvas), "utf8");
 
-      const capName = rendition.fileName.replace(/\.mp4$/, "_captioned.mp4");
+      const capBase = rendition.fileName.replace(/\.mp4$/, "_captioned.mp4");
+      const capName = isBlur ? capBase.replace(/\.mp4$/, "_blurred.mp4") : capBase;
       const capPath = path.join(workDir, capName);
       await runFfmpeg(ffmpegPath, buildImprovFfmpegArgs(withVideo, workDir, capPath, {
         canvas: rendition.canvas,
         logoPath: WATERMARK_LOGO,
         subtitlePath,
+        blurUids: isBlur ? blurUids : undefined,
       }));
-      const capDest = `${HIGHLIGHT_PREFIX}/${matchId}/${capName}`;
+      const capDest = isBlur ?
+        `${HIGHLIGHT_PREFIX}/${matchId}/blurred/${capName}` :
+        `${HIGHLIGHT_PREFIX}/${matchId}/${capName}`;
       await bucket.upload(capPath, {destination: capDest, metadata: {contentType: "video/mp4"}});
+
+      if (isBlur) {
+        // Post-only blurred cut -> its own key, never touching renditions or
+        // the publish state.
+        await matchRef.set({
+          highlight: {
+            blurRenditions: {
+              vertical: {
+                path: capDest,
+                sizeBytes: (await fs.stat(capPath)).size,
+                width: rendition.canvas.width,
+                height: rendition.canvas.height,
+              },
+            },
+            blurUids,
+            blurRenderedAt: FieldValue.serverTimestamp(),
+            ...(warnings.length > 0 ? {blurWarnings: warnings} : {}),
+          },
+        }, {merge: true});
+        return {rendered: true, blurred: true, warnings};
+      }
 
       // Deep-merge the captioned path into the existing vertical rendition so
       // `.path` (what the judge feed serves) is preserved. reviewStatus /
@@ -1142,14 +1180,21 @@ async function renderImprovHighlight(matchId, matchRef, bucket, {captions = fals
       return {rendered: true, captioned: merged.length > 0, warnings};
     }
 
-    // STAGE 1: the uncaptioned cut the judge feed plays.
-    const outputPath = path.join(workDir, rendition.fileName);
+    // STAGE 1: the uncaptioned cut the judge feed plays. When isBlur (an
+    // uncaptioned blur render - the normal posting blur comes captioned via the
+    // branch above), this stays the blurred, post-only cut in blurRenditions.
+    const stage1Name = isBlur ?
+      rendition.fileName.replace(/\.mp4$/, "_blurred.mp4") : rendition.fileName;
+    const outputPath = path.join(workDir, stage1Name);
     await runFfmpeg(ffmpegPath, buildImprovFfmpegArgs(withVideo, workDir, outputPath, {
       canvas: rendition.canvas,
       logoPath: WATERMARK_LOGO,
+      blurUids: isBlur ? blurUids : undefined,
     }));
 
-    const destination = `${HIGHLIGHT_PREFIX}/${matchId}/${rendition.fileName}`;
+    const destination = isBlur ?
+      `${HIGHLIGHT_PREFIX}/${matchId}/blurred/${stage1Name}` :
+      `${HIGHLIGHT_PREFIX}/${matchId}/${stage1Name}`;
     await bucket.upload(outputPath, {destination, metadata: {contentType: "video/mp4"}});
     const out = {
       vertical: {
@@ -1159,6 +1204,18 @@ async function renderImprovHighlight(matchId, matchRef, bucket, {captions = fals
         height: rendition.canvas.height,
       },
     };
+
+    if (isBlur) {
+      await matchRef.set({
+        highlight: {
+          blurRenditions: out,
+          blurUids,
+          blurRenderedAt: FieldValue.serverTimestamp(),
+          ...(warnings.length > 0 ? {blurWarnings: warnings} : {}),
+        },
+      }, {merge: true});
+      return {rendered: true, blurred: true, warnings};
+    }
 
     await matchRef.set({
       highlight: {
