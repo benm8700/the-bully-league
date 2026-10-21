@@ -55,15 +55,19 @@ const STYLE = {
   // text on the seam between the players rather than over either face,
   // and clear of the platform UI that crowds the bottom of the screen.
   alignment: 5,
-  // Per-speaker colour matching the app's player scheme ("red = this person,
-  // blue = that person"), carried into the shareable clip for brand
-  // consistency. ASS colours are &HAABBGGRR (reversed). P1 is the brand red
-  // (House.gelRed #C4485E); P2 is a BRIGHTER blue than the muted UI gel
-  // (#40C4FF rather than #5E93A8) so it stays legible on light backgrounds -
-  // captions' first job is readability on muted social, and the UI gel is too
-  // desaturated for text. The heavy black outline (below) carries both.
-  player1Colour: "&H005E48C4", // red #C4485E
-  player2Colour: "&H00FFC440", // blue #40C4FF
+  // Captions stay WHITE and maximally legible, NOT the app's red/blue player
+  // gels (DECIDED 2026-10-20). Clips live or die on organic reach: app-branded
+  // colour reads as an ad and hurts readability on muted social, white-with-
+  // outline is the muted-autoplay gold standard, and "red = this person" means
+  // nothing to a cold viewer who never saw the app. The red/blue gels stay an
+  // IN-APP judging aid only. BUT captions are vertically centred (alignment 5),
+  // so on the stacked layout they sit on the seam - position does NOT tell a
+  // muted viewer which player spoke, so colour is the only speaker cue. Keep a
+  // distinction, just a legible one: P1 white, P2 a warm amber/gold (the most
+  // legible non-white caption colour). The heavy black outline (below) carries
+  // both. ASS colours are &HAABBGGRR (reversed).
+  player1Colour: "&H00FFFFFF", // white
+  player2Colour: "&H0000D7FF", // amber/gold #FFD700
 };
 
 const MAX_WORDS_PER_CUE = 4;
