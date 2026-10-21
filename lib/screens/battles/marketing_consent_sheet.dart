@@ -112,16 +112,15 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
   // blow up, which is the whole point of being here.
   Future<void> _confirmAndOptOut() async {
     final body = _posted
-        ? "Both good AND bad performances can blow up and get you noticed - "
-            "that's the whole point of being here. This clip is already up on "
-            "our socials; opt out and we'll take it down from our accounts."
-        : "Both good AND bad performances can blow up and get you noticed - "
-            "that's the whole point of being here. Opt out and we'll keep this "
-            "clip out of our promos.";
+        ? "You don't have to win to go viral. Are you sure you want to give up "
+            "your chance to get seen?\n\nThis clip is already up on our socials "
+            "- opt out and we'll take it down from our accounts."
+        : "You don't have to win to go viral. Are you sure you want to give up "
+            "your chance to get seen?";
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Sure you want to opt out?'),
+        title: const Text('Hold up'),
         content: Text(body),
         actions: [
           TextButton(
