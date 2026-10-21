@@ -64,6 +64,35 @@ async function _bumpFollowerCount(targetUid, delta) {
   });
 }
 
+/**
+ * Every new account auto-follows the FOUNDER (house) account, so the fame feed
+ * is never empty for a newcomer and the community sees the founder is present
+ * (developer's call). Fires on the bare users/{uid} create (before the username
+ * is even set - the follow needs no profile). Writing the follower own-doc lets
+ * onFollowCreated maintain the founder's count exactly as a manual follow would.
+ * Best-effort and idempotent: a skip never blocks signup, and a re-fire finds
+ * the follow doc already there. Unfollow is trivial (standard), so this is a
+ * default, not a trap.
+ */
+async function autoFollowFounder(db, newUid) {
+  const {getFounderUid, shouldAutoFollow} = require("./founder");
+  const founderUid = await getFounderUid(db);
+  if (!shouldAutoFollow(founderUid, newUid)) return {skipped: true};
+  const ref = db.collection("follows").doc(founderUid)
+      .collection("followers").doc(newUid);
+  if ((await ref.get()).exists) return {skipped: "already"};
+  await ref.set({at: FieldValue.serverTimestamp(), auto: true});
+  return {followed: founderUid};
+}
+
+exports.onUserCreated = onDocumentCreated("users/{uid}", async (event) => {
+  try {
+    await autoFollowFounder(getFirestore(), event.params.uid);
+  } catch (e) {
+    console.error("onUserCreated autoFollow failed:", e.message);
+  }
+});
+
 exports.onFollowCreated = onDocumentCreated(
     "follows/{targetUid}/followers/{followerUid}",
     async (event) => {
@@ -215,6 +244,7 @@ async function notifyFollowersOfClip(matchId, participantUids) {
   }
 }
 
+module.exports.autoFollowFounder = autoFollowFounder;
 module.exports.getPendingFameMilestone = getPendingFameMilestone;
 module.exports.notifyFollowersOfGauntletPairing = notifyFollowersOfGauntletPairing;
 module.exports.notifyFollowersOfClip = notifyFollowersOfClip;

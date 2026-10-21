@@ -1527,6 +1527,8 @@ exports.getDailyRewardState = onCall((request) => {
 const follows = require("./follows");
 exports.onFollowCreated = follows.onFollowCreated;
 exports.onFollowDeleted = follows.onFollowDeleted;
+// Every new account auto-follows the founder (config/founder.uid). See founder.js.
+exports.onUserCreated = follows.onUserCreated;
 exports.getPendingFameMilestone = onCall((request) =>
   follows.getPendingFameMilestone(request.auth));
 
