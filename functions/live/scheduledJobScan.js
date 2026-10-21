@@ -75,6 +75,8 @@ const JOBS = [
   {name: "dailyRewardReminder", mod: "../dailyRewardReminder",
     fn: "sendDailyRewardReminder"},
   {name: "watchGoatThrone", mod: "../goatThrone", fn: "sweepGoatThrone"},
+  // TEMPORARY (2026-10-22 capture): one-shot tournament armer. Remove with the job.
+  {name: "autoArmTournament", mod: "../armTournament", fn: "armTournamentIfDue"},
 ];
 
 /**
