@@ -831,7 +831,6 @@ class _BattleCard extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.campaign_outlined),
                 title: const Text('Use in our promos'),
-                subtitle: const Text('On by default - tap to opt this clip out'),
                 onTap: () {
                   Navigator.pop(sheetCtx);
                   MarketingConsentSheet.show(context, matchId);
