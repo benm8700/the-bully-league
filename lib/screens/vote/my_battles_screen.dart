@@ -830,8 +830,8 @@ class _BattleCard extends StatelessWidget {
             if (mode != 'exhibition' && status == 'completed')
               ListTile(
                 leading: const Icon(Icons.campaign_outlined),
-                title: const Text('Feature in our promos?'),
-                subtitle: const Text('Let us use this clip on our socials'),
+                title: const Text('Use in our promos'),
+                subtitle: const Text('On by default - tap to opt this clip out'),
                 onTap: () {
                   Navigator.pop(sheetCtx);
                   MarketingConsentSheet.show(context, matchId);

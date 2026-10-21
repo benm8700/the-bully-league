@@ -1023,9 +1023,25 @@ Raised by the developer: what protects someone who is unhappy that their match f
     human-decide.** What's STILL not built is the literal one-click AUTO-post
     to the platforms (needs each platform's posting API + OAuth + TikTok
     approval) — once wired, real posting drops onto the same "Mark posted"
-    control; until then the flow is download → upload → mark posted. **The
-    paired piece still to build: a per-clip MARKETING-USE consent flag** (so a
-    candidate shows ✅ both consented vs ⚠️ needs consent).
+    control; until then the flow is download → upload → mark posted.
+  - **MARKETING-USE CONSENT MODEL — DECIDED + BUILT (2026-10-20, the developer's
+    call, after rejecting the first design).** A per-clip OPT-IN consent step was
+    built first and the developer rightly called it "ridiculous" / over-built.
+    Final model: **blanket consent UPFRONT (default IN), per-clip OPT-OUT.**
+    (1) The recording-consent screen now explicitly grants that The Bully League
+    may use/post the recording in its promos/marketing incl. social media - so
+    every battler has okayed promo use before they play. (2) In My Battles, a
+    "Use in our promos - on by default, tap to opt this clip out" sheet
+    (`marketing_consent_sheet.dart`) lets anyone keep a SPECIFIC clip out (or
+    allow it back) - the withdrawal path (the existing takedown/objection flow
+    also serves withdrawal). (3) The Post Studio defaults every clip to cleared
+    and only flags **🚫 opted out** when a battler explicitly backed out, warning
+    on Mark-posted only then. Stored at `match.marketingConsent.{uid}={consent,at}`
+    via the `setMatchMarketingConsent` callable (`functions/marketingConsent.js`,
+    participant-only; match docs are write:false so it is the only writer).
+    Absent = IN. The narrow exception that still wants its OWN specific consent:
+    the surprise comedian-STUNT (roasting someone who did not knowingly sign up)
+    - already a separate guardrail, not the normal flow.
   - **OFFICIAL-POST COMPLIANCE RULES — decided (2026-10-20).** External posts go
     out ONLY from the company's own marketing accounts, curated + human-reviewed
     by the developer (not users' personal accounts; the developer explicitly
@@ -1034,15 +1050,15 @@ Raised by the developer: what protects someone who is unhappy that their match f
     for the company's own first-party curated posts, so official posts carry
     real publisher exposure (defamation if a roast states a false FACT; right-of-
     publicity for using a real face in an ad; platform strikes). GREEN-LIGHT to
-    post: both 18+ (gated) AND both gave marketing-use consent for THAT clip;
-    pure comedy that passes the "stranger with zero context laughs" test. RED-
-    LIGHT (never): slurs/anything targeting a protected group even "ironically"
-    (#1 account-killer), anything reading as real harassment, a false factual
-    claim stated as fact, sexual/nudity/threats/doxxing, any 18+ doubt, or any
-    objection/no-consent. The two safeguards: marketing-use consent from BOTH
-    people per clip, and the developer's own eyes applying the PLATFORM's
-    standard (not the app's free-speech one) on every post. Not legal advice;
-    the ToS footage-license/consent docs still want counsel before go-live.
+    post: both 18+ (gated) AND promo use consented (the default-in model above,
+    i.e. NOT opted out); pure comedy that passes the "stranger with zero context
+    laughs" test. RED-LIGHT (never): slurs/anything targeting a protected group
+    even "ironically" (#1 account-killer), anything reading as real harassment, a
+    false factual claim stated as fact, sexual/nudity/threats/doxxing, any 18+
+    doubt, or a clip a battler opted out of. The safeguard: the developer's own
+    eyes applying the PLATFORM's standard (not the app's free-speech one) on
+    every post. Not legal advice; the ToS footage-license/consent docs still want
+    counsel before go-live.
   - **NON-NEGOTIABLE CONSTRAINT, already decided: a HUMAN platform-policy review
     gate must sit in front of any social post.** External platforms enforce
     stricter rules than this app's free-speech policy, so a clip that's fine

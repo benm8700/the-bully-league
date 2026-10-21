@@ -268,9 +268,10 @@ export type PostClip = {
   votes: number;
   positiveEmoji: number; // 🔥 fire + 🧠 clever received this match
   score: number;
-  // Marketing-use consent across BOTH battlers: both said yes / still needed /
-  // at least one declined. Gates whether it's safe to post as official promo.
-  consent: "both" | "needs" | "declined";
+  // Marketing-use consent. DEFAULT is "ok" - battlers okay promo use in the
+  // join acknowledgement, so a clip is cleared unless someone explicitly opted
+  // THIS one out (consent === false) from My Battles, which flags "optedout".
+  consent: "ok" | "optedout";
   status: "candidate" | "posted" | "dismissed";
   platforms: { tiktok: boolean; instagram: boolean; youtube: boolean } | null;
   actedAtMs: number | null; // posted/dismissed timestamp, for archive ordering
@@ -367,12 +368,9 @@ async function postStudioClips(): Promise<{
       (x.marketingConsent as Record<string, { consent?: boolean }> | undefined) ?? {};
     const c1 = mc[String(x.player1Id ?? "")]?.consent;
     const c2 = mc[String(x.player2Id ?? "")]?.consent;
-    const consent: "both" | "needs" | "declined" =
-      c1 === false || c2 === false
-        ? "declined"
-        : c1 === true && c2 === true
-          ? "both"
-          : "needs";
+    // Default IN: only an explicit opt-out (false) by either battler flags it.
+    const consent: "ok" | "optedout" =
+      c1 === false || c2 === false ? "optedout" : "ok";
     return {
       id: d.id,
       player1Name: nameByUid.get(String(x.player1Id ?? "")) ?? "Unknown",

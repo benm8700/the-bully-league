@@ -54,7 +54,7 @@ type PostClip = {
   votes: number;
   positiveEmoji: number;
   score: number;
-  consent: "both" | "needs" | "declined";
+  consent: "ok" | "optedout";
   status: "candidate" | "posted" | "dismissed";
   platforms: { tiktok: boolean; instagram: boolean; youtube: boolean } | null;
   actedAtMs: number | null;
@@ -466,12 +466,8 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
                 ) : (
                   <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-300">reel ready</span>
                 )}
-                {c.consent === "both" ? (
-                  <span title="Both battlers consented to marketing use" className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">✅ consent</span>
-                ) : c.consent === "declined" ? (
-                  <span title="A battler declined marketing use — don't post this officially" className="rounded bg-red-500/15 px-1.5 py-0.5 text-xs text-red-300">❌ declined</span>
-                ) : (
-                  <span title="Marketing-use consent not given by both — get it before posting officially" className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">⚠️ needs consent</span>
+                {c.consent === "optedout" && (
+                  <span title="A battler opted this clip out of promos — don't post it" className="rounded bg-red-500/15 px-1.5 py-0.5 text-xs text-red-300">🚫 opted out</span>
                 )}
                 <span className="font-mono text-xs text-zinc-600">#{c.id.slice(-6)}</span>
                 <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -500,9 +496,7 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
                   );
                 })}
                 <button disabled={busy} onClick={() => {
-                  if (c.consent !== "both" && !confirm(c.consent === "declined"
-                    ? "A battler DECLINED marketing use of this clip — posting it as official promo is not advised. Mark posted anyway?"
-                    : "Both battlers haven't given marketing-use consent yet. Mark posted anyway?")) return;
+                  if (c.consent === "optedout" && !confirm("A battler OPTED this clip OUT of promos. Posting it is against their wishes. Mark posted anyway?")) return;
                   act({ type: "markClipPosted", matchId: c.id, platforms: platOf(c.id) }, "Marked posted");
                 }} className="rounded bg-pink-600/80 px-2 py-1 text-xs text-white hover:bg-pink-600 disabled:opacity-50">
                   Mark posted

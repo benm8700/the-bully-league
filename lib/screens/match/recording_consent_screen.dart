@@ -48,8 +48,10 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
                     'You consent to being recorded, on video and audio, for this match.',
                   ),
                   const _ConsentBullet(
-                    'The recording may be posted publicly on The Bully League\'s '
-                    'website or social media if it\'s selected as a highlight.',
+                    'The Bully League may use and post this recording publicly - '
+                    'on our website, our social media, and in our promotional / '
+                    'marketing content - including as a highlight. You can opt a '
+                    'specific clip out later from My Battles.',
                   ),
                   const _ConsentBullet(
                     'The raw recording is kept for a limited time (see Privacy Policy) '

@@ -119,59 +119,57 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
                 padding: EdgeInsets.all(28),
                 child: Center(child: CircularProgressIndicator()),
               )
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Feature this in our promos?',
-                      style: theme.textTheme.titleLarge),
-                  const SizedBox(height: 8),
-                  Text(
-                    "If you AND your opponent both say yes, this battle could "
-                    "show up in The Bully League's own promos - our official "
-                    "TikTok, Instagram and YouTube. Nothing goes out unless you "
-                    "both agree, and you can change your mind here any time.",
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  if (_consent != null)
+            : Builder(builder: (context) {
+                // Default IN: when you joined, you okayed us featuring your
+                // battles in our promos, so a clip is in by default. Only an
+                // explicit opt-out (consent == false) keeps THIS one out.
+                final optedOut = _consent == false;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Use this in our promos',
+                        style: theme.textTheme.titleLarge),
+                    const SizedBox(height: 8),
+                    Text(
+                      "When you joined, you okayed us featuring your battles in "
+                      "The Bully League's promos - so this one's in by default. "
+                      "If you'd rather we didn't use THIS clip, keep it out "
+                      "below. You can flip it back any time.",
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Text(
-                        _consent!
-                            ? "You're good with it being used."
-                            : "You've said no for this one.",
+                        optedOut
+                            ? "This clip is kept OUT of our promos."
+                            : "This clip is in our promos.",
                         style: theme.textTheme.labelLarge?.copyWith(
-                            color: _consent! ? scheme.primary : scheme.error),
+                            color: optedOut ? scheme.error : scheme.primary),
                       ),
                     ),
-                  if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(_error!, style: TextStyle(color: scheme.error)),
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child:
+                            Text(_error!, style: TextStyle(color: scheme.error)),
+                      ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: optedOut
+                          ? FilledButton(
+                              onPressed: _busy ? null : () => _set(true),
+                              child: const Text('Allow it in our promos'),
+                            )
+                          : OutlinedButton(
+                              onPressed: _busy ? null : () => _set(false),
+                              child: const Text('Keep this one out'),
+                            ),
                     ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton(
-                          onPressed:
-                              _busy || _consent == true ? null : () => _set(true),
-                          child: const Text('Yes, use it'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _busy || _consent == false
-                              ? null
-                              : () => _set(false),
-                          child: const Text('No thanks'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                  ],
+                );
+              }),
       ),
     );
   }
