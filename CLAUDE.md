@@ -1011,6 +1011,38 @@ Raised by the developer: what protects someone who is unhappy that their match f
   cut with burned-in captions + the "THE BULLY LEAGUE" watermark (exactly what
   short-form socials want), and the /admin Publish action is the natural
   trigger/approval point to hang this off.
+  - **UPDATE (2026-10-20): the CURATION / AUTO-SURFACE half is BUILT — the
+    "Post Studio" in /admin** (`website/src/app/admin/page.tsx` PostStudio +
+    `postStudioClips` in `adminMetrics.ts` + markClipPosted/setAsideClip/
+    restoreClip in the admin action route; curation state is a server-only
+    `postStudio` map on the match doc). It ranks finalized, rendered clips
+    BEST-FIRST by votes + 🔥/🧠 positive emoji, with per-clip preview, ⬇
+    download-the-vertical-cut, Publish-to-site (reusing the objection-gated
+    `publishBattle`), per-platform TikTok/IG/YT "mark posted" tracking, and
+    Posted / Set-aside archives with move-back. It is **auto-surface,
+    human-decide.** What's STILL not built is the literal one-click AUTO-post
+    to the platforms (needs each platform's posting API + OAuth + TikTok
+    approval) — once wired, real posting drops onto the same "Mark posted"
+    control; until then the flow is download → upload → mark posted. **The
+    paired piece still to build: a per-clip MARKETING-USE consent flag** (so a
+    candidate shows ✅ both consented vs ⚠️ needs consent).
+  - **OFFICIAL-POST COMPLIANCE RULES — decided (2026-10-20).** External posts go
+    out ONLY from the company's own marketing accounts, curated + human-reviewed
+    by the developer (not users' personal accounts; the developer explicitly
+    does not care about liability on user self-posts). Whoever posts is the
+    PUBLISHER and owns that post's liability; Section 230's shield is weak/gone
+    for the company's own first-party curated posts, so official posts carry
+    real publisher exposure (defamation if a roast states a false FACT; right-of-
+    publicity for using a real face in an ad; platform strikes). GREEN-LIGHT to
+    post: both 18+ (gated) AND both gave marketing-use consent for THAT clip;
+    pure comedy that passes the "stranger with zero context laughs" test. RED-
+    LIGHT (never): slurs/anything targeting a protected group even "ironically"
+    (#1 account-killer), anything reading as real harassment, a false factual
+    claim stated as fact, sexual/nudity/threats/doxxing, any 18+ doubt, or any
+    objection/no-consent. The two safeguards: marketing-use consent from BOTH
+    people per clip, and the developer's own eyes applying the PLATFORM's
+    standard (not the app's free-speech one) on every post. Not legal advice;
+    the ToS footage-license/consent docs still want counsel before go-live.
   - **NON-NEGOTIABLE CONSTRAINT, already decided: a HUMAN platform-policy review
     gate must sit in front of any social post.** External platforms enforce
     stricter rules than this app's free-speech policy, so a clip that's fine
