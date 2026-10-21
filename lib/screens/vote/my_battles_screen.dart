@@ -7,6 +7,7 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/follow_button.dart';
 import '../../widgets/player_avatar.dart';
 import '../battles/get_clip_sheet.dart';
+import '../battles/marketing_consent_sheet.dart';
 import '../profile/performer_profile_screen.dart';
 import '../settings/blocked_players_screen.dart';
 import '../moderation/clip_takedown_sheet.dart';
@@ -824,6 +825,16 @@ class _BattleCard extends StatelessWidget {
                 onTap: () {
                   Navigator.pop(sheetCtx);
                   GetClipSheet.show(context, matchId);
+                },
+              ),
+            if (mode != 'exhibition' && status == 'completed')
+              ListTile(
+                leading: const Icon(Icons.campaign_outlined),
+                title: const Text('Feature in our promos?'),
+                subtitle: const Text('Let us use this clip on our socials'),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  MarketingConsentSheet.show(context, matchId);
                 },
               ),
             ListTile(

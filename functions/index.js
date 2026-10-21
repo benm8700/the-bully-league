@@ -1179,6 +1179,10 @@ exports.renderMatchHighlight = onCall(
 );
 
 exports.setMatchReady = onCall((request) => setMatchReady(request.auth, request.data));
+exports.setMatchMarketingConsent = onCall((request) => {
+  const {setMatchMarketingConsent} = require("./marketingConsent");
+  return setMatchMarketingConsent(request.auth, request.data);
+});
 exports.skipMatch = onCall((request) => skipMatch(request.auth, request.data));
 exports.getSkipAllowance = onCall((request) => getSkipAllowance(request.auth));
 

@@ -268,6 +268,9 @@ export type PostClip = {
   votes: number;
   positiveEmoji: number; // 🔥 fire + 🧠 clever received this match
   score: number;
+  // Marketing-use consent across BOTH battlers: both said yes / still needed /
+  // at least one declined. Gates whether it's safe to post as official promo.
+  consent: "both" | "needs" | "declined";
   status: "candidate" | "posted" | "dismissed";
   platforms: { tiktok: boolean; instagram: boolean; youtube: boolean } | null;
   actedAtMs: number | null; // posted/dismissed timestamp, for archive ordering
@@ -360,6 +363,16 @@ async function postStudioClips(): Promise<{
     const ps = (x.postStudio as Record<string, unknown> | undefined) ?? {};
     const plat = (ps.platforms as Record<string, boolean> | undefined) ?? null;
     const votes = Number(x.voteCount) || 0;
+    const mc =
+      (x.marketingConsent as Record<string, { consent?: boolean }> | undefined) ?? {};
+    const c1 = mc[String(x.player1Id ?? "")]?.consent;
+    const c2 = mc[String(x.player2Id ?? "")]?.consent;
+    const consent: "both" | "needs" | "declined" =
+      c1 === false || c2 === false
+        ? "declined"
+        : c1 === true && c2 === true
+          ? "both"
+          : "needs";
     return {
       id: d.id,
       player1Name: nameByUid.get(String(x.player1Id ?? "")) ?? "Unknown",
@@ -370,6 +383,7 @@ async function postStudioClips(): Promise<{
       votes,
       positiveEmoji,
       score: votes + positiveEmoji * 2,
+      consent,
       status,
       platforms: plat
         ? { tiktok: !!plat.tiktok, instagram: !!plat.instagram, youtube: !!plat.youtube }
