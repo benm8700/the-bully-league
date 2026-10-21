@@ -559,6 +559,9 @@ function ArchiveRow({ clip, accent, busy, onRestore }: { clip: PostClip; accent:
       {accent === "pink" && plats.length > 0 && (
         <span className="text-pink-300">{plats.map((p) => (p === "tiktok" ? "TikTok" : p === "instagram" ? "IG" : "YT")).join(" · ")}</span>
       )}
+      {accent === "pink" && clip.consent === "optedout" && (
+        <span title="A battler opted out after this was posted — take it down from your socials" className="rounded bg-red-500/15 px-1.5 py-0.5 text-red-300">🚫 take down from socials</span>
+      )}
       <span className="text-zinc-600">{clip.actedAtMs ? new Date(clip.actedAtMs).toLocaleDateString() : ""}</span>
       <button disabled={busy} onClick={onRestore} className="ml-auto rounded border border-zinc-700 px-2 py-0.5 text-zinc-400 hover:bg-zinc-800 disabled:opacity-50">
         Move back

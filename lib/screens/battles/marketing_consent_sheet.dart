@@ -39,6 +39,7 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
   bool _busy = false;
   String? _error;
   bool? _consent; // my answer: true = yes, false = no, null = not answered
+  bool _posted = false; // this clip is already up on our socials
 
   @override
   void initState() {
@@ -57,11 +58,14 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
           .collection('matches')
           .doc(widget.matchId)
           .get();
-      final mc = (snap.data()?['marketingConsent'] as Map?) ?? const {};
+      final data = snap.data();
+      final mc = (data?['marketingConsent'] as Map?) ?? const {};
       final mine = mc[uid] as Map?;
+      final posted = (data?['postStudio'] as Map?)?['status'] == 'posted';
       if (mounted) {
         setState(() {
           _consent = mine == null ? null : mine['consent'] == true;
+          _posted = posted;
           _loading = false;
         });
       }
@@ -100,6 +104,38 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
         });
       }
     }
+  }
+
+  // An opt-out is one tap + one confirm - deliberately easy (withdrawing
+  // promo use must be as simple as it was given). The confirm is an honest
+  // reminder of the upside, NOT a guilt-trip: both great and terrible sets can
+  // blow up, which is the whole point of being here.
+  Future<void> _confirmAndOptOut() async {
+    final body = _posted
+        ? "Both good AND bad performances can blow up and get you noticed - "
+            "that's the whole point of being here. This clip is already up on "
+            "our socials; opt out and we'll take it down from our accounts."
+        : "Both good AND bad performances can blow up and get you noticed - "
+            "that's the whole point of being here. Opt out and we'll keep this "
+            "clip out of our promos.";
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sure you want to opt out?'),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep it in'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Opt out'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await _set(false);
   }
 
   @override
@@ -163,7 +199,7 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
                               child: const Text('Allow it in our promos'),
                             )
                           : OutlinedButton(
-                              onPressed: _busy ? null : () => _set(false),
+                              onPressed: _busy ? null : _confirmAndOptOut,
                               child: const Text('Keep this one out'),
                             ),
                     ),
