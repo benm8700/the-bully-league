@@ -162,8 +162,8 @@ class MainStageBanner extends StatelessWidget {
       case MainStageRole.finalist:
         return (
           title: needsAnswer
-              ? 'You made the Main Stage — confirm'
-              : "You're in the Main Stage",
+              ? 'Congratulations! You made the Main Stage'
+              : "Congratulations! You're in the Main Stage",
           sub: needsAnswer
               ? 'Confirm by Thursday 4pm or your spot goes to an alternate.'
               : 'Field locks Thursday 4pm.',
@@ -182,8 +182,8 @@ class MainStageBanner extends StatelessWidget {
       case MainStageRole.judge:
         return (
           title: needsAnswer
-              ? "You're on the judging panel — confirm"
-              : "You're judging the finals",
+              ? "Congratulations! You're on the judging panel"
+              : "Congratulations! You're judging the finals",
           sub: 'Five judges decide the Main Stage. Confirm by Thursday 4pm.',
           icon: Icons.gavel,
           urgent: needsAnswer,

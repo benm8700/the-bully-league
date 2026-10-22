@@ -327,14 +327,14 @@ class _MainStageScreenState extends State<MainStageScreen> {
     if (v.status == 'locked') return [..._locked(v), _fieldWidget(v)];
     // accepting
     final base = switch (v.role) {
-      MainStageRole.finalist => _invite(v, "You made the Main Stage.",
+      MainStageRole.finalist => _invite(v, "Congratulations! You made the Main Stage.",
           "Top 4 this week. Confirm you're in by Thursday 4pm or your spot "
               'goes to an alternate.'),
       MainStageRole.alternate => _invite(v, "You're an alternate.",
           "Ranks 5-8 this week. If a finalist drops by Thursday 4pm, the "
               'highest confirmed alternate rolls in — so confirm you\'re '
               'around just in case.'),
-      MainStageRole.judge => _invite(v, "You're on the judging panel.",
+      MainStageRole.judge => _invite(v, "Congratulations! You're on the judging panel.",
           'Five judges decide the finals live on stage. Confirm by Thursday '
               '4pm.'),
       MainStageRole.none => <Widget>[
