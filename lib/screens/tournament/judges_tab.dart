@@ -47,6 +47,18 @@ class _JudgesTabState extends State<JudgesTab> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(JudgesTab old) {
+    super.didUpdateWidget(old);
+    // The hub loads weekKey a beat after this tab first builds, so the initial
+    // _load often ran with a null weekKey and couldn't read the volunteer doc
+    // (showing "not volunteered" even after a successful opt-in). Re-read once
+    // the key arrives so the state reflects the server, not a stale first pass.
+    if (old.weekKey != widget.weekKey && widget.weekKey != null) {
+      _load();
+    }
+  }
+
   Future<void> _load() async {
     try {
       final db = FirebaseFirestore.instance;

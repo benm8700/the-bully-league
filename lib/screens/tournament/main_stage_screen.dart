@@ -324,7 +324,13 @@ class _MainStageScreenState extends State<MainStageScreen> {
     }
     // The announced field (with the wild-card reveal) shows below the viewer's
     // own status in both the locked and accepting states.
-    if (v.status == 'locked') return [..._locked(v), _fieldWidget(v)];
+    if (v.status == 'locked') {
+      return [
+        ..._locked(v),
+        _fieldWidget(v),
+        if (v.role == MainStageRole.judge) ..._judgeGreenRoom(v),
+      ];
+    }
     // accepting
     final base = switch (v.role) {
       MainStageRole.finalist => _invite(v, "Congratulations! You made the Main Stage.",
@@ -347,7 +353,40 @@ class _MainStageScreenState extends State<MainStageScreen> {
           ),
         ],
     };
-    return [...base, _fieldWidget(v)];
+    return [
+      ...base,
+      _fieldWidget(v),
+      if (v.role == MainStageRole.judge && v.invite == InviteStatus.accepted)
+        ..._judgeGreenRoom(v),
+    ];
+  }
+
+  /// The judges' private green room, surfaced to a confirmed judge from
+  /// acceptance through the show. The chat is backend-gated to SEATED judges
+  /// (the panel is set at the 4pm lock), so before the lock this just sets the
+  /// expectation; from the lock on it mounts the live chat. During a live
+  /// battle the chat is already shown full-screen by [_layout], so this is for
+  /// the quieter accepting/locked windows.
+  List<Widget> _judgeGreenRoom(MainStageView v) {
+    final gold = context.palette.reward;
+    final open = v.status == 'locked' || v.status == 'live';
+    if (!open) {
+      return [
+        const SizedBox(height: 24),
+        _statusPill(Icons.forum_outlined, "Judges' green room",
+            'Opens when the panel locks at 4pm PT — you\'ll meet the other '
+                'judges and chat here before the show.', gold),
+      ];
+    }
+    return [
+      const SizedBox(height: 24),
+      _headline("Judges' green room", gold),
+      const SizedBox(height: 8),
+      Text('Your private panel chat — hang with the other judges before '
+          'the show and between battles.', style: _muted()),
+      const SizedBox(height: 12),
+      SizedBox(height: 380, child: JudgeChat(tournamentId: v.tournamentId)),
+    ];
   }
 
   /// The announced finals field with the wild card marked. Uses the locked
