@@ -6,6 +6,7 @@ import '../../core/services/main_stage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/judge_chat.dart';
+import '../profile/performer_profile_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import 'judges_room_screen.dart';
@@ -673,54 +674,74 @@ class _FieldRosterState extends State<_FieldRoster> {
           Text(reveal,
               style: text.bodySmall
                   ?.copyWith(color: Colors.white.withValues(alpha: 0.78))),
-          const SizedBox(height: 10),
+          const SizedBox(height: 4),
+          Text('Tap a name to study them — their intro and their ammo.',
+              style: text.bodySmall?.copyWith(
+                  color: Colors.white38, fontStyle: FontStyle.italic)),
+          const SizedBox(height: 8),
           ...List.generate(widget.uids.length, (i) {
             final uid = widget.uids[i];
             final isWild = wc != null && uid == wc;
             final isMe = uid == me;
             final name = _loading ? '…' : (_names[uid] ?? 'Roaster');
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 30,
-                    child: isWild
-                        ? const Text('\u{1F3B2}',
-                            style: TextStyle(fontSize: 17))
-                        : Text('${i + 1}',
-                            style: text.titleMedium?.copyWith(
-                                color: gold, fontWeight: FontWeight.w900)),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      isMe ? '$name (you)' : name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight:
-                              isMe ? FontWeight.w800 : FontWeight.w600),
+            // Tap anyone but yourself to open their card and STUDY them
+            // (intro video + ammo) before the show.
+            return InkWell(
+              onTap: isMe
+                  ? null
+                  : () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => PerformerProfileScreen(uid: uid))),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 30,
+                      child: isWild
+                          ? const Text('\u{1F3B2}',
+                              style: TextStyle(fontSize: 17))
+                          : Text('${i + 1}',
+                              style: text.titleMedium?.copyWith(
+                                  color: gold, fontWeight: FontWeight.w900)),
                     ),
-                  ),
-                  if (isWild)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        color: gold.withValues(alpha: 0.18),
-                        border: Border.all(color: gold.withValues(alpha: 0.6)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isMe ? '$name (you)' : name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight:
+                                isMe ? FontWeight.w800 : FontWeight.w600),
                       ),
-                      child: Text('WILD CARD',
-                          style: TextStyle(
-                              color: gold,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5)),
                     ),
-                ],
+                    if (isWild)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: gold.withValues(alpha: 0.18),
+                          border:
+                              Border.all(color: gold.withValues(alpha: 0.6)),
+                        ),
+                        child: Text('WILD CARD',
+                            style: TextStyle(
+                                color: gold,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5)),
+                      ),
+                    if (!isMe)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 6),
+                        child: Icon(Icons.chevron_right,
+                            size: 18, color: Colors.white38),
+                      ),
+                  ],
+                ),
               ),
             );
           }),

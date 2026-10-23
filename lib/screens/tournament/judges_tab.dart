@@ -4,9 +4,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/hub_service.dart';
+import '../../core/services/main_stage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
 import '../profile/performer_profile_screen.dart';
+import 'judges_room_screen.dart';
 
 /// The Judges tab of the tournament hub.
 ///
@@ -38,6 +40,7 @@ class _JudgesTabState extends State<JudgesTab> {
   int _minToQualify = _defaultMinToQualify;
   bool _volunteered = false;
   bool _acting = false;
+  final _mainStage = MainStageService();
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
@@ -143,6 +146,9 @@ class _JudgesTabState extends State<JudgesTab> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
         children: [
+          // If you're a seated judge and a battle is on stage right now, the
+          // fastest way in - straight to the judges' room.
+          _liveJudgeCta(),
           // How the panel gets filled.
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -201,6 +207,43 @@ class _JudgesTabState extends State<JudgesTab> {
                 _row(e.key, e.value, selfUid, gold, text, scheme)),
         ],
       ),
+    );
+  }
+
+  /// Shown only to a seated judge while a battle is live on stage: a direct
+  /// button into the judges' room. The alert bar and Home banner cover this
+  /// too; this is the in-hub path the developer asked for.
+  Widget _liveJudgeCta() {
+    return StreamBuilder<MainStageView?>(
+      stream: _mainStage.watch(),
+      builder: (context, snap) {
+        final v = snap.data;
+        if (v == null ||
+            v.status != 'live' ||
+            v.role != MainStageRole.judge ||
+            v.liveBattleMatchId == null) {
+          return const SizedBox.shrink();
+        }
+        final mid = v.liveBattleMatchId!;
+        final live = context.palette.live;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: live,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 52),
+              ),
+              icon: const Icon(Icons.gavel),
+              label: const Text("Join the judges' room"),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => JudgesRoomScreen(matchId: mid))),
+            ),
+          ),
+        );
+      },
     );
   }
 
