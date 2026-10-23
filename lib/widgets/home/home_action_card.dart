@@ -34,11 +34,12 @@ class HomeActionCard extends StatelessWidget {
   final Widget? center;
   final Alignment centerAlignment;
 
-  /// Display aspect (developer, 2026-10-23): a taller 2.5:1 so the banners
-  /// aren't short/compressed. The art is 1200x360 (3.33:1), so BoxFit.cover
-  /// crops the sides a touch to this ratio (centred, never stretched) - the
-  /// labels sit toward the middle, so they stay visible.
-  static const double aspect = 2.5;
+  /// Display aspect (developer, 2026-10-23): 2.7:1 - a touch shorter than 2.5
+  /// so the banners don't read as stretched/tall, while still fuller than the
+  /// old 3.33. The art is full-bleed 2.5:1, so BoxFit.cover trims only a sliver
+  /// off the top/bottom (centred, never stretched); the labels sit mid-frame,
+  /// so they stay visible.
+  static const double aspect = 2.7;
   static const double _radius = 19;
   static const double _widthFactor = 0.95;
 
