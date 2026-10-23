@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../screens/tournament/tournament_hub_screen.dart';
@@ -23,24 +24,71 @@ class MainStageCard extends StatelessWidget {
           MaterialPageRoute(builder: (_) => const TournamentHubScreen()),
         );
 
-    return HeroModeCard(
-      asset: 'assets/home/tournament_hero.png',
-      glow: context.palette.reward, // gold - the event/tournament colour
-      aspectRatio: kHeroPillAspect, // matched to the Basement pill
-      scrim: false, // baked art used as-is
-      onTap: openHub,
-      topRight: IconButton(
-        icon: const Icon(Icons.help_outline),
-        iconSize: 28,
-        color: Colors.white,
-        tooltip: 'How the Main Stage works',
-        style: IconButton.styleFrom(
-          backgroundColor: Colors.black.withValues(alpha: 0.42),
-          padding: const EdgeInsets.all(6),
-        ),
-        onPressed: () => _showMainStageInfo(context),
+    // Watches the tournament flag so a "COMING SOON" badge shows while it is
+    // switched off (which it is now). Everything underneath - the card, the
+    // hub, all the features - stays fully intact and tappable; this is only a
+    // reminder to users that the monthly Main Stage is not live yet, and it
+    // disappears automatically the moment config/tournament.enabled flips true.
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('config')
+          .doc('tournament')
+          .snapshots(),
+      builder: (context, snap) {
+        final enabled = snap.data?.data()?['enabled'] == true;
+        return HeroModeCard(
+          asset: 'assets/home/tournament_hero.png',
+          glow: context.palette.reward, // gold - the event/tournament colour
+          aspectRatio: kHeroPillAspect, // matched to the Basement pill
+          scrim: false, // baked art used as-is
+          onTap: openHub,
+          topRight: IconButton(
+            icon: const Icon(Icons.help_outline),
+            iconSize: 28,
+            color: Colors.white,
+            tooltip: 'How the Main Stage works',
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.black.withValues(alpha: 0.42),
+              padding: const EdgeInsets.all(6),
+            ),
+            onPressed: () => _showMainStageInfo(context),
+          ),
+          // Sits just below the baked "MAIN STAGE" title so it never covers it.
+          center: enabled ? null : _comingSoonBadge(context),
+          centerAlignment: const Alignment(0, 0.58),
+          overlay: const SizedBox.shrink(),
+        );
+      },
+    );
+  }
+
+  /// A dark gold-rimmed "COMING SOON" pill, shown over the card while the
+  /// tournament is switched off.
+  Widget _comingSoonBadge(BuildContext context) {
+    final gold = context.palette.reward;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: gold.withValues(alpha: 0.9), width: 1.5),
       ),
-      overlay: const SizedBox.shrink(),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.schedule, size: 15, color: gold),
+          const SizedBox(width: 6),
+          Text(
+            'COMING SOON',
+            style: TextStyle(
+              color: gold,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
