@@ -43,8 +43,41 @@ class HomeScreen extends StatelessWidget {
     final authService = context.read<AuthService>();
 
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    // The cinematic stage background runs behind the WHOLE screen (app bar
+    // included), matching the other tabs (Vote / My Battles / Ranks / Profile),
+    // which each use their own assets/home/<screen>_background.png. Same recipe:
+    // a dark base, the image fit to width and anchored to the top, and a soft
+    // gradient so the cards and text stay readable. Drop
+    // assets/home/home_background.png in to light it up; the errorBuilder keeps
+    // it to the plain dark base until then, so it can never break the screen.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const ColoredBox(color: Color(0xFF0E0B14)),
+        Image.asset(
+          'assets/home/home_background.png',
+          fit: BoxFit.fitWidth,
+          alignment: Alignment.topCenter,
+          errorBuilder: (_, _, _) =>
+              const ColoredBox(color: Color(0xFF0E0B14)),
+        ),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x3D000000), Color(0x0A000000), Color(0x59000000)],
+            ),
+          ),
+        ),
+        Scaffold(
+      // Transparent so the stage background above shows through the whole
+      // screen rather than being hidden behind a solid Scaffold/app bar.
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         // The header logo is the WORDMARK-ONLY branding asset
         // (assets/branding/bully_league_wordmark.png) - the approved
         // bully_league_header.png with the "REAL PEOPLE. REAL ROASTS." tagline
@@ -247,6 +280,8 @@ class HomeScreen extends StatelessWidget {
           );
         },
       ),
+      ),
+      ],
     );
   }
 }
