@@ -1231,19 +1231,10 @@ class _PlayWatchDoors extends StatelessWidget {
               ),
               onPressed: () => _showPlayInfo(context, accent),
             ),
-            overlay: const SizedBox.shrink(),
-          ),
-        ),
-        const SizedBox(height: 8),
-        // A plain one-liner for newbies: the "?" has the full story, but the
-        // one core mode must be instantly legible without tapping anything.
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24),
-          child: Text(
-            'Get matched with a random stranger for a live 1-on-1 roast battle. '
-            'Funniest wins the crowd vote.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white70, fontSize: 12.5, height: 1.3),
+            // A short caption chip at the very bottom - the core mode must be
+            // legible without tapping the "?", and a translucent pill reads
+            // cleanly over the crowd without dimming the baked word.
+            overlay: _pillCaption('Roast a random stranger — funniest wins'),
           ),
         ),
         const SizedBox(height: 14),
@@ -1255,12 +1246,41 @@ class _PlayWatchDoors extends StatelessWidget {
             aspectRatio: kHeroPillAspect,
             scrim: false,
             onTap: () => MainShell.go(MainShell.tabWatch),
-            overlay: const SizedBox.shrink(),
+            overlay: _pillCaption('Watch & judge live battles'),
           ),
         ),
       ],
     );
   }
+
+  /// A compact translucent caption pill anchored at the bottom of a hero card,
+  /// so a one-line description reads over the art without a full scrim.
+  Widget _pillCaption(String text) => Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
 
   /// Explains Play (roast a stranger / The Basement) - opened by the "?".
   void _showPlayInfo(BuildContext context, Color accent) {
