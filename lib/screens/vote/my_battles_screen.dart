@@ -570,6 +570,14 @@ class _BattleCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 10),
                             _judgedRow(context, total),
+                            // The clip is the growth engine, so getting/sharing
+                            // it is a VISIBLE one-tap action on every finished
+                            // recorded battle - not buried in the options sheet.
+                            // Louder on a win (your best content to post).
+                            if (mode != 'exhibition' && status == 'completed') ...[
+                              const SizedBox(height: 12),
+                              _clipCta(context, result),
+                            ],
                           ],
                         );
                       },
@@ -762,6 +770,26 @@ class _BattleCard extends StatelessWidget {
             : null,
       ),
       child: child,
+    );
+  }
+
+  /// A visible, full-width clip call-to-action on a finished recorded battle -
+  /// opens the Get-your-clip sheet in one tap. Green and "Share your win" on a
+  /// win (your most postable content); neutral "Get your clip" otherwise.
+  Widget _clipCta(BuildContext context, _Result result) {
+    final won = result == _Result.win;
+    final green = context.palette.winner;
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.tonalIcon(
+        onPressed: () => GetClipSheet.show(context, matchId),
+        icon: const Icon(Icons.ios_share, size: 18),
+        label: Text(won ? 'Share your win' : 'Get your clip'),
+        style: FilledButton.styleFrom(
+          backgroundColor: won ? green.withValues(alpha: 0.18) : null,
+          foregroundColor: won ? const Color(0xFF6BE0A0) : null,
+        ),
+      ),
     );
   }
 

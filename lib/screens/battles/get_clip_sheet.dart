@@ -253,7 +253,14 @@ class _GetClipSheetState extends State<GetClipSheet> {
       setState(() => _busy = false);
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'video/mp4')],
-        text: 'My roast on The Bully League',
+        // Every shared clip is free acquisition, so the caption RECRUITS: a
+        // dare + the site (which carries the download CTA) + hashtags, rather
+        // than a flat "my roast". Kept here as one string so it is trivial to
+        // retune; swap the URL for the real store/landing link when there is
+        // one.
+        text: 'Think you can roast me better? Come get cooked on The Bully '
+            'League 🎤🔥 the-bully-league.vercel.app\n'
+            '#TheBullyLeague #roastbattle #comedy',
       );
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
