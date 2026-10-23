@@ -266,18 +266,18 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
           right: 0,
           child: Container(
             color: color.withValues(alpha: 0.92),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             child: Row(
               children: [
                 _numBadge(playerUid),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 15,
+                          fontSize: 13,
                           fontWeight: FontWeight.w800)),
                 ),
               ],
@@ -361,8 +361,8 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
   /// A small circled number (①/②) in the player's colour.
   Widget _numBadge(int n) {
     return Container(
-      width: 22,
-      height: 22,
+      width: 18,
+      height: 18,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.3),
@@ -371,7 +371,7 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
       ),
       child: Text('$n',
           style: const TextStyle(
-              color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
+              color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900)),
     );
   }
 

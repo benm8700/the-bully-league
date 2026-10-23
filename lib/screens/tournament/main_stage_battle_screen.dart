@@ -55,7 +55,7 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
   // in N" before the first clock drains - so the battle has a real start
   // instead of lurching straight into someone's turn. The host drives it and
   // broadcasts once; the guest mirrors it locally.
-  static const int _kCountdownMs = 20000;
+  static const int _kCountdownMs = 15000;
   int? _countdownEndMs;
   Timer? _countdownTimer;
   int get _countdownLeft {
@@ -98,6 +98,12 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
     }
     if (!mounted) return;
     _msgSub = _video.matchMessages.listen(_onMessage);
+    // BOTH mics stay muted through connect + countdown. There is no warmup on
+    // the Main Stage - it goes countdown -> battle - so nobody should be
+    // audible until the clock assigns the floor. _afterStateChange unmutes the
+    // floor-holder the moment the battle opens (host) / its first state lands
+    // (guest), so this only silences the dead pre-battle window.
+    _video.muteLocalAudio(true);
     setState(() => _initialized = true);
 
     if (_isHost) {

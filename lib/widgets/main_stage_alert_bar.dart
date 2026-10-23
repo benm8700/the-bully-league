@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/services/main_stage_service.dart';
+import '../screens/tournament/judges_room_screen.dart';
 import '../screens/tournament/main_stage_screen.dart';
 import '../theme/app_theme.dart';
 
@@ -37,8 +38,16 @@ class _MainStageAlertBarState extends State<MainStageAlertBar> {
         return Material(
           color: bg,
           child: InkWell(
+            // The judge's "needs your verdict" cue drops STRAIGHT into the
+            // panel for that battle - one tap, no intermediate Main Stage
+            // screen. Every other cue routes through the Main Stage, which
+            // then picks the right sub-state.
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const MainStageScreen()),
+              MaterialPageRoute(
+                builder: (_) => cue.judgeMatchId != null
+                    ? JudgesRoomScreen(matchId: cue.judgeMatchId!)
+                    : const MainStageScreen(),
+              ),
             ),
             child: SafeArea(
               bottom: false,
@@ -70,7 +79,8 @@ class _MainStageAlertBarState extends State<MainStageAlertBar> {
     );
   }
 
-  ({String text, String action, IconData icon})? _cue(MainStageView v) {
+  ({String text, String action, IconData icon, String? judgeMatchId})? _cue(
+      MainStageView v) {
     if (v.status != 'live') return null;
     if (v.liveStage == MainStageLiveStage.playNow) {
       return (
@@ -79,6 +89,7 @@ class _MainStageAlertBarState extends State<MainStageAlertBar> {
             : "You're up on the Main Stage",
         action: v.myMatchupIsFinal ? 'Play final' : 'Play',
         icon: Icons.mic,
+        judgeMatchId: null,
       );
     }
     if (v.role == MainStageRole.judge && v.liveBattleMatchId != null) {
@@ -86,6 +97,8 @@ class _MainStageAlertBarState extends State<MainStageAlertBar> {
         text: 'A Main Stage battle needs your verdict',
         action: 'Judge',
         icon: Icons.gavel,
+        // Carry the match id so the tap opens the judges' room directly.
+        judgeMatchId: v.liveBattleMatchId,
       );
     }
     // Just battled: pull them to WATCH the panel decide it, rather than leaving
@@ -95,6 +108,7 @@ class _MainStageAlertBarState extends State<MainStageAlertBar> {
         text: 'Your battle is being judged — watch the panel',
         action: 'Watch',
         icon: Icons.gavel,
+        judgeMatchId: null,
       );
     }
     return null;

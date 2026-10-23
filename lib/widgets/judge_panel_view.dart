@@ -334,7 +334,7 @@ class _JudgePanelViewState extends State<JudgePanelView> {
                       fontSize: 13,
                       fontWeight: FontWeight.w700)),
             ),
-          Row(children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Expanded(child: _voteButton(
                 widget.player1Id, widget.player1Name, House.gelRed, mine)),
             const SizedBox(width: 10),
@@ -346,23 +346,67 @@ class _JudgePanelViewState extends State<JudgePanelView> {
     );
   }
 
-  /// A compact tap-to-vote button - one tap casts (or changes) the vote.
+  /// A compact tap-to-vote button - one tap casts (or changes) the vote. Once
+  /// a pick is in, the winner lights up in their gel colour with a 👍 and the
+  /// other instantly flips dark with a 🖕 - the verdict reads itself, no gavel,
+  /// same footprint so the video table keeps the screen.
   Widget _voteButton(String id, String name, Color color, String? mine) {
-    final selected = mine == id;
-    return OutlinedButton(
-      onPressed: _submitting ? null : () => _vote(id),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        backgroundColor:
-            selected ? color.withValues(alpha: 0.28) : Colors.transparent,
-        side: BorderSide(
-            color: selected ? Colors.white : color, width: selected ? 2 : 1),
+    final hasPick = mine != null;
+    final isWinner = mine == id;
+    final isLoser = hasPick && !isWinner;
+
+    final emoji =
+        isWinner ? '\u{1F44D}' : (isLoser ? '\u{1F595}' : null); // 👍 / 🖕
+    final bg = isWinner
+        ? color.withValues(alpha: 0.9)
+        : isLoser
+            ? const Color(0xFF161616)
+            : color.withValues(alpha: 0.14);
+    final border = isWinner
+        ? Colors.white
+        : isLoser
+            ? Colors.white12
+            : color;
+    final fg = isWinner ? Colors.white : (isLoser ? Colors.white38 : Colors.white);
+
+    return GestureDetector(
+      onTap: _submitting ? null : () => _vote(id),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: border, width: isWinner ? 2 : 1),
+          boxShadow: isWinner
+              ? [BoxShadow(color: color.withValues(alpha: 0.55), blurRadius: 14)]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (emoji != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  transitionBuilder: (child, anim) =>
+                      ScaleTransition(scale: anim, child: child),
+                  child: Text(emoji,
+                      key: ValueKey(emoji),
+                      style: const TextStyle(fontSize: 18)),
+                ),
+              ),
+            Flexible(
+              child: Text(name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: fg, fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
       ),
-      child: Text(name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w700)),
     );
   }
 }
