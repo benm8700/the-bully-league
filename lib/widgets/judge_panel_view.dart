@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/judges_table.dart';
 import '../core/services/agora_token_service.dart';
@@ -72,6 +73,13 @@ class _JudgePanelViewState extends State<JudgePanelView> {
   // listener echoing it back. Reconciled against the server below; reverted
   // only if the vote actually fails.
   String? _optimisticPick;
+
+  // Two-step verdict: SELECT a side (tap a chip), then SLAM the gavel to commit.
+  // _selected is the tapped-but-not-yet-slammed battler; _slamming drives the
+  // one-shot gavel animation overlay.
+  String? _selected;
+  bool _slamming = false;
+  Color _slamColor = Colors.white;
 
   // Once decided, a 30s grace runs (cameras stay live, judges keep talking),
   // then this nudges the server to settle. The 1s tick drives the countdown.
@@ -197,6 +205,22 @@ class _JudgePanelViewState extends State<JudgePanelView> {
     }
   }
 
+  /// Commit the verdict with a bang: a haptic thump + the gavel-slam overlay,
+  /// then cast the vote. The slam IS the moment the pick lands on the public
+  /// tally - the gratifying "submit" the one-tap button never had.
+  void _slam(String id, Color color) {
+    if (_submitting) return;
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _slamColor = color;
+      _slamming = true;
+    });
+    _vote(id);
+  }
+
+  String _nameOf(String? id) =>
+      id == widget.player1Id ? widget.player1Name : widget.player2Name;
+
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
@@ -236,30 +260,47 @@ class _JudgePanelViewState extends State<JudgePanelView> {
         );
         return ValueListenableBuilder<Set<int>>(
           valueListenable: _panel.presentUids,
-          builder: (context, present, _) => Column(
+          builder: (context, present, _) => Stack(
             children: [
-              Expanded(
-                child: ValueListenableBuilder<int?>(
-                  valueListenable: _panel.activeSpeaker,
-                  builder: (context, active, _) => JudgesTable(
-                    seats: seats,
-                    present: present,
-                    activeSeatUid: active,
-                    judgeNames: _judgeNames,
-                    playerNames: {
-                      widget.player1Id: widget.player1Name,
-                      widget.player2Id: widget.player2Name,
-                    },
-                    playerColors: {
-                      widget.player1Id: House.gelRed,
-                      widget.player2Id: House.gelBlue,
-                    },
-                    localViewBuilder: _panel.localVideoView,
-                    remoteViewBuilder: _panel.remoteVideoView,
+              Column(
+                children: [
+                  Expanded(
+                    child: ValueListenableBuilder<int?>(
+                      valueListenable: _panel.activeSpeaker,
+                      builder: (context, active, _) => JudgesTable(
+                        seats: seats,
+                        present: present,
+                        activeSeatUid: active,
+                        judgeNames: _judgeNames,
+                        playerNames: {
+                          widget.player1Id: widget.player1Name,
+                          widget.player2Id: widget.player2Name,
+                        },
+                        playerColors: {
+                          widget.player1Id: House.gelRed,
+                          widget.player2Id: House.gelBlue,
+                        },
+                        localViewBuilder: _panel.localVideoView,
+                        remoteViewBuilder: _panel.remoteVideoView,
+                      ),
+                    ),
+                  ),
+                  _voteBar(myPick),
+                ],
+              ),
+              // The gavel SLAM - a one-shot celebration overlay when a verdict
+              // is committed. IgnorePointer so it never eats a tap.
+              if (_slamming)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: _GavelSlam(
+                      color: _slamColor,
+                      onDone: () {
+                        if (mounted) setState(() => _slamming = false);
+                      },
+                    ),
                   ),
                 ),
-              ),
-              _voteBar(myPick),
             ],
           ),
         );
@@ -301,7 +342,8 @@ class _JudgePanelViewState extends State<JudgePanelView> {
         ),
       );
     }
-    // Open vote: two transparent tap-to-vote buttons.
+    // Open vote: SELECT a side, then SLAM the gavel to commit it.
+    final effective = _selected ?? _optimisticPick ?? myPick;
     return Padding(
       padding: EdgeInsets.fromLTRB(12, 4, 12, bottom),
       child: Column(
@@ -315,21 +357,24 @@ class _JudgePanelViewState extends State<JudgePanelView> {
                   style: TextStyle(color: context.palette.live, fontSize: 11)),
             ),
           Row(children: [
-            Expanded(child: _voteButton(
-                widget.player1Id, widget.player1Name, House.gelRed, myPick)),
+            Expanded(child: _selectChip(
+                widget.player1Id, widget.player1Name, House.gelRed, effective)),
             const SizedBox(width: 10),
-            Expanded(child: _voteButton(
-                widget.player2Id, widget.player2Name, House.gelBlue, myPick)),
+            Expanded(child: _selectChip(
+                widget.player2Id, widget.player2Name, House.gelBlue, effective)),
           ]),
+          const SizedBox(height: 8),
+          _gavelButton(myPick),
         ],
       ),
     );
   }
 
-  Widget _voteButton(String id, String name, Color color, String? myPick) {
-    final selected = (_optimisticPick ?? myPick) == id;
+  /// A tap-to-SELECT battler chip (does not vote - just arms the gavel).
+  Widget _selectChip(String id, String name, Color color, String? effective) {
+    final selected = effective == id;
     return OutlinedButton(
-      onPressed: _submitting ? null : () => _vote(id),
+      onPressed: _submitting ? null : () => setState(() => _selected = id),
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 10),
         backgroundColor:
@@ -342,6 +387,146 @@ class _JudgePanelViewState extends State<JudgePanelView> {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
               color: Colors.white, fontWeight: FontWeight.w700)),
+    );
+  }
+
+  /// The GAVEL - the satisfying commit. Enabled once a side is selected that
+  /// differs from your current vote; slamming it casts (or changes) the verdict.
+  Widget _gavelButton(String? myPick) {
+    final target = _selected;
+    final nothingNew = target == null || target == myPick;
+    if (nothingNew) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Text(
+          myPick != null
+              ? 'Verdict in for ${_nameOf(myPick)} — tap the other side to change'
+              : 'Pick a side, then slam the gavel.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+      );
+    }
+    final color = target == widget.player1Id ? House.gelRed : House.gelBlue;
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton(
+        onPressed: _submitting ? null : () => _slam(target, color),
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(double.infinity, 54),
+          backgroundColor: context.palette.reward,
+          foregroundColor: Colors.black,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14)),
+        ),
+        child: _submitting
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.black))
+            : Text(
+                myPick == null ? '🔨  SLAM THE GAVEL' : '🔨  SLAM TO CHANGE',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w900, fontSize: 16),
+              ),
+      ),
+    );
+  }
+}
+
+/// The one-shot gavel-slam animation: the gavel swings down, CRACKS, and a ring
+/// of the winner's colour flashes out. ~550ms, then [onDone]. Purely cosmetic,
+/// shown under IgnorePointer so it never blocks a tap.
+class _GavelSlam extends StatefulWidget {
+  const _GavelSlam({required this.color, required this.onDone});
+  final Color color;
+  final VoidCallback onDone;
+
+  @override
+  State<_GavelSlam> createState() => _GavelSlamState();
+}
+
+class _GavelSlamState extends State<_GavelSlam>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 560),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _c.addStatusListener((s) {
+      if (s == AnimationStatus.completed) widget.onDone();
+    });
+    _c.forward();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  static double _l(double a, double b, double t) => a + (b - a) * t;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) {
+        final t = _c.value;
+        const hitAt = 0.42;
+        // Swing down into the hit.
+        final fall = Curves.easeIn.transform((t / hitAt).clamp(0.0, 1.0));
+        final angle = _l(-0.75, 0.12, fall);
+        final dy = _l(-34.0, 0.0, fall);
+        // After the crack: the ring expands + fades; the gavel eases back up.
+        final after = ((t - hitAt) / (1 - hitAt)).clamp(0.0, 1.0);
+        final ringScale = _l(0.2, 2.2, Curves.easeOut.transform(after));
+        final ringOpacity = (t < hitAt - 0.02) ? 0.0 : (1 - after) * 0.7;
+        final gavelOpacity = 1.0 - after * 0.85;
+        return Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Flash ring in the winner's colour.
+              Opacity(
+                opacity: ringOpacity.clamp(0.0, 1.0),
+                child: Transform.scale(
+                  scale: ringScale,
+                  child: Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: widget.color, width: 6),
+                      boxShadow: [
+                        BoxShadow(
+                            color: widget.color.withValues(alpha: 0.6),
+                            blurRadius: 30,
+                            spreadRadius: 4),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // The gavel.
+              Opacity(
+                opacity: gavelOpacity.clamp(0.0, 1.0),
+                child: Transform.translate(
+                  offset: Offset(0, dy),
+                  child: Transform.rotate(
+                    angle: angle,
+                    child: const Text('🔨', style: TextStyle(fontSize: 96)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
