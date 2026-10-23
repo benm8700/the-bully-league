@@ -257,13 +257,20 @@ class _MainStageScreenState extends State<MainStageScreen> {
 
         case MainStageLiveStage.awaitingVerdict:
           // Just battled - the judges are deciding. No play button (that was
-          // the stale "already played" banner bug).
+          // the stale "already played" banner bug). Instead, pull them to WATCH
+          // the panel deliberate - that is the show.
           return [
             _headline('Battle done', context.palette.reward),
             const SizedBox(height: 8),
-            Text("Nice work. The judges are deciding the winner - hang tight, "
-                "you'll find out here.", style: _muted()),
+            Text(
+                'Nice work — now watch the panel decide it. Head to the '
+                "judges' table and see the verdict land live.",
+                style: _muted()),
             const SizedBox(height: 20),
+            if (battle != null) ...[
+              watchBtn('Watch the judges decide'),
+              const SizedBox(height: 10),
+            ],
             _statusPill(Icons.gavel, 'Judges are deciding',
                 'The verdict lands here in a moment.',
                 Theme.of(context).colorScheme.onSurfaceVariant),

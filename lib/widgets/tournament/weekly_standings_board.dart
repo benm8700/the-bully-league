@@ -33,6 +33,7 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
   List<Map<String, dynamic>> _rows = const [];
   final Map<String, String> _names = {};
   int? _cutoffMs;
+  bool _mainStageLive = false; // is a Main Stage show running right now?
 
   @override
   void initState() {
@@ -66,10 +67,24 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
           if (n is String) _names[d.id] = n;
         }
       }
+      // Is the Main Stage actually LIVE right now? A single-field query over
+      // currently-live tournaments (usually 0-1), filtered to mainstage in Dart
+      // so no composite index is needed. Drives the header copy so it never
+      // says "opens Thursday night" during a live show.
+      var live = false;
+      try {
+        final q = await FirebaseFirestore.instance
+            .collection('tournaments')
+            .where('status', isEqualTo: 'live')
+            .get();
+        live = q.docs.any((d) => d.data()['format'] == 'mainstage');
+      } catch (_) {/* header falls back to the default copy */}
+
       if (!mounted) return;
       setState(() {
         _rows = rows;
         _cutoffMs = (data?['cutoffMs'] as num?)?.toInt();
+        _mainStageLive = live;
         _loading = false;
       });
     } catch (_) {
@@ -132,12 +147,18 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
         children: [
           Row(
             children: [
-              Icon(Icons.emoji_events_outlined, size: 20, color: gold),
+              Icon(_mainStageLive ? Icons.sensors : Icons.emoji_events_outlined,
+                  size: 20,
+                  color: _mainStageLive ? context.palette.live : gold),
               const SizedBox(width: 8),
               Expanded(
-                child: Text('The Main Stage opens Thursday night',
-                    style: text.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800, color: gold)),
+                child: Text(
+                    _mainStageLive
+                        ? 'The Main Stage is LIVE now'
+                        : 'The Main Stage opens Thursday night',
+                    style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: _mainStageLive ? context.palette.live : gold)),
               ),
             ],
           ),

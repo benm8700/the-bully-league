@@ -88,6 +88,15 @@ class _MainStageAlertBarState extends State<MainStageAlertBar> {
         icon: Icons.gavel,
       );
     }
+    // Just battled: pull them to WATCH the panel decide it, rather than leaving
+    // them idle. The whole point of the show is watching the judges judge.
+    if (v.liveStage == MainStageLiveStage.awaitingVerdict) {
+      return (
+        text: 'Your battle is being judged — watch the panel',
+        action: 'Watch',
+        icon: Icons.gavel,
+      );
+    }
     return null;
   }
 
