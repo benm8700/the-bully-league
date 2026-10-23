@@ -610,6 +610,14 @@ exports.postJudgeChatMessage = onCall((request) => {
   return postJudgeChatMessage(request.auth, request.data);
 });
 
+// The Main Stage viewers' LOBBY chat (the whole crowd). The only write path -
+// clients can't write lobbyChat/** - so moderation + rate-limit can't be
+// skipped. Wiped when the tournament ends (onGauntletEnded). See lobby.js.
+exports.postLobbyMessage = onCall((request) => {
+  const {postLobbyMessage} = require("./lobby");
+  return postLobbyMessage(request.auth, request.data);
+});
+
 /**
  * Rolls a recent sample of matches into stats/matchStats once a day - round
  * length, completion rate, votes per match, counts by mode. The data already

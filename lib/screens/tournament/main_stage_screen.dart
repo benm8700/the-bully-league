@@ -12,6 +12,7 @@ import '../match/recording_consent_screen.dart';
 import 'judges_room_screen.dart';
 import 'live_viewer_screen.dart';
 import 'main_stage_callout_screen.dart';
+import 'main_stage_lobby_screen.dart';
 import 'main_stage_rules_screen.dart';
 
 /// The Main Stage (weekly finals) front door: tells the viewer where they stand
@@ -312,6 +313,7 @@ class _MainStageScreenState extends State<MainStageScreen> {
                 'the crown.', style: _muted()),
             const SizedBox(height: 20),
             if (battle != null) watchBtn('Watch the rest'),
+            _joinCrowdBtn(v),
           ];
 
         case MainStageLiveStage.spectate:
@@ -327,6 +329,7 @@ class _MainStageScreenState extends State<MainStageScreen> {
               _statusPill(Icons.hourglass_top, 'Between battles',
                   'The next battle is being set up - hang tight.',
                   Theme.of(context).colorScheme.onSurfaceVariant),
+            _joinCrowdBtn(v),
           ];
       }
     }
@@ -404,6 +407,19 @@ class _MainStageScreenState extends State<MainStageScreen> {
     if (uids.isEmpty) return const SizedBox.shrink();
     return _FieldRoster(uids: uids, wildCardUid: v.wildCardUid);
   }
+
+  /// Into the viewers' lobby - the crowd's holding room (live count + chat).
+  Widget _joinCrowdBtn(MainStageView v) => Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+          icon: const Icon(Icons.forum),
+          label: const Text('Join the crowd'),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) =>
+                  MainStageLobbyScreen(tournamentId: v.tournamentId))),
+        ),
+      );
 
   List<Widget> _invite(MainStageView v, String title, String blurb) {
     final gold = context.palette.reward;

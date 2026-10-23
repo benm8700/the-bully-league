@@ -446,6 +446,15 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Main Stage viewers' LOBBY presence - each viewer heartbeats its own doc
+    // for the live "N watching" count. Own-write only (so the count reflects
+    // distinct accounts and nobody can inflate it); readable by any signed-in
+    // viewer. Vanity/ephemeral - nothing downstream trusts it.
+    match /mainStageLobby/{tournamentId}/viewers/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
     // Live crowd reactions on a Main Stage battle. Reactions ONLY go through the
     // castLiveReaction Cloud Function (session/Turnstile, one-per-account, and
     // the emojiCounts increment all need server-side enforcement - emojiCounts
