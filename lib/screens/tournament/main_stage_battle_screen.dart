@@ -11,7 +11,7 @@ import '../../core/services/main_stage_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/video_call_service.dart';
 import '../../theme/app_theme.dart';
-import 'live_viewer_screen.dart';
+import 'watch_judges_screen.dart';
 
 /// The Main Stage finals battle: the chess-clock + interrupt format, driving
 /// the verified MainStageBattleState engine live over Agora. Host-authoritative
@@ -595,7 +595,7 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
                 onPressed: () => Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
                     builder: (_) =>
-                        LiveViewerScreen(matchId: widget.pairing.matchId),
+                        WatchJudgesScreen(matchId: widget.pairing.matchId),
                   ),
                 ),
               ),

@@ -13,6 +13,7 @@ import 'judges_room_screen.dart';
 import 'live_viewer_screen.dart';
 import 'main_stage_callout_screen.dart';
 import 'main_stage_lobby_screen.dart';
+import 'watch_judges_screen.dart';
 import 'main_stage_rules_screen.dart';
 
 /// The Main Stage (weekly finals) front door: tells the viewer where they stand
@@ -270,7 +271,17 @@ class _MainStageScreenState extends State<MainStageScreen> {
                 style: _muted()),
             const SizedBox(height: 20),
             if (battle != null) ...[
-              watchBtn('Watch the judges decide'),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: context.palette.live,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(0, 54),
+                ),
+                icon: const Icon(Icons.gavel),
+                label: const Text('Watch the judges decide'),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => WatchJudgesScreen(matchId: battle))),
+              ),
               const SizedBox(height: 10),
             ],
             _statusPill(Icons.gavel, 'Judges are deciding',
