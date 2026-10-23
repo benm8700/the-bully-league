@@ -88,14 +88,11 @@ class HomeScreen extends StatelessWidget {
         // height only (BoxFit.contain preserves the aspect ratio - never
         // stretched, cropped or recoloured), kept compact.
         toolbarHeight: 72,
-        titleSpacing: 16,
-        title: Align(
-          alignment: Alignment.centerLeft,
-          child: Image.asset(
-            'assets/branding/bully_league_wordmark.png',
-            height: 44,
-            fit: BoxFit.contain,
-          ),
+        centerTitle: true,
+        title: Image.asset(
+          'assets/branding/bully_league_wordmark.png',
+          height: 44,
+          fit: BoxFit.contain,
         ),
         actions: [
           // The bell shows notification settings (no badge count).
