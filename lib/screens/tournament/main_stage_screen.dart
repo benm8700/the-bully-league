@@ -472,7 +472,7 @@ class _MainStageScreenState extends State<MainStageScreen> {
     final until = v.showAtMs == null ? null : _untilShow(v.showAtMs!);
     final isShowtime = v.showAtMs != null && until == null;
     final widgets = <Widget>[
-      _headline('The field is locked', gold),
+      _headline('The Main Stage is live', gold),
       const SizedBox(height: 8),
       Text('Four finalists. Single elimination. One battle at a time.',
           style: _muted()),

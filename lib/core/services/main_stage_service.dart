@@ -135,14 +135,14 @@ class MainStageService {
         .collection('tournaments')
         .where('format', isEqualTo: 'mainstage')
         .snapshots()
-        .map((snap) {
+        .asyncMap((snap) async {
       if (uid == null) return null;
       final live = snap.docs
           .where((d) => _active.contains(d.data()['status']))
           .toList()
         ..sort((a, b) => _createdMs(b.data()).compareTo(_createdMs(a.data())));
       if (live.isEmpty) return null;
-      return _view(live.first.id, live.first.data(), uid);
+      return await _view(live.first.id, live.first.data(), uid);
     });
   }
 
@@ -153,7 +153,8 @@ class MainStageService {
     return 0;
   }
 
-  MainStageView _view(String id, Map<String, dynamic> t, String uid) {
+  Future<MainStageView> _view(
+      String id, Map<String, dynamic> t, String uid) async {
     final finalists = _strList(t['finalists']);
     final alternates = _strList(t['alternates']);
     final judgePool = _strList(t['judgePool']);
@@ -245,9 +246,31 @@ class MainStageService {
                     : MainStageLiveStage.advancedWaiting)
                 : MainStageLiveStage.eliminated;
           } else if (started) {
-            // Battle in progress or played and awaiting the verdict - NOT a
-            // fresh "Play your match" (that was the stale-banner bug).
-            liveStage = MainStageLiveStage.awaitingVerdict;
+            // A matchId exists but no winner yet - and that is TWO different
+            // situations that must not be conflated:
+            //  - the match is still pending/in_progress: the viewer can step on
+            //    stage (they haven't joined yet, OR they dropped and want back
+            //    in). Show "Play your match" so the battle can actually start /
+            //    resume instead of deadlocking.
+            //  - the match is completed and the judges are deciding: "Battle
+            //    done".
+            // The bracket alone can't tell these apart (both are matchId-set,
+            // winner-null); one field off the match doc can. Falls back to the
+            // safe "awaiting verdict" state if the read fails.
+            String? matchStatus;
+            try {
+              final md =
+                  await _db.collection('matches').doc(mid).get();
+              matchStatus = md.data()?['status'] as String?;
+            } catch (_) {}
+            if (matchStatus == 'pending' || matchStatus == 'in_progress') {
+              liveStage = MainStageLiveStage.playNow;
+              myRound = hiR;
+              myIdx = hiM;
+              myIsFinal = hiR == lastRound;
+            } else {
+              liveStage = MainStageLiveStage.awaitingVerdict;
+            }
           } else if (opponent == null) {
             // Through to this round, opponent not settled yet (the other
             // semifinal is still going).

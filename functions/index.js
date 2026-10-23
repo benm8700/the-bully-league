@@ -560,19 +560,6 @@ exports.sweepMainStage = onSchedule("every 15 minutes", async () => {
   }
 });
 
-// TEMPORARY one-shot armer for the 2026-10-22 first-capture: flips
-// config/tournament.enabled true once now >= config/tournament.armAtMs, so the
-// real-clock midnight selection fires hands-off. REMOVE after the event.
-exports.autoArmTournament = onSchedule("every 10 minutes", async () => {
-  const {armTournamentIfDue} = require("./armTournament");
-  try {
-    const r = await armTournamentIfDue();
-    if (r.armed) console.log("autoArmTournament:", JSON.stringify(r));
-  } catch (err) {
-    console.error("autoArmTournament failed:", err);
-  }
-});
-
 // A finalist/alternate confirms or declines their Main Stage invite.
 exports.respondToMainStageInvite = onCall(async (request) => {
   const {respondToInvite} = require("./mainStageTournament");
