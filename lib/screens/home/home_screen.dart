@@ -17,6 +17,7 @@ import '../../widgets/admin_only.dart';
 import '../../widgets/home/goat_throne_banner.dart';
 import '../../widgets/home/main_stage_banner.dart';
 import '../../widgets/home/prize_claim_banner.dart';
+import '../../widgets/home/home_action_card.dart';
 import '../../widgets/home/player_status_card.dart';
 import '../../widgets/home/home_quick_actions.dart';
 import '../../widgets/home/home_featured.dart';
@@ -1242,55 +1243,21 @@ class _PlayWatchDoors extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Both use the shared HomeActionCard, so Play, Watch and the Main Stage
+    // card below are all the same size/shape (91% width, 3.33:1, 22px radius,
+    // BoxFit.cover). 14px between them.
     return Column(
       children: [
-        _ActionCard(
+        HomeActionCard(
           asset: 'assets/home/roast_hero.png',
           onTap: () => _startMatch(context, 'ranked'),
         ),
-        const SizedBox(height: 16),
-        _ActionCard(
+        const SizedBox(height: 14),
+        HomeActionCard(
           asset: 'assets/home/watch_hero.png',
           onTap: () => MainShell.go(MainShell.tabWatch),
         ),
       ],
-    );
-  }
-}
-
-/// A full-bleed image action card for the two front doors: 90% of the screen
-/// width, ~110 logical px tall, 22px rounded corners, the whole artwork shown
-/// via BoxFit.fill (the PLAY/WATCH labels are baked into the image, so nothing
-/// is overlaid), centred, and the ENTIRE card tappable. Responsive by sizing
-/// to the screen width, so it scales across iPhone and Android.
-class _ActionCard extends StatelessWidget {
-  const _ActionCard({required this.asset, required this.onTap});
-
-  final String asset;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width * 0.9;
-    const height = 110.0;
-    return Center(
-      child: GestureDetector(
-        onTap: onTap,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: Image.asset(
-            asset,
-            width: width,
-            height: height,
-            fit: BoxFit.fill,
-            errorBuilder: (_, _, _) => Container(
-              width: width,
-              height: height,
-              color: const Color(0xFF14100F),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

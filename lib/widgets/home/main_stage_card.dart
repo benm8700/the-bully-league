@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../screens/tournament/tournament_hub_screen.dart';
 import '../../theme/app_theme.dart';
-import 'hero_mode_card.dart';
+import 'home_action_card.dart';
 
 /// The Main Stage hero card on Home - the permanent front door to the WEEKLY
 /// tournament hub.
@@ -36,27 +36,26 @@ class MainStageCard extends StatelessWidget {
           .snapshots(),
       builder: (context, snap) {
         final enabled = snap.data?.data()?['enabled'] == true;
-        return HeroModeCard(
+        // Same shared card as Play/Watch, so all three are identical in size.
+        return HomeActionCard(
           asset: 'assets/home/tournament_hero.png',
-          glow: context.palette.reward, // gold - the event/tournament colour
-          aspectRatio: kHeroPillAspect, // matched to the Basement pill
-          scrim: false, // baked art used as-is
           onTap: openHub,
           topRight: IconButton(
             icon: const Icon(Icons.help_outline),
-            iconSize: 28,
+            iconSize: 22,
             color: Colors.white,
             tooltip: 'How the Main Stage works',
             style: IconButton.styleFrom(
               backgroundColor: Colors.black.withValues(alpha: 0.42),
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(5),
+              minimumSize: const Size(0, 0),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             onPressed: () => _showMainStageInfo(context),
           ),
           // Sits just below the baked "MAIN STAGE" title so it never covers it.
           center: enabled ? null : _comingSoonBadge(context),
-          centerAlignment: const Alignment(0, 0.58),
-          overlay: const SizedBox.shrink(),
+          centerAlignment: const Alignment(0, 0.55),
         );
       },
     );
