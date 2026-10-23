@@ -60,16 +60,16 @@ class MainStageCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'The weekly finals - the biggest stage in the league. Four '
+                'The monthly finals - the biggest stage in the league. Four '
                 'roasters battle live, a panel of judges decides, and the '
-                'champion takes The Belt.',
+                'champion takes The Belt. One big night, hyped all month.',
                 style: body,
               ),
               const SizedBox(height: 16),
               _infoHeading(context, 'How you get here'),
               Text(
                 "You don't enter - you qualify by battling in The Basement all "
-                'week. The top 3 roasters by skill lock in a seat. The 4th is a '
+                'month. The top 3 roasters by skill lock in a seat. The 4th is a '
                 'wild card: the more you play and vote on other matches, the '
                 'better your odds of getting selected.',
                 style: body,

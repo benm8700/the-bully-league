@@ -17,6 +17,7 @@ import '../../widgets/admin_only.dart';
 import '../../widgets/home/goat_throne_banner.dart';
 import '../../widgets/home/main_stage_banner.dart';
 import '../../widgets/home/prize_claim_banner.dart';
+import '../../widgets/home/hero_mode_card.dart';
 import '../../widgets/home/player_status_card.dart';
 import '../../widgets/home/home_quick_actions.dart';
 import '../../widgets/home/home_featured.dart';
@@ -1188,107 +1189,134 @@ class _WalletBar extends StatelessWidget {
   }
 }
 
-/// The two front doors: PLAY and WATCH, side by side.
+/// The two front doors: PLAY and WATCH, as the premium pillbox hero cards used
+/// elsewhere on Home.
 ///
 /// This is the whole point of the Home redesign - the first decision a visitor
 /// makes is reduced to the two things anyone understands (make it vs watch it)
 /// instead of a wall of named modes. PLAY launches the everyday Basement battle
 /// (roast a stranger) through the existing _startMatch path, so the entitlement
 /// gate and the rest of the flow are untouched. WATCH jumps to the Vote tab.
+///
+/// The art carries the words (the developer bakes "PLAY"/"WATCH" into the PNGs),
+/// so nothing is overlaid. Play reuses the Basement art (assets/home/roast_hero.png)
+/// for a good look out of the box; Watch uses assets/home/watch_hero.png (a
+/// re-lettered copy of the Main Stage art) and shows a plain gradient until that
+/// file is dropped in.
 class _PlayWatchDoors extends StatelessWidget {
   const _PlayWatchDoors();
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: _Door(
-              label: 'Play',
-              sub: 'Roast a stranger',
-              icon: Icons.mic,
-              color: scheme.primary,
-              onColor: scheme.onPrimary,
-              onTap: () => _startMatch(context, 'ranked'),
+    final accent = context.palette.accent;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: HeroModeCard(
+            asset: 'assets/home/roast_hero.png',
+            glow: accent,
+            aspectRatio: kHeroPillAspect,
+            scrim: false,
+            onTap: () => _startMatch(context, 'ranked'),
+            topRight: IconButton(
+              icon: const Icon(Icons.help_outline),
+              iconSize: 28,
+              color: Colors.white,
+              tooltip: 'What is Play?',
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.black.withValues(alpha: 0.42),
+                padding: const EdgeInsets.all(6),
+              ),
+              onPressed: () => _showPlayInfo(context, accent),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _Door(
-              label: 'Watch',
-              sub: 'Watch & judge',
-              icon: Icons.visibility,
-              color: scheme.secondary,
-              onColor: scheme.onSecondary,
-              onTap: () => MainShell.go(MainShell.tabWatch),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One of the two big front-door tiles - a bold coloured block with an icon,
-/// a big display-font label and a one-line subtitle. Fixed height so the pair
-/// line up without an IntrinsicHeight pass.
-class _Door extends StatelessWidget {
-  const _Door({
-    required this.label,
-    required this.sub,
-    required this.icon,
-    required this.color,
-    required this.onColor,
-    required this.onTap,
-  });
-
-  final String label;
-  final String sub;
-  final IconData icon;
-  final Color color;
-  final Color onColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return Material(
-      color: color,
-      borderRadius: BorderRadius.circular(20),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: SizedBox(
-          height: 156,
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Icon(icon, color: onColor, size: 36),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label,
-                        style: text.headlineMedium?.copyWith(
-                            color: onColor,
-                            fontWeight: FontWeight.w900,
-                            height: 1.0)),
-                    const SizedBox(height: 2),
-                    Text(sub,
-                        style: text.bodySmall?.copyWith(
-                            color: onColor.withValues(alpha: 0.85),
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ],
-            ),
+            overlay: const SizedBox.shrink(),
           ),
         ),
+        const SizedBox(height: 8),
+        // A plain one-liner for newbies: the "?" has the full story, but the
+        // one core mode must be instantly legible without tapping anything.
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24),
+          child: Text(
+            'Get matched with a random stranger for a live 1-on-1 roast battle. '
+            'Funniest wins the crowd vote.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white70, fontSize: 12.5, height: 1.3),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: HeroModeCard(
+            asset: 'assets/home/watch_hero.png',
+            glow: scheme.secondary,
+            aspectRatio: kHeroPillAspect,
+            scrim: false,
+            onTap: () => MainShell.go(MainShell.tabWatch),
+            overlay: const SizedBox.shrink(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Explains Play (roast a stranger / The Basement) - opened by the "?".
+  void _showPlayInfo(BuildContext context, Color accent) {
+    final body = Theme.of(context).textTheme.bodyMedium;
+    Widget heading(String label) => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(label,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold, color: accent)),
+        );
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Play'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Get matched with a random opponent for a live, one-on-one roast '
+                'battle. No bracket, no waiting - just you, them, and a crowd to '
+                'settle it.',
+                style: body,
+              ),
+              const SizedBox(height: 16),
+              heading('How it works'),
+              Text(
+                'You each get a short clock that only ticks while you hold the '
+                'floor; roast, then yield. Before the bell you watch their intro '
+                'video, so you walk in with ammo. The whole thing is recorded.',
+                style: body,
+              ),
+              const SizedBox(height: 16),
+              heading('How you win'),
+              Text(
+                'The crowd watches and votes - most votes takes it. Wins climb '
+                'your rank, and your best moments become a clip you can post.',
+                style: body,
+              ),
+              const SizedBox(height: 16),
+              heading('Keep it funny'),
+              Text(
+                'Go as hard as you want - it is comedy. Deliberate hate or '
+                'harassment will not be tolerated.',
+                style: body,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
       ),
     );
   }
@@ -1297,6 +1325,12 @@ class _Door extends StatelessWidget {
 /// The two other ways to play, demoted to a quiet secondary row under the
 /// doors: Face-Off (improv) and Challenge a Friend. Compact outlined pills so
 /// they stay reachable without competing with PLAY/WATCH.
+///
+/// Face-Off ships LOCKED (greyed, a padlock): it is a whole second mode that
+/// shouldn't compete for a newcomer's attention, so it is held back as an
+/// unlock. The exact gate (a subscription, or reaching the top ranks) is still
+/// being decided, so tapping just explains it - nothing is wired to the real
+/// entitlement/rank yet.
 class _MoreWaysToPlay extends StatelessWidget {
   const _MoreWaysToPlay();
 
@@ -1312,7 +1346,8 @@ class _MoreWaysToPlay extends StatelessWidget {
               icon: Icons.flash_on,
               label: 'Face-Off',
               iconColor: const Color(0xFF19B3A6),
-              onTap: () => _startMatch(context, 'improv'),
+              locked: true,
+              onTap: () => _showFaceOffLocked(context),
             ),
           ),
           const SizedBox(width: 12),
@@ -1330,50 +1365,83 @@ class _MoreWaysToPlay extends StatelessWidget {
       ),
     );
   }
+
+  void _showFaceOffLocked(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Face-Off is locked'),
+        content: Text(
+          'Face-Off is a blind improv mode - you and your opponent riff the '
+          'same surprise prompt. It unlocks for subscribers, or once you climb '
+          'to the top ranks. Coming soon.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// A compact secondary play pill - icon + label in an outlined surface card.
+/// [locked] greys it out and shows a padlock; the tap then explains how to
+/// unlock rather than launching.
 class _MiniPlay extends StatelessWidget {
   const _MiniPlay({
     required this.icon,
     required this.label,
     required this.iconColor,
     required this.onTap,
+    this.locked = false,
   });
 
   final IconData icon;
   final String label;
   final Color iconColor;
   final VoidCallback onTap;
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    return Material(
-      color: scheme.surfaceContainer,
-      borderRadius: BorderRadius.circular(14),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: scheme.outlineVariant),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          child: Row(
-            children: [
-              Icon(icon, color: iconColor, size: 22),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800)),
-              ),
-            ],
+    final labelColor = locked ? scheme.onSurfaceVariant : scheme.onSurface;
+    return Opacity(
+      opacity: locked ? 0.55 : 1,
+      child: Material(
+        color: scheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              children: [
+                Icon(icon, color: locked ? scheme.onSurfaceVariant : iconColor,
+                    size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800, color: labelColor)),
+                ),
+                if (locked)
+                  Icon(Icons.lock_outline,
+                      size: 16, color: scheme.onSurfaceVariant),
+              ],
+            ),
           ),
         ),
       ),
