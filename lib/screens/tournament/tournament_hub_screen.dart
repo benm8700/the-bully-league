@@ -6,12 +6,14 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/event_window.dart';
 import '../../core/services/hub_service.dart';
+import '../../core/services/main_stage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/tournament/hub_chat.dart';
 import '../../widgets/tournament/prize_tab.dart';
 import '../../widgets/tournament/weekly_standings_board.dart';
 import 'judges_tab.dart';
 import 'main_stage_rules_screen.dart';
+import 'main_stage_screen.dart';
 
 /// THE MAIN STAGE HUB - the home of the weekly tournament.
 ///
@@ -100,6 +102,7 @@ class _TournamentHubScreenState extends State<TournamentHubScreen> {
               child: Column(
                 children: [
                   const _HubHeader(),
+                  const _JoinBar(),
                   TabBar(
                     isScrollable: false,
                     indicatorColor: gold,
@@ -149,6 +152,71 @@ class _TournamentHubScreenState extends State<TournamentHubScreen> {
           ),
         ),
       );
+}
+
+/// The loud "take your spot" bar at the top of the hub while a Main Stage show
+/// is LIVE - funnelling everyone in is the whole point of the tab. Role-aware:
+/// a finalist plays, a judge judges, everyone else watches. One tap into
+/// MainStageScreen, which already routes to the right place. Renders nothing
+/// when no show is live.
+class _JoinBar extends StatefulWidget {
+  const _JoinBar();
+
+  @override
+  State<_JoinBar> createState() => _JoinBarState();
+}
+
+class _JoinBarState extends State<_JoinBar> {
+  final _service = MainStageService();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<MainStageView?>(
+      stream: _service.watch(),
+      builder: (context, snap) {
+        final v = snap.data;
+        if (v == null || v.status != 'live') return const SizedBox.shrink();
+        final (label, icon) = _cue(v);
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+          child: SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: context.palette.live,
+                foregroundColor: Colors.white,
+              ),
+              icon: Icon(icon),
+              label: Text(label,
+                  style: const TextStyle(fontWeight: FontWeight.w900)),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const MainStageScreen()),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  (String, IconData) _cue(MainStageView v) {
+    if (v.role == MainStageRole.judge) {
+      return ('Judge the Main Stage — join the panel', Icons.gavel);
+    }
+    if (v.liveStage == MainStageLiveStage.playNow) {
+      return (
+        v.myMatchupIsFinal
+            ? "You're in the FINAL — take the stage"
+            : "You're up — take the stage",
+        Icons.mic,
+      );
+    }
+    if (v.liveStage == MainStageLiveStage.awaitingVerdict) {
+      return ('Your battle is being judged — watch the panel', Icons.gavel);
+    }
+    return ('The Main Stage is LIVE — tap to watch', Icons.sensors);
+  }
 }
 
 /// The persistent strip above the tabs: the countdown to Thursday's finals and

@@ -11,6 +11,7 @@ import '../../core/services/main_stage_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/video_call_service.dart';
 import '../../theme/app_theme.dart';
+import 'live_viewer_screen.dart';
 
 /// The Main Stage finals battle: the chess-clock + interrupt format, driving
 /// the verified MainStageBattleState engine live over Agora. Host-authoritative
@@ -54,14 +55,15 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
   // in N" before the first clock drains - so the battle has a real start
   // instead of lurching straight into someone's turn. The host drives it and
   // broadcasts once; the guest mirrors it locally.
-  static const int _kCountdownMs = 10000;
+  static const int _kCountdownMs = 20000;
   int? _countdownEndMs;
   Timer? _countdownTimer;
   int get _countdownLeft {
     final end = _countdownEndMs;
     if (end == null) return 0;
     final left = ((end - _nowMs) / 1000).ceil();
-    return left < 0 ? 0 : (left > 10 ? 10 : left);
+    final cap = (_kCountdownMs / 1000).ceil();
+    return left < 0 ? 0 : (left > cap ? cap : left);
   }
 
   int get _nowMs => DateTime.now().millisecondsSinceEpoch;
@@ -574,15 +576,34 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
                     fontWeight: FontWeight.w900)),
             const SizedBox(height: 6),
             const Text(
-              'Both clocks are out. The judges decide it now — hang tight for '
-              'the verdict.',
+              "Both clocks are out — now watch the panel decide it. That's the "
+              'best part of the show.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white70),
             ),
             const SizedBox(height: 16),
-            FilledButton(
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: context.palette.live,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(0, 52),
+                ),
+                icon: const Icon(Icons.gavel),
+                label: const Text('Watch the judges decide'),
+                onPressed: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        LiveViewerScreen(matchId: widget.pairing.matchId),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
               onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
-              child: const Text('Done'),
+              child: const Text('Leave'),
             ),
           ],
         ),
