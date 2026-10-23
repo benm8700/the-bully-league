@@ -17,7 +17,6 @@ import '../../widgets/admin_only.dart';
 import '../../widgets/home/goat_throne_banner.dart';
 import '../../widgets/home/main_stage_banner.dart';
 import '../../widgets/home/prize_claim_banner.dart';
-import '../../widgets/home/hero_mode_card.dart';
 import '../../widgets/home/player_status_card.dart';
 import '../../widgets/home/home_quick_actions.dart';
 import '../../widgets/home/home_featured.dart';
@@ -1208,135 +1207,54 @@ class _PlayWatchDoors extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final accent = context.palette.accent;
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: HeroModeCard(
-            asset: 'assets/home/roast_hero.png',
-            glow: accent,
-            aspectRatio: kHeroPillAspect,
-            scrim: false,
-            onTap: () => _startMatch(context, 'ranked'),
-            topRight: IconButton(
-              icon: const Icon(Icons.help_outline),
-              iconSize: 28,
-              color: Colors.white,
-              tooltip: 'What is Play?',
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.black.withValues(alpha: 0.42),
-                padding: const EdgeInsets.all(6),
-              ),
-              onPressed: () => _showPlayInfo(context, accent),
-            ),
-            // A short caption chip at the very bottom - the core mode must be
-            // legible without tapping the "?", and a translucent pill reads
-            // cleanly over the crowd without dimming the baked word.
-            overlay: _pillCaption('Roast a random stranger — funniest wins'),
-          ),
+        _ActionCard(
+          asset: 'assets/home/roast_hero.png',
+          onTap: () => _startMatch(context, 'ranked'),
         ),
-        const SizedBox(height: 14),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: HeroModeCard(
-            asset: 'assets/home/watch_hero.png',
-            glow: scheme.secondary,
-            aspectRatio: kHeroPillAspect,
-            scrim: false,
-            onTap: () => MainShell.go(MainShell.tabWatch),
-            overlay: _pillCaption('Watch & judge live battles'),
-          ),
+        const SizedBox(height: 16),
+        _ActionCard(
+          asset: 'assets/home/watch_hero.png',
+          onTap: () => MainShell.go(MainShell.tabWatch),
         ),
       ],
     );
   }
+}
 
-  /// A compact translucent caption pill anchored at the bottom of a hero card,
-  /// so a one-line description reads over the art without a full scrim.
-  Widget _pillCaption(String text) => Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.2,
-                ),
-              ),
+/// A full-bleed image action card for the two front doors: 90% of the screen
+/// width, ~110 logical px tall, 22px rounded corners, the whole artwork shown
+/// via BoxFit.fill (the PLAY/WATCH labels are baked into the image, so nothing
+/// is overlaid), centred, and the ENTIRE card tappable. Responsive by sizing
+/// to the screen width, so it scales across iPhone and Android.
+class _ActionCard extends StatelessWidget {
+  const _ActionCard({required this.asset, required this.onTap});
+
+  final String asset;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width * 0.9;
+    const height = 110.0;
+    return Center(
+      child: GestureDetector(
+        onTap: onTap,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Image.asset(
+            asset,
+            width: width,
+            height: height,
+            fit: BoxFit.fill,
+            errorBuilder: (_, _, _) => Container(
+              width: width,
+              height: height,
+              color: const Color(0xFF14100F),
             ),
           ),
-        ],
-      );
-
-  /// Explains Play (roast a stranger / The Basement) - opened by the "?".
-  void _showPlayInfo(BuildContext context, Color accent) {
-    final body = Theme.of(context).textTheme.bodyMedium;
-    Widget heading(String label) => Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(label,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold, color: accent)),
-        );
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Play'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Get matched with a random opponent for a live, one-on-one roast '
-                'battle. No bracket, no waiting - just you, them, and a crowd to '
-                'settle it.',
-                style: body,
-              ),
-              const SizedBox(height: 16),
-              heading('How it works'),
-              Text(
-                'You each get a short clock that only ticks while you hold the '
-                'floor; roast, then yield. Before the bell you watch their intro '
-                'video, so you walk in with ammo. The whole thing is recorded.',
-                style: body,
-              ),
-              const SizedBox(height: 16),
-              heading('How you win'),
-              Text(
-                'The crowd watches and votes - most votes takes it. Wins climb '
-                'your rank, and your best moments become a clip you can post.',
-                style: body,
-              ),
-              const SizedBox(height: 16),
-              heading('Keep it funny'),
-              Text(
-                'Go as hard as you want - it is comedy. Deliberate hate or '
-                'harassment will not be tolerated.',
-                style: body,
-              ),
-            ],
-          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Got it'),
-          ),
-        ],
       ),
     );
   }
