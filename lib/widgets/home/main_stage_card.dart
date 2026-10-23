@@ -39,6 +39,7 @@ class MainStageCard extends StatelessWidget {
         // Same shared card as Play/Watch, so all three are identical in size.
         return HomeActionCard(
           asset: 'assets/home/tournament_hero.png',
+          accent: context.palette.reward, // gold - the event colour
           onTap: openHub,
           topRight: IconButton(
             icon: const Icon(Icons.help_outline),

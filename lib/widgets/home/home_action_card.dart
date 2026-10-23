@@ -16,6 +16,7 @@ class HomeActionCard extends StatelessWidget {
     super.key,
     required this.asset,
     required this.onTap,
+    required this.accent,
     this.topRight,
     this.center,
     this.centerAlignment = Alignment.center,
@@ -23,14 +24,23 @@ class HomeActionCard extends StatelessWidget {
 
   final String asset;
   final VoidCallback onTap;
+
+  /// The card's neon accent - the border + outer glow colour. Each mode gets
+  /// its own (Play green, Watch magenta, Main Stage gold) so the card reads as
+  /// a lit, tappable button rather than a flat banner.
+  final Color accent;
+
   final Widget? topRight;
   final Widget? center;
   final Alignment centerAlignment;
 
-  /// Native aspect of the 1200x360 button art.
-  static const double aspect = 1200 / 360;
-  static const double _radius = 22;
-  static const double _widthFactor = 0.91;
+  /// Display aspect (developer, 2026-10-23): a taller 2.5:1 so the banners
+  /// aren't short/compressed. The art is 1200x360 (3.33:1), so BoxFit.cover
+  /// crops the sides a touch to this ratio (centred, never stretched) - the
+  /// labels sit toward the middle, so they stay visible.
+  static const double aspect = 2.5;
+  static const double _radius = 19;
+  static const double _widthFactor = 0.95;
 
   @override
   Widget build(BuildContext context) {
@@ -40,33 +50,68 @@ class HomeActionCard extends StatelessWidget {
         width: width,
         child: AspectRatio(
           aspectRatio: aspect,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(_radius),
+          // Outer glow so the button looks lit/clickable. The shadow lives out
+          // here, OUTSIDE the ClipRRect, since a clip would cut it off.
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(_radius),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.45),
+                  blurRadius: 18,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.asset(
-                  asset,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) =>
-                      const ColoredBox(color: Color(0xFF14100F)),
-                ),
-                // Whole-card tap layer; any topRight control sits above it and
-                // keeps its own tap.
-                Positioned.fill(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(onTap: onTap),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(_radius),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.asset(
+                        asset,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) =>
+                            const ColoredBox(color: Color(0xFF14100F)),
+                      ),
+                      // Whole-card tap layer; any topRight control sits above
+                      // it and keeps its own tap.
+                      Positioned.fill(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(onTap: onTap),
+                        ),
+                      ),
+                      if (center != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: Align(
+                                alignment: centerAlignment, child: center!),
+                          ),
+                        ),
+                      if (topRight != null)
+                        Positioned(top: 6, right: 6, child: topRight!),
+                    ],
                   ),
                 ),
-                if (center != null)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Align(alignment: centerAlignment, child: center!),
+                // The neon frame, drawn last over the art so it reads as a
+                // button edge. IgnorePointer so it never eats a tap.
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(_radius),
+                        border: Border.all(
+                          color: accent.withValues(alpha: 0.95),
+                          width: 2.5,
+                        ),
+                      ),
                     ),
                   ),
-                if (topRight != null)
-                  Positioned(top: 6, right: 6, child: topRight!),
+                ),
               ],
             ),
           ),

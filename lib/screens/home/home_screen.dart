@@ -200,7 +200,7 @@ class HomeScreen extends StatelessWidget {
                     // modes and their wiring are untouched - this is just the
                     // front door.
                     const _PlayWatchDoors(),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 11),
                     // The WEEKLY Main Stage tournament stays its own distinct
                     // card - it is the EVENT/destination, not an everyday mode,
                     // so it earns a spot below the doors rather than hiding
@@ -1244,17 +1244,19 @@ class _PlayWatchDoors extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Both use the shared HomeActionCard, so Play, Watch and the Main Stage
-    // card below are all the same size/shape (91% width, 3.33:1, 22px radius,
-    // BoxFit.cover). 14px between them.
+    // card below are all the same size/shape (95% width, 2.5:1, 19px radius,
+    // BoxFit.cover). 11px between them.
     return Column(
       children: [
         HomeActionCard(
           asset: 'assets/home/roast_hero.png',
+          accent: const Color(0xFF3DE06B), // green, matching the Play art
           onTap: () => _startMatch(context, 'ranked'),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 11),
         HomeActionCard(
           asset: 'assets/home/watch_hero.png',
+          accent: const Color(0xFFC24DFF), // magenta, matching the Watch art
           onTap: () => MainShell.go(MainShell.tabWatch),
         ),
       ],
