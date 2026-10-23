@@ -188,9 +188,16 @@ class _JudgePanelViewState extends State<JudgePanelView> {
       await _service.castJudgeVote(widget.matchId, winnerUid);
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
+        final raw = e.message ?? '';
+        // A vote that lands on a battle that's gone/replaced (e.g. the live
+        // battle moved on) must say so clearly, not fail silently.
+        final msg = raw.contains('Not a Main Stage')
+            ? 'This battle has closed — go back and judge the current one.'
+            : (raw.isEmpty ? "Couldn't record that." : raw);
         setState(() {
           _optimisticPick = null; // revert the optimistic highlight on failure
-          _voteError = e.message ?? "Couldn't record that.";
+          _voteError = msg;
+          _slamming = false; // kill the gavel overlay - the slam didn't land
         });
       }
     } catch (_) {
@@ -350,11 +357,22 @@ class _JudgePanelViewState extends State<JudgePanelView> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_voteError != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: context.palette.live.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: context.palette.live.withValues(alpha: 0.6)),
+              ),
               child: Text(_voteError!,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: context.palette.live, fontSize: 11)),
+                  style: TextStyle(
+                      color: context.palette.live,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700)),
             ),
           Row(children: [
             Expanded(child: _selectChip(

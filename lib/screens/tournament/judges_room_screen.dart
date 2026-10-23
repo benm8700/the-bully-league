@@ -31,6 +31,7 @@ class JudgesRoomScreen extends StatefulWidget {
 class _JudgesRoomScreenState extends State<JudgesRoomScreen>
     with WidgetsBindingObserver {
   final SpectatorService _spectator = AgoraSpectatorService();
+  late final MainStageService _mainStage = widget.service ?? MainStageService();
   final String _myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
   bool _loading = true;
@@ -314,9 +315,46 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
               ),
               child: const Text('Done'),
             ),
+            _nextBattleButton(),
           ],
         ),
       ),
+    );
+  }
+
+  /// If a DIFFERENT battle is now on stage, offer to re-bind to it - so a judge
+  /// isn't stranded on a finished battle while the show has moved on.
+  Widget _nextBattleButton() {
+    return StreamBuilder<MainStageView?>(
+      stream: _mainStage.watch(),
+      builder: (context, snap) {
+        final v = snap.data;
+        final next = v?.liveBattleMatchId;
+        if (v == null ||
+            v.status != 'live' ||
+            next == null ||
+            next == widget.matchId) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: context.palette.live,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(240, 48),
+            ),
+            icon: const Icon(Icons.gavel),
+            label: const Text('Judge the current battle'),
+            onPressed: () => Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) =>
+                    JudgesRoomScreen(matchId: next, service: widget.service),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
