@@ -278,10 +278,85 @@ async function settleDecidedBattles(db, now = Date.now()) {
   return out;
 }
 
+// A battle whose panel never reaches a verdict can't be allowed to halt the
+// whole show. If it has sat completed-but-undecided this long, force a verdict
+// from the votes cast so far - a quiet/absent judge should never stall it.
+const STALL_MS = 15 * 60 * 1000;
+
+/**
+ * PURE. The forced verdict for a stalled battle: the plurality of the votes
+ * cast so far, with the HIGHER SEED (player1 - the bracket's 'a' slot) breaking
+ * a tie or an empty panel. A bracket must have exactly one winner, so unlike a
+ * gauntlet there is no "draw".
+ */
+function stalledJudgingVerdict(votes, player1Id, player2Id) {
+  let p1 = 0;
+  let p2 = 0;
+  for (const w of Object.values(votes || {})) {
+    if (w === player1Id) p1++;
+    else if (w === player2Id) p2++;
+  }
+  return p2 > p1 ? player2Id : player1Id; // ties + empty panel -> higher seed
+}
+
+/**
+ * Force-resolve mainstage battles whose JUDGING has stalled: completed, no
+ * verdict, older than STALL_MS. Stamps a verdict (from the votes so far) dated
+ * so its grace has already elapsed, so settleDecidedBattles finalizes it this
+ * same sweep and the bracket moves on. Best-effort per match. Only ever touches
+ * a battle that has genuinely FINISHED (status completed) - it never cuts a live
+ * battle short.
+ */
+async function forceResolveStalledBattles(db, now = Date.now()) {
+  const snap = await db.collection("tournaments")
+      .where("format", "==", "mainstage")
+      .where("status", "==", "live").get();
+  const out = [];
+  for (const d of snap.docs) {
+    const t = d.data();
+    if (!t.bracket) continue;
+    const bracket = loadBracket(t.bracket);
+    for (const round of bracket.rounds) {
+      for (const m of (round || [])) {
+        if (!m || !m.matchId || m.winner != null) continue;
+        const mref = db.collection("matches").doc(m.matchId);
+        const match = (await mref.get()).data();
+        if (!match || match.voteFinalized || match.judgeWinnerId) continue;
+        if (match.status !== "completed") continue; // only a FINISHED battle
+        const createdMs = match.createdAt && match.createdAt.toMillis ?
+          match.createdAt.toMillis() : 0;
+        if (!createdMs || now - createdMs < STALL_MS) continue;
+        try {
+          const votesSnap = await mref.collection("mainStageVotes").get();
+          const votes = {};
+          votesSnap.forEach((v) => {
+            votes[v.id] = v.data().winnerUid;
+          });
+          const winner =
+              stalledJudgingVerdict(votes, match.player1Id, match.player2Id);
+          // Date the verdict in the past so the grace is already up -
+          // settleDecidedBattles finalizes it on this run.
+          await mref.update({
+            judgeWinnerId: winner,
+            judgeDecidedAtMs: now - SETTLE_BUFFER_MS - 1000,
+          });
+          out.push(m.matchId);
+        } catch (e) {
+          console.error(`mainstage force-resolve ${m.matchId}:`, e.message);
+        }
+      }
+    }
+  }
+  return out;
+}
+
 module.exports = {
   startMainStageBattle,
   castMainStageJudgeVote,
   settleMainStageBattle,
   settleDecidedBattles,
+  forceResolveStalledBattles,
+  stalledJudgingVerdict,
   SETTLE_BUFFER_MS,
+  STALL_MS,
 };

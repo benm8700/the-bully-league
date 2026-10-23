@@ -203,9 +203,13 @@ async function sweepMainStage(now = Date.now()) {
   // Backstop AFTER locking, so a show locked and overdue in the same tick can
   // still auto-start this run.
   const autoStarted = await autoStartDueShows(db, now);
-  const {settleDecidedBattles} = require("./mainStagePlay");
+  const {settleDecidedBattles, forceResolveStalledBattles} =
+      require("./mainStagePlay");
+  // Force a verdict on any FINISHED battle the panel never decided (a stalled /
+  // absent panel must not halt the bracket), then settle everything decided.
+  const forced = await forceResolveStalledBattles(db, now);
   const settled = await settleDecidedBattles(db, now);
-  return {created, locked, autoStarted, settled};
+  return {created, locked, autoStarted, forced, settled};
 }
 
 /** A finalist/alternate confirms or declines (callable body). */
