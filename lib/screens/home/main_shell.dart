@@ -32,6 +32,16 @@ import 'home_screen.dart';
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
+  /// Lets any screen inside the shell jump to another tab (e.g. Home's "Watch"
+  /// door -> the Vote feed). A live callback onto the mounted shell state, so
+  /// there is no stale static index to carry across sign-outs. [go] is a no-op
+  /// when no shell is mounted.
+  static void Function(int index)? _selector;
+  static void go(int index) => _selector?.call(index);
+
+  /// Watch = the Vote feed tab (index 1).
+  static const int tabWatch = 1;
+
   @override
   State<MainShell> createState() => _MainShellState();
 }
@@ -42,6 +52,9 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+    MainShell._selector = (i) {
+      if (mounted) setState(() => _index = i);
+    };
     // Checked here rather than on Home so it fires once per app launch,
     // not every time someone taps back to the first tab. Deferred past the
     // first frame because it shows a dialog and needs a mounted route to
@@ -57,6 +70,12 @@ class _MainShellState extends State<MainShell> {
       if (mounted) await BadgePopup.maybeShow(context);
       if (mounted) await FameMilestonePopup.maybeShow(context);
     });
+  }
+
+  @override
+  void dispose() {
+    MainShell._selector = null;
+    super.dispose();
   }
 
   /// The Vote tab, whose feed autoplays a clip WITH SOUND. Named so the shell

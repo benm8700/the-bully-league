@@ -17,14 +17,12 @@ import '../../widgets/admin_only.dart';
 import '../../widgets/home/goat_throne_banner.dart';
 import '../../widgets/home/main_stage_banner.dart';
 import '../../widgets/home/prize_claim_banner.dart';
-import '../../widgets/home/hero_mode_card.dart';
 import '../../widgets/home/player_status_card.dart';
 import '../../widgets/home/home_quick_actions.dart';
 import '../../widgets/home/home_featured.dart';
 import '../../widgets/home/main_stage_card.dart';
-import '../../widgets/home/friend_battle_card.dart';
-import '../../widgets/home/improv_station_card.dart';
 import '../../widgets/home/daily_window_strip.dart';
+import 'main_shell.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/improv_match_screen.dart';
 import '../match/matchmaking_screen.dart';
@@ -158,35 +156,27 @@ class HomeScreen extends StatelessWidget {
                     // the window is switched off (its own bottom padding spaces
                     // it from the hero below).
                     const DailyWindowStrip(),
-                    // THE BASEMENT LEADS (developer's call, 2026-10-11):
-                    // everyday play - Roast a Stranger - is the TOP hero now,
-                    // with the Main Stage tournament below it. This reverses
-                    // the earlier "tournament is the Home headline" overhaul
-                    // decision; backlogged to revisit with the Home redesign.
-                    // Illustrated red/blue VS artwork with the title, subtitle
-                    // and FIND A MATCH CTA as Flutter overlays.
-                    RoastHero(
-                      onFindMatch: () => _startMatch(context, 'ranked'),
-                    ),
-                    const SizedBox(height: 12),
-                    // The WEEKLY Main Stage tournament, below the Basement hero.
-                    // Always shown; taps to the hub (standings/lobby/judges/
-                    // prize). The countdown to Thursday's finals lives in the
-                    // hub, not on the clean pill.
+                    // TWO FRONT DOORS: PLAY / WATCH (Home redesign,
+                    // 2026-10-22). The old Home stacked four mode heroes
+                    // (Basement, Main Stage, Friend, Face-Off) which read as a
+                    // confusing wall of categories to a newcomer. The one
+                    // decision anyone understands is "make it" vs "watch it", so
+                    // that owns the screen: PLAY -> roast a stranger (the
+                    // everyday Basement battle), WATCH -> the Vote feed. The
+                    // modes and their wiring are untouched - this is just the
+                    // front door.
+                    const _PlayWatchDoors(),
+                    const SizedBox(height: 14),
+                    // The WEEKLY Main Stage tournament stays its own distinct
+                    // card - it is the EVENT/destination, not an everyday mode,
+                    // so it earns a spot below the doors rather than hiding
+                    // under "more ways to play". Taps to the hub.
                     const MainStageCard(),
                     const SizedBox(height: 12),
-                    // Battle a Friend - a FULL hero pill now (developer's call),
-                    // sitting under the other two so people see it and invite a
-                    // buddy. Promoted from the quiet nav-list card it used to be
-                    // because friend challenges drive growth (and seed the
-                    // invite-by-text loop). Purple, distinct from pink/gold.
-                    const FriendBattleCard(),
-                    const SizedBox(height: 12),
-                    // Improv Station - the prompt-based showcase mode. Teal,
-                    // distinct from the other three. Runs the same start flow
-                    // as a roast (entitlement -> consent -> pre-match), then
-                    // queues the improv pool.
-                    ImprovStationCard(onStart: () => _startMatch(context, 'improv')),
+                    // The other two ways to play, demoted to a compact secondary
+                    // row so they are reachable without crowding the two doors:
+                    // Face-Off (improv) and Challenge a Friend.
+                    const _MoreWaysToPlay(),
                     const SizedBox(height: 14),
                     // Quick Actions row (Home overhaul): Daily Challenges /
                     // Free Rewards / Current Streak. The Daily Challenges card
@@ -1198,11 +1188,197 @@ class _WalletBar extends StatelessWidget {
   }
 }
 
-/// Battle a Friend - a SECONDARY mode, so a compact premium PURPLE card
-/// (identity/secondary colour per the app's colour hierarchy) that is quieter
-/// than the gold Tournament banner and the pink Roast a Stranger hero, but
-/// more premium than a plain outlined button. The whole card is tappable.
-// _BattleFriendCard / _DuelIcon removed - Battle a Friend is now the
-// FriendBattleCard hero pill up top (lib/widgets/home/friend_battle_card.dart).
+/// The two front doors: PLAY and WATCH, side by side.
+///
+/// This is the whole point of the Home redesign - the first decision a visitor
+/// makes is reduced to the two things anyone understands (make it vs watch it)
+/// instead of a wall of named modes. PLAY launches the everyday Basement battle
+/// (roast a stranger) through the existing _startMatch path, so the entitlement
+/// gate and the rest of the flow are untouched. WATCH jumps to the Vote tab.
+class _PlayWatchDoors extends StatelessWidget {
+  const _PlayWatchDoors();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: _Door(
+              label: 'Play',
+              sub: 'Roast a stranger',
+              icon: Icons.mic,
+              color: scheme.primary,
+              onColor: scheme.onPrimary,
+              onTap: () => _startMatch(context, 'ranked'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _Door(
+              label: 'Watch',
+              sub: 'Watch & judge',
+              icon: Icons.visibility,
+              color: scheme.secondary,
+              onColor: scheme.onSecondary,
+              onTap: () => MainShell.go(MainShell.tabWatch),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One of the two big front-door tiles - a bold coloured block with an icon,
+/// a big display-font label and a one-line subtitle. Fixed height so the pair
+/// line up without an IntrinsicHeight pass.
+class _Door extends StatelessWidget {
+  const _Door({
+    required this.label,
+    required this.sub,
+    required this.icon,
+    required this.color,
+    required this.onColor,
+    required this.onTap,
+  });
+
+  final String label;
+  final String sub;
+  final IconData icon;
+  final Color color;
+  final Color onColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Material(
+      color: color,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 156,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(icon, color: onColor, size: 36),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style: text.headlineMedium?.copyWith(
+                            color: onColor,
+                            fontWeight: FontWeight.w900,
+                            height: 1.0)),
+                    const SizedBox(height: 2),
+                    Text(sub,
+                        style: text.bodySmall?.copyWith(
+                            color: onColor.withValues(alpha: 0.85),
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The two other ways to play, demoted to a quiet secondary row under the
+/// doors: Face-Off (improv) and Challenge a Friend. Compact outlined pills so
+/// they stay reachable without competing with PLAY/WATCH.
+class _MoreWaysToPlay extends StatelessWidget {
+  const _MoreWaysToPlay();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: _MiniPlay(
+              icon: Icons.flash_on,
+              label: 'Face-Off',
+              iconColor: const Color(0xFF19B3A6),
+              onTap: () => _startMatch(context, 'improv'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _MiniPlay(
+              icon: Icons.group,
+              label: 'Challenge a friend',
+              iconColor: scheme.secondary,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ChallengeScreen()),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A compact secondary play pill - icon + label in an outlined surface card.
+class _MiniPlay extends StatelessWidget {
+  const _MiniPlay({
+    required this.icon,
+    required this.label,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    return Material(
+      color: scheme.surfaceContainer,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, color: iconColor, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 
