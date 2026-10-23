@@ -29,7 +29,11 @@ class MainStageCard extends StatelessWidget {
     // hub, all the features - stays fully intact and tappable; this is only a
     // reminder to users that the monthly Main Stage is not live yet, and it
     // disappears automatically the moment config/tournament.enabled flips true.
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+    //
+    // Same slim side margin as the Play/Watch cards so all three line up.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('config')
           .doc('tournament')
@@ -59,6 +63,7 @@ class MainStageCard extends StatelessWidget {
           centerAlignment: const Alignment(0, 0.55),
         );
       },
+      ),
     );
   }
 
