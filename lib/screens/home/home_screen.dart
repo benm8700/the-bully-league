@@ -71,6 +71,10 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ),
+        // Darkens the background image ~25% so the foreground cards pop. It sits
+        // ABOVE the image but BELOW the transparent Scaffold, so the Play/Watch/
+        // Main Stage banners keep their full brightness.
+        const ColoredBox(color: Color(0x40000000)),
         Scaffold(
       // Transparent so the stage background above shows through the whole
       // screen rather than being hidden behind a solid Scaffold/app bar.
@@ -203,7 +207,7 @@ class HomeScreen extends StatelessWidget {
                     // so it earns a spot below the doors rather than hiding
                     // under "more ways to play". Taps to the hub.
                     const MainStageCard(),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 20),
                     // The other two ways to play, demoted to a compact secondary
                     // row so they are reachable without crowding the two doors:
                     // Face-Off (improv) and Challenge a Friend.

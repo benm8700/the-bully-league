@@ -51,10 +51,12 @@ class HomeActionCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(_radius),
           boxShadow: [
+            // Glow dimmed ~50% so the outline reads as a subtle accent rather
+            // than a loud neon frame.
             BoxShadow(
-              color: accent.withValues(alpha: 0.45),
-              blurRadius: 18,
-              spreadRadius: 1,
+              color: accent.withValues(alpha: 0.22),
+              blurRadius: 12,
+              spreadRadius: 0,
             ),
           ],
         ),
@@ -99,9 +101,11 @@ class HomeActionCard extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(_radius),
+                    // Outline opacity/brightness dimmed ~50% - still a subtle
+                    // coloured edge, no longer a bright neon frame.
                     border: Border.all(
-                      color: accent.withValues(alpha: 0.95),
-                      width: 2.5,
+                      color: accent.withValues(alpha: 0.48),
+                      width: 2,
                     ),
                   ),
                 ),
