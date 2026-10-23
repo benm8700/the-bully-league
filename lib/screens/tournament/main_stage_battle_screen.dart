@@ -50,6 +50,20 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
   bool _completeSent = false;
   String? _error;
 
+  // Pre-battle countdown: once both players are present, run a brief "starts
+  // in N" before the first clock drains - so the battle has a real start
+  // instead of lurching straight into someone's turn. The host drives it and
+  // broadcasts once; the guest mirrors it locally.
+  static const int _kCountdownMs = 10000;
+  int? _countdownEndMs;
+  Timer? _countdownTimer;
+  int get _countdownLeft {
+    final end = _countdownEndMs;
+    if (end == null) return 0;
+    final left = ((end - _nowMs) / 1000).ceil();
+    return left < 0 ? 0 : (left > 10 ? 10 : left);
+  }
+
   int get _nowMs => DateTime.now().millisecondsSinceEpoch;
 
   @override
@@ -99,15 +113,39 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
   /// present, then drive it on a timer. Guarded so a remote reconnect (uid
   /// flapping) never re-opens a battle already under way.
   void _maybeStartHostEngine() {
-    if (!_isHost || _engineStarted || _video.remoteUid.value == null) return;
+    if (!_isHost ||
+        _engineStarted ||
+        _countdownEndMs != null ||
+        _video.remoteUid.value == null) {
+      return;
+    }
+    // Both players are here. Run the countdown first (synced to the guest),
+    // then open the engine when it hits zero.
+    _countdownEndMs = _nowMs + _kCountdownMs;
+    _video.sendMatchMessage({'t': 'ms_countdown'});
+    _countdownTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (!mounted) return;
+      if (_nowMs >= (_countdownEndMs ?? 0)) {
+        _countdownTimer?.cancel();
+        _openEngine();
+      } else {
+        setState(() {}); // tick the on-screen number
+      }
+    });
+    if (mounted) setState(() {});
+  }
+
+  /// Host-only: actually open the chess-clock engine (after the countdown) and
+  /// drive it on a timer.
+  void _openEngine() {
+    if (_engineStarted) return;
     _engineStarted = true;
     // Record the finals like any tournament match - the match is mode
     // "tournament", so the backend records it and completeMatch (fired when
-    // both clocks hit zero) stops it. Host-only and once, at the first moment
-    // both players are provably in the channel (same reasoning as MatchScreen).
-    // Fire-and-forget: a recording failure must never block the marquee
-    // battle. No round boundaries are sent - the chess-clock format has no
-    // fixed rounds, so the highlight renders full-length.
+    // both clocks hit zero) stops it. Host-only and once. Fire-and-forget: a
+    // recording failure must never block the marquee battle. No round
+    // boundaries are sent - the chess-clock format has no fixed rounds, so the
+    // highlight renders full-length.
     unawaited(_matchmaking.startRecording(widget.pairing.matchId));
     final cfg = MainStageBattleConfig(
       turnMs: widget.pairing.turnMs,
@@ -146,6 +184,16 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
         _battle = MainStageBattleState.fromMap(Map<String, dynamic>.from(s));
         _afterStateChange(broadcast: false);
       }
+    } else if (t == 'ms_countdown' && !_isHost && _countdownEndMs == null) {
+      // Mirror the host's pre-battle countdown locally. When the host opens the
+      // engine it broadcasts ms_state, which takes over and ends the countdown.
+      _countdownEndMs = _nowMs + _kCountdownMs;
+      _countdownTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+        if (!mounted) return;
+        if (_battle != null) _countdownTimer?.cancel();
+        setState(() {});
+      });
+      if (mounted) setState(() {});
     } else if (t == 'ms_intent' && _isHost) {
       final ev = _eventFromName(m['ev'] as String?);
       if (ev != null) _hostApply(ev, by: m['by'] as String?);
@@ -222,6 +270,7 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
   @override
   void dispose() {
     _tick?.cancel();
+    _countdownTimer?.cancel();
     _msgSub?.cancel();
     _pulse.dispose();
     _video.remoteUid.removeListener(_maybeStartHostEngine);
@@ -237,6 +286,44 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
     );
   }
 
+  /// The pre-battle countdown: a big number that pops each second until the
+  /// clock starts.
+  Widget _countdownView() {
+    final n = _countdownLeft;
+    final gold = context.palette.reward;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('BOTH ON STAGE',
+              style: TextStyle(
+                  color: gold,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 3)),
+          const SizedBox(height: 12),
+          TweenAnimationBuilder<double>(
+            key: ValueKey(n),
+            tween: Tween(begin: 0.6, end: 1.0),
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutBack,
+            builder: (context, s, child) =>
+                Transform.scale(scale: s, child: child),
+            child: Text('$n',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 120,
+                    height: 1,
+                    fontWeight: FontWeight.w900)),
+          ),
+          const SizedBox(height: 8),
+          Text(n > 0 ? 'Battle starts…' : 'Here we go.',
+              style: const TextStyle(color: Colors.white70, fontSize: 16)),
+        ],
+      ),
+    );
+  }
+
   Widget _body() {
     if (_error != null) {
       return Center(
@@ -247,6 +334,11 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
               style: const TextStyle(color: Colors.white70)),
         ),
       );
+    }
+    // Both players are present: the pre-battle countdown runs before the first
+    // clock starts.
+    if (_battle == null && _countdownEndMs != null) {
+      return _countdownView();
     }
     if (!_initialized || _battle == null) {
       // Before the engine opens: connecting, or (for the first arrival) waiting
