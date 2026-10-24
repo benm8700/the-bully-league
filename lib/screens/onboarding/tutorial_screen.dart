@@ -434,9 +434,8 @@ class _TutorialScreenState extends State<TutorialScreen> {
             'crowd decides the rest.',
         // The two parts of the league, framed as the climb (see the
         // Basement/Main Stage naming decision).
-        'This is The Basement - everyday battles. Win here and you climb '
-            'toward The Main Stage, the tournament where the prizes and '
-            'prestige are.',
+        'These are everyday battles. Win here and you climb toward The Main '
+            'Stage - the tournament where the prizes and prestige are.',
         // Liquidity nudge, pulled from live config (hours are provisional);
         // the single hardest thing about a scheduled moment is getting people
         // to remember when it is, and this is the one screen every new player

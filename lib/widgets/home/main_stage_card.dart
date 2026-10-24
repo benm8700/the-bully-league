@@ -121,8 +121,8 @@ class MainStageCard extends StatelessWidget {
               const SizedBox(height: 16),
               _infoHeading(context, 'How you get here'),
               Text(
-                "You don't enter - you qualify by battling in The Basement all "
-                'month. The top 3 roasters by skill lock in a seat. The 4th is a '
+                "You don't enter - you qualify by battling in everyday matches "
+                'all month. The top 3 roasters by skill lock in a seat. The 4th is a '
                 'wild card: the more you play and vote on other matches, the '
                 'better your odds of getting selected.',
                 style: body,

@@ -53,7 +53,7 @@ final ValueNotifier<bool> kWindowLive = ValueNotifier(false);
 /// from config/eventWindow so the LIVE CUE names it correctly even though
 /// the name is provisional and console-tunable. Defaults to the documented
 /// name so the cue reads right before the config resolves.
-final ValueNotifier<String> kWindowName = ValueNotifier('Basement Happy Hour');
+final ValueNotifier<String> kWindowName = ValueNotifier('Happy Hour');
 
 /// The effective theme the MaterialApp renders: simply the user's equipped
 /// skin. Derived from [kEquippedSkin] - never set directly.

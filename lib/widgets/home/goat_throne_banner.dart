@@ -40,9 +40,9 @@ class GoatThroneBanner extends StatelessWidget {
         // players to the "Daily Gauntlet", a tournament that no longer exists.
         final body = isDefender
             ? '${d['challengerName'] ?? 'A challenger'} is closing in. '
-                'Keep winning in The Basement to hold your spot.'
+                'Keep winning your battles to hold your spot.'
             : "You're closing in on ${d['goatName'] ?? 'a GOAT'}. "
-                'Keep winning in The Basement to take it.';
+                'Keep winning your battles to take it.';
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),

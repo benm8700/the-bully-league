@@ -60,12 +60,11 @@ class RulesScreen extends StatelessWidget {
           ),
           const _Rule(
             icon: Icons.stairs_outlined,
-            title: 'The Basement & The Main Stage',
-            body: 'The Bully League has two rooms. The Basement is everyday '
-                'play - roast a random stranger any time, climb the ranks. The '
-                'Main Stage is the tournament: the big show, where the prizes '
-                'and the prestige are. Win in The Basement to earn your way up '
-                'to it.',
+            title: 'Battle your way to the Main Stage',
+            body: 'Day to day, you roast random strangers any time and climb '
+                'the ranks. The Main Stage is the tournament: the big show, '
+                'where the prizes and the prestige are. Keep winning your '
+                'everyday battles to earn your way up to it.',
           ),
           const _Rule(
             icon: Icons.emoji_emotions_outlined,

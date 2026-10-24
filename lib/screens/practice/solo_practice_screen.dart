@@ -247,7 +247,7 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'This is how The Basement feels - loosen up here, then go find a '
+            'This is how a real battle feels - loosen up here, then go find a '
             'stranger.',
             style: text.bodySmall,
             textAlign: TextAlign.center,

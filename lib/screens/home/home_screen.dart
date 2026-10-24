@@ -1247,7 +1247,8 @@ class _PlayWatchDoors extends StatelessWidget {
     // Both use the shared HomeActionCard, so Play, Watch and the Main Stage
     // card below are all the same size/shape (2.5:1, fills the width, 20px
     // radius, BoxFit.cover). 11px between them; a slim side margin so they
-    // aren't jammed to the edges and the glow has room.
+    // aren't jammed to the edges and the glow has room. Each carries a "?"
+    // explainer like the Main Stage card.
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
@@ -1256,12 +1257,75 @@ class _PlayWatchDoors extends StatelessWidget {
             asset: 'assets/home/roast_hero.png',
             accent: const Color(0xFF3DE06B), // green, matching the Play art
             onTap: () => _startMatch(context, 'ranked'),
+            topRight:
+                _helpButton(context, 'About Play', () => _showPlayInfo(context)),
           ),
           const SizedBox(height: 11),
           HomeActionCard(
             asset: 'assets/home/watch_hero.png',
             accent: const Color(0xFFC24DFF), // magenta, matching the Watch art
             onTap: () => MainShell.go(MainShell.tabWatch),
+            topRight: _helpButton(
+                context, 'About Watch', () => _showWatchInfo(context)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The small "?" disc pinned top-right on a card, matching the Main Stage one.
+  Widget _helpButton(
+      BuildContext context, String tooltip, VoidCallback onPressed) {
+    return IconButton(
+      icon: const Icon(Icons.help_outline),
+      iconSize: 22,
+      color: Colors.white,
+      tooltip: tooltip,
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.black.withValues(alpha: 0.42),
+        padding: const EdgeInsets.all(5),
+        minimumSize: const Size(0, 0),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: onPressed,
+    );
+  }
+
+  void _showPlayInfo(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Play'),
+        content: Text(
+          'Get matched with a random stranger for a live 1-on-1 roast battle. '
+          'Land your jokes, and the crowd votes on the winner - every win '
+          'climbs your rank.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showWatchInfo(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Watch'),
+        content: Text(
+          'Watch battles and vote for the winner. Your votes decide who rises '
+          'to the top of the leaderboard - and judging earns you points too.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got it'),
           ),
         ],
       ),
