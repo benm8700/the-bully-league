@@ -19,12 +19,21 @@ class DailyWindowStrip extends StatefulWidget {
   State<DailyWindowStrip> createState() => _DailyWindowStripState();
 }
 
-class _DailyWindowStripState extends State<DailyWindowStrip> {
+class _DailyWindowStripState extends State<DailyWindowStrip>
+    with SingleTickerProviderStateMixin {
   Timer? _ticker;
+  // Drives the pulsing glow while the window is LIVE, so 6-7pm actively grabs
+  // attention. Runs continuously but is only read (via AnimatedBuilder) during
+  // the live state, so the quiet countdown never repaints per frame.
+  late final AnimationController _pulse;
 
   @override
   void initState() {
     super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
     _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -32,6 +41,7 @@ class _DailyWindowStripState extends State<DailyWindowStrip> {
 
   @override
   void dispose() {
+    _pulse.dispose();
     _ticker?.cancel();
     super.dispose();
   }
@@ -62,69 +72,94 @@ class _DailyWindowStripState extends State<DailyWindowStrip> {
             ? '${_mins(window.end, now)} left'
             : 'in ${_remaining(window.start, now)}';
 
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: accent.withValues(alpha: 0.12),
-              border: Border.all(color: accent.withValues(alpha: 0.5)),
-            ),
-            child: Row(
-              children: [
-                Icon(live ? Icons.bolt : Icons.bolt_outlined,
-                    size: 18, color: accent),
-                const SizedBox(width: 8),
-                // One line, with the DRAW first: "2X POINTS - Basement Happy
-                // Hour - 6pm to 7pm". 2x points leads (the value), the named
-                // window gives the venue context, then the hours; if the strip
-                // is too narrow it clips the trailing hours, never the draw.
-                Expanded(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text.rich(
+        final content = Row(
+          children: [
+            Icon(live ? Icons.bolt : Icons.bolt_outlined,
+                size: 18, color: accent),
+            const SizedBox(width: 8),
+            // One line, with the DRAW first: "2X POINTS - Happy Hour - 6pm to
+            // 7pm". 2x points leads (the value), the named window gives
+            // context, then the hours; if the strip is too narrow it clips the
+            // trailing hours, never the draw.
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text.rich(
+                  TextSpan(
+                    children: [
                       TextSpan(
-                        children: [
-                          TextSpan(
-                            text: live ? '2X POINTS LIVE' : '2X POINTS',
-                            style: TextStyle(
-                              color: accent,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.3,
-                              fontSize: 13,
-                            ),
-                          ),
-                          TextSpan(
-                            text: live
-                                ? ' - ${config.name}'
-                                : ' - ${config.name} - $hours',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.75),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                        text: live ? '2X POINTS LIVE' : '2X POINTS',
+                        style: TextStyle(
+                          color: accent,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.3,
+                          fontSize: 13,
+                        ),
                       ),
-                      maxLines: 1,
-                      softWrap: false,
-                    ),
+                      TextSpan(
+                        text: live
+                            ? ' - ${config.name}'
+                            : ' - ${config.name} - $hours',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.75),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
+                  maxLines: 1,
+                  softWrap: false,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  right,
-                  style: TextStyle(
-                    color: accent,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+            Text(
+              right,
+              style: TextStyle(
+                color: accent,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        );
+
+        // LIVE pops - a brighter fill, a bold border and a pulsing glow - so the
+        // one hour it's on actively pulls people in. Outside the window it's the
+        // quiet static countdown.
+        Widget strip(double t) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                    horizontal: 12, vertical: live ? 10 : 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: accent.withValues(alpha: live ? 0.22 : 0.12),
+                  border: Border.all(
+                    color: accent.withValues(alpha: live ? 0.95 : 0.5),
+                    width: live ? 1.6 : 1,
+                  ),
+                  boxShadow: live
+                      ? [
+                          BoxShadow(
+                            color: accent.withValues(alpha: 0.30 + 0.30 * t),
+                            blurRadius: 14 + 10 * t,
+                            spreadRadius: 1,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: content,
+              ),
+            );
+
+        if (!live) return strip(0);
+        return AnimatedBuilder(
+          animation: _pulse,
+          builder: (context, _) =>
+              strip(Curves.easeInOut.transform(_pulse.value)),
         );
       },
     );
