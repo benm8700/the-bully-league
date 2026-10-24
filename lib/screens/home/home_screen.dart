@@ -1381,11 +1381,10 @@ class _MoreWaysToPlay extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Face-Off is locked'),
+        title: const Text('Face-Off'),
         content: Text(
-          'Face-Off is a blind improv mode - you and your opponent riff the '
-          'same surprise prompt. It unlocks for subscribers, or once you climb '
-          'to the top ranks. Coming soon.',
+          'In Face-Off, each opponent is given three subjects to riff off of, '
+          'and the crowd votes the winner. Coming soon.',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         actions: [
