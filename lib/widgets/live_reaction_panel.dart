@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../core/emoji_ratings.dart';
 import '../core/services/watch_feed_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/house_theme.dart';
@@ -28,6 +29,7 @@ class LiveReactionPanel extends StatefulWidget {
     required this.player2Id,
     required this.player1Name,
     required this.player2Name,
+    this.collapsible = false,
   });
 
   final String matchId;
@@ -35,6 +37,11 @@ class LiveReactionPanel extends StatefulWidget {
   final String player2Id;
   final String player1Name;
   final String player2Name;
+
+  /// When true, starts as a slim bar so the live video keeps most of the
+  /// screen; a tap expands the full picker. Used while a battle is LIVE (the
+  /// debate view keeps it open, since the judges' table is the focus there).
+  final bool collapsible;
 
   @override
   State<LiveReactionPanel> createState() => _LiveReactionPanelState();
@@ -49,6 +56,7 @@ class _LiveReactionPanelState extends State<LiveReactionPanel> {
   bool _busy = false;
   bool _reacted = false;
   bool _checking = true;
+  bool _expanded = false;
   String? _error;
 
   @override
@@ -181,6 +189,7 @@ class _LiveReactionPanelState extends State<LiveReactionPanel> {
                 style: Theme.of(context).textTheme.titleSmall),
           ]);
         }
+        if (widget.collapsible && !_expanded) return _collapsedBar(context);
         return _picker(context);
       },
     );
@@ -195,12 +204,60 @@ class _LiveReactionPanelState extends State<LiveReactionPanel> {
     );
   }
 
+  /// The slim collapsed state for a live battle: a tap-to-open bar that leaves
+  /// the video almost the whole screen.
+  Widget _collapsedBar(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surface,
+      child: InkWell(
+        onTap: () => setState(() => _expanded = true),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              for (final k in const ['fire', 'clever', 'boring', 'trash'])
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Text(emojiCharFor(k),
+                      style: const TextStyle(fontSize: 18)),
+                ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text('React to the roasters', style: text.titleSmall),
+              ),
+              Icon(Icons.keyboard_arrow_up, color: scheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _picker(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return _shell(context, [
-      Text('React to the roasters', style: text.titleMedium),
+      if (widget.collapsible)
+        Row(
+          children: [
+            Expanded(
+                child:
+                    Text('React to the roasters', style: text.titleMedium)),
+            InkWell(
+              onTap: () => setState(() => _expanded = false),
+              borderRadius: BorderRadius.circular(20),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.keyboard_arrow_down),
+              ),
+            ),
+          ],
+        )
+      else
+        Text('React to the roasters', style: text.titleMedium),
       const SizedBox(height: 2),
-      Text('The judges pick the winner - this is your crowd reaction.',
+      Text('Your crowd reaction - it feeds each roaster\'s stats.',
           style: text.bodySmall),
       const SizedBox(height: 12),
       EmojiRateRow(

@@ -17,10 +17,19 @@ const Color kFollowPink = Color(0xFFFF3B6B);
 /// carry their own solid backgrounds so the pink "Follow" and the translucent
 /// "Following" stay legible over a bright clip as well as on a dark surface.
 class FollowButton extends StatefulWidget {
-  const FollowButton({super.key, required this.uid, this.compact = false});
+  const FollowButton({
+    super.key,
+    required this.uid,
+    this.compact = false,
+    this.iconOnly = false,
+  });
 
   final String uid;
   final bool compact;
+
+  /// A tiny circular icon-only toggle - visible but out of the way, for
+  /// over-video overlays where a labelled pill would crowd the frame.
+  final bool iconOnly;
 
   @override
   State<FollowButton> createState() => _FollowButtonState();
@@ -42,10 +51,32 @@ class _FollowButtonState extends State<FollowButton> {
       stream: _service.isFollowing(widget.uid),
       builder: (context, snap) {
         final following = snap.data ?? false;
+        if (widget.iconOnly) return _iconOnly(following);
         return widget.compact
             ? _compact(following)
             : _full(following);
       },
+    );
+  }
+
+  /// A small circular toggle: pink person-add when not following, a dim check
+  /// once following. Sits over a live tile without competing with the video.
+  Widget _iconOnly(bool following) {
+    return Material(
+      color: following ? Colors.black.withValues(alpha: 0.5) : kFollowPink,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: _busy ? null : () => _toggle(!following),
+        child: Padding(
+          padding: const EdgeInsets.all(7),
+          child: Icon(
+            following ? Icons.check : Icons.person_add_alt_1,
+            size: 16,
+            color: Colors.white,
+          ),
+        ),
+      ),
     );
   }
 

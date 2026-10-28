@@ -346,6 +346,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                             player2Id: _player2Id!,
                             player1Name: _player1Name,
                             player2Name: _player2Name,
+                            collapsible: true,
                           ),
                       ],
                     );
@@ -425,7 +426,7 @@ class _PerformerTag extends StatelessWidget {
         ),
         if (uid != null) ...[
           const SizedBox(width: 6),
-          FollowButton(uid: uid!, compact: true),
+          FollowButton(uid: uid!, iconOnly: true),
         ],
       ],
     );
