@@ -208,4 +208,37 @@ test("judgesTableProblem does NOT block battlers (they may watch the panel)", ()
   assert.strictEqual(askJT(), null);
 });
 
+// --- opt-in "live watch" everyday matches (both players opted in) ---
+const liveWatchable = {
+  mode: "ranked",
+  status: "in_progress",
+  player1Id: "alice",
+  player2Id: "bob",
+  liveWatchable: true,
+  channelName: "match_xyz",
+};
+const askLive = (over = {}) => spectateProblem({
+  match: liveWatchable, tournament: null, uid: "carol", ...over,
+});
+
+test("an opted-in everyday match IS watchable while in progress", () => {
+  assert.strictEqual(askLive(), null);
+});
+
+test("an opted-in everyday match is NOT watchable once finished", () => {
+  assert.strictEqual(
+      askLive({match: {...liveWatchable, status: "completed"}}),
+      "already-finished");
+});
+
+test("a participant can't spectate their own opted-in match", () => {
+  assert.strictEqual(askLive({uid: "alice"}), "you-are-playing");
+});
+
+test("an everyday match NOT opted in is still refused (no live audience)", () => {
+  assert.strictEqual(
+      askLive({match: {...liveWatchable, liveWatchable: false}}),
+      "not-a-tournament-match");
+});
+
 console.log(`spectator: ${passed} checks passed`);

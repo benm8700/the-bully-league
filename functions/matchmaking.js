@@ -360,6 +360,11 @@ async function enterQueue(auth, data) {
     // never answered - costing every player who matched it a five-minute
     // wait for nothing. See functions/standingChallenge.js.
     canNotify: Array.isArray(user.fcmTokens) && user.fcmTokens.length > 0,
+    // Opt-in to being watched LIVE (everyday matches only). Resolved from the
+    // user doc here, carried on the queue entry, and stamped on the match at
+    // pairing - a match is only live-watchable if BOTH players opted in. Two
+    // random strangers don't get a live audience unless they both chose it.
+    liveWatchOptIn: user.liveWatchOptIn === true,
   });
 
   // Reported so the waiting screen can confirm the reward landed. A perk
@@ -594,6 +599,9 @@ async function attemptPairing(uid, mode, matchId, channelName, now, tierWidenMs 
     // once, and by finalization time either player may have deleted
     // their account - see the missing-user branch in finalizeMatch.
     opponentRating: queue?.[mine.opponentId]?.rating ?? null,
+    // The opponent's live-watch opt-in, carried out like opponentRating so the
+    // match can be stamped live-watchable only when BOTH players opted in.
+    opponentLiveWatchOptIn: queue?.[mine.opponentId]?.liveWatchOptIn === true,
   };
 }
 
@@ -757,6 +765,14 @@ async function pollMatchmaking(auth, data) {
       mode,
       settings,
       eventWindow,
+      // Live-watchable ONLY when this is an everyday ranked match AND both
+      // players opted in on the recording-consent screen. Everyday strangers
+      // never get a live audience unless they both chose it; tournaments have
+      // their own (entering = opting in) path, and friend/practice aren't
+      // spectatable at all.
+      liveWatchable: mode === "ranked" &&
+        paired.liveWatchOptIn === true &&
+        paired.opponentLiveWatchOptIn === true,
       // Where this pairing came from. A match born of a standing challenge
       // may have a player who is asleep, so it gets a five-minute
       // acceptance window instead of the bio reveal timer, and is released

@@ -341,7 +341,14 @@ Future<void> _startMatch(BuildContext context, String mode) async {
   if (!context.mounted) return;
 
   final consented = await Navigator.of(context).push<bool>(
-    MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
+    MaterialPageRoute(
+      // Everyday ranked matches can opt into being watched live; tournaments
+      // are already opted in by entering, and friend/practice aren't
+      // spectatable, so they don't show the opt-in.
+      builder: (_) => RecordingConsentScreen(
+        showLiveWatchOptIn: mode == 'ranked',
+      ),
+    ),
   );
   if (consented != true || !context.mounted) return;
 

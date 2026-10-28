@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/friendly_error.dart';
@@ -6,6 +9,7 @@ import '../../widgets/empty_state.dart';
 import '../../core/services/clip_cache.dart';
 import '../../core/services/watch_feed_service.dart';
 import '../../widgets/turnstile_challenge.dart';
+import '../tournament/live_viewer_screen.dart';
 import 'feed_page.dart';
 
 /// The Judge tab: one vertical feed of battles.
@@ -53,6 +57,12 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
   bool _exhausted = false;
   bool _loadingMore = false;
 
+  /// Everyday matches that are LIVE right now (both players opted in). Shown as
+  /// a banner over the feed; tapping lists them to spectate. Polled, since a
+  /// match goes live and ends on its own schedule.
+  List<_LiveMatch> _liveNow = const [];
+  Timer? _livePoll;
+
   /// How far from the end to start fetching. Loading a page ahead means the
   /// next clip is already initialising while the current one plays, rather
   /// than the feed stalling on a spinner at the moment someone swipes.
@@ -63,6 +73,32 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _load();
+    _loadLiveNow();
+    // Live matches start and end on their own, so poll for them while the tab
+    // is on screen. Cheap - one callable, and only when active.
+    _livePoll = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (widget.isActiveTab) _loadLiveNow();
+    });
+  }
+
+  Future<void> _loadLiveNow() async {
+    try {
+      final r = await FirebaseFunctions.instance
+          .httpsCallable('getLiveWatchableMatches')
+          .call<Map<String, dynamic>>();
+      final list = (r.data['matches'] as List?) ?? const [];
+      if (!mounted) return;
+      setState(() => _liveNow = [
+            for (final e in list)
+              _LiveMatch(
+                matchId: (e as Map)['matchId'] as String,
+                p1: e['player1Name'] as String? ?? 'Roaster',
+                p2: e['player2Name'] as String? ?? 'Roaster',
+              ),
+          ]);
+    } catch (_) {
+      // Just don't show the banner - never let this break the feed.
+    }
   }
 
   @override
@@ -99,6 +135,7 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
     WidgetsBinding.instance.removeObserver(this);
     // Anything left over goes now, or leaving the tab loses it.
     _flushCalls();
+    _livePoll?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -368,7 +405,92 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
             top: false,
             child: _buildBody(),
           ),
+          // "Live now" sits ON TOP of the feed - a playing clip fills the
+          // screen, so a banner is the only way to surface a live battle
+          // without hijacking the judging feed.
+          if (_liveNow.isNotEmpty)
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: _liveNowBanner(context),
+                ),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _liveNowBanner(BuildContext context) {
+    final n = _liveNow.length;
+    return Material(
+      color: const Color(0xFFD12E3C),
+      borderRadius: BorderRadius.circular(999),
+      elevation: 4,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: _openLiveSheet,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                    color: Colors.white, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                n == 1 ? '1 battle live now' : '$n battles live now',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13),
+              ),
+              const SizedBox(width: 6),
+              const Text('· tap to watch',
+                  style: TextStyle(color: Colors.white70, fontSize: 12)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openLiveSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text('Live now',
+                  style:
+                      TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            ),
+            for (final m in _liveNow)
+              ListTile(
+                leading: const Icon(Icons.sensors, color: Color(0xFFD12E3C)),
+                title: Text('${m.p1} vs ${m.p2}'),
+                subtitle: const Text('Battling live'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => LiveViewerScreen(matchId: m.matchId),
+                  ));
+                },
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -429,4 +551,12 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
       },
     );
   }
+}
+
+/// One live, opted-in everyday match in the "Live now" banner/sheet.
+class _LiveMatch {
+  const _LiveMatch({required this.matchId, required this.p1, required this.p2});
+  final String matchId;
+  final String p1;
+  final String p2;
 }

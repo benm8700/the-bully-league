@@ -60,6 +60,15 @@ function spectateProblem({match, tournament, uid}) {
   if (uid === match.player1Id || uid === match.player2Id) {
     return "you-are-playing";
   }
+  // An everyday match BOTH players opted into being watched live (set at
+  // pairing from the recording-consent opt-in). The opt-in IS the consent, so
+  // no tournament is required - it just has to still be in progress.
+  if (match.liveWatchable === true) {
+    if (match.status !== "pending" && match.status !== "in_progress") {
+      return "already-finished";
+    }
+    return null;
+  }
   if (match.mode !== "tournament") return "not-a-tournament-match";
   // A Main Stage finals battle carries its tournament id under `mainStage` -
   // that is what makes it a live event somebody signed up to perform in.
@@ -240,9 +249,54 @@ async function watchLiveMatch(auth, data, appCertificate) {
   };
 }
 
+/**
+ * The everyday matches that are LIVE and watchable right now - i.e. both
+ * players opted in (liveWatchable) and the match is still in progress. Feeds
+ * the Watch tab's "Live now" row. Excludes the caller's own matches (they're
+ * playing, not spectating).
+ *
+ * Queries the single-field liveWatchable index and filters status in code,
+ * because a finished opted-in match keeps liveWatchable=true (the field is a
+ * record of consent, not of live state). Bounded by a small limit - fine at
+ * beta scale; a dedicated liveNow flag cleared on completion is the scaling
+ * fix if the opted-in back catalogue ever grows large.
+ */
+async function getLiveWatchableMatches(auth) {
+  if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const db = getFirestore();
+  const snap = await db.collection("matches")
+      .where("liveWatchable", "==", true)
+      .limit(40)
+      .get();
+
+  const live = [];
+  for (const doc of snap.docs) {
+    const m = doc.data();
+    if (m.status !== "pending" && m.status !== "in_progress") continue;
+    if (auth.uid === m.player1Id || auth.uid === m.player2Id) continue;
+    live.push({matchId: doc.id, p1: m.player1Id, p2: m.player2Id});
+  }
+
+  const ids = [...new Set(live.flatMap((x) => [x.p1, x.p2]))];
+  const names = {};
+  await Promise.all(ids.map(async (id) => {
+    const u = await db.collection("users").doc(id).get();
+    names[id] = u.data()?.username ?? "Roaster";
+  }));
+
+  return {
+    matches: live.map((x) => ({
+      matchId: x.matchId,
+      player1Name: names[x.p1] ?? "Roaster",
+      player2Name: names[x.p2] ?? "Roaster",
+    })),
+  };
+}
+
 module.exports = {
   watchLiveMatch,
   watchJudgesTable,
+  getLiveWatchableMatches,
   spectateProblem,
   judgesTableProblem,
   spectatorUid,

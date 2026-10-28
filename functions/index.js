@@ -1543,6 +1543,13 @@ exports.watchLiveMatch = onCall({secrets: [agoraAppCertificate]},
           agoraAppCertificate.value());
     });
 
+// The "Live now" list for the Watch tab: everyday matches both players opted
+// into being watched live, that are still in progress.
+exports.getLiveWatchableMatches = onCall((request) => {
+  const {getLiveWatchableMatches} = require("./spectator");
+  return getLiveWatchableMatches(request.auth);
+});
+
 // The crowd watching the Main Stage JUDGES' video table during the debate - a
 // subscriber token for the judges_<matchId> channel. The judges publish there
 // via generateAgoraToken's judges_ branch.
