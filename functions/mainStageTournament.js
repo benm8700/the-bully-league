@@ -1,6 +1,11 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {pacificWallClockToUtcMs} = require("./eventWindow");
-const {applyResult, isComplete} = require("./mainStageBracket");
+const {
+  applyResult,
+  isComplete,
+  stampOpened,
+  stuckMatchupOutcome,
+} = require("./mainStageBracket");
 const {
   buildMainStageDoc,
   lockOutcome,
@@ -175,7 +180,11 @@ async function autoStartDueShows(db, now = Date.now()) {
       continue;
     }
     await d.ref.update({
-      bracket: storeBracket(r.bracket), status: "live", autoStarted: true,
+      // Stamp openedMs on the semis so the stuck-matchup backstop can tell a
+      // no-show from a battle that just hasn't started yet.
+      bracket: storeBracket(stampOpened(r.bracket, now)),
+      status: "live",
+      autoStarted: true,
     });
     try {
       const {notifyShowLive} = require("./mainStageNotify");
@@ -206,10 +215,12 @@ async function sweepMainStage(now = Date.now()) {
   const {settleDecidedBattles, forceResolveStalledBattles} =
       require("./mainStagePlay");
   // Force a verdict on any FINISHED battle the panel never decided (a stalled /
-  // absent panel must not halt the bracket), then settle everything decided.
+  // absent panel must not halt the bracket), advance any matchup a no-show
+  // never started or abandoned, then settle everything decided.
   const forced = await forceResolveStalledBattles(db, now);
+  const advanced = await forceAdvanceStuckMatchups(db, now);
   const settled = await settleDecidedBattles(db, now);
-  return {created, locked, autoStarted, forced, settled};
+  return {created, locked, autoStarted, forced, advanced, settled};
 }
 
 /** A finalist/alternate confirms or declines (callable body). */
@@ -267,7 +278,8 @@ async function callout(auth, data) {
     const doc = (await tx.get(ref)).data();
     const r = calloutResult(doc, auth.uid, pickUid);
     if (!r.ok) throw httpsError("failed-precondition", r.error);
-    tx.update(ref, {bracket: storeBracket(r.bracket), status: "live"});
+    tx.update(ref,
+        {bracket: storeBracket(stampOpened(r.bracket, Date.now())), status: "live"});
     return {ok: true, bracket: r.bracket, doc};
   });
   // The show is now live - pull the finalists and judges in (best-effort).
@@ -296,7 +308,9 @@ async function recordBattleResult(db, tournamentId, roundIdx, matchIdx, winnerUi
     }
     const next = applyResult(loadBracket(doc.bracket), roundIdx, matchIdx,
         winnerUid);
-    const update = {bracket: storeBracket(next)};
+    // Stamp openedMs on the final the moment both semis settle (it just became
+    // ready), so it too has the no-show clock. Semis keep their earlier stamp.
+    const update = {bracket: storeBracket(stampOpened(next, Date.now()))};
     let completed = false;
     if (isComplete(next)) {
       update.status = "completed";
@@ -322,6 +336,73 @@ async function recordBattleResult(db, tournamentId, roundIdx, matchIdx, winnerUi
   return result;
 }
 
+// A ready matchup that produces no result for this long is force-advanced, so a
+// no-show / abandon can't halt the single-elimination show. Generous enough
+// never to cut a real battle short - a Main Stage battle runs well under this
+// from start to finish. (The JUDGING stall, after a battle completes, is handled
+// separately by forceResolveStalledBattles.)
+const MATCHUP_NOSHOW_MS = 20 * 60 * 1000;
+
+/**
+ * Backstop: advance any ready matchup that has produced no result for too long -
+ * a battle nobody ever started (no matchId past its openedMs) or one started and
+ * abandoned before it could complete. The player who showed (startedBy) advances
+ * over the one who didn't; if nobody started, the higher seed does. Never touches
+ * a FINISHED-but-undecided battle - that is the judging sweep's job. Best-effort
+ * per matchup; each recordBattleResult re-reads the doc, so advancing several in
+ * one run is safe.
+ */
+async function forceAdvanceStuckMatchups(db, now = Date.now()) {
+  const snap = await db.collection("tournaments")
+      .where("format", "==", "mainstage")
+      .where("status", "==", "live").get();
+  const out = [];
+  for (const d of snap.docs) {
+    const t = d.data();
+    if (!t.bracket) continue;
+    const bracket = loadBracket(t.bracket);
+    for (let ri = 0; ri < bracket.rounds.length; ri++) {
+      const round = bracket.rounds[ri] || [];
+      for (let mi = 0; mi < round.length; mi++) {
+        const m = round[mi];
+        if (!m || m.a == null || m.b == null || m.winner != null) continue;
+        let matchInfo = null;
+        if (m.matchId) {
+          const md =
+            (await db.collection("matches").doc(m.matchId).get()).data();
+          // A missing match doc is treated as never-started, so openedMs is
+          // still the clock.
+          matchInfo = md ? {
+            status: md.status,
+            judgeWinnerId: md.judgeWinnerId,
+            startedBy: md.startedBy,
+            createdMs: md.createdAt && md.createdAt.toMillis ?
+              md.createdAt.toMillis() : 0,
+          } : null;
+        }
+        const outcome =
+          stuckMatchupOutcome(m, matchInfo, now, MATCHUP_NOSHOW_MS);
+        if (!outcome) continue;
+        try {
+          const r = await recordBattleResult(db, d.id, ri, mi, outcome.winner);
+          if (r.ok) {
+            out.push({tournamentId: d.id, roundIdx: ri, matchIdx: mi});
+            // Tidy the abandoned battle doc so it doesn't linger pending.
+            if (m.matchId) {
+              await db.collection("matches").doc(m.matchId)
+                  .update({status: "abandoned"}).catch(() => {});
+            }
+          }
+        } catch (e) {
+          console.error(
+              `mainstage force-advance ${d.id} r${ri}m${mi}:`, e.message);
+        }
+      }
+    }
+  }
+  return out;
+}
+
 // A tiny HttpsError shim so the callable bodies can live here (pure-ish) and
 // the index.js wrappers just pass auth/data through. Lazily required to avoid
 // pulling firebase-functions into the pure test path.
@@ -343,6 +424,7 @@ module.exports = {
   setJudges,
   callout,
   recordBattleResult,
+  forceAdvanceStuckMatchups,
   autoStartDueShows,
   shouldAutoStart,
   AUTO_START_GRACE_MS,

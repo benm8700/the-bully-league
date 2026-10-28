@@ -4,6 +4,9 @@ const {
   applyResult,
   nextMatches,
   isComplete,
+  stampOpened,
+  forfeitWinner,
+  stuckMatchupOutcome,
 } = require("../mainStageBracket");
 
 let passed = 0;
@@ -98,6 +101,92 @@ check("applyResult never mutates its input", () => {
   const snapshot = JSON.stringify(b);
   applyResult(b, 0, 0, "s1");
   assert.strictEqual(JSON.stringify(b), snapshot);
+});
+
+// ---- no-show backstop: stampOpened / forfeitWinner / stuckMatchupOutcome ----
+
+check("stampOpened stamps ready matchups, leaves the unfilled final alone", () => {
+  const b = stampOpened(createBracket(SEEDS, "s3"), 1000);
+  assert.strictEqual(b.rounds[0][0].openedMs, 1000);
+  assert.strictEqual(b.rounds[0][1].openedMs, 1000);
+  // the final isn't ready (a/b null) so it gets no clock yet
+  assert.strictEqual(b.rounds[1][0].openedMs, undefined);
+});
+
+check("stampOpened never re-stamps an already-opened matchup", () => {
+  let b = stampOpened(createBracket(SEEDS, "s3"), 1000);
+  b = stampOpened(b, 5000);
+  assert.strictEqual(b.rounds[0][0].openedMs, 1000, "keeps the first stamp");
+});
+
+check("stampOpened clocks the final once the semis fill it", () => {
+  let b = stampOpened(createBracket(SEEDS, "s3"), 1000);
+  b = applyResult(b, 0, 0, "s1");
+  b = applyResult(b, 0, 1, "s2"); // final now ready
+  b = stampOpened(b, 9000);
+  assert.strictEqual(b.rounds[1][0].openedMs, 9000);
+  assert.strictEqual(b.rounds[0][0].openedMs, 1000, "semis keep their stamp");
+});
+
+check("stampOpened does not mutate its input", () => {
+  const b = createBracket(SEEDS, "s3");
+  const snap = JSON.stringify(b);
+  stampOpened(b, 1000);
+  assert.strictEqual(JSON.stringify(b), snap);
+});
+
+check("forfeitWinner: whoever showed beats the no-show", () => {
+  const m = {a: "s1", b: "s3"};
+  assert.strictEqual(forfeitWinner(m, "s3"), "s3", "the one who started wins");
+  assert.strictEqual(forfeitWinner(m, "s1"), "s1");
+});
+
+check("forfeitWinner: nobody / unknown -> higher seed (the a slot)", () => {
+  const m = {a: "s1", b: "s3"};
+  assert.strictEqual(forfeitWinner(m, null), "s1");
+  assert.strictEqual(forfeitWinner(m, "someone-else"), "s1");
+});
+
+const MIN = 60 * 1000;
+
+check("stuck: a never-started matchup force-advances past its no-show window", () => {
+  const m = {a: "s1", b: "s3", winner: null, openedMs: 1 * MIN};
+  assert.strictEqual(stuckMatchupOutcome(m, null, 10 * MIN, 20 * MIN), null,
+      "not stuck yet");
+  const out = stuckMatchupOutcome(m, null, 22 * MIN, 20 * MIN);
+  assert.strictEqual(out.winner, "s1", "higher seed advances on a double no-show");
+});
+
+check("stuck: a matchup with no openedMs is never force-advanced", () => {
+  const m = {a: "s1", b: "s3", winner: null};
+  assert.strictEqual(stuckMatchupOutcome(m, null, 999 * MIN, 20 * MIN), null);
+});
+
+check("stuck: an abandoned started battle advances whoever showed", () => {
+  const m = {a: "s1", b: "s3", winner: null, openedMs: 1 * MIN, matchId: "x"};
+  const info = {status: "pending", startedBy: "s3", createdMs: 1 * MIN};
+  assert.strictEqual(stuckMatchupOutcome(m, info, 10 * MIN, 20 * MIN), null,
+      "not stuck yet");
+  const out = stuckMatchupOutcome(m, info, 22 * MIN, 20 * MIN);
+  assert.strictEqual(out.winner, "s3", "the player who started advances");
+});
+
+check("stuck: a FINISHED (completed/decided) battle is left to the judging sweep", () => {
+  const m = {a: "s1", b: "s3", winner: null, openedMs: 1 * MIN, matchId: "x"};
+  assert.strictEqual(
+      stuckMatchupOutcome(m, {status: "completed", createdMs: 1 * MIN},
+          999 * MIN, 20 * MIN),
+      null, "completed -> judging owns it");
+  assert.strictEqual(
+      stuckMatchupOutcome(m,
+          {status: "in_progress", judgeWinnerId: "s1", createdMs: 1 * MIN},
+          999 * MIN, 20 * MIN),
+      null, "a verdict already landed -> leave it");
+});
+
+check("stuck: a settled matchup is never touched", () => {
+  const m = {a: "s1", b: "s3", winner: "s1", openedMs: 1 * MIN};
+  assert.strictEqual(stuckMatchupOutcome(m, null, 999 * MIN, 20 * MIN), null);
 });
 
 console.log(`\n${passed} passed`);

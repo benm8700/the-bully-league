@@ -110,4 +110,72 @@ function isComplete(bracket) {
   return bracket.status === "done";
 }
 
-module.exports = {createBracket, applyResult, nextMatches, isComplete};
+/**
+ * Stamp `openedMs` on every matchup that is ready to play (both players known,
+ * no winner) and not already stamped - this is the clock the stuck-matchup
+ * backstop keys off, so a no-show can't halt the show forever. Pure: the caller
+ * passes `now` and stores the result. Already-stamped and already-settled
+ * matchups are left untouched.
+ */
+function stampOpened(bracket, now) {
+  const b = clone(bracket);
+  for (const round of b.rounds) {
+    for (const m of round) {
+      if (m.a != null && m.b != null && m.winner == null && m.openedMs == null) {
+        m.openedMs = now;
+      }
+    }
+  }
+  return b;
+}
+
+/**
+ * Who advances when a matchup is force-resolved for a no-show / abandon. The
+ * player who actually SHOWED (started the battle) beats the one who didn't; if
+ * nobody started (or it's unknown), the higher seed - the 'a' slot - advances,
+ * since a bracket must have exactly one winner. Never a draw (unlike a gauntlet).
+ */
+function forfeitWinner(m, startedBy) {
+  if (startedBy === m.a || startedBy === m.b) return startedBy;
+  return m.a;
+}
+
+/**
+ * PURE. Should a ready-but-unresolved matchup be force-advanced for a no-show?
+ *
+ * `matchInfo` is null when no battle was ever started (no matchId), else
+ * {status, judgeWinnerId, startedBy, createdMs} read from the match doc. Returns
+ * {winner} to force-advance, or null to leave it alone. A matchup whose battle
+ * actually FINISHED (status completed, or a verdict landed) is left to the
+ * judging-stall sweeps; this only catches a battle nobody ever started, or one
+ * started and then abandoned before it could complete.
+ */
+function stuckMatchupOutcome(m, matchInfo, now, noShowMs) {
+  if (!m || m.a == null || m.b == null || m.winner != null) return null;
+  // A clock is only valid once we have a real (positive, finite) timestamp;
+  // a missing / zero value means "no clock yet", never "opened at epoch".
+  const aged = (ts) => {
+    const t = Number(ts);
+    return Number.isFinite(t) && t > 0 && now - t >= noShowMs;
+  };
+  if (matchInfo) {
+    // A started battle: leave it alone once it finished (judging owns it) or
+    // while it is still plausibly live.
+    if (matchInfo.status === "completed" || matchInfo.judgeWinnerId) return null;
+    if (!aged(matchInfo.createdMs)) return null;
+    return {winner: forfeitWinner(m, matchInfo.startedBy)};
+  }
+  // Nobody ever started this matchup.
+  if (!aged(m.openedMs)) return null;
+  return {winner: forfeitWinner(m, null)};
+}
+
+module.exports = {
+  createBracket,
+  applyResult,
+  nextMatches,
+  isComplete,
+  stampOpened,
+  forfeitWinner,
+  stuckMatchupOutcome,
+};

@@ -105,6 +105,10 @@ async function startMainStageBattle(auth, data) {
       mainStageConfig: {...BATTLE_DEFAULTS, graceMs}, // chess-clock timings for the UI
       settings,
       status: "pending",
+      // Whoever tapped "Play your match" first. If the battle is abandoned
+      // before it completes, the stuck-matchup backstop advances the player who
+      // at least showed up over the one who never did.
+      startedBy: auth.uid,
       channelName: `match_${id}`, // short (ms_ + 24 hex) -> well under 64 bytes
       origin: "mainstage",
       createdAt: FieldValue.serverTimestamp(),
