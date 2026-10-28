@@ -31,7 +31,9 @@ class RecordingConsentScreen extends StatefulWidget {
 
 class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
   bool _consentChecked = false;
-  bool _liveWatch = false;
+  // Opted IN by default (the developer's call) - most players want the crowd.
+  // A returning player who explicitly turned it off is respected in _loadPref.
+  bool _liveWatch = true;
 
   @override
   void initState() {
@@ -40,17 +42,19 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
   }
 
   /// Default the switch to the player's last choice, so it's a remembered
-  /// preference they can still change per match.
+  /// preference they can still change per match. Only an EXPLICITLY stored
+  /// value overrides the ON default - an absent field keeps the default on,
+  /// so new players are opted in while anyone who turned it off stays off.
   Future<void> _loadPref() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     try {
       final snap =
           await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final v = snap.data()?['liveWatchOptIn'] == true;
-      if (mounted) setState(() => _liveWatch = v);
+      final raw = snap.data()?['liveWatchOptIn'];
+      if (raw is bool && mounted) setState(() => _liveWatch = raw);
     } catch (_) {
-      // Leave it off; a failed read shouldn't flip someone live by accident.
+      // Leave the default; a failed read shouldn't change the choice.
     }
   }
 
@@ -110,7 +114,7 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
                     'The raw recording is kept for a limited time (see Privacy Policy) '
                     'and then deleted unless it was posted as a highlight.',
                   ),
-                  // OPTIONAL live-watch opt-in (everyday matches only). Off by
+                  // OPTIONAL live-watch opt-in (everyday matches only). ON by
                   // default, and only takes effect if the opponent opts in too.
                   if (widget.showLiveWatchOptIn) ...[
                     const SizedBox(height: 24),
@@ -126,10 +130,11 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      "Off by default. Turn this on and signed-in viewers in the "
-                      "app can watch this battle as it happens. It only goes "
-                      "live if your opponent turns it on too - and the "
-                      "recording and crowd vote work the same either way.",
+                      "On by default. Signed-in viewers in the app can watch "
+                      "this battle as it happens. It only goes live if your "
+                      "opponent is on too - and the recording and crowd vote "
+                      "work the same either way. Turn it off to keep this one "
+                      "private.",
                     ),
                     SwitchListTile(
                       value: _liveWatch,
