@@ -180,13 +180,29 @@ class MainStageBanner extends StatelessWidget {
           urgent: needsAnswer,
         );
       case MainStageRole.judge:
+        // A volunteer judge (notInvited) autofills the panel at the 4pm lock -
+        // nothing to confirm, so it is never urgent and never says "confirm".
+        // Only a hand-picked, invited judge confirms.
+        if (v.invite == InviteStatus.notInvited) {
+          return (
+            title: "You're in the judge pool",
+            sub: 'The panel fills from the volunteer pool at the Thursday 4pm '
+                'lock — no action needed.',
+            icon: Icons.gavel,
+            urgent: false,
+          );
+        }
+        final judgeConfirm = v.invite == InviteStatus.pending ||
+            v.invite == InviteStatus.declined;
         return (
-          title: needsAnswer
-              ? "Congratulations! You're on the judging panel"
+          title: judgeConfirm
+              ? "Congratulations! You're invited to judge"
               : "Congratulations! You're judging the finals",
-          sub: 'Five judges decide the Main Stage. Confirm by Thursday 4pm.',
+          sub: judgeConfirm
+              ? 'Five judges decide the Main Stage. Confirm by Thursday 4pm.'
+              : 'Five judges decide the Main Stage. See you Thursday.',
           icon: Icons.gavel,
-          urgent: needsAnswer,
+          urgent: judgeConfirm,
         );
       case MainStageRole.none:
         return null;

@@ -362,9 +362,16 @@ class _MainStageScreenState extends State<MainStageScreen> {
           "Ranks 5-8 this week. If a finalist drops by Thursday 4pm, the "
               'highest confirmed alternate rolls in — so confirm you\'re '
               'around just in case.'),
-      MainStageRole.judge => _invite(v, "Congratulations! You're on the judging panel.",
-          'Five judges decide the finals live on stage. Confirm by Thursday '
-              '4pm.'),
+      // A hand-picked judge is in the invite list and confirms ("I'm in"); a
+      // volunteer/pool judge is NOT invited - the panel autofills from the
+      // volunteer pool at the 4pm lock with no confirmation. Showing a pool
+      // judge an accept button was the bug: the backend only honours invited
+      // uids, so their tap failed ("Couldn't save").
+      MainStageRole.judge => v.invite == InviteStatus.notInvited
+          ? _judgePoolInfo(v)
+          : _invite(v, "Congratulations! You're on the judging panel.",
+              'Five judges decide the finals live on stage. Confirm by '
+                  'Thursday 4pm.'),
       MainStageRole.none => <Widget>[
           const EmptyState(
             icon: Icons.visibility_outlined,
@@ -431,6 +438,23 @@ class _MainStageScreenState extends State<MainStageScreen> {
                   MainStageLobbyScreen(tournamentId: v.tournamentId))),
         ),
       );
+
+  /// A volunteer judge sitting in the pool: nothing to confirm. The five seats
+  /// fill from the qualified volunteer pool when the panel locks at 4pm, so
+  /// there is no accept button (unlike a hand-picked judge, who IS invited).
+  List<Widget> _judgePoolInfo(MainStageView v) {
+    final gold = context.palette.reward;
+    return [
+      _headline("You're in the judge pool", gold),
+      const SizedBox(height: 8),
+      Text(
+        "You volunteered to judge this week. The five-seat panel fills from "
+        "the volunteer pool when it locks Thursday 4pm — no action needed. If "
+        "you're picked, your green room opens then.",
+        style: _muted(),
+      ),
+    ];
+  }
 
   List<Widget> _invite(MainStageView v, String title, String blurb) {
     final gold = context.palette.reward;
