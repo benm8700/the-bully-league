@@ -225,6 +225,11 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                         snap.data?.data()?['status'] == 'completed';
                     final haveNames =
                         _player1Id != null && _player2Id != null;
+                    // A Main Stage battle auto-resolves if a performer never
+                    // shows (the force-advance backstop), so the waiting copy
+                    // can promise the crowd they won't be stranded.
+                    final isMainStage =
+                        snap.data?.data()?['mainStage'] != null;
                     // The battle is over: leave the Agora channel (this is what
                     // stops the match audio - the leak the live test hit). The
                     // winner is the judge panel's call, so there is no ballot -
@@ -323,17 +328,26 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                               }
                               return ValueListenableBuilder<Set<int>>(
                                 valueListenable: _spectator.presentUids,
-                                builder: (context, present, _) => Column(
-                                  children: [
-                                    Expanded(
-                                        child: _tile(1, present, _player1Id,
-                                            _player1Name)),
-                                    const SizedBox(height: 2),
-                                    Expanded(
-                                        child: _tile(2, present, _player2Id,
-                                            _player2Name)),
-                                  ],
-                                ),
+                                builder: (context, present, _) {
+                                  // Nobody on camera yet: one reassuring
+                                  // "getting ready" state rather than two tiles
+                                  // each reading "waiting" forever.
+                                  if (present.isEmpty) {
+                                    return _BattleWaiting(
+                                        isMainStage: isMainStage);
+                                  }
+                                  return Column(
+                                    children: [
+                                      Expanded(
+                                          child: _tile(1, _player1Id,
+                                              _player1Name)),
+                                      const SizedBox(height: 2),
+                                      Expanded(
+                                          child: _tile(2, _player2Id,
+                                              _player2Name)),
+                                    ],
+                                  );
+                                },
                               );
                             },
                           ),
@@ -355,19 +369,18 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
     );
   }
 
-  Widget _tile(
-      int playerUid, Set<int> present, String? playerId, String playerName) {
+  Widget _tile(int playerUid, String? playerId, String playerName) {
     final view = _spectator.playerVideo(playerUid) ??
         ColoredBox(
           color: const Color(0xFF111111),
           child: Center(
             child: Text(
-              // A player whose stream has not arrived gets an honest
-              // placeholder rather than a black rectangle that reads as a
-              // broken app.
-              present.isEmpty
-                  ? 'Waiting for the battle to start...'
-                  : 'Waiting for player $playerUid...',
+              // The other performer is already on camera; this one hasn't
+              // connected yet. An honest placeholder, not a black rectangle
+              // that reads as a broken app. (The all-empty case is handled by
+              // _BattleWaiting before we get here.)
+              'Waiting for the other performer…',
+              textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white38),
             ),
           ),
@@ -429,6 +442,94 @@ class _PerformerTag extends StatelessWidget {
           FollowButton(uid: uid!, iconOnly: true),
         ],
       ],
+    );
+  }
+}
+
+/// Shown while nobody is on camera yet - a reassuring "getting the battle
+/// ready" state instead of an indefinite spinner. The copy escalates after a
+/// longer wait, and for a Main Stage battle it promises the crowd they won't be
+/// stranded (the force-advance backstop moves the show on if a performer never
+/// shows), so a delay never reads as a dead app.
+class _BattleWaiting extends StatefulWidget {
+  const _BattleWaiting({required this.isMainStage});
+
+  final bool isMainStage;
+
+  @override
+  State<_BattleWaiting> createState() => _BattleWaitingState();
+}
+
+class _BattleWaitingState extends State<_BattleWaiting> {
+  final int _since = DateTime.now().millisecondsSinceEpoch;
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    // Re-render every few seconds so the copy can escalate while we wait.
+    _ticker = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final longWait =
+        DateTime.now().millisecondsSinceEpoch - _since > 40000;
+    final gold = context.palette.reward;
+    final title = longWait ? 'Hang tight — almost there' : 'Getting the battle ready';
+    final sub = longWait
+        ? (widget.isMainStage
+            ? "The performers are connecting. If someone doesn't show, the "
+                "show moves on automatically — you won't be left waiting."
+            : "The performers are connecting. It'll start the moment both are "
+                'on camera.')
+        : 'The performers are getting set up — this only takes a moment.';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: gold.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.mic, color: gold, size: 34),
+            ),
+            const SizedBox(height: 20),
+            Text(title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            Text(sub,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white60, height: 1.4)),
+            const SizedBox(height: 22),
+            SizedBox(
+              width: 160,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  minHeight: 4,
+                  backgroundColor: Colors.white12,
+                  valueColor: AlwaysStoppedAnimation(gold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
