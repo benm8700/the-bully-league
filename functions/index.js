@@ -681,6 +681,22 @@ exports.dailyRewardReminder = onSchedule("every 30 minutes", async () => {
 });
 
 /**
+ * The morning clip reminder: once each morning (Pacific), nudge admins to post
+ * the day's top clip IF there is one ready - the nudge that makes the daily
+ * "post last night's roast" ritual stick. Polled like the other reminders so
+ * the hour stays a tunable constant with a single once-a-day marker fire.
+ */
+exports.morningClipReminder = onSchedule("every 30 minutes", async () => {
+  const {sendMorningClipReminder} = require("./morningClipReminder");
+  try {
+    const result = await sendMorningClipReminder();
+    if (!result.skipped) console.log("morningClipReminder:", JSON.stringify(result));
+  } catch (err) {
+    console.error("morningClipReminder failed:", err);
+  }
+});
+
+/**
  * Turns finished matches into watchable clips without anyone clicking:
  * composite first (cheap), captions only for clips that earn them
  * (expensive). See functions/autoRender.js for why this is a sweep rather

@@ -407,17 +407,13 @@ async function postStudioClips(): Promise<{
   const dismissed = dismissedSnap.docs
     .map((d) => build(d, 0, "dismissed"))
     .sort((a, b) => (b.actedAtMs ?? 0) - (a.actedAtMs ?? 0));
-  // The "morning-after" pick: the best postable clip from the last ~24h (last
-  // night's roasts, when viewed in the morning), so the daily ritual is "post
-  // last night's top roast" without hunting for it. candidates are already
-  // best-first, so the first recent, postable one is the pick. "out" (a
-  // battler pulled it) is never the pick.
-  const MORNING_WINDOW_MS = 24 * 60 * 60 * 1000;
-  const morningCutoff = Date.now() - MORNING_WINDOW_MS;
-  const morningPick =
-    candidates.find(
-      (c) => c.consent !== "out" && (c.completedAtMs ?? 0) >= morningCutoff,
-    ) ?? null;
+  // The daily "post this" pick: the single best clip that is READY to post
+  // right now (the top un-pulled candidate). NOT time-windowed to "last night":
+  // a regular match only finalizes ~24h after it's played, so a clip becomes
+  // postable the day AFTER the battle - a "completed last night" filter would
+  // show almost nothing in the morning. candidates are already best-first, so
+  // the first non-pulled one is the pick.
+  const morningPick = candidates.find((c) => c.consent !== "out") ?? null;
   return { candidates, posted, dismissed, morningPick };
 }
 

@@ -584,8 +584,8 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
       {ps.morningPick && (
         <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/[0.06] p-3">
           <div className="mb-2 flex items-center gap-2">
-            <span className="text-sm font-bold text-amber-300">🌅 Last night’s top roast</span>
-            <span className="text-xs text-amber-200/70">— the daily one to post</span>
+            <span className="text-sm font-bold text-amber-300">🏆 Top pick to post</span>
+            <span className="text-xs text-amber-200/70">— the best clip that’s ready right now</span>
           </div>
           {renderClip(ps.morningPick, null)}
         </div>
