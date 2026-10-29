@@ -1024,6 +1024,21 @@ Raised by the developer: what protects someone who is unhappy that their match f
     to the platforms (needs each platform's posting API + OAuth + TikTok
     approval) — once wired, real posting drops onto the same "Mark posted"
     control; until then the flow is download → upload → mark posted.
+  - **UPDATE (2026-10-29): PHASE 1 (make the manual daily post effortless) is
+    BUILT.** The Post Studio now leads with a **"🏆 Top pick to post"** card (the
+    single best clip ready right now — NOT time-windowed to "last night", since a
+    regular match only finalizes ~24h after it's played, so "last night" shows
+    nothing in the morning), and every clip has **per-platform caption templates**
+    (TikTok/IG/YT, matchup filled in, one-click Copy). A scheduled
+    **`morningClipReminder`** (deployed) nudges ADMINS each morning Pacific when a
+    clip is ready ("fresh roasts ready to post") — a founder tool, admins-only,
+    idempotent, stands down when nothing's ready; it needs the admin account
+    signed into the app (fcmTokens) to land. The developer DECIDED to **park
+    Phase 2** (the social-posting API integration + account/app setup) until the
+    full app build + design tweaks are done. **Phase-2 setup checklist lives at
+    `SOCIAL_POSTING_SETUP.md`** (repo root) — the brand accounts, each platform's
+    dev-app + OAuth + approval steps (TikTok is the long pole), and the
+    integration build, all sequenced. See [[clip-flywheel-phase1-built]].
   - **MARKETING-USE CONSENT MODEL — DECIDED + BUILT (2026-10-20, iterated hard
     with the developer).** A per-clip OPT-IN was built first and rightly called
     over-built; then default-in opt-out; the FINAL model is **blanket consent
