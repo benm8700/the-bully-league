@@ -30,7 +30,7 @@ type Metrics = {
   prizes: PrizeItem[];
   recentBattles: BattleItem[];
   handled: { reports: HandledItem[]; support: HandledItem[]; appeals: HandledItem[] };
-  postStudio: { candidates: PostClip[]; posted: PostClip[]; dismissed: PostClip[] };
+  postStudio: { candidates: PostClip[]; posted: PostClip[]; dismissed: PostClip[]; morningPick: PostClip | null };
 };
 
 type BattleItem = {
@@ -398,13 +398,45 @@ function prizeAge(wonAtMs: number | null): string {
   return `won ${d.toLocaleDateString()} · ${ago}`;
 }
 
+// Ready-to-paste captions per platform, with the matchup filled in. Edit after
+// pasting - these are a fast start, not a straitjacket. (When real API posting
+// lands, these become the auto-filled caption; for now the founder copies one.)
+function captionsFor(c: PostClip): { label: string; text: string }[] {
+  const vs = `${c.player1Name} vs ${c.player2Name}`;
+  return [
+    {
+      label: "TikTok",
+      text:
+        `${vs} 😳 Two strangers, 15 seconds each to roast — the crowd picks the winner. Who took it? 👇\n` +
+        `🎤 Roast a stranger on The Bully League\n` +
+        `#roastbattle #roast #comedy #standupcomedy #fyp #foryou #thebullyleague`,
+    },
+    {
+      label: "Instagram",
+      text:
+        `${vs} 😳 Two strangers, 15 seconds each — the crowd decides who won. 👇\n` +
+        `🎤 The Bully League\n` +
+        `#roastbattle #roast #comedy #comedyreels #standup #reels #explorepage #thebullyleague`,
+    },
+    {
+      label: "YouTube",
+      text:
+        `${vs} — Roast Battle 🎤 | The Bully League\n` +
+        `Two strangers get 15 seconds each to roast. The crowd picks the winner.\n` +
+        `#Shorts #roastbattle #roast #comedy #standup`,
+    },
+  ];
+}
+
 function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: (name: string, data: Record<string, unknown>, label: string) => void; act: (p: Record<string, unknown>, l: string) => void; busy: boolean }) {
-  const ps = metrics.postStudio ?? { candidates: [], posted: [], dismissed: [] };
+  const ps = metrics.postStudio ?? { candidates: [], posted: [], dismissed: [], morningPick: null };
   const [preview, setPreview] = useState<{ id: string; url: string } | null>(null);
   const [loadingClip, setLoadingClip] = useState<string | null>(null);
   const [plat, setPlat] = useState<Record<string, { tiktok: boolean; instagram: boolean; youtube: boolean }>>({});
   const [showPosted, setShowPosted] = useState(false);
   const [showAside, setShowAside] = useState(false);
+  const [capsOpen, setCapsOpen] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
 
   async function getClipUrl(id: string, blurred: boolean): Promise<string | null> {
     try {
@@ -438,6 +470,105 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
     { key: "youtube", label: "YT" },
   ];
 
+  // The morning pick is shown in its own section up top, so keep it out of the
+  // ranked list below (no double-render).
+  const candidatesToShow = ps.candidates.filter((c) => c.id !== ps.morningPick?.id);
+
+  const renderClip = (c: PostClip, rank: number | null) => (
+    <div key={c.id} className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        {rank !== null && (
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-zinc-800 text-xs font-bold text-zinc-300">{rank}</span>
+        )}
+        <span className="font-semibold text-white">{c.player1Name} vs {c.player2Name}</span>
+        <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-300" title="postability score">★ {c.score}</span>
+        <span className="rounded bg-zinc-800/60 px-1.5 py-0.5 text-xs text-zinc-400">👍 {c.votes}</span>
+        <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-xs text-orange-300">🔥 {c.positiveEmoji}</span>
+        {c.published ? (
+          <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">on site</span>
+        ) : (
+          <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-300">reel ready</span>
+        )}
+        {c.consent === "blur" && (
+          <span title="A battler opted to blur their face — post the BLURRED cut" className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">👤 face blurred{c.blurReady ? "" : " · prep needed"}</span>
+        )}
+        {c.consent === "out" && (
+          <span title="A battler pulled this clip entirely — don't post it" className="rounded bg-red-500/15 px-1.5 py-0.5 text-xs text-red-300">🚫 pulled</span>
+        )}
+        <span className="font-mono text-xs text-zinc-600">#{c.id.slice(-6)}</span>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {c.consent === "blur" && !c.blurReady ? (
+            <button disabled={busy} onClick={() => callFn("renderBlurredClip", { matchId: c.id }, "Rendering the blurred cut - give it a minute")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600 disabled:opacity-50">
+              Prepare blurred cut
+            </button>
+          ) : (
+            <>
+              <button onClick={() => togglePreview(c)} disabled={loadingClip === c.id} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
+                {loadingClip === c.id ? "…" : preview?.id === c.id ? "Hide" : "▶ Preview"}
+              </button>
+              <button onClick={() => download(c)} disabled={loadingClip === c.id} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
+                ⬇ Clip{c.consent === "blur" ? " (blurred)" : ""}
+              </button>
+            </>
+          )}
+          {c.consent === "ok" && !c.published && c.rendered && (
+            <button disabled={busy} onClick={() => callFn("publishBattle", { matchId: c.id, published: true }, "Published")} className="rounded bg-green-600/80 px-2 py-1 text-xs text-white hover:bg-green-600 disabled:opacity-50">
+              Publish to site
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="text-xs text-zinc-500">Posted to:</span>
+        {PLATFORMS.map((p) => {
+          const on = platOf(c.id)[p.key];
+          return (
+            <button key={p.key} onClick={() => togglePlat(c.id, p.key)} className={`rounded border px-2 py-0.5 text-xs ${on ? "border-pink-500/60 bg-pink-500/15 text-pink-200" : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"}`}>
+              {on ? "✓ " : ""}{p.label}
+            </button>
+          );
+        })}
+        <button disabled={busy} onClick={() => {
+          if (c.consent === "out" && !confirm("A battler PULLED this clip entirely. Posting it is against their wishes. Mark posted anyway?")) return;
+          act({ type: "markClipPosted", matchId: c.id, platforms: platOf(c.id) }, "Marked posted");
+        }} className="rounded bg-pink-600/80 px-2 py-1 text-xs text-white hover:bg-pink-600 disabled:opacity-50">
+          Mark posted
+        </button>
+        <button disabled={busy} onClick={() => act({ type: "setAsideClip", matchId: c.id }, "Set aside")} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-50">
+          Set aside
+        </button>
+      </div>
+
+      <div className="mt-2">
+        <button onClick={() => setCapsOpen(capsOpen === c.id ? null : c.id)} className="text-xs text-zinc-400 hover:text-zinc-200">
+          📋 Captions {capsOpen === c.id ? "▴" : "▾"}
+        </button>
+        {capsOpen === c.id && (
+          <div className="mt-2 space-y-2">
+            {captionsFor(c).map((cap) => (
+              <div key={cap.label} className="rounded border border-zinc-800 bg-zinc-950/60 p-2">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-zinc-300">{cap.label}</span>
+                  <button onClick={() => { navigator.clipboard?.writeText(cap.text); setCopied(cap.label + c.id); setTimeout(() => setCopied((v) => (v === cap.label + c.id ? null : v)), 1500); }} className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-200 hover:bg-zinc-800">
+                    {copied === cap.label + c.id ? "✓ Copied" : "Copy"}
+                  </button>
+                </div>
+                <pre className="whitespace-pre-wrap break-words font-sans text-xs text-zinc-400">{cap.text}</pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {preview?.id === c.id && (
+        <div className="mt-3">
+          <video key={preview.url} src={preview.url} controls autoPlay className="block max-h-[70vh] rounded border border-zinc-800 bg-black" />
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="mb-8">
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
@@ -450,81 +581,25 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
         Posted and set-aside clips move to the archives below.
       </p>
 
-      {ps.candidates.length === 0 ? (
-        <p className="text-xs text-zinc-600">No clips ready to post yet — they appear here once a battle is judged and its reel has rendered.</p>
+      {ps.morningPick && (
+        <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/[0.06] p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-sm font-bold text-amber-300">🌅 Last night’s top roast</span>
+            <span className="text-xs text-amber-200/70">— the daily one to post</span>
+          </div>
+          {renderClip(ps.morningPick, null)}
+        </div>
+      )}
+
+      {candidatesToShow.length === 0 ? (
+        <p className="text-xs text-zinc-600">
+          {ps.morningPick
+            ? "That’s the lot for now — more land here as battles are judged and render."
+            : "No clips ready to post yet — they appear here once a battle is judged and its reel has rendered."}
+        </p>
       ) : (
         <div className="space-y-2">
-          {ps.candidates.map((c, i) => (
-            <div key={c.id} className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-zinc-800 text-xs font-bold text-zinc-300">{i + 1}</span>
-                <span className="font-semibold text-white">{c.player1Name} vs {c.player2Name}</span>
-                <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-300" title="postability score">★ {c.score}</span>
-                <span className="rounded bg-zinc-800/60 px-1.5 py-0.5 text-xs text-zinc-400">👍 {c.votes}</span>
-                <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-xs text-orange-300">🔥 {c.positiveEmoji}</span>
-                {c.published ? (
-                  <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">on site</span>
-                ) : (
-                  <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-300">reel ready</span>
-                )}
-                {c.consent === "blur" && (
-                  <span title="A battler opted to blur their face — post the BLURRED cut" className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">👤 face blurred{c.blurReady ? "" : " · prep needed"}</span>
-                )}
-                {c.consent === "out" && (
-                  <span title="A battler pulled this clip entirely — don't post it" className="rounded bg-red-500/15 px-1.5 py-0.5 text-xs text-red-300">🚫 pulled</span>
-                )}
-                <span className="font-mono text-xs text-zinc-600">#{c.id.slice(-6)}</span>
-                <div className="ml-auto flex flex-wrap items-center gap-2">
-                  {c.consent === "blur" && !c.blurReady ? (
-                    <button disabled={busy} onClick={() => callFn("renderBlurredClip", { matchId: c.id }, "Rendering the blurred cut - give it a minute")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600 disabled:opacity-50">
-                      Prepare blurred cut
-                    </button>
-                  ) : (
-                    <>
-                      <button onClick={() => togglePreview(c)} disabled={loadingClip === c.id} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
-                        {loadingClip === c.id ? "…" : preview?.id === c.id ? "Hide" : "▶ Preview"}
-                      </button>
-                      <button onClick={() => download(c)} disabled={loadingClip === c.id} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
-                        ⬇ Clip{c.consent === "blur" ? " (blurred)" : ""}
-                      </button>
-                    </>
-                  )}
-                  {c.consent === "ok" && !c.published && c.rendered && (
-                    <button disabled={busy} onClick={() => callFn("publishBattle", { matchId: c.id, published: true }, "Published")} className="rounded bg-green-600/80 px-2 py-1 text-xs text-white hover:bg-green-600 disabled:opacity-50">
-                      Publish to site
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="text-xs text-zinc-500">Posted to:</span>
-                {PLATFORMS.map((p) => {
-                  const on = platOf(c.id)[p.key];
-                  return (
-                    <button key={p.key} onClick={() => togglePlat(c.id, p.key)} className={`rounded border px-2 py-0.5 text-xs ${on ? "border-pink-500/60 bg-pink-500/15 text-pink-200" : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"}`}>
-                      {on ? "✓ " : ""}{p.label}
-                    </button>
-                  );
-                })}
-                <button disabled={busy} onClick={() => {
-                  if (c.consent === "out" && !confirm("A battler PULLED this clip entirely. Posting it is against their wishes. Mark posted anyway?")) return;
-                  act({ type: "markClipPosted", matchId: c.id, platforms: platOf(c.id) }, "Marked posted");
-                }} className="rounded bg-pink-600/80 px-2 py-1 text-xs text-white hover:bg-pink-600 disabled:opacity-50">
-                  Mark posted
-                </button>
-                <button disabled={busy} onClick={() => act({ type: "setAsideClip", matchId: c.id }, "Set aside")} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-50">
-                  Set aside
-                </button>
-              </div>
-
-              {preview?.id === c.id && (
-                <div className="mt-3">
-                  <video key={preview.url} src={preview.url} controls autoPlay className="block max-h-[70vh] rounded border border-zinc-800 bg-black" />
-                </div>
-              )}
-            </div>
-          ))}
+          {candidatesToShow.map((c, i) => renderClip(c, i + 1))}
         </div>
       )}
 
