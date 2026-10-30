@@ -44,12 +44,23 @@ class MainStageCard extends StatelessWidget {
         // size. A COMING SOON badge rides under the label while the tournament
         // is switched off; it clears the moment config/tournament.enabled flips.
         return HomeActionCard(
-          label: 'MAIN STAGE',
+          label: 'MAIN\nSTAGE',
           icon: HomeActionCard.neonIcon(Icons.emoji_events, _kGold), // trophy
           accent: _kGold,
           accentEnd: _kGoldDeep,
           onTap: openHub,
           badge: enabled ? null : _comingSoonBadge(),
+          // While it's COMING SOON (tournament switched off), the card can't be
+          // tapped - nobody enters the Main Stage until it goes live.
+          enabled: enabled,
+          onInfo: () => showModeInfo(
+            context,
+            title: 'Main Stage',
+            body:
+                'The tournament. The top roasters earn their spot and battle '
+                'live for the title and the belt. Coming soon.',
+            accent: _kGold,
+          ),
         );
       },
       ),

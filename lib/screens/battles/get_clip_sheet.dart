@@ -417,6 +417,16 @@ class _GetClipSheetState extends State<GetClipSheet> {
                       style: text.bodySmall,
                       textAlign: TextAlign.center,
                     ),
+                    if (_balance < _price) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Judge battles and play to earn points.',
+                        style: text.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     Text(
                       'Subscribers get every ranked battle captioned '

@@ -83,8 +83,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Redeem a day pass?'),
         content: Text(
-          'Spend $_dayPassPrice points for 24 hours of battling any time '
-          'today, outside the nightly window.',
+          'Spend $_dayPassPrice points to battle any time today - a full '
+          '24-hour pass.',
         ),
         actions: [
           TextButton(
@@ -213,7 +213,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
     return _RewardTile(
       emoji: '🎟️',
       title: 'Day pass',
-      subtitle: 'Battle any time today,\noutside the nightly window.',
+      subtitle: 'Battle any time today -\na full 24-hour pass.',
       price: _dayPassPrice,
       affordable: affordable,
       actionLabel: actionLabel,

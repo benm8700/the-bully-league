@@ -13,7 +13,12 @@ import '../../theme/app_theme.dart';
 /// unreadable, so a switched-off promo never makes Home look wrong. Ticks once a
 /// minute for the countdown (plenty for a minutes-granularity display).
 class DailyWindowStrip extends StatefulWidget {
-  const DailyWindowStrip({super.key});
+  const DailyWindowStrip({super.key, this.compact = false});
+
+  /// When true, render a tiny inline line ("⚡ 2X POINTS · in 18h 5m") with no
+  /// container - for dropping inside the Play box instead of a full banner. The
+  /// name and the 6-7pm hours are dropped; only the draw + countdown remain.
+  final bool compact;
 
   @override
   State<DailyWindowStrip> createState() => _DailyWindowStripState();
@@ -65,6 +70,48 @@ class _DailyWindowStripState extends State<DailyWindowStrip>
         // multiplier is for everyday Basement play, so it reads in the same
         // family as the Basement hero rather than the gold Main Stage.
         final accent = context.palette.accent;
+
+        // Compact inline line for inside the Play box: just the draw + how long.
+        if (widget.compact) {
+          final tail = live
+              ? 'LIVE  ${_mins(window.end, now)} left'
+              : 'in ${_remaining(window.start, now)}';
+          return Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.bolt, size: 13, color: accent),
+                const SizedBox(width: 3),
+                Flexible(
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '2X POINTS',
+                          style: TextStyle(
+                            color: accent,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.2,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                        TextSpan(
+                          text: '  $tail',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.72),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+          );
+        }
 
         final hours =
             '${_h(config.startHourPacific)} to ${_h(config.endHourPacific)}';

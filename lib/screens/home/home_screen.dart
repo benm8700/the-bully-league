@@ -185,12 +185,10 @@ class HomeScreen extends StatelessWidget {
                     const GoatThroneBanner(),
                     const _TrialStatus(),
                     const SizedBox(height: 8),
-                    // The daily 6-7pm "power hour" (2x points) sits ABOVE the
-                    // Basement hero - the multiplier is for everyday Basement
-                    // play, so it headlines that block. Renders nothing when
-                    // the window is switched off (its own bottom padding spaces
-                    // it from the hero below).
-                    const DailyWindowStrip(),
+                    // The daily 6-7pm "power hour" (2x points) now rides as a
+                    // small line INSIDE the Play box (see _PlayWatchDoors), not a
+                    // full-width banner: the name + hours read as redundant, so
+                    // only "2X POINTS" + how long until it starts is kept.
                     // TWO FRONT DOORS: PLAY / WATCH (Home redesign,
                     // 2026-10-22). The old Home stacked four mode heroes
                     // (Basement, Main Stage, Friend, Face-Off) which read as a
@@ -201,7 +199,7 @@ class HomeScreen extends StatelessWidget {
                     // modes and their wiring are untouched - this is just the
                     // front door.
                     const _PlayWatchDoors(),
-                    const SizedBox(height: 11),
+                    const SizedBox(height: 18),
                     // The WEEKLY Main Stage tournament stays its own distinct
                     // card - it is the EVENT/destination, not an everyday mode,
                     // so it earns a spot below the doors rather than hiding
@@ -212,13 +210,13 @@ class HomeScreen extends StatelessWidget {
                     // row so they are reachable without crowding the two doors:
                     // Face-Off (improv) and Challenge a Friend.
                     const _MoreWaysToPlay(),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 18),
                     // Quick Actions row (Home overhaul): Daily Challenges /
                     // Free Rewards / Current Streak. The Daily Challenges card
                     // opens the full quests in a sheet, so the tall inline
                     // quest list is no longer shown here (one route, not two).
                     if (uid != null) HomeQuickActions(uid: uid),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 18),
                     // Slim wallet line: "N Points" + Rewards ->. The old
                     // milestone bar moved into the Rewards screen; Home keeps
                     // only the glanceable balance and a way in.
@@ -653,11 +651,23 @@ class _DayPassOfferState extends State<_DayPassOffer> {
       }
       return Padding(
         padding: const EdgeInsets.only(bottom: 12),
-        child: Text(
-          '${price - balance} more points and you could battle any time '
-          'for a day.',
-          style: text.bodySmall,
-          textAlign: TextAlign.center,
+        child: Column(
+          children: [
+            Text(
+              '${price - balance} more points and you could battle any time '
+              'for a day.',
+              style: text.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Judge battles and play to earn points.',
+              style: text.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       );
     }
@@ -1263,16 +1273,39 @@ class _PlayWatchDoors extends StatelessWidget {
             accent: _kPlayPink,
             accentEnd: _kNeonBlue,
             subtitle: 'Roast a stranger',
+            // The 2x "power hour" line, condensed, lives inside Play.
+            footer: const DailyWindowStrip(compact: true),
             onTap: () => _startMatch(context, 'ranked'),
+            onInfo: () => showModeInfo(
+              context,
+              title: 'Play',
+              body:
+                  "You're matched with a random stranger for a live 1-on-1 roast "
+                  'battle. Take turns, land your best jokes, and the crowd votes '
+                  'on who won. Win to climb the ranks.',
+              accent: _kPlayPink,
+            ),
           ),
-          const SizedBox(height: 11),
+          const SizedBox(height: 18),
           HomeActionCard(
-            label: 'WATCH',
-            icon: HomeActionCard.neonIcon(Icons.live_tv, _kWatchPurple),
+            // "JUDGE", not "WATCH": votes are the scarce resource the ladder
+            // runs on, and an active "you decide the winner" framing pulls far
+            // harder than a passive "watch". They watch anyway to judge.
+            label: 'JUDGE',
+            icon: HomeActionCard.neonIcon(Icons.gavel, _kWatchPurple),
             accent: _kWatchPurple,
             accentEnd: _kNeonBlue,
-            subtitle: 'Watch strangers roast each other and vote for the winners',
+            subtitle: 'Your vote decides the winner',
             onTap: () => MainShell.go(MainShell.tabWatch),
+            onInfo: () => showModeInfo(
+              context,
+              title: 'Judge',
+              body:
+                  'Watch real roast battles and vote for who was funnier. Your '
+                  'votes decide the winners, and you earn points every time you '
+                  'judge.',
+              accent: _kWatchPurple,
+            ),
           ),
         ],
       ),
