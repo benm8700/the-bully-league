@@ -58,7 +58,8 @@ class MainStageCard extends StatelessWidget {
             title: 'Main Stage',
             body:
                 'The tournament. The top roasters earn their spot and battle '
-                'live for the title and the belt. Coming soon.',
+                'live for the title and the belt. Win money, prizes, and fame. '
+                'Coming soon.',
             accent: _kGold,
           ),
         );
