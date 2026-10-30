@@ -262,8 +262,9 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
     // element here). All clipped to the card by the ClipRRect above.
     final content = Stack(
       children: [
-        // Very faint diagonal sheen - a whisper of light on the surface, not a
-        // metallic stripe. Kept minimal so the card reads dark and quiet.
+        // Diagonal sheen - a soft band of light across the surface. A touch
+        // brighter than before so the card reads glossy/premium and holds its
+        // own against the game-mode buttons below it.
         Positioned.fill(
           child: IgnorePointer(
             child: DecoratedBox(
@@ -273,12 +274,35 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
                   end: Alignment.bottomRight,
                   colors: [
                     Colors.transparent,
-                    const Color(0xFFD9A8FF).withValues(alpha: 0.02),
-                    const Color(0xFFE7C6FF).withValues(alpha: 0.06),
-                    const Color(0xFFD9A8FF).withValues(alpha: 0.02),
+                    const Color(0xFFD9A8FF).withValues(alpha: 0.04),
+                    const Color(0xFFE7C6FF).withValues(alpha: 0.11),
+                    const Color(0xFFD9A8FF).withValues(alpha: 0.04),
                     Colors.transparent,
                   ],
                   stops: const [0.0, 0.38, 0.5, 0.62, 1.0],
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Glass top highlight - a thin specular sheen along the top edge, the
+        // classic "glossy card" cue. This is the "more shine" lift: light, not
+        // colour, so the card stays purple identity.
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 34,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.11),
+                    Colors.transparent,
+                  ],
                 ),
               ),
             ),
@@ -317,7 +341,7 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      gold.withValues(alpha: prestige ? 0.36 : 0.22),
+                      gold.withValues(alpha: prestige ? 0.40 : 0.26),
                       Colors.transparent,
                     ],
                     stops: const [0.0, 1.0],
@@ -423,12 +447,13 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
                   blurRadius: 14,
                   offset: Offset(0, 6),
                 ),
-                // One very subtle purple edge glow - present for premium depth,
-                // nowhere near a neon halo (reduced from the old bright glow).
+                // A purple edge glow for premium depth - lifted a little so the
+                // identity card reads as the anchor of Home, standing out from
+                // the calmer game-mode buttons below. Still well short of neon.
                 BoxShadow(
-                  color: const Color(0xFFB44AD4).withValues(alpha: 0.14),
-                  blurRadius: 14,
-                  spreadRadius: -4,
+                  color: const Color(0xFFB44AD4).withValues(alpha: 0.22),
+                  blurRadius: 18,
+                  spreadRadius: -2,
                 ),
               ],
             ),

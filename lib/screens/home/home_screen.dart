@@ -1265,10 +1265,10 @@ class _PlayWatchDoors extends StatelessWidget {
             subtitle: 'Roast a stranger',
             onTap: () => _startMatch(context, 'ranked'),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 11),
           HomeActionCard(
             label: 'WATCH',
-            icon: HomeActionCard.neonIcon(Icons.ondemand_video, _kWatchPurple),
+            icon: HomeActionCard.neonIcon(Icons.live_tv, _kWatchPurple),
             accent: _kWatchPurple,
             accentEnd: _kNeonBlue,
             subtitle: 'Watch strangers roast each other and vote for the winners',
