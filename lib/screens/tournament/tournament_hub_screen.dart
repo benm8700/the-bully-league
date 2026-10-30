@@ -30,7 +30,11 @@ import 'main_stage_screen.dart';
 /// empty states until the system is switched on; the Lobby and Prize tabs work
 /// today.
 class TournamentHubScreen extends StatefulWidget {
-  const TournamentHubScreen({super.key});
+  const TournamentHubScreen({super.key, this.initialTab = 0});
+
+  /// Which tab to open on (0 Lobby, 1 The Cut, 2 Judges, 3 Prize). The Judge
+  /// explainer's "judges' table" link deep-links straight to the Judges tab.
+  final int initialTab;
 
   @override
   State<TournamentHubScreen> createState() => _TournamentHubScreenState();
@@ -60,6 +64,7 @@ class _TournamentHubScreenState extends State<TournamentHubScreen> {
     final gold = context.palette.reward;
     return DefaultTabController(
       length: 4,
+      initialIndex: widget.initialTab,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         extendBodyBehindAppBar: true,

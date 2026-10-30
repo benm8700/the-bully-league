@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
@@ -371,14 +372,20 @@ const Color _kGold = Color(0xFFF8C73B);
 
 /// A brief "what is this mode" dialog, used by the Home boxes' "?" buttons.
 ///
-/// [highlight], when set, renders as an eye-catching gold callout beneath the
-/// body - the Main Stage "prizes and fame" hook on the Play dialog.
+/// [highlight], when set, renders as an eye-catching callout beneath the body -
+/// the Main Stage "prizes and fame" hook on the Play dialog (gold by default),
+/// or the judges'-table hook on the Judge dialog. [highlightColor] tints it
+/// (defaults to gold); [highlightLinkText] + [onHighlightTap] make a word
+/// inside it a clickable link (which also closes the dialog first).
 void showModeInfo(
   BuildContext context, {
   required String title,
   required String body,
   required Color accent,
   String? highlight,
+  Color? highlightColor,
+  String? highlightLinkText,
+  VoidCallback? onHighlightTap,
 }) {
   final p = context.palette;
   showDialog<void>(
@@ -413,30 +420,16 @@ void showModeInfo(
           ),
           if (highlight != null) ...[
             const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-              decoration: BoxDecoration(
-                color: _kGold.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _kGold.withValues(alpha: 0.45)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.emoji_events, color: _kGold, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      highlight,
-                      style: const TextStyle(
-                        color: _kGold,
-                        fontWeight: FontWeight.w700,
-                        height: 1.3,
-                        fontSize: 13.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            _HighlightCallout(
+              text: highlight,
+              color: highlightColor ?? _kGold,
+              linkText: highlightLinkText,
+              onTap: onHighlightTap == null
+                  ? null
+                  : () {
+                      Navigator.of(ctx).pop();
+                      onHighlightTap();
+                    },
             ),
           ],
         ],
@@ -450,4 +443,99 @@ void showModeInfo(
       ],
     ),
   );
+}
+
+/// The aspirational callout inside a mode dialog: a tinted box with a trophy
+/// and a line of text, optionally with one word turned into a brighter,
+/// underlined link. Owns its tap recogniser so it is disposed cleanly.
+class _HighlightCallout extends StatefulWidget {
+  const _HighlightCallout({
+    required this.text,
+    required this.color,
+    this.linkText,
+    this.onTap,
+  });
+
+  final String text;
+  final Color color;
+  final String? linkText;
+  final VoidCallback? onTap;
+
+  @override
+  State<_HighlightCallout> createState() => _HighlightCalloutState();
+}
+
+class _HighlightCalloutState extends State<_HighlightCallout> {
+  TapGestureRecognizer? _recognizer;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.linkText != null && widget.onTap != null) {
+      _recognizer = TapGestureRecognizer()..onTap = widget.onTap;
+    }
+  }
+
+  @override
+  void dispose() {
+    _recognizer?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.color;
+    final baseStyle = TextStyle(
+      color: color,
+      fontWeight: FontWeight.w700,
+      height: 1.3,
+      fontSize: 13.5,
+    );
+
+    final link = widget.linkText;
+    final idx = link == null ? -1 : widget.text.indexOf(link);
+    final Widget textWidget;
+    if (link != null && idx >= 0 && _recognizer != null) {
+      // The link word is brighter (lerped toward white) and underlined, so it
+      // reads as tappable against the rest of the callout.
+      final linkColor = Color.lerp(color, Colors.white, 0.4)!;
+      textWidget = Text.rich(
+        TextSpan(
+          style: baseStyle,
+          children: [
+            TextSpan(text: widget.text.substring(0, idx)),
+            TextSpan(
+              text: link,
+              style: TextStyle(
+                color: linkColor,
+                fontWeight: FontWeight.w900,
+                decoration: TextDecoration.underline,
+                decorationColor: linkColor,
+              ),
+              recognizer: _recognizer,
+            ),
+            TextSpan(text: widget.text.substring(idx + link.length)),
+          ],
+        ),
+      );
+    } else {
+      textWidget = Text(widget.text, style: baseStyle);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.emoji_events, color: color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(child: textWidget),
+        ],
+      ),
+    );
+  }
 }

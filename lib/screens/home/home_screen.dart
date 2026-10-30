@@ -23,6 +23,7 @@ import '../../widgets/home/home_quick_actions.dart';
 import '../../widgets/home/home_featured.dart';
 import '../../widgets/home/main_stage_card.dart';
 import '../../widgets/home/daily_window_strip.dart';
+import '../tournament/tournament_hub_screen.dart';
 import 'main_shell.dart';
 import '../match/bio_reveal_screen.dart';
 import '../match/improv_match_screen.dart';
@@ -1307,6 +1308,18 @@ class _PlayWatchDoors extends StatelessWidget {
                   'Watch real roast battles and vote for who was funnier. Your '
                   'votes decide the winners, and you earn points every time you '
                   'judge.',
+              highlight: "Top judges earn a spot at the judges' table.",
+              // Brighter than the Judge purple so the hook stands out, with the
+              // "judges' table" as a link into the Main Stage judges' lobby
+              // (where people volunteer to judge). The hub handles its own
+              // coming-soon state while the tournament is switched off.
+              highlightColor: const Color(0xFFCE8BFF),
+              highlightLinkText: "judges' table",
+              onHighlightTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const TournamentHubScreen(initialTab: 2),
+                ),
+              ),
               accent: _kWatchPurple,
             ),
           ),
