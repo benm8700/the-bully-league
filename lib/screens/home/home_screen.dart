@@ -1241,104 +1241,50 @@ class _WalletBar extends StatelessWidget {
 /// (roast a stranger) through the existing _startMatch path, so the entitlement
 /// gate and the rest of the flow are untouched. WATCH jumps to the Vote tab.
 ///
-/// The art carries the words (the developer bakes "PLAY"/"WATCH" into the PNGs),
-/// so nothing is overlaid. Play reuses the Basement art (assets/home/roast_hero.png)
-/// for a good look out of the box; Watch uses assets/home/watch_hero.png (a
-/// re-lettered copy of the Main Stage art) and shows a plain gradient until that
-/// file is dropped in.
+/// Neon capsule buttons (developer's reference, 2026-10-29): a glowing icon, a
+/// divider, the label in the accent colour, and a chevron - the background art
+/// shows through the glassy interior, so the buttons frame it rather than
+/// competing with it.
 class _PlayWatchDoors extends StatelessWidget {
   const _PlayWatchDoors();
 
   @override
   Widget build(BuildContext context) {
     // Both use the shared HomeActionCard, so Play, Watch and the Main Stage
-    // card below are all the same size/shape (2.5:1, fills the width, 20px
-    // radius, BoxFit.cover). 11px between them; a slim side margin so they
-    // aren't jammed to the edges and the glow has room. Each carries a "?"
-    // explainer like the Main Stage card.
+    // card below are all the same size/shape. A slim side margin so they aren't
+    // jammed to the edges and the glow has room.
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
         children: [
           HomeActionCard(
-            asset: 'assets/home/roast_hero.png',
-            accent: const Color(0xFF3DE06B), // green, matching the Play art
+            label: 'PLAY',
+            icon: HomeActionCard.neonIcon(Icons.mic, _kPlayPink),
+            accent: _kPlayPink,
+            accentEnd: _kNeonBlue,
+            subtitle: 'Roast a stranger',
             onTap: () => _startMatch(context, 'ranked'),
-            topRight:
-                _helpButton(context, 'About Play', () => _showPlayInfo(context)),
           ),
-          const SizedBox(height: 11),
+          const SizedBox(height: 14),
           HomeActionCard(
-            asset: 'assets/home/watch_hero.png',
-            accent: const Color(0xFFC24DFF), // magenta, matching the Watch art
+            label: 'WATCH',
+            icon: HomeActionCard.neonIcon(Icons.ondemand_video, _kWatchPurple),
+            accent: _kWatchPurple,
+            accentEnd: _kNeonBlue,
+            subtitle: 'Watch strangers roast each other and vote for the winners',
             onTap: () => MainShell.go(MainShell.tabWatch),
-            topRight: _helpButton(
-                context, 'About Watch', () => _showWatchInfo(context)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// The small "?" disc pinned top-right on a card, matching the Main Stage one.
-  Widget _helpButton(
-      BuildContext context, String tooltip, VoidCallback onPressed) {
-    return IconButton(
-      icon: const Icon(Icons.help_outline),
-      iconSize: 22,
-      color: Colors.white,
-      tooltip: tooltip,
-      style: IconButton.styleFrom(
-        backgroundColor: Colors.black.withValues(alpha: 0.42),
-        padding: const EdgeInsets.all(5),
-        minimumSize: const Size(0, 0),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      onPressed: onPressed,
-    );
-  }
-
-  void _showPlayInfo(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Play'),
-        content: Text(
-          'Get matched with a random stranger for a live 1-on-1 roast battle. '
-          'Land your jokes, and the crowd votes on the winner - every win '
-          'climbs your rank.',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Got it'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showWatchInfo(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Watch'),
-        content: Text(
-          'Watch battles and vote for the winner. Your votes decide who rises '
-          'to the top of the leaderboard - and judging earns you points too.',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Got it'),
           ),
         ],
       ),
     );
   }
 }
+
+/// The neon pill colours for the Home doors: PLAY pink -> blue, WATCH purple ->
+/// blue (Main Stage uses gold, set in main_stage_card.dart).
+const Color _kPlayPink = Color(0xFFFF2E7E);
+const Color _kWatchPurple = Color(0xFFB64DFF);
+const Color _kNeonBlue = Color(0xFF3D7BFF);
 
 /// The two other ways to play, demoted to a quiet secondary row under the
 /// doors: Face-Off (improv) and Challenge a Friend. Compact outlined pills so
