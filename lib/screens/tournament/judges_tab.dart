@@ -36,7 +36,6 @@ class _JudgesTabState extends State<JudgesTab> {
   bool _loading = true;
   List<Map<String, dynamic>> _volunteers = const [];
   final Map<String, String> _names = {};
-  int _panelSize = 5;
   int _minToQualify = _defaultMinToQualify;
   bool _volunteered = false;
   bool _acting = false;
@@ -100,7 +99,6 @@ class _JudgesTabState extends State<JudgesTab> {
       if (!mounted) return;
       setState(() {
         _volunteers = rows;
-        _panelSize = (data?['panelSize'] as num?)?.toInt() ?? 5;
         _minToQualify =
             (data?['minToQualify'] as num?)?.toInt() ?? _defaultMinToQualify;
         _volunteered = volunteered;
@@ -166,10 +164,9 @@ class _JudgesTabState extends State<JudgesTab> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '$_panelSize seats on the panel. The founder picks a few; the '
-                  'rest go to the top volunteers who voted on the most matches '
-                  'this week. You qualify for a seat after voting on at least '
-                  '$_minToQualify matches.',
+                  'Earn your way onto the panel and judge the Main Stage live — '
+                  'on camera, in front of the whole League. Your verdict, your '
+                  'moment to shine, your spot on the show.',
                   style:
                       text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                 ),
