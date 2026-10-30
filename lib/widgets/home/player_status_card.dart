@@ -78,31 +78,64 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
     }
   }
 
+  // Both loaders run from initState. Because the Home tab lives in MainShell's
+  // IndexedStack, this card is built EAGERLY at login (not when Home is first
+  // opened) and NEVER re-inits - so a one-shot load that fails during the
+  // Firestore cold start stays failed for the whole session. That is exactly
+  // the UsernameCard bug (form_card.dart): a silent catch cached the failure.
+  // So both retry with backoff, same as UsernameCard.
+
   Future<void> _loadMeter() async {
-    try {
-      final r = await FirebaseFunctions.instance
-          .httpsCallable('getLaughMeter')
-          .call<Map<String, dynamic>>();
-      if (mounted) setState(() => _meter = r.data);
-    } catch (_) {
-      // Quiet: the fallback title still renders the identity.
+    for (var attempt = 0; attempt < 4; attempt++) {
+      try {
+        final r = await FirebaseFunctions.instance
+            .httpsCallable('getLaughMeter')
+            .call<Map<String, dynamic>>();
+        if (mounted) setState(() => _meter = r.data);
+        return;
+      } catch (e) {
+        if (!mounted) return;
+        if (attempt < 3) {
+          await Future.delayed(Duration(milliseconds: 600 * (1 << attempt)));
+        } else {
+          // The fallback title/XP still renders the identity, but surface the
+          // final failure rather than swallowing it silently.
+          debugPrint('PlayerStatusCard: meter load failed after retries: $e');
+        }
+      }
     }
   }
 
   Future<void> _loadRank() async {
-    try {
-      final db = FirebaseFirestore.instance;
-      final doc = await db.collection('users').doc(widget.uid).get();
-      final rating = doc.data()?['rating'] as num?;
-      if (rating == null) return; // Never placed - no position to show.
-      final ahead = await db
-          .collection('users')
-          .where('rating', isGreaterThan: rating)
-          .count()
-          .get();
-      if (mounted) setState(() => _rank = (ahead.count ?? 0) + 1);
-    } catch (_) {
-      // Quiet: hide the rank column rather than error under it.
+    // The count() aggregation is SERVER-ONLY - it cannot be served from the
+    // local cache, unlike the doc.get() above it. So on a cold start the doc
+    // read succeeds from cache while the aggregation throws `unavailable`,
+    // which with the old one-shot silent catch hid the GLOBAL RANK column for
+    // the entire session (observed on the Moto, 2026-10-29: a GOAT at rating
+    // 1243 whose rank is genuinely #2 showed no rank at all). Retry the whole
+    // sequence; only a SUCCESSFUL null-rating read (a genuinely unplaced
+    // account) stops without a position.
+    for (var attempt = 0; attempt < 4; attempt++) {
+      try {
+        final db = FirebaseFirestore.instance;
+        final doc = await db.collection('users').doc(widget.uid).get();
+        final rating = doc.data()?['rating'] as num?;
+        if (rating == null) return; // Never placed - no position to show.
+        final ahead = await db
+            .collection('users')
+            .where('rating', isGreaterThan: rating)
+            .count()
+            .get();
+        if (mounted) setState(() => _rank = (ahead.count ?? 0) + 1);
+        return;
+      } catch (e) {
+        if (!mounted) return;
+        if (attempt < 3) {
+          await Future.delayed(Duration(milliseconds: 600 * (1 << attempt)));
+        } else {
+          debugPrint('PlayerStatusCard: rank lookup failed after retries: $e');
+        }
+      }
     }
   }
 
