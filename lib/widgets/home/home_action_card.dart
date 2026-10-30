@@ -304,13 +304,15 @@ class HomeActionCard extends StatelessWidget {
                 ),
               ),
             ),
-            // A small "?" in the top-right corner (above the main ripple, so its
-            // tap is captured separately) opens a brief explainer. Works even
-            // when the box itself is disabled (Main Stage).
+            // A "?" in the top-right corner (above the main ripple, so its tap
+            // is captured separately) opens a brief explainer. Works even when
+            // the box itself is disabled (Main Stage). Deliberately big and
+            // glowing in the mode's colour so people WANT to tap it - the
+            // explainer is how a new player learns the mode.
             if (onInfo != null)
               Positioned(
-                top: 1,
-                right: 1,
+                top: 3,
+                right: 3,
                 child: Material(
                   color: Colors.transparent,
                   shape: const CircleBorder(),
@@ -318,25 +320,31 @@ class HomeActionCard extends StatelessWidget {
                     customBorder: const CircleBorder(),
                     onTap: onInfo,
                     child: Padding(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(6),
                       child: Container(
-                        width: 19,
-                        height: 19,
+                        width: 27,
+                        height: 27,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.black.withValues(alpha: 0.45),
+                          color: accent.withValues(alpha: 0.24),
                           border: Border.all(
-                            color: accent.withValues(alpha: 0.75),
-                            width: 1,
+                            color: accent.withValues(alpha: 0.95),
+                            width: 1.4,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.45),
+                              blurRadius: 8,
+                            ),
+                          ],
                         ),
-                        child: Text(
+                        child: const Text(
                           '?',
                           style: TextStyle(
-                            color: accent,
+                            color: Colors.white,
                             fontWeight: FontWeight.w800,
-                            fontSize: 12.5,
+                            fontSize: 16,
                             height: 1.0,
                           ),
                         ),
@@ -358,12 +366,19 @@ class HomeActionCard extends StatelessWidget {
   }
 }
 
+/// The Main Stage gold, reused for the aspirational callout in a mode dialog.
+const Color _kGold = Color(0xFFF8C73B);
+
 /// A brief "what is this mode" dialog, used by the Home boxes' "?" buttons.
+///
+/// [highlight], when set, renders as an eye-catching gold callout beneath the
+/// body - the Main Stage "prizes and fame" hook on the Play dialog.
 void showModeInfo(
   BuildContext context, {
   required String title,
   required String body,
   required Color accent,
+  String? highlight,
 }) {
   final p = context.palette;
   showDialog<void>(
@@ -387,9 +402,44 @@ void showModeInfo(
           ],
         ),
       ),
-      content: Text(
-        body,
-        style: const TextStyle(color: Colors.white70, height: 1.4, fontSize: 14.5),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            body,
+            style: const TextStyle(
+                color: Colors.white70, height: 1.4, fontSize: 14.5),
+          ),
+          if (highlight != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(
+                color: _kGold.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _kGold.withValues(alpha: 0.45)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.emoji_events, color: _kGold, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      highlight,
+                      style: const TextStyle(
+                        color: _kGold,
+                        fontWeight: FontWeight.w700,
+                        height: 1.3,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
       actions: [
         TextButton(

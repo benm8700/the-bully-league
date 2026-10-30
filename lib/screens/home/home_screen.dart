@@ -1283,6 +1283,9 @@ class _PlayWatchDoors extends StatelessWidget {
                   "You're matched with a random stranger for a live 1-on-1 roast "
                   'battle. Take turns, land your best jokes, and the crowd votes '
                   'on who won. Win to climb the ranks.',
+              highlight:
+                  'Top performers earn a spot on the Main Stage for a chance to '
+                  'win prizes and fame.',
               accent: _kPlayPink,
             ),
           ),
