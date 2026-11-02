@@ -1156,16 +1156,14 @@ class _MatchScreenState extends State<MatchScreen>
               ),
             ),
         Positioned(
-          right: 16,
-          // Self-view at the TOP-RIGHT, not the bottom (2026-11-01, developer's
-          // call). On a phone the camera is at the top, so people instinctively
-          // watching their own picture at the bottom end up looking DOWN and
-          // away from the lens - the classic FaceTime stare. Putting the
-          // self-view up here makes them look UP toward the camera (slightly
-          // off-lens, the way a TV presenter does), which reads far better in
-          // the recorded clip. 72 clears the top chrome (the clock row during
-          // battle, the warmup pill otherwise).
-          top: 72,
+          right: 12,
+          // Self-view at the VERY top-right, just below the status bar
+          // (2026-11-01, developer's call). The lens is at the top of the
+          // phone, so a bottom self-view makes people look DOWN and away from
+          // it - the FaceTime stare; up here they look UP toward the camera
+          // (the TV-presenter eye line), which reads far better on the clip.
+          // The timers moved to the top-LEFT (see _clocks) to clear this corner.
+          top: MediaQuery.of(context).padding.top + 6,
           width: 100,
           height: 140,
           child: ClipRRect(
@@ -1474,17 +1472,21 @@ class _MatchScreenState extends State<MatchScreen>
         ? null
         : (b.pendingBy == _myFirebaseUid ? _oppFirebaseUid : _myFirebaseUid);
     return Positioned(
-      top: 12,
+      // Both clocks STACKED on the top-LEFT, freeing the top-right corner for
+      // the self-view camera (developer's call, 2026-11-01). Just below the
+      // status bar, to line up with the camera's top.
+      top: MediaQuery.of(context).padding.top + 6,
       left: 12,
-      right: 12,
       child: AnimatedBuilder(
         animation: _pulse,
-        builder: (context, _) => Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        builder: (context, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             _clockChip('You', b.remaining[_myFirebaseUid] ?? 0,
                 b.floor == _myFirebaseUid, b.steals[_myFirebaseUid] ?? 0,
                 flash: target == _myFirebaseUid),
+            const SizedBox(height: 8),
             _clockChip('Them', b.remaining[_oppFirebaseUid] ?? 0,
                 b.floor == _oppFirebaseUid, b.steals[_oppFirebaseUid] ?? 0,
                 flash: target == _oppFirebaseUid),

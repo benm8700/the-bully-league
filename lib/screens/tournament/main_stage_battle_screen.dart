@@ -386,13 +386,13 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
               ),
             ),
         Positioned(
-          right: 16,
-          // Self-view at TOP-RIGHT so the performer looks UP toward the camera
-          // (the phone lens is at the top) instead of down at a bottom inset -
-          // the TV-presenter eye line, which reads far better on the recording.
-          // Default everywhere you're on camera (2026-11-01). 72 clears the
-          // top clock row.
-          top: 72,
+          right: 12,
+          // Self-view at the VERY top-right, just below the status bar: the
+          // performer looks UP toward the lens (top of the phone) instead of
+          // down at a bottom inset - the TV-presenter eye line, which reads far
+          // better on the recording. The timers moved to the top-LEFT (see
+          // _clocks) to clear this corner (developer's call, 2026-11-01).
+          top: MediaQuery.of(context).padding.top + 6,
           width: 100,
           height: 140,
           child: ClipRRect(
@@ -419,17 +419,21 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
     final target =
         b.pendingBy == null ? null : (b.pendingBy == _myUid ? _oppUid : _myUid);
     return Positioned(
-      top: 12,
+      // Both clocks STACKED on the top-LEFT, freeing the top-right for the
+      // self-view camera (developer's call, 2026-11-01). Just below the status
+      // bar, to line up with the camera's top.
+      top: MediaQuery.of(context).padding.top + 6,
       left: 12,
-      right: 12,
       child: AnimatedBuilder(
         animation: _pulse,
-        builder: (context, _) => Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        builder: (context, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             _clockChip('You', b.remaining[_myUid] ?? 0, b.floor == _myUid,
                 b.steals[_myUid] ?? 0,
                 flash: target == _myUid),
+            const SizedBox(height: 8),
             _clockChip('Them', b.remaining[_oppUid] ?? 0, b.floor == _oppUid,
                 b.steals[_oppUid] ?? 0,
                 flash: target == _oppUid),

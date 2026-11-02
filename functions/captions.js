@@ -33,6 +33,15 @@ const STT_SAMPLE_RATE = 16000;
 const STT_LOCATION = "us-central1";
 const STT_MODEL = "chirp_2";
 
+// Drop a whole transcribed utterance the model is UNSURE about, rather than
+// burning its words in. On muddy audio (e.g. two phones close together) the
+// recognizer hallucinates - most visibly as strings of "random numbers" - and
+// those come back with low confidence. Chirp 2 reports a per-result confidence
+// in [0,1]; this skips results below the threshold. Guarded in the loop: a
+// 0/absent confidence is NOT treated as low, so a clean transcript where the
+// model simply omits confidence is never dropped. Tunable.
+const MIN_RESULT_CONFIDENCE = 0.6;
+
 /**
  * Caption styling, tuned for short-form vertical video rather than
  * broadcast subtitling.
@@ -275,7 +284,16 @@ async function transcribeSegments(segments, localDir, ffmpegPath, workDir) {
       });
 
       for (const result of response.results ?? []) {
-        for (const w of result.alternatives?.[0]?.words ?? []) {
+        const alt = result.alternatives?.[0];
+        if (!alt) continue;
+        // Skip a low-confidence utterance - a muddy-audio hallucination (the
+        // "random numbers"). Only when confidence is a real positive number
+        // below the threshold; absent/0 confidence keeps the words, so a clean
+        // transcript the model didn't score is never blanked. See
+        // MIN_RESULT_CONFIDENCE.
+        const conf = typeof alt.confidence === "number" ? alt.confidence : null;
+        if (conf !== null && conf > 0 && conf < MIN_RESULT_CONFIDENCE) continue;
+        for (const w of alt.words ?? []) {
           words.push({
             uid: seg.uid,
             text: w.word,
