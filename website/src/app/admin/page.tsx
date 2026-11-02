@@ -152,6 +152,9 @@ export default function AdminPage() {
   const inFlight = useRef<number>(0);
   const [busy, setBusy] = useState(false);
   const [nowTick, setNowTick] = useState(() => Date.now());
+  // Match id -> when its reel render started, for a per-clip progress bar (a LONG
+  // background job) instead of blocking the whole dashboard.
+  const [rendering, setRendering] = useState<Map<string, number>>(new Map());
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -231,6 +234,38 @@ export default function AdminPage() {
     [user, loadMetrics],
   );
 
+  // Render reel is a LONG job (download + nudity scan + transcribe + 2 renditions
+  // + slur scan), so it runs in the BACKGROUND with a per-clip "rendering…" chip
+  // rather than blocking the whole dashboard or depending on the click surviving
+  // a page refresh - which is why the old synchronous version felt like "nothing
+  // happened". Even if the client call times out, the server finishes the render,
+  // so a Refresh shows the ready reel.
+  const renderReel = useCallback(
+    async (id: string) => {
+      setRendering((s) => {
+        if (s.has(id)) return s;
+        const n = new Map(s);
+        n.set(id, Date.now());
+        return n;
+      });
+      setNote("Rendering the reel… you can keep working.");
+      try {
+        await httpsCallable(functions, "renderMatchHighlight", { timeout: 540_000 })({ matchId: id });
+        setNote("✅ Rendering complete — hit Refresh to see it.");
+      } catch {
+        setNote("Still rendering in the background — give it a minute, then Refresh.");
+      } finally {
+        setRendering((s) => {
+          const n = new Map(s);
+          n.delete(id);
+          return n;
+        });
+        loadMetrics();
+      }
+    },
+    [loadMetrics],
+  );
+
   // Calls a Firebase callable (Editor's Choice feature/publish) as the signed-in
   // admin - the callable enforces requireAdmin and reuses the real publish gate.
   const callFn = useCallback(
@@ -303,7 +338,7 @@ export default function AdminPage() {
       {note && (
         <div
           className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 max-w-[90vw] rounded-lg border px-4 py-2.5 text-sm font-semibold shadow-xl ${
-            note.includes(": done")
+            note.includes(": done") || note.startsWith("✅")
               ? "border-green-500/50 bg-green-950/90 text-green-200"
               : note.endsWith("…")
                 ? "border-zinc-600 bg-zinc-900/95 text-zinc-200"
@@ -366,7 +401,7 @@ export default function AdminPage() {
           <FlaggedWords metrics={metrics} act={act} />
           <Feedback items={metrics.feedback} />
           <PostStudio metrics={metrics} callFn={callFn} act={act} busy={busy} />
-          <EditorsChoice metrics={metrics} callFn={callFn} busy={busy} />
+          <EditorsChoice metrics={metrics} callFn={callFn} busy={busy} renderReel={renderReel} rendering={rendering} now={nowTick} />
           <Prizes metrics={metrics} act={act} />
           <Queues metrics={metrics} act={act} busy={busy} />
           <UserSearch user={user!} act={act} />
@@ -684,8 +719,8 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
         }} className="rounded bg-pink-600/80 px-2 py-1 text-xs text-white hover:bg-pink-600 disabled:opacity-50">
           Mark posted
         </button>
-        <button disabled={busy} onClick={() => act({ type: "setAsideClip", matchId: c.id }, "Set aside")} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-50">
-          Set aside
+        <button disabled={busy} onClick={() => act({ type: "setAsideClip", matchId: c.id }, "Archived")} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-50" title="Don't use this clip — move it to the archive (you can move it back later)">
+          Archive
         </button>
       </div>
 
@@ -727,7 +762,8 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
         The best finalized clips, ranked by <span className="text-zinc-400">votes + 🔥/🧠 received</span>, best first.
         For each: <span className="text-zinc-400">⬇ download the vertical cut, upload it to your socials, tick where it went, and Mark posted.</span>{" "}
         (True one-click auto-posting to TikTok/IG/YT needs those platform apps connected — once they are, it drops onto this same button.)
-        Posted and set-aside clips move to the archives below.
+        Posted and archived clips move to the archives below. Use{" "}
+        <span className="text-zinc-400">Archive</span> on anything you don&apos;t want to post.
       </p>
 
       {ps.morningPick && (
@@ -759,7 +795,7 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
             <ArchiveRow key={c.id} clip={c} accent="pink" busy={busy} onRestore={() => act({ type: "restoreClip", matchId: c.id }, "Back to queue")} />
           ))}
         </ArchiveBlock>
-        <ArchiveBlock title="Set aside" count={ps.dismissed.length} open={showAside} onToggle={() => setShowAside((v) => !v)}>
+        <ArchiveBlock title="Archived" count={ps.dismissed.length} open={showAside} onToggle={() => setShowAside((v) => !v)}>
           {ps.dismissed.map((c) => (
             <ArchiveRow key={c.id} clip={c} accent="zinc" busy={busy} onRestore={() => act({ type: "restoreClip", matchId: c.id }, "Back to queue")} />
           ))}
@@ -806,7 +842,10 @@ function ArchiveRow({ clip, accent, busy, onRestore }: { clip: PostClip; accent:
   );
 }
 
-function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (name: string, data: Record<string, unknown>, label: string) => void; busy: boolean }) {
+// Typical reel render time (ms), used only to pace the progress bar's estimate.
+const RENDER_ESTIMATE_MS = 150_000;
+
+function EditorsChoice({ metrics, callFn, busy, renderReel, rendering, now }: { metrics: Metrics; callFn: (name: string, data: Record<string, unknown>, label: string) => void; busy: boolean; renderReel: (id: string) => void; rendering: Map<string, number>; now: number }) {
   const items = metrics.recentBattles ?? [];
   const featuredCount = items.filter((b) => b.featured).length;
   const [preview, setPreview] = useState<{ id: string; urls: { landscape: string | null; vertical: string | null } } | null>(null);
@@ -879,8 +918,8 @@ function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (n
                     </button>
                   )}
                   {!b.captioned && !b.hasClip && b.rendered && (
-                    <button disabled={busy} onClick={() => callFn("renderMatchHighlight", { matchId: b.id }, "Rendering captioned reel — give it a minute")} className="rounded bg-sky-600/80 px-2 py-1 text-xs text-white hover:bg-sky-600 disabled:opacity-50">
-                      Render reel
+                    <button disabled={rendering.has(b.id)} onClick={() => renderReel(b.id)} className="rounded bg-sky-600/80 px-2 py-1 text-xs text-white hover:bg-sky-600 disabled:opacity-50">
+                      {rendering.has(b.id) ? "Rendering…" : "Render reel"}
                     </button>
                   )}
                   {(b.featured || b.hasClip) ? (
@@ -894,6 +933,18 @@ function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (n
                   ) : null}
                 </div>
               </div>
+              {rendering.has(b.id) && (() => {
+                const started = rendering.get(b.id)!;
+                const pct = Math.min(95, Math.max(4, Math.round(((now - started) / RENDER_ESTIMATE_MS) * 100)));
+                return (
+                  <div className="mt-2">
+                    <div className="mb-1 text-xs text-sky-300">Rendering reel… {pct}%</div>
+                    <div className="h-1.5 w-full overflow-hidden rounded bg-zinc-800">
+                      <div className="h-full bg-sky-500 transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })()}
               {preview?.id === b.id && (
                 <div className="mt-3">
                   <div className="mb-2 inline-flex overflow-hidden rounded border border-zinc-700 text-xs">
