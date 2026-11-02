@@ -23,8 +23,8 @@ import '../../core/services/yuv_to_jpeg.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/match/ability_deploy_bar.dart';
 import '../../widgets/match/tomato_splat.dart';
+import '../home/main_shell.dart';
 import '../vote/my_battles_screen.dart';
-import '../vote/vote_queue_screen.dart';
 import 'pre_match_screen.dart';
 
 /// Round/turn/timer state machine (Build Order step 4).
@@ -1766,6 +1766,11 @@ class _MatchScreenState extends State<MatchScreen>
     // A FRIEND battle is a private scrimmage - not judged, not with the crowd -
     // so it gets a rematch offer instead of the vote flow.
     final isFriend = widget.pairing.mode == 'friend';
+    // The standard "your battle is with the crowd" ranked ending, as opposed to
+    // a friend scrimmage, a forfeit win, or a no-contest - those keep the
+    // shared Back-to-home button at the bottom, while this case puts Home on
+    // top (most people just want out) with Vote below it.
+    final isStandardRanked = !isFriend && !_wonByForfeit && !_noContest;
     final scheme = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
@@ -1849,22 +1854,44 @@ class _MatchScreenState extends State<MatchScreen>
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
-              if (_matchCompleted)
+              // Home FIRST and prominent: most people just want out after a
+              // battle, and it shows immediately (even while the match is still
+              // saving) rather than being buried under the vote CTAs. Pink
+              // primary so it reads as the obvious action.
+              FilledButton.icon(
+                onPressed: () =>
+                    Navigator.of(context).popUntil((route) => route.isFirst),
+                icon: const Icon(Icons.home_outlined),
+                label: const Text('Back to home'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(220, 52),
+                  backgroundColor: scheme.primary,
+                  foregroundColor: scheme.onPrimary,
+                ),
+              ),
+              if (_matchCompleted) ...[
+                const SizedBox(height: 12),
+                // Vote second, in the PURPLE secondary colour so it's a clearly
+                // distinct action from Home rather than two look-alike buttons.
                 FilledButton.icon(
-                  onPressed: () => Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const VoteQueueScreen()),
-                  ),
+                  onPressed: () {
+                    // Unified judging surface: the Judge tab IS the vote feed -
+                    // there is no separate vote queue. Pop the match flow and
+                    // switch to that tab, so this lands on the exact same screen
+                    // as tapping Vote in the nav bar (no second look-alike screen
+                    // with its own empty state).
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    MainShell.go(MainShell.tabWatch);
+                  },
                   icon: const Icon(Icons.how_to_vote_outlined),
                   label: const Text('Vote on a battle'),
-                )
-              else if (_matchSaveError != null)
-                Text(_matchSaveError!,
-                    style: TextStyle(
-                        color: Theme.of(context).colorScheme.error))
-              else
-                const CircularProgressIndicator(),
-              if (_matchCompleted) ...[
-                const SizedBox(height: 8),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(220, 48),
+                    backgroundColor: scheme.secondary,
+                    foregroundColor: scheme.onSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 // The other half of the wait: watching your own count climb.
                 TextButton.icon(
                   onPressed: () => Navigator.of(context).pushReplacement(
@@ -1873,33 +1900,48 @@ class _MatchScreenState extends State<MatchScreen>
                   icon: const Icon(Icons.leaderboard_outlined, size: 18),
                   label: const Text('Watch the votes come in'),
                 ),
+              ] else if (_matchSaveError != null) ...[
+                const SizedBox(height: 12),
+                Text(_matchSaveError!,
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.error)),
+              ] else ...[
+                const SizedBox(height: 16),
+                const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
               ],
             ],
-            const SizedBox(height: 16),
-            // A big, easy-to-hit way home (the small arrow was hard to tap).
-            // In a friend battle it's the PINK primary (paired with the purple
-            // Rematch); in ranked it stays tonal so it doesn't fight the pink
-            // "Vote on a battle" CTA above it.
-            if (isFriend)
-              FilledButton.icon(
-                onPressed: () =>
-                    Navigator.of(context).popUntil((route) => route.isFirst),
-                icon: const Icon(Icons.home_outlined),
-                label: const Text('Back to home'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(200, 48),
-                  backgroundColor: scheme.primary,
-                  foregroundColor: scheme.onPrimary,
+            // Back-to-home for the non-standard endings (friend scrimmage,
+            // forfeit win, no-contest). The standard ranked ending above
+            // already has its own Home button on top, so it's skipped here to
+            // avoid two of them. In a friend battle it's the PINK primary
+            // (paired with the purple Rematch); otherwise tonal.
+            if (!isStandardRanked) ...[
+              const SizedBox(height: 16),
+              if (isFriend)
+                FilledButton.icon(
+                  onPressed: () =>
+                      Navigator.of(context).popUntil((route) => route.isFirst),
+                  icon: const Icon(Icons.home_outlined),
+                  label: const Text('Back to home'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(200, 48),
+                    backgroundColor: scheme.primary,
+                    foregroundColor: scheme.onPrimary,
+                  ),
+                )
+              else
+                FilledButton.tonalIcon(
+                  onPressed: () =>
+                      Navigator.of(context).popUntil((route) => route.isFirst),
+                  icon: const Icon(Icons.home_outlined),
+                  label: const Text('Back to home'),
+                  style:
+                      FilledButton.styleFrom(minimumSize: const Size(200, 48)),
                 ),
-              )
-            else
-              FilledButton.tonalIcon(
-                onPressed: () =>
-                    Navigator.of(context).popUntil((route) => route.isFirst),
-                icon: const Icon(Icons.home_outlined),
-                label: const Text('Back to home'),
-                style: FilledButton.styleFrom(minimumSize: const Size(200, 48)),
-              ),
+            ],
           ],
         ),
       ),

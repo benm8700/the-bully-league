@@ -107,8 +107,7 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
                   const _ConsentBullet(
                     'The Bully League may use and post this recording publicly - '
                     'on our website, our social media, and in our promotional / '
-                    'marketing content - including as a highlight. You can opt a '
-                    'specific clip out later from My Battles.',
+                    'marketing content - including as a highlight.',
                   ),
                   const _ConsentBullet(
                     'The raw recording is kept for a limited time (see Privacy Policy) '
@@ -130,11 +129,8 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      "On by default. Signed-in viewers in the app can watch "
-                      "this battle as it happens. It only goes live if your "
-                      "opponent is on too - and the recording and crowd vote "
-                      "work the same either way. Turn it off to keep this one "
-                      "private.",
+                      "Signed-in viewers in the app can watch this battle as it "
+                      "happens. Turn it off to keep this one private.",
                     ),
                     SwitchListTile(
                       value: _liveWatch,

@@ -66,22 +66,22 @@ const RECORDED_MODES = ["ranked", "tournament", "improv"];
 // qualification. See functions/improv.js.
 const MODES = ["exhibition", "ranked", "improv"];
 
-/** Each widen interval of waiting widens the acceptable tier gap by one,
- * per CLAUDE.md's matchmaking fallback decision ("gradually widen the tier
- * search range further over time... rather than waiting indefinitely or
- * falling back to a truly unrestricted match"). Band 0 = same tier only,
- * band 1 = ±1 tier, and so on - so it starts strict and eventually
- * matches anyone rather than leaving someone queued forever.
+/** TIER SEARCH (revamped 2026-11-01, the developer's call after a thin-pool
+ * beta kept pairing too slowly). Two phases, not a slow per-band crawl:
  *
- * This is the DEFAULT/fallback; the live value comes from
- * config/matchSettings.tierWidenSeconds via getTierWidenMs(). Lowered from
- * 30s to 15s: in a thin pool two players one tier apart could not pair for a
- * full 30s (they must wait for band 1), which reads as "matchmaking is
- * broken" during a private beta. It is live-tunable so the developer can
- * trade pairing speed against skill-appropriateness from the console as the
- * pool grows, without shipping a new app version - same rationale as the
- * per-match timings. */
-const TIER_WIDEN_INTERVAL_MS = 15 * 1000;
+ *   Phase 1 (0 .. TIER_OPEN_ALL_MS): search YOUR tier plus one above and one
+ *            below, all at once (band 1). Most pairings land here instantly.
+ *   Phase 2 (>= TIER_OPEN_ALL_MS):   open EVERY tier (band = all), because a
+ *            match now beats a skill-appropriate wait - a thin pool must never
+ *            leave two willing players unpaired for long.
+ *
+ * The old model widened by ONE tier per interval, so a wide skill gap could
+ * sit unpaired for minutes; this caps the wait to a single threshold. This is
+ * the DEFAULT; the live value comes from
+ * config/matchSettings.tierOpenAllSeconds via getTierOpenAllMs(), so the
+ * developer can trade pairing speed against skill-appropriateness from the
+ * console without shipping a new app version. */
+const TIER_OPEN_ALL_MS = 18 * 1000;
 const TIER_WIDEN_MIN_MS = 5 * 1000;
 const TIER_WIDEN_MAX_MS = 120 * 1000;
 // Cached in-memory per function instance so this costs at most one Firestore
@@ -90,38 +90,44 @@ const TIER_WIDEN_MAX_MS = 120 * 1000;
 // with exactly the traffic this feature exists to serve (the same reasoning
 // that made the online count a scheduled job rather than a per-poll write).
 const TIER_WIDEN_TTL_MS = 60 * 1000;
-let _tierWidenCache = {ms: null, at: 0};
+let _tierOpenAllCache = {ms: null, at: 0};
 
-/** Clamps a configured tierWidenSeconds to a valid interval in ms, or null
- * if it is not a finite number or is out of bounds - in which case the
- * caller keeps the default. Pure, so the bounds rule is unit-testable
- * without Firestore. */
-function clampTierWidenMs(secs) {
+/** Clamps a configured seconds value to a valid ms threshold, or null if it
+ * is not a finite number or is out of bounds - in which case the caller keeps
+ * the default. Pure, so the bounds rule is unit-testable without Firestore. */
+function clampTierOpenAllMs(secs) {
   if (typeof secs !== "number" || !Number.isFinite(secs)) return null;
   const ms = Math.round(secs) * 1000;
   if (ms < TIER_WIDEN_MIN_MS || ms > TIER_WIDEN_MAX_MS) return null;
   return ms;
 }
 
-/** The live tier-widening interval in ms, read from
- * config/matchSettings.tierWidenSeconds and bounds-checked, cached per
+/** The acceptable tier gap for a wait of [waitedMs]. PURE. Band 1 (your tier
+ * +/- one) until [openAllMs] has passed, then every tier (RANK_TIERS.length is
+ * larger than any possible gap). */
+function tierBandFor(waitedMs, openAllMs) {
+  return waitedMs >= openAllMs ? RANK_TIERS.length : 1;
+}
+
+/** The live "open all tiers after" threshold in ms, read from
+ * config/matchSettings.tierOpenAllSeconds and bounds-checked, cached per
  * instance. Never throws - an unreadable or out-of-range value falls back to
  * the default, because failing to read one tuning knob is no reason to stop
  * pairing people. */
-async function getTierWidenMs() {
+async function getTierOpenAllMs() {
   const now = Date.now();
-  if (_tierWidenCache.ms !== null && now - _tierWidenCache.at < TIER_WIDEN_TTL_MS) {
-    return _tierWidenCache.ms;
+  if (_tierOpenAllCache.ms !== null && now - _tierOpenAllCache.at < TIER_WIDEN_TTL_MS) {
+    return _tierOpenAllCache.ms;
   }
-  let ms = TIER_WIDEN_INTERVAL_MS;
+  let ms = TIER_OPEN_ALL_MS;
   try {
     const snap = await getFirestore().collection("config").doc("matchSettings").get();
-    const clamped = clampTierWidenMs(snap.exists ? snap.data().tierWidenSeconds : undefined);
+    const clamped = clampTierOpenAllMs(snap.exists ? snap.data().tierOpenAllSeconds : undefined);
     if (clamped !== null) ms = clamped;
   } catch (e) {
-    console.error("tierWidenSeconds read failed, using default:", e.message);
+    console.error("tierOpenAllSeconds read failed, using default:", e.message);
   }
-  _tierWidenCache = {ms, at: now};
+  _tierOpenAllCache = {ms, at: now};
   return ms;
 }
 
@@ -414,7 +420,7 @@ function isOnCooldown(a, b, now) {
  * Mutates `queue` only by deleting stale entries. Returns the chosen
  * opponent, or null when nobody is currently compatible.
  */
-function selectOpponent(queue, uid, now, tierWidenMs = TIER_WIDEN_INTERVAL_MS) {
+function selectOpponent(queue, uid, now, openAllMs = TIER_OPEN_ALL_MS) {
   const me = queue[uid];
   // A standing entry can still be paired FROM as well as against - the
   // player may have reopened the app and started polling again, and there
@@ -462,7 +468,7 @@ function selectOpponent(queue, uid, now, tierWidenMs = TIER_WIDEN_INTERVAL_MS) {
   // being overwritten when that user queues again.
   if (!queue[uid]) return null; // our own entry was the stale one
 
-  const band = Math.floor((now - me.joinedAt) / tierWidenMs);
+  const band = tierBandFor(now - me.joinedAt, openAllMs);
   const myBlocked = me.blockedUserIds ?? [];
 
   const candidates = Object.values(queue).filter((o) =>
@@ -574,10 +580,10 @@ function applyPairing(queue, uid, opponentId, matchId, channelName) {
  * is fine at private-beta volume and is the documented scaling limit
  * here; sharding by tier band is the natural fix if it ever matters.
  */
-async function attemptPairing(uid, mode, matchId, channelName, now, tierWidenMs = TIER_WIDEN_INTERVAL_MS) {
+async function attemptPairing(uid, mode, matchId, channelName, now, openAllMs = TIER_OPEN_ALL_MS) {
   const result = await queueRef(mode).transaction((queue) => {
     if (!queue) return queue;
-    const opponent = selectOpponent(queue, uid, now, tierWidenMs);
+    const opponent = selectOpponent(queue, uid, now, openAllMs);
     if (!opponent) return; // abort: not queued, already paired, or nobody compatible
     return applyPairing(queue, uid, opponent.uid, matchId, channelName);
   });
@@ -670,6 +676,80 @@ async function notifyMatchFound(opponentId, matchId, fromUsername) {
  * opponent's poll did) or a "still searching" status carrying enough
  * information for the UI to explain what's happening.
  */
+/** How old a pending match may be and still be something to route a searching
+ * player back into. Comfortably past any setup + chess-clock battle, so a live
+ * match is always recovered, but an ancient stuck/pending doc is not. */
+const REJOIN_MAX_AGE_MS = 15 * 60 * 1000;
+
+/** The most recent still-live match this player should be routed back into,
+ * from their recent match docs. PURE (plain objects with createdAtMs). Returns
+ * the match or null.
+ *
+ * THE SELF-HEAL. The client can re-enter the queue (a not_queued poll) or have
+ * its entry removed by findMatch's finally, while the OTHER player's poll has
+ * already locked BOTH into a live pending match. That leaves this player's
+ * queue entry out of sync - waiting, or gone - so pollMatchmaking keeps
+ * returning "searching"/"not_queued" and NOTHING routes them into the match
+ * they are already a participant in. The deadlock seen twice on real devices
+ * (2026-11-01): one phone on the ready-up screen, the other searching forever.
+ * Being a participant in a recent pending match for this mode is enough to be
+ * routed in, independent of the fragile queue-entry flag. */
+function pickRejoinableMatch(matches, uid, mode, nowMs, maxAgeMs = REJOIN_MAX_AGE_MS) {
+  const live = matches.filter((m) =>
+    m && m.status === "pending" && m.mode === mode &&
+    (m.player1Id === uid || m.player2Id === uid) &&
+    nowMs - (m.createdAtMs ?? 0) <= maxAgeMs,
+  );
+  if (live.length === 0) return null;
+  live.sort((a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0));
+  return live[0];
+}
+
+/** Firestore wrapper over pickRejoinableMatch. Reuses the (playerId, createdAt)
+ * indexes My Battles / getActiveMatch already declare, so it needs no new
+ * composite index. Queried only on non-matched polls (searching / not_queued),
+ * never on a matched poll, so it is bounded to genuinely-searching clients. */
+async function findPendingMatchFor(db, uid, mode, nowMs) {
+  const docs = [];
+  for (const field of ["player1Id", "player2Id"]) {
+    const snap = await db.collection("matches")
+        .where(field, "==", uid)
+        .orderBy("createdAt", "desc")
+        .limit(5)
+        .get();
+    snap.forEach((d) => docs.push({
+      id: d.id,
+      ...d.data(),
+      createdAtMs: d.data().createdAt?.toMillis?.() ?? 0,
+    }));
+  }
+  return pickRejoinableMatch(docs, uid, mode, nowMs);
+}
+
+/** Builds the "matched" poll response for a rejoinable match AND repairs the
+ * queue entry to "matched", so getActiveMatch and the Home rejoin banner also
+ * recover it, and so this player stops being a pairing candidate for anyone
+ * else. The repair is best-effort - the response alone already lets the client
+ * navigate in. */
+async function rejoinResponse(db, mode, uid, m) {
+  const opponentId = m.player1Id === uid ? m.player2Id : m.player1Id;
+  await queueRef(mode).child(uid).update({
+    status: "matched",
+    matchId: m.id,
+    channelName: m.channelName,
+    opponentId,
+  }).catch(() => {});
+  return {
+    status: "matched",
+    matchId: m.id,
+    channelName: m.channelName,
+    opponentId,
+    mode,
+    settings: m.settings ?? null,
+    agoraUid: agoraUidFor(m, uid),
+  };
+}
+
 async function pollMatchmaking(auth, data) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
   const mode = data?.mode;
@@ -679,6 +759,16 @@ async function pollMatchmaking(auth, data) {
 
   const snap = await queueRef(mode).child(uid).get();
   const entry = snap.val();
+
+  // SELF-HEAL (2026-11-01): if our queue entry is out of sync (waiting, or
+  // gone) but we are already a participant in a live pending match, route us
+  // back into it rather than searching forever. Checked BEFORE pairing so we
+  // never create a SECOND match while already in one. See pickRejoinableMatch.
+  if (!entry || entry.status !== "matched") {
+    const rejoin = await findPendingMatchFor(db, uid, mode, Date.now());
+    if (rejoin) return rejoinResponse(db, mode, uid, rejoin);
+  }
+
   if (!entry) return {status: "not_queued"};
 
   // The opponent's poll may have already paired us. Settings come from the
@@ -706,13 +796,13 @@ async function pollMatchmaking(auth, data) {
   const matchRef = db.collection("matches").doc();
   const channelName = `match_${matchRef.id}`;
 
-  const tierWidenMs = await getTierWidenMs();
-  const paired = await attemptPairing(uid, mode, matchRef.id, channelName, now, tierWidenMs);
+  const openAllMs = await getTierOpenAllMs();
+  const paired = await attemptPairing(uid, mode, matchRef.id, channelName, now, openAllMs);
   if (!paired) {
     return {
       status: "searching",
       waitedMs: now - entry.joinedAt,
-      tierBand: Math.floor((now - entry.joinedAt) / tierWidenMs),
+      tierBand: tierBandFor(now - entry.joinedAt, openAllMs),
     };
   }
 
@@ -1777,11 +1867,16 @@ module.exports = {
   selectOpponent,
   applyPairing,
   isOnCooldown,
-  TIER_WIDEN_INTERVAL_MS,
+  TIER_OPEN_ALL_MS,
   TIER_WIDEN_MIN_MS,
   TIER_WIDEN_MAX_MS,
-  getTierWidenMs,
-  clampTierWidenMs,
+  tierBandFor,
+  getTierOpenAllMs,
+  clampTierOpenAllMs,
+  // Self-heal for a desynced queue entry - routes a player back into a live
+  // pending match they're already in. See pickRejoinableMatch.
+  pickRejoinableMatch,
+  REJOIN_MAX_AGE_MS,
   REPEAT_OPPONENT_COOLDOWN_MS,
   STALE_ENTRY_MS,
   earliestQueuedAt,

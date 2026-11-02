@@ -471,6 +471,7 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     // opponent only - never on the public study profile) and the volunteered
     // "about me" below.
     const fields = <String, String>{
+      'name': 'Name',
       'hometown': 'City & State',
     };
 

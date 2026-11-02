@@ -413,7 +413,7 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
               child: Align(
                 alignment: Alignment.topCenter,
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: _liveNowBanner(context),
                 ),
               ),
@@ -425,35 +425,71 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
 
   Widget _liveNowBanner(BuildContext context) {
     final n = _liveNow.length;
+    // A full-width, loud LIVE bar - this is the ONLY link to a live battle, so
+    // it has to actually advertise itself rather than be a tiny pill that's
+    // easy to miss. Only shown when a battle is genuinely live (an empty "watch
+    // live" affordance would just lead to an empty room).
     return Material(
-      color: const Color(0xFFD12E3C),
-      borderRadius: BorderRadius.circular(999),
-      elevation: 4,
+      color: const Color(0xFFE11D2A),
+      borderRadius: BorderRadius.circular(16),
+      elevation: 6,
+      shadowColor: const Color(0x66E11D2A),
       child: InkWell(
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(16),
         onTap: _openLiveSheet,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
+              // White LIVE badge with a red dot - the universal "we're on air" cue.
               Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                    color: Colors.white, shape: BoxShape.circle),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                  SizedBox(
+                    width: 7,
+                    height: 7,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                          color: Color(0xFFE11D2A), shape: BoxShape.circle),
+                    ),
+                  ),
+                  SizedBox(width: 5),
+                  Text('LIVE',
+                      style: TextStyle(
+                          color: Color(0xFFE11D2A),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          letterSpacing: 0.5)),
+                ]),
               ),
-              const SizedBox(width: 8),
-              Text(
-                n == 1 ? '1 battle live now' : '$n battles live now',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      n == 1
+                          ? 'A battle is happening right now'
+                          : '$n battles happening right now',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15),
+                    ),
+                    const SizedBox(height: 1),
+                    const Text('Tap to watch it live',
+                        style:
+                            TextStyle(color: Colors.white70, fontSize: 12)),
+                  ],
+                ),
               ),
-              const SizedBox(width: 6),
-              const Text('· tap to watch',
-                  style: TextStyle(color: Colors.white70, fontSize: 12)),
+              const Icon(Icons.play_circle_fill, color: Colors.white, size: 30),
             ],
           ),
         ),

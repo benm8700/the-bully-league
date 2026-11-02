@@ -57,6 +57,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // the profile collects now - the intro video is the real ammo. (The old
   // profession/education/interests/relationship/pets/favoriteFood controllers
   // were removed 2026-10-17.)
+  final _nameController = TextEditingController();
   final _hometownController = TextEditingController();
   final _ammoTextController = TextEditingController();
 
@@ -99,6 +100,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final snapshot = await _userRef.get();
     final data = snapshot.data();
     final profile = data?['profile'] as Map<String, dynamic>? ?? {};
+    _nameController.text = profile['name'] as String? ?? '';
     _hometownController.text = profile['hometown'] as String? ?? '';
     _ammoTextController.text = profile['ammoText'] as String? ?? '';
     final photoUrls = (profile['photoUrls'] as List<dynamic>?)?.cast<String>() ?? [];
@@ -174,6 +176,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // rankTitle/rankedMatchesPlayed/wins/losses/accountStatus, so this
       // update is otherwise unrestricted for the owning user.
       await _userRef.update({
+        'profile.name': _nameController.text.trim(),
         'profile.hometown': _hometownController.text.trim(),
         'profile.ammoText': _ammoTextController.text.trim(),
       });
@@ -281,6 +284,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     _savedTimer?.cancel();
+    _nameController.dispose();
     _hometownController.dispose();
     _ammoTextController.dispose();
     super.dispose();
@@ -508,6 +512,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // you" box people can volunteer. Nothing is labelled
                     // "optional" even though only the intro gates ranked -
                     // labels suppress fill-in.
+                    Text('Name', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _nameController,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Name',
+                        hintText: 'What should we call you? e.g. Mike',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                     Text('City & State', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     TextFormField(

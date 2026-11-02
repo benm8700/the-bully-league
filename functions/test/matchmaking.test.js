@@ -23,10 +23,13 @@ const {
   applyPairing,
   isOnCooldown,
   utcDayKey,
-  TIER_WIDEN_INTERVAL_MS,
+  TIER_OPEN_ALL_MS,
   TIER_WIDEN_MIN_MS,
   TIER_WIDEN_MAX_MS,
-  clampTierWidenMs,
+  tierBandFor,
+  clampTierOpenAllMs,
+  pickRejoinableMatch,
+  REJOIN_MAX_AGE_MS,
   REPEAT_OPPONENT_COOLDOWN_MS,
   STALE_ENTRY_MS,
   MAX_SKIPS_PER_DAY,
@@ -35,6 +38,7 @@ const {
   battleForfeitDecision,
   BATTLE_FORFEIT_STALE_MS,
 } = require("../matchmaking");
+const {RANK_TIERS} = require("../rating");
 
 const NOW = 1_700_000_000_000;
 
@@ -75,62 +79,114 @@ test("same tier pairs immediately", () => {
   assert.strictEqual(selectOpponent(q, "a", NOW).uid, "b");
 });
 
-test("a one-tier gap is refused at band 0", () => {
+test("a one-tier gap pairs IMMEDIATELY (your tier +/- one, from t=0)", () => {
+  // The revamp (2026-11-01): phase 1 searches your tier and one above and
+  // below at once, so an adjacent-tier opponent pairs on the first poll
+  // rather than after a 15s widen. This is the fix for the beta's slow pairing.
   const q = queueOf(entry("a", {tierIndex: 4}), entry("b", {tierIndex: 5}));
-  assert.strictEqual(selectOpponent(q, "a", NOW), null);
+  assert.strictEqual(selectOpponent(q, "a", NOW).uid, "b");
+  const below = queueOf(entry("a", {tierIndex: 4}), entry("c", {tierIndex: 3}));
+  assert.strictEqual(selectOpponent(below, "a", NOW).uid, "c");
 });
 
-test("a one-tier gap is accepted after one widen interval", () => {
-  const q = queueOf(entry("a", {tierIndex: 4}), entry("b", {tierIndex: 5}));
-  const later = NOW + TIER_WIDEN_INTERVAL_MS;
-  assert.strictEqual(selectOpponent(q, "a", later).uid, "b");
+test("a two-tier gap is refused in phase 1, then opens up", () => {
+  const q = queueOf(entry("a", {tierIndex: 4}), entry("b", {tierIndex: 6}));
+  assert.strictEqual(selectOpponent(q, "a", NOW), null, "two tiers is > band 1");
+  // Still refused just before the open-all threshold...
+  assert.strictEqual(selectOpponent(q, "a", NOW + TIER_OPEN_ALL_MS - 1), null);
+  // ...and accepted once every tier opens.
+  assert.strictEqual(selectOpponent(q, "a", NOW + TIER_OPEN_ALL_MS).uid, "b");
 });
 
-test("widening keeps expanding until even the widest gap matches", () => {
+test("even the widest gap matches once all tiers open", () => {
   const q = queueOf(entry("a", {tierIndex: 0}), entry("b", {tierIndex: 9}));
-  assert.strictEqual(selectOpponent(q, "a", NOW), null, "should not match at band 0");
-  const eventually = NOW + 9 * TIER_WIDEN_INTERVAL_MS;
+  assert.strictEqual(selectOpponent(q, "a", NOW), null, "9 tiers is > band 1");
   assert.strictEqual(
-      selectOpponent(q, "a", eventually).uid,
-      "b",
+      selectOpponent(q, "a", NOW + TIER_OPEN_ALL_MS).uid, "b",
       "nobody should be able to wait forever",
   );
 });
 
-test("clampTierWidenMs accepts an in-range value and rounds to ms", () => {
-  assert.strictEqual(clampTierWidenMs(15), 15000);
-  assert.strictEqual(clampTierWidenMs(5), TIER_WIDEN_MIN_MS);
-  assert.strictEqual(clampTierWidenMs(120), TIER_WIDEN_MAX_MS);
-  assert.strictEqual(clampTierWidenMs(12.4), 12000);
+test("tierBandFor is 1 before the threshold and all-tiers at/after it", () => {
+  assert.strictEqual(tierBandFor(0, 18000), 1);
+  assert.strictEqual(tierBandFor(17999, 18000), 1);
+  assert.strictEqual(tierBandFor(18000, 18000), RANK_TIERS.length);
+  // The all-tiers band must exceed the widest possible gap (tiers 0..len-1).
+  assert.ok(tierBandFor(99999, 18000) >= RANK_TIERS.length - 1);
 });
 
-test("clampTierWidenMs rejects out-of-range or non-numeric values", () => {
+test("clampTierOpenAllMs accepts an in-range value and rounds to ms", () => {
+  assert.strictEqual(clampTierOpenAllMs(18), 18000);
+  assert.strictEqual(clampTierOpenAllMs(5), TIER_WIDEN_MIN_MS);
+  assert.strictEqual(clampTierOpenAllMs(120), TIER_WIDEN_MAX_MS);
+  assert.strictEqual(clampTierOpenAllMs(12.4), 12000);
+});
+
+test("clampTierOpenAllMs rejects out-of-range or non-numeric values", () => {
   // Rejected -> null, so the caller keeps the default rather than pairing on
-  // a nonsense interval a console typo introduced.
-  assert.strictEqual(clampTierWidenMs(0), null);
-  assert.strictEqual(clampTierWidenMs(4), null, "below the 5s floor");
-  assert.strictEqual(clampTierWidenMs(9999), null, "above the 120s ceiling");
-  assert.strictEqual(clampTierWidenMs(-10), null);
-  assert.strictEqual(clampTierWidenMs("15"), null, "a string is not a number");
-  assert.strictEqual(clampTierWidenMs(undefined), null);
-  assert.strictEqual(clampTierWidenMs(NaN), null);
-  assert.strictEqual(clampTierWidenMs(Infinity), null);
+  // a nonsense threshold a console typo introduced.
+  assert.strictEqual(clampTierOpenAllMs(0), null);
+  assert.strictEqual(clampTierOpenAllMs(4), null, "below the 5s floor");
+  assert.strictEqual(clampTierOpenAllMs(9999), null, "above the 120s ceiling");
+  assert.strictEqual(clampTierOpenAllMs(-10), null);
+  assert.strictEqual(clampTierOpenAllMs("18"), null, "a string is not a number");
+  assert.strictEqual(clampTierOpenAllMs(undefined), null);
+  assert.strictEqual(clampTierOpenAllMs(NaN), null);
+  assert.strictEqual(clampTierOpenAllMs(Infinity), null);
 });
 
-test("a custom (shorter) widen interval pairs a cross-tier gap sooner", () => {
-  // The interval is now live-configurable (config/matchSettings.tierWidenSeconds),
-  // threaded through selectOpponent. A 1-tier gap needs band 1: with a 5s
-  // interval that arrives at 5s, where the 15s default would still refuse.
-  const q = queueOf(entry("a", {tierIndex: 4}), entry("b", {tierIndex: 5}));
+test("a custom (shorter) open-all threshold opens all tiers sooner", () => {
+  // The threshold is live-configurable (config/matchSettings.tierOpenAllSeconds),
+  // threaded through selectOpponent. A 2-tier gap needs all tiers open: with a
+  // 5s threshold that arrives at 5s, where the 18s default would still refuse.
+  const q = queueOf(entry("a", {tierIndex: 4}), entry("b", {tierIndex: 6}));
   const at5s = NOW + 5000;
   assert.strictEqual(
       selectOpponent(q, "a", at5s, 5000).uid, "b",
-      "a 5s interval should pair a 1-tier gap at 5s",
+      "a 5s threshold should pair a 2-tier gap at 5s",
   );
   assert.strictEqual(
-      selectOpponent(q, "a", at5s, TIER_WIDEN_INTERVAL_MS), null,
-      "the 15s default should still refuse the same gap at 5s",
+      selectOpponent(q, "a", at5s, TIER_OPEN_ALL_MS), null,
+      "the 18s default should still refuse the same gap at 5s",
   );
+});
+
+// --- Self-heal: route a desynced player back into their pending match ------
+
+test("pickRejoinableMatch returns a recent pending match the caller is in", () => {
+  const now = NOW;
+  const m = {
+    id: "m1", status: "pending", mode: "ranked",
+    player1Id: "a", player2Id: "b", createdAtMs: now - 60_000,
+  };
+  assert.strictEqual(pickRejoinableMatch([m], "a", "ranked", now).id, "m1");
+  assert.strictEqual(pickRejoinableMatch([m], "b", "ranked", now).id, "m1");
+});
+
+test("pickRejoinableMatch ignores settled, wrong-mode, foreign, or stale matches", () => {
+  const now = NOW;
+  const base = {id: "m", mode: "ranked", player1Id: "a", player2Id: "b", createdAtMs: now};
+  assert.strictEqual(
+      pickRejoinableMatch([{...base, status: "completed"}], "a", "ranked", now), null,
+      "a finished match is not rejoinable");
+  assert.strictEqual(
+      pickRejoinableMatch([{...base, status: "abandoned"}], "a", "ranked", now), null);
+  assert.strictEqual(
+      pickRejoinableMatch([{...base, status: "pending", mode: "improv"}], "a", "ranked", now), null,
+      "a different mode's match must not be routed into the ranked queue");
+  assert.strictEqual(
+      pickRejoinableMatch([{...base, status: "pending", player1Id: "x", player2Id: "y"}], "a", "ranked", now),
+      null, "not a participant");
+  assert.strictEqual(
+      pickRejoinableMatch([{...base, status: "pending", createdAtMs: now - REJOIN_MAX_AGE_MS - 1}], "a", "ranked", now),
+      null, "an ancient pending doc is not resurrected");
+});
+
+test("pickRejoinableMatch prefers the most recent pending match", () => {
+  const now = NOW;
+  const older = {id: "old", status: "pending", mode: "ranked", player1Id: "a", player2Id: "b", createdAtMs: now - 120_000};
+  const newer = {id: "new", status: "pending", mode: "ranked", player1Id: "a", player2Id: "c", createdAtMs: now - 10_000};
+  assert.strictEqual(pickRejoinableMatch([older, newer], "a", "ranked", now).id, "new");
 });
 
 // --- Blocking -------------------------------------------------------------
@@ -148,7 +204,7 @@ test("blocking is honoured in the blocked party's direction too", () => {
 
 test("a block never leaks past widening", () => {
   const q = queueOf(entry("a", {blockedUserIds: ["b"]}), entry("b", {tierIndex: 9}));
-  const muchLater = NOW + 50 * TIER_WIDEN_INTERVAL_MS;
+  const muchLater = NOW + 50 * TIER_OPEN_ALL_MS;
   assert.strictEqual(selectOpponent(q, "a", muchLater), null);
 });
 
@@ -424,7 +480,7 @@ test("no player is ever double-booked, across randomised queues", () => {
       entry(id, {
         rating: 1000 + Math.floor(rand() * 800),
         tierIndex: Math.floor(rand() * 10),
-        joinedAt: NOW - Math.floor(rand() * 5 * TIER_WIDEN_INTERVAL_MS),
+        joinedAt: NOW - Math.floor(rand() * 5 * TIER_OPEN_ALL_MS),
         blockedUserIds: rand() < 0.15 ? [ids[Math.floor(rand() * size)]] : [],
         recentOpponentIds: rand() < 0.2 ?
           {[ids[Math.floor(rand() * size)]]: NOW - Math.floor(rand() * 1000)} :
