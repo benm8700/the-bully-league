@@ -53,7 +53,6 @@ class _GetClipSheetState extends State<GetClipSheet> {
   bool _freeClipAvailable = false;
   bool _subscriber = false;
   bool _alreadyOwned = false;
-  int? _availableAfterMs;
 
   @override
   void initState() {
@@ -122,10 +121,10 @@ class _GetClipSheetState extends State<GetClipSheet> {
       setState(() {
         _busy = false;
         _alreadyOwned = true;
-        _availableAfterMs = (data['availableAfterMs'] as num?)?.toInt();
         _done = data['deliverable'] == true
-            ? 'Captions are being added. Your clip will be ready shortly.'
-            : 'Booked. Your clip arrives once voting closes.';
+            ? "It's ready — watch, save, or share it below."
+            : "We're adding captions now. Your clip will be ready here in a "
+                'minute or two — check back and tap Watch.';
         // The server decides what it actually cost - it grants the free
         // clip regardless of what the client asked for, so deducting the
         // price here would show a balance that never left the account.
@@ -323,17 +322,6 @@ class _GetClipSheetState extends State<GetClipSheet> {
                 const SizedBox(height: 20),
                 if (_done != null) ...[
                   _Notice(icon: Icons.check_circle_outline, text: _done!),
-                  if (_availableAfterMs != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      // Said plainly rather than buried: someone who paid
-                      // and saw nothing arrive would reasonably assume it
-                      // had failed.
-                      'Held until your opponent\'s chance to object has '
-                      'passed. That is the same protection you get.',
-                      style: text.bodySmall,
-                    ),
-                  ],
                 ] else if (_alreadyOwned) ...[
                   const _Notice(
                     icon: Icons.check_circle_outline,

@@ -66,6 +66,16 @@ async function publishHighlight(matchId) {
   const snap = await matchRef.get();
   if (!snap.exists) throw new HttpsError("not-found", "Match not found.");
 
+  // A battle flagged for inappropriate content never goes public, full stop.
+  const {isContentBlocked} = require("./contentGate");
+  if (isContentBlocked(snap.data())) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This battle was removed for inappropriate content and can't be " +
+        "published.",
+    );
+  }
+
   // A HARD BLOCK, enforced here rather than left to an admin remembering.
   // Two things stop a publication: a participant having objected, and the
   // objection window still being open - so nothing reaches a public

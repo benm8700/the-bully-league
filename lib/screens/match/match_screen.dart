@@ -1161,14 +1161,15 @@ class _MatchScreenState extends State<MatchScreen>
               ),
             ),
         Positioned(
-          right: 12,
-          // Self-view at the VERY top-right, just below the status bar
-          // (2026-11-01, developer's call). The lens is at the top of the
-          // phone, so a bottom self-view makes people look DOWN and away from
-          // it - the FaceTime stare; up here they look UP toward the camera
-          // (the TV-presenter eye line), which reads far better on the clip.
-          // The timers moved to the top-LEFT (see _clocks) to clear this corner.
-          top: MediaQuery.of(context).padding.top + 6,
+          // Tucked hard into the top-RIGHT corner (small 4px margins), to clear
+          // dead space and maximise the camera (2026-11-02, developer's call).
+          // The lens is at the top of the phone, so a bottom self-view makes
+          // people look DOWN and away from it - the FaceTime stare; up here they
+          // look UP toward the camera (the TV-presenter eye line), which reads
+          // far better on the clip. The timers are hard into the top-LEFT
+          // corner (see _clocks) so the two never collide.
+          right: 4,
+          top: MediaQuery.of(context).padding.top + 2,
           width: 100,
           height: 140,
           child: ClipRRect(
@@ -1473,11 +1474,11 @@ class _MatchScreenState extends State<MatchScreen>
         ? null
         : (b.pendingBy == _myFirebaseUid ? _oppFirebaseUid : _myFirebaseUid);
     return Positioned(
-      // Both clocks STACKED on the top-LEFT, freeing the top-right corner for
-      // the self-view camera (developer's call, 2026-11-01). Just below the
-      // status bar, to line up with the camera's top.
-      top: MediaQuery.of(context).padding.top + 6,
-      left: 12,
+      // Both clocks STACKED hard into the top-LEFT corner (small 4px margins),
+      // freeing the top-right for the self-view camera and clearing dead space
+      // (developer's call, 2026-11-02).
+      top: MediaQuery.of(context).padding.top + 2,
+      left: 4,
       child: AnimatedBuilder(
         animation: _pulse,
         builder: (context, _) => Column(

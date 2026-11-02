@@ -1,6 +1,7 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {RECORDED_MODES} = require("./matchmaking");
 const {qualityFactor} = require("./captureQuality");
+const {isContentBlocked} = require("./contentGate");
 
 /**
  * Turns finished matches into watchable clips automatically, in two
@@ -194,6 +195,8 @@ function selectForCaptioning(candidates, {
  */
 function needsFirstRender(match, nowMs = Date.now()) {
   if (!match) return false;
+  // A battle flagged for inappropriate content must never be rendered.
+  if (isContentBlocked(match)) return false;
   if (match.status !== "completed") return false;
   if (!RECORDED_MODES.includes(match.mode)) return false;
   // Give Agora time to finish uploading ALL of the recording's segments -
@@ -226,6 +229,7 @@ function needsFirstRender(match, nowMs = Date.now()) {
  */
 function canBeCaptioned(match) {
   if (!match) return false;
+  if (isContentBlocked(match)) return false;
   if (!match.highlight?.renditions) return false;
   // Paying for transcription twice on the same audio is pure waste.
   if (match.highlight.captioned === true) return false;

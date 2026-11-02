@@ -451,6 +451,15 @@ class _BattleCard extends StatelessWidget {
     final isTournament = mode == 'tournament';
     final palette = context.palette;
 
+    // A battle flagged for inappropriate content: it keeps its place in your
+    // record (you DID play it) but shows as disqualified, with who triggered it
+    // and no clip.
+    final contentViolation = match['contentViolation'] as Map<String, dynamic>?;
+    final isDisqualified = status == 'disqualified' ||
+        match['disqualifyReason'] == 'inappropriate-content' ||
+        contentViolation != null;
+    final dqTriggerUid = contentViolation?['reportedUserId'] as String?;
+
     final iAmP1 = uid == player1Id;
     final oppId = iAmP1 ? player2Id : player1Id;
 
@@ -496,13 +505,17 @@ class _BattleCard extends StatelessWidget {
                 ],
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
                 child: Column(
                   children: [
                     // Top row: type pill (left), date (right).
                     Row(
                       children: [
                         _typePill(context, mode, gold, pink),
+                        if (isDisqualified) ...[
+                          const SizedBox(width: 6),
+                          _dqPill(context),
+                        ],
                         const Spacer(),
                         Text(
                           when,
@@ -514,7 +527,7 @@ class _BattleCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     // The matchup, fed by the live tally.
                     StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
@@ -531,16 +544,20 @@ class _BattleCard extends StatelessWidget {
                         final oppVotes = iAmP1 ? p2 : p1;
                         final total = p1 + p2;
 
-                        final decided = finalized && winnerId != null;
+                        final decided = finalized &&
+                            winnerId != null &&
+                            !isDisqualified;
                         final meWon = decided && winnerId == uid;
                         final oppWon = decided && winnerId == oppId;
-                        final result = !finalized
-                            ? _Result.judging
-                            : winnerId == null
-                                ? _Result.draw
-                                : meWon
-                                    ? _Result.win
-                                    : _Result.loss;
+                        final result = isDisqualified
+                            ? _Result.disqualified
+                            : !finalized
+                                ? _Result.judging
+                                : winnerId == null
+                                    ? _Result.draw
+                                    : meWon
+                                        ? _Result.win
+                                        : _Result.loss;
 
                         return Column(
                           children: [
@@ -553,7 +570,8 @@ class _BattleCard extends StatelessWidget {
                                       photo: me.photo,
                                       votes: meVotes,
                                       isWinner: meWon,
-                                      isLoser: oppWon),
+                                      isLoser: oppWon,
+                                      showVotes: !isDisqualified),
                                 ),
                                 const SizedBox(width: 6),
                                 _centre(context, result),
@@ -564,20 +582,27 @@ class _BattleCard extends StatelessWidget {
                                       photo: opp.photo,
                                       votes: oppVotes,
                                       isWinner: oppWon,
-                                      isLoser: meWon),
+                                      isLoser: meWon,
+                                      showVotes: !isDisqualified),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 10),
-                            _judgedRow(context, total),
-                            // The clip is the growth engine, so getting/sharing
-                            // it is a VISIBLE one-tap action on every finished
-                            // recorded battle - not buried in the options sheet.
-                            // Louder on a win (your best content to post).
-                            if (mode != 'exhibition' && status == 'completed') ...[
-                              const SizedBox(height: 12),
-                              _clipCta(context, result),
-                            ],
+                            const SizedBox(height: 8),
+                            if (isDisqualified)
+                              _dqLine(context,
+                                  triggerUid: dqTriggerUid,
+                                  uid: uid,
+                                  oppId: oppId,
+                                  oppName: opp.name)
+                            else
+                              // Judged count + a compact clip button (the clip
+                              // is the growth engine, kept VISIBLE - not buried
+                              // in the options sheet - just smaller now).
+                              _footerRow(context,
+                                  total: total,
+                                  result: result,
+                                  showClip: mode != 'exhibition' &&
+                                      status == 'completed'),
                           ],
                         );
                       },
@@ -624,7 +649,8 @@ class _BattleCard extends StatelessWidget {
       required String? photo,
       required int votes,
       required bool isWinner,
-      required bool isLoser}) {
+      required bool isLoser,
+      bool showVotes = true}) {
     final text = Theme.of(context).textTheme;
     final green = context.palette.winner;
     final pink = context.palette.accent;
@@ -639,7 +665,7 @@ class _BattleCard extends StatelessWidget {
         // Winner gets a bright green glowing ring; everyone else a thin
         // neutral one so the avatar always reads as circular over the art.
         Container(
-          padding: const EdgeInsets.all(2.5),
+          padding: const EdgeInsets.all(2),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
@@ -650,31 +676,31 @@ class _BattleCard extends StatelessWidget {
                 ? [
                     BoxShadow(
                       color: green.withValues(alpha: 0.55),
-                      blurRadius: 10,
+                      blurRadius: 9,
                       spreadRadius: 0,
                     ),
                   ]
                 : null,
           ),
-          child: PlayerAvatar(name: name, photoUrl: photo, size: 46),
+          child: PlayerAvatar(name: name, photoUrl: photo, size: 34),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
           name,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
-          style: text.titleSmall?.copyWith(
+          style: text.bodyMedium?.copyWith(
             color: Colors.white,
             fontWeight: isWinner ? FontWeight.w800 : FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          '$votes ${votes == 1 ? 'vote' : 'votes'}',
-          style: text.bodySmall
-              ?.copyWith(color: voteColor, fontWeight: FontWeight.w700),
-        ),
+        if (showVotes)
+          Text(
+            '$votes ${votes == 1 ? 'vote' : 'votes'}',
+            style: text.labelSmall
+                ?.copyWith(color: voteColor, fontWeight: FontWeight.w700),
+          ),
       ],
     );
   }
@@ -736,17 +762,34 @@ class _BattleCard extends StatelessWidget {
               style: text.labelSmall?.copyWith(
                   color: Colors.white70, fontWeight: FontWeight.w800)),
         );
+      case _Result.disqualified:
+        final red = const Color(0xFFE5484D);
+        badge = _badge(
+          bg: red.withValues(alpha: 0.14),
+          border: red.withValues(alpha: 0.6),
+          glow: red.withValues(alpha: 0.3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.block, size: 13, color: red),
+              const SizedBox(width: 3),
+              Text('DQ',
+                  style: text.labelMedium
+                      ?.copyWith(color: red, fontWeight: FontWeight.w900)),
+            ],
+          ),
+        );
     }
     return SizedBox(
-      width: 84,
+      width: 66,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           badge,
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text('VS',
-              style: text.labelMedium?.copyWith(
+              style: text.labelSmall?.copyWith(
                   color: Colors.white.withValues(alpha: 0.5),
                   fontWeight: FontWeight.w800)),
         ],
@@ -773,52 +816,97 @@ class _BattleCard extends StatelessWidget {
     );
   }
 
-  /// A visible, full-width clip call-to-action on a finished recorded battle -
-  /// opens the Get-your-clip sheet in one tap. Green and "Share your win" on a
-  /// win (your most postable content); neutral "Get your clip" otherwise.
-  Widget _clipCta(BuildContext context, _Result result) {
+  /// Compact footer: "N judged" on the left, and - kept VISIBLE because the
+  /// clip is the growth engine - a small clip button on the right. Replaces the
+  /// old full-width clip button + separate judged row, to shrink the card.
+  Widget _footerRow(BuildContext context,
+      {required int total,
+      required _Result result,
+      required bool showClip}) {
+    final muted = Colors.white.withValues(alpha: 0.55);
     final won = result == _Result.win;
     final green = context.palette.winner;
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton.tonalIcon(
-        onPressed: () => GetClipSheet.show(context, matchId),
-        icon: const Icon(Icons.ios_share, size: 18),
-        label: Text(won ? 'Share your win' : 'Get your clip'),
-        style: FilledButton.styleFrom(
-          backgroundColor: won ? green.withValues(alpha: 0.18) : null,
-          foregroundColor: won ? const Color(0xFF6BE0A0) : null,
+    return Row(
+      children: [
+        Icon(Icons.groups, size: 15, color: muted),
+        const SizedBox(width: 5),
+        Text(
+          total == 0
+              ? 'No votes yet'
+              : '$total ${total == 1 ? 'person' : 'people'} judged',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: muted),
         ),
+        const Spacer(),
+        if (showClip)
+          FilledButton.tonalIcon(
+            onPressed: () => GetClipSheet.show(context, matchId),
+            icon: const Icon(Icons.ios_share, size: 15),
+            label: Text(won ? 'Share win' : 'Get clip'),
+            style: FilledButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+              minimumSize: const Size(0, 30),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: const TextStyle(
+                  fontSize: 12.5, fontWeight: FontWeight.w700),
+              backgroundColor: won ? green.withValues(alpha: 0.18) : null,
+              foregroundColor: won ? const Color(0xFF6BE0A0) : null,
+            ),
+          )
+        else
+          Icon(Icons.chevron_right,
+              size: 20, color: Colors.white.withValues(alpha: 0.45)),
+      ],
+    );
+  }
+
+  /// A small red "DISQUALIFIED" pill shown beside the type pill on a flagged
+  /// battle.
+  Widget _dqPill(BuildContext context) {
+    const red = Color(0xFFE5484D);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: red.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        'DISQUALIFIED',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: red,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
       ),
     );
   }
 
-  /// Centred "N people judged" with a chevron pinned to the right.
-  Widget _judgedRow(BuildContext context, int total) {
-    final muted = Colors.white.withValues(alpha: 0.55);
+  /// The disqualified detail line: what happened + WHO triggered it, so you
+  /// still have the record of the battle and know the result.
+  Widget _dqLine(BuildContext context,
+      {required String? triggerUid,
+      required String uid,
+      required String oppId,
+      required String oppName}) {
+    final who = triggerUid == null
+        ? 'A player was disqualified'
+        : triggerUid == uid
+            ? 'You were disqualified'
+            : triggerUid == oppId
+                ? '$oppName was disqualified'
+                : 'A player was disqualified';
     return Row(
       children: [
-        const SizedBox(width: 22), // balances the trailing chevron
+        const Icon(Icons.gavel, size: 15, color: Color(0xFFE5A24D)),
+        const SizedBox(width: 6),
         Expanded(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.groups, size: 15, color: muted),
-              const SizedBox(width: 5),
-              Text(
-                total == 0
-                    ? 'No votes yet'
-                    : '$total ${total == 1 ? 'person' : 'people'} judged',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: muted),
-              ),
-            ],
+          child: Text(
+            '$who — inappropriate content. No clip for this battle.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
           ),
         ),
-        Icon(Icons.chevron_right,
-            size: 20, color: Colors.white.withValues(alpha: 0.45)),
       ],
     );
   }
@@ -909,7 +997,7 @@ class _BattleCard extends StatelessWidget {
   }
 }
 
-enum _Result { win, loss, draw, judging }
+enum _Result { win, loss, draw, judging, disqualified }
 
 /// Minutes-ago within the hour, hours-ago within the day, and a full
 /// day/month/year date beyond that - no "N days ago" (developer's call).

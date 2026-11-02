@@ -3,6 +3,7 @@ const {HttpsError} = require("firebase-functions/v2/https");
 const {publishBlockedReason} = require("./takedown");
 const {readMonetizationConfig, battleEntitlement} = require("./entitlement");
 const {readEventWindowConfig} = require("./eventWindow");
+const {isContentBlocked} = require("./contentGate");
 
 /**
  * How a player gets the shareable version of their own battle.
@@ -57,6 +58,7 @@ const DENY = {
   insufficientPoints: "insufficient-points",
   paymentUnavailable: "payment-unavailable",
   unknownSource: "unknown-source",
+  contentBlocked: "content-blocked",
 };
 
 async function readClipPointsPrice(db = getFirestore()) {
@@ -123,6 +125,13 @@ function resolveClipGrant({user, match, uid, source, price, entitlement}) {
     // somebody might fixate on a specific person.
     return {allowed: false, reason: DENY.notParticipant,
       message: "You can only get clips of your own battles."};
+  }
+  if (isContentBlocked(match)) {
+    // A battle flagged for inappropriate content (nudity/explicit acts) has
+    // no clip to hand out - it never renders, delivers, or publishes.
+    return {allowed: false, reason: DENY.contentBlocked,
+      message: "This battle was removed for inappropriate content, so there's " +
+        "no clip to send."};
   }
   if (match.status !== "completed") {
     return {allowed: false, reason: DENY.matchNotReady,
@@ -471,6 +480,11 @@ async function getClipDownload(auth, data) {
   if (!match || (match.player1Id !== uid && match.player2Id !== uid)) {
     throw new HttpsError("permission-denied",
         "You can only download clips of your own battles.");
+  }
+  if (isContentBlocked(match)) {
+    throw new HttpsError("failed-precondition",
+        "This battle was removed for inappropriate content.",
+        {reason: "content-blocked"});
   }
   const grant = match.clipGrants?.[uid];
   if (!grant) {
