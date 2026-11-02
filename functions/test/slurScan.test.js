@@ -67,7 +67,8 @@ check("a clean transcript is clean", () => {
 
 // --- shows the ACTUAL word said ---
 check("reports the actual spoken word, not the stem", () => {
-  assert.deepStrictEqual(scanWordsForSlurs(["retarded"]).terms, ["retarded"]);
+  // "faggot" is the spoken word; the matched stem is "fagg" - we report the word.
+  assert.deepStrictEqual(scanWordsForSlurs(["faggot"]).terms, ["faggot"]);
   assert.deepStrictEqual(scanWordsForSlurs(["Nigga,"]).terms, ["nigga"]);
 });
 
