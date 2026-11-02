@@ -142,7 +142,10 @@ export default function AdminPage() {
   // Guards against an action firing again while one is in flight (double-clicks
   // when the result isn't instantly visible) - which could double-post/grant.
   // `busy` is the reactive mirror used to grey out the buttons.
-  const inFlight = useRef(false);
+  // Start time of the in-flight action (0 = idle). Timestamp rather than a
+  // bool so a call that hangs can't wedge every button forever - after 90s we
+  // let the next click through.
+  const inFlight = useRef<number>(0);
   const [busy, setBusy] = useState(false);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
@@ -185,8 +188,9 @@ export default function AdminPage() {
 
   const act = useCallback(
     async (payload: Record<string, unknown>, label: string) => {
-      if (!user || inFlight.current) return;
-      inFlight.current = true;
+      if (!user) return;
+      if (inFlight.current && Date.now() - inFlight.current < 90_000) { setNote("Hang on — finishing the last action…"); return; }
+      inFlight.current = Date.now();
       setBusy(true);
       setNote(`${label}…`);
       try {
@@ -198,7 +202,7 @@ export default function AdminPage() {
         setNote(res.ok ? `${label}: done` : `${label}: ${data.error ?? res.status}`);
         await loadMetrics();
       } finally {
-        inFlight.current = false;
+        inFlight.current = 0;
         setBusy(false);
       }
     },
@@ -209,8 +213,9 @@ export default function AdminPage() {
   // admin - the callable enforces requireAdmin and reuses the real publish gate.
   const callFn = useCallback(
     async (name: string, data: Record<string, unknown>, label: string) => {
-      if (!user || inFlight.current) return;
-      inFlight.current = true;
+      if (!user) return;
+      if (inFlight.current && Date.now() - inFlight.current < 90_000) { setNote("Hang on — finishing the last action…"); return; }
+      inFlight.current = Date.now();
       setBusy(true);
       setNote(`${label}…`);
       try {
@@ -221,7 +226,7 @@ export default function AdminPage() {
         setNote(`${label}: ${(e as Error).message}`);
       } finally {
         await loadMetrics();
-        inFlight.current = false;
+        inFlight.current = 0;
         setBusy(false);
       }
     },
@@ -266,8 +271,19 @@ export default function AdminPage() {
 
       {metrics && <StatusBar health={metrics.health} now={nowTick} />}
 
+      {/* Floating toast, pinned to the viewport so the result of an action is
+          ALWAYS visible - even when the button you clicked is far down the
+          page. Green = done, red = error, neutral = in progress. */}
       {note && (
-        <div className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+        <div
+          className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 max-w-[90vw] rounded-lg border px-4 py-2.5 text-sm font-semibold shadow-xl ${
+            note.includes(": done")
+              ? "border-green-500/50 bg-green-950/90 text-green-200"
+              : note.endsWith("…")
+                ? "border-zinc-600 bg-zinc-900/95 text-zinc-200"
+                : "border-red-500/50 bg-red-950/90 text-red-200"
+          }`}
+        >
           {note}
         </div>
       )}
