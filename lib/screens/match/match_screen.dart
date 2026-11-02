@@ -1034,20 +1034,19 @@ class _MatchScreenState extends State<MatchScreen>
         }
       },
       child: Scaffold(
+        // The video fills the whole screen, BEHIND a transparent app bar, so the
+        // camera/timers sit at the true top (no solid "Match" band pushing them
+        // down) and the camera is maximised. Leaving mid-battle is handled by the
+        // back gesture (PopScope -> _confirmLeave), so the top-left stays free for
+        // the timers during a battle; the standard back arrow appears only in the
+        // free-to-leave states (error/loading/verdict/violation), which never show
+        // the clocks, so there is no collision.
+        extendBodyBehindAppBar: true,
         appBar: AppBar(
-          title: const Text('Match'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
           automaticallyImplyLeading: canLeaveFreely,
-          leading: canLeaveFreely
-              ? null
-              : IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  tooltip: 'Leave match',
-                  onPressed: () async {
-                    if (await _confirmLeave() && context.mounted) {
-                      Navigator.of(context).pop();
-                    }
-                  },
-                ),
         ),
         body: _error != null
             ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))
