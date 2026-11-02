@@ -855,6 +855,15 @@ async function enforceContentBlock(db, bucket, matchId, match, scan) {
     // best-effort
   }
 
+  // Pull it off the Home "Featured" spotlight too, if it was showcased - a
+  // disqualified clip must not linger there (its video is now destroyed, so the
+  // card would be dead anyway). Best-effort.
+  try {
+    await db.collection("featured").doc(matchId).delete();
+  } catch (_) {
+    // best-effort
+  }
+
   // Flag the match: contentGate.isContentBlocked now blocks every clip path.
   await db.collection("matches").doc(matchId).set({
     status: "disqualified",
