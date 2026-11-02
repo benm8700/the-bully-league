@@ -1159,6 +1159,13 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
           captionedSizeBytes: out.sizeBytes,
         };
       }
+      // POSTING-SIDE slur flag (free: the transcript already exists). NEVER
+      // disqualifies a battle or blocks a player's own clip - the in-app policy
+      // is free-speech. It ONLY warns the founder before a clip goes to the
+      // app's marketing accounts, where TikTok/IG/YT would strike the account.
+      // FieldValue.delete() clears a stale flag when a re-render comes back clean.
+      const {scanWordsForSlurs} = require("./slurScan");
+      const slur = scanWordsForSlurs(transcript.words);
       await matchRef.set({
         highlight: {
           renditions: renditionMerge,
@@ -1166,6 +1173,9 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
           cueCount: cues.length,
           trimmedSeconds: Math.round(trimmedSeconds * 10) / 10,
           captionedRenderedAt: FieldValue.serverTimestamp(),
+          languageFlag: slur.detected ?
+            {slur: true, terms: slur.terms, at: FieldValue.serverTimestamp()} :
+            FieldValue.delete(),
           ...(warnings.length > 0 ? {captionWarnings: warnings} : {}),
         },
       }, {merge: true});

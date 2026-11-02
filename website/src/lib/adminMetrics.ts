@@ -108,6 +108,7 @@ type BattleItem = {
   featured: boolean;
   rendered: boolean; // an edit reel exists in Storage -> the clip CAN be published
   captioned: boolean; // the captioned (postable) cut exists - what should publish
+  slurTerms: string[] | null; // hate slurs heard in the clip (posting warning)
   hasClip: boolean; // published -> playable
   // A public, playable URL when the highlight is published (so the dashboard can
   // preview it before featuring). Null when unpublished - previewing an
@@ -127,10 +128,18 @@ type MatchRow = {
   published: boolean;
   rendered: boolean;
   captioned: boolean;
+  slurTerms: string[] | null;
   clipUrl: string | null;
   featName1?: string; // fallback names from the featured doc if the match is gone
   featName2?: string;
 };
+
+function slurTermsOf(h: Record<string, unknown>): string[] | null {
+  const lf = h.languageFlag as Record<string, unknown> | undefined;
+  if (!lf || lf.slur !== true) return null;
+  const terms = Array.isArray(lf.terms) ? (lf.terms as string[]) : [];
+  return terms.length > 0 ? terms : ["slur"];
+}
 
 function rowFromMatch(id: string, x: Record<string, unknown>): MatchRow {
   const h = (x.highlight as Record<string, unknown> | undefined) ?? {};
@@ -145,6 +154,7 @@ function rowFromMatch(id: string, x: Record<string, unknown>): MatchRow {
     published,
     rendered: Object.keys(rends).length > 0,
     captioned: h.captioned === true,
+    slurTerms: slurTermsOf(h),
     clipUrl: published ? (pub.vertical ?? pub.landscape ?? null) : null,
   };
 }
@@ -195,6 +205,7 @@ async function recentBattles(): Promise<BattleItem[]> {
           published: false,
           rendered: false,
           captioned: false,
+          slurTerms: null,
           clipUrl: (feat.clipUrl as string | undefined) ?? null,
           featName1: String(feat.player1Name ?? "Unknown"),
           featName2: String(feat.player2Name ?? "Unknown"),
@@ -222,6 +233,7 @@ async function recentBattles(): Promise<BattleItem[]> {
     featured: featuredIds.has(r.id),
     rendered: r.rendered,
     captioned: r.captioned,
+    slurTerms: r.slurTerms,
     hasClip: r.published,
     clipUrl: r.clipUrl,
   }));
@@ -319,6 +331,7 @@ export type PostClip = {
   votes: number;
   positiveEmoji: number; // 🔥 fire + 🧠 clever received this match
   score: number;
+  slurTerms: string[] | null; // hate slurs heard - posting-to-socials warning
   // Marketing-use consent. DEFAULT "ok" (promo use okayed in the join
   // acknowledgement). "blur" = a battler opted to blur their own panel (post
   // the blurred cut); "out" = a battler pulled it entirely (don't post).
@@ -439,6 +452,7 @@ async function postStudioClips(): Promise<{
       votes,
       positiveEmoji,
       score: votes + positiveEmoji * 2,
+      slurTerms: slurTermsOf(h),
       consent,
       blurReady,
       status,

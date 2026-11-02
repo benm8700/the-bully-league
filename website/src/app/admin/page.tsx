@@ -50,6 +50,7 @@ type BattleItem = {
   featured: boolean;
   rendered: boolean;
   captioned: boolean;
+  slurTerms: string[] | null;
   hasClip: boolean;
   clipUrl: string | null;
 };
@@ -64,6 +65,7 @@ type PostClip = {
   votes: number;
   positiveEmoji: number;
   score: number;
+  slurTerms: string[] | null;
   consent: "ok" | "blur" | "out";
   blurReady: boolean;
   status: "candidate" | "posted" | "dismissed";
@@ -507,6 +509,26 @@ function captionsFor(c: PostClip): { label: string; text: string }[] {
   ];
 }
 
+// A LOUD, unmissable warning that the clip's audio contains a hate slur. This
+// does NOT block anything (in-app battles allow slurs by design) - it exists so
+// the founder never posts a slur clip to the app's OWN TikTok/IG/YT accounts,
+// where it would get the marketing account struck/banned.
+function SlurWarning({ terms }: { terms: string[] }) {
+  const quoted = terms.length
+    ? terms.map((t) => `“${t}”`).join(", ")
+    : "a slur";
+  return (
+    <div className="mb-2 flex items-start gap-2 rounded-md border-2 border-red-500 bg-red-600 px-3 py-2 text-sm font-extrabold text-white shadow-lg">
+      <span className="text-lg leading-none">⚠️</span>
+      <span>
+        SLUR DETECTED: {quoted} — do NOT post this to TikTok / Instagram /
+        YouTube. It can get the account struck or banned. (In-app is fine; this
+        is a posting warning only.)
+      </span>
+    </div>
+  );
+}
+
 function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: (name: string, data: Record<string, unknown>, label: string) => void; act: (p: Record<string, unknown>, l: string) => void; busy: boolean }) {
   const ps = metrics.postStudio ?? { candidates: [], posted: [], dismissed: [], morningPick: null };
   const [preview, setPreview] = useState<{ id: string; url: string } | null>(null);
@@ -554,7 +576,8 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
   const candidatesToShow = ps.candidates.filter((c) => c.id !== ps.morningPick?.id);
 
   const renderClip = (c: PostClip, rank: number | null) => (
-    <div key={c.id} className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-sm">
+    <div key={c.id} className={`rounded-lg border bg-zinc-900/60 p-3 text-sm ${c.slurTerms ? "border-2 border-red-500" : "border-zinc-800"}`}>
+      {c.slurTerms && <SlurWarning terms={c.slurTerms} />}
       <div className="flex flex-wrap items-center gap-2">
         {rank !== null && (
           <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-zinc-800 text-xs font-bold text-zinc-300">{rank}</span>
@@ -777,7 +800,8 @@ function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (n
       ) : (
         <div className="space-y-2">
           {items.map((b) => (
-            <div key={b.id} className={`rounded-lg border p-3 text-sm ${b.featured ? "border-amber-500/50 bg-amber-500/10" : "border-zinc-800 bg-zinc-900/60"}`}>
+            <div key={b.id} className={`rounded-lg border p-3 text-sm ${b.slurTerms ? "border-2 border-red-500 bg-zinc-900/60" : b.featured ? "border-amber-500/50 bg-amber-500/10" : "border-zinc-800 bg-zinc-900/60"}`}>
+              {b.slurTerms && <SlurWarning terms={b.slurTerms} />}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-white">{b.player1Name} vs {b.player2Name}</span>
                 <span className="font-mono text-xs text-zinc-600">#{b.id.slice(-6)}</span>
