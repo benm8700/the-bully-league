@@ -116,6 +116,21 @@ async function moderateImageContent(base64Content) {
 }
 
 /**
+ * STRICT SafeSearch on a raw frame (prepublish policy), for scanning a clip's
+ * frames before it can be delivered or posted - the backstop for what the live
+ * sampler misses (it samples ~every 4s on only the blatant-nudity band). Same
+ * strictness as a profile photo, so a posted clip can't carry what a photo
+ * can't. Returns {approved, reason?}. See functions/clipContentScan.js.
+ */
+async function moderateFrameStrict(base64Content) {
+  const [result] = await client.safeSearchDetection({
+    image: {content: Buffer.from(base64Content, "base64")},
+  });
+  return prepublishVerdict(result.safeSearchAnnotation,
+      "Could not analyze this frame.");
+}
+
+/**
  * Moderates a "tell me about yourself" intro video (mandatory, User Profile
  * System). A video cannot be handed straight to SafeSearch, so ffmpeg
  * (already a dependency, used by the highlight renderer) samples ~one frame
@@ -183,7 +198,7 @@ async function moderateVideo(storagePath) {
 }
 
 module.exports = {
-  moderateImage, moderateImageContent, moderateVideo,
+  moderateImage, moderateImageContent, moderateVideo, moderateFrameStrict,
   // Exported for the pure regression test (functions/test/visualModeration.test.js).
   verdictFromSafeSearch, liveFrameVerdict, prepublishVerdict,
 };

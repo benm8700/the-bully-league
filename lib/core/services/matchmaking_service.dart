@@ -487,12 +487,17 @@ class MatchmakingService {
     // Best Rounds board can play just the voted-best round. Null from the
     // guest, and for any match the host couldn't capture.
     List<Map<String, int>>? roundBoundaries,
+    // Set when the LIVE visual-moderation ended the match: the server records
+    // who was disqualified (the caller's opponent) + flags the match so no
+    // clip of it can be delivered. See functions/matchmaking.js completeMatch.
+    bool violation = false,
   }) async {
     await _call('completeMatch', {
       'matchId': matchId,
       'outcome': outcome,
       'quality': ?quality,
       'roundBoundaries': ?roundBoundaries,
+      if (violation) 'violation': true,
     });
   }
 }

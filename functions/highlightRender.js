@@ -826,6 +826,77 @@ function runFfmpeg(binary, args) {
  * matches never become highlights, and rendering each one would burn
  * compute on clips nobody will post.
  */
+/**
+ * Enforces a content-scan trip: the match is disqualified (never renders,
+ * delivers, or publishes again - see contentGate.js), any rendered output is
+ * destroyed, anyone who paid for a clip is refunded, and a report is filed for
+ * human review. reportedUserId is the player whose OWN stream tripped (uid 1 ->
+ * player1, uid 2 -> player2), so My Battles can say who was disqualified.
+ */
+async function enforceContentBlock(db, bucket, matchId, match, scan) {
+  const {FieldValue} = require("firebase-admin/firestore");
+  const reportedUserId =
+    scan.reportedUid === "2" ? match.player2Id : match.player1Id;
+
+  // Refund any paid clip grants FIRST, while they're still on the doc.
+  try {
+    const {refundClipGrants} = require("./clipGrants");
+    await refundClipGrants(matchId, match, null);
+  } catch (e) {
+    console.error("content-block refund failed:", e.message);
+  }
+
+  // Destroy any rendered highlight output (the public/deliverable artifacts).
+  try {
+    const [objs] = await bucket.getFiles(
+        {prefix: `match_highlights/${matchId}/`});
+    await Promise.all(objs.map((o) => o.delete().catch(() => {})));
+  } catch (_) {
+    // best-effort
+  }
+
+  // Flag the match: contentGate.isContentBlocked now blocks every clip path.
+  await db.collection("matches").doc(matchId).set({
+    status: "disqualified",
+    disqualifyReason: "inappropriate-content",
+    voteFinalized: true,
+    contentViolation: {
+      kind: "visual",
+      reason: scan.reason || "nudity",
+      reportedUserId: reportedUserId || null,
+      source: "clip-scan",
+      detectedLive: false,
+      at: FieldValue.serverTimestamp(),
+    },
+    highlight: {
+      destroyedForContent: true,
+      captionRequested: false,
+      captioned: false,
+      published: false,
+      renditions: FieldValue.delete(),
+      publicUrls: FieldValue.delete(),
+    },
+    clipGrants: FieldValue.delete(),
+  }, {merge: true});
+
+  // File a report for human review (the raw recording stays until the 7-day
+  // retention sweep, so a moderator can see it).
+  try {
+    await db.collection("reports").add({
+      reporterId: "system",
+      reportedUserId: reportedUserId || null,
+      matchId,
+      reason: "inappropriate_content",
+      details: "Auto-detected by post-match clip content scan.",
+      status: "pending",
+      source: "clip-scan",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    console.error("content-block report failed:", e.message);
+  }
+}
+
 async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = {}) {
   // A BLUR render is a separate, post-only output: it blurs the opted-out
   // player(s)' panel and is stored under highlight.blurRenditions, never
@@ -910,6 +981,33 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
     }
 
     const ffmpegPath = require("ffmpeg-static");
+
+    // CONTENT SAFETY SCAN - captioned (deliverable/postable) renders only, so
+    // it costs ~1-2c per REQUESTED clip, never on every battle's stage-1 render.
+    // The live in-match sampler can miss a brief flash; this scans the finished
+    // recording strictly, per player, before a clip can be delivered or posted.
+    // On a trip: disqualify + destroy + refund + report, and abort the render
+    // (before the expensive transcription below). Blur renders skip it - they
+    // are a re-render of an already-vetted battle.
+    if (captions && !isBlur) {
+      const {scanRecordingForContent} = require("./clipContentScan");
+      const {moderateFrameStrict} = require("./visualModeration");
+      let scan = {blocked: false};
+      try {
+        scan = await scanRecordingForContent(
+            timeline, workDir, ffmpegPath, moderateFrameStrict);
+      } catch (e) {
+        // A scan that can't RUN must not silently pass a clip - but it also
+        // must not wedge the pipeline. Record it and let the render proceed;
+        // the live filter + human report remain as the other layers.
+        warnings.push("content scan could not run: " + e.message);
+      }
+      if (scan.blocked) {
+        await enforceContentBlock(db, bucket, matchId, snap.data(), scan);
+        throw new Error(
+            "content-blocked: match disqualified for inappropriate content");
+      }
+    }
 
     // Transcribed ONCE and reused across both renditions. Speech-to-Text
     // bills per audio minute, so transcribing per rendition would double

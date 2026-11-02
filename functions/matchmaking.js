@@ -1489,19 +1489,63 @@ async function completeMatch(auth, data, creds = null) {
   // recording" error, and the loser's error overwrote the winner's file
   // list. Found on a real two-device match; the footage was fine but the
   // record of it wasn't.
+  // Live visual-moderation ended this match: the caller's client detected a
+  // flash on the OTHER player's feed. Record WHO (the non-caller participant)
+  // so My Battles can show who was disqualified, and flag the match so the
+  // content gate blocks any clip of it. The client can't name an arbitrary
+  // person - the server attributes it to the caller's opponent - and it's a
+  // no-contest routed to human review via the report the client also files.
+  const isViolation = data?.violation === true ||
+    (data?.violation && typeof data.violation === "object");
+
   const claimed = await db.runTransaction(async (tx) => {
     const fresh = await tx.get(matchRef);
     if (fresh.data().status !== "pending") return false;
+    const extra = outcome === "abandoned" ? {voteFinalized: true} : {};
+    if (isViolation) {
+      const f = fresh.data();
+      const opp = f.player1Id === auth.uid ? f.player2Id : f.player1Id;
+      extra.disqualifyReason = "inappropriate-content";
+      extra.contentViolation = {
+        kind: "visual",
+        reason: "nudity",
+        reportedUserId: opp || null,
+        source: "live",
+        detectedLive: true,
+        at: new Date(),
+      };
+    }
     tx.update(matchRef, {
       status: outcome,
       completedAt: FieldValue.serverTimestamp(),
-      ...(outcome === "abandoned" ? {voteFinalized: true} : {}),
+      ...extra,
     });
     return true;
   });
 
   if (!claimed) {
     const current = (await matchRef.get()).data();
+    // The reporting device may have LOST the settle race to the other device,
+    // which abandoned the match without the content flag (it doesn't know who
+    // flashed - only the reporter's side detected it). Backfill the attribution
+    // so My Battles shows who and the content gate blocks any clip. Only the
+    // reporting side sends violation:true.
+    if (isViolation && !current.contentViolation) {
+      const opp = current.player1Id === auth.uid ?
+        current.player2Id : current.player1Id;
+      await matchRef.set({
+        disqualifyReason: "inappropriate-content",
+        contentViolation: {
+          kind: "visual",
+          reason: "nudity",
+          reportedUserId: opp || null,
+          source: "live",
+          detectedLive: true,
+          at: new Date(),
+        },
+      }, {merge: true}).catch((e) =>
+        console.error("violation backfill failed:", e.message));
+    }
     return {status: current.status, alreadySettled: true};
   }
 

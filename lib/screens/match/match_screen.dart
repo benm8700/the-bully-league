@@ -385,7 +385,12 @@ class _MatchScreenState extends State<MatchScreen>
     // and never surfaces in the public discovery feed. Both devices call
     // this; the second is a server-side no-op.
     try {
-      await _matchmakingService.completeMatch(widget.pairing.matchId, outcome: 'abandoned');
+      // Only the REPORTING side attributes the violation (it detected the flash
+      // on the opponent's feed); the server disqualifies the reporter's
+      // opponent and flags the match so no clip of it can be delivered. The
+      // other device just abandons.
+      await _matchmakingService.completeMatch(widget.pairing.matchId,
+          outcome: 'abandoned', violation: iAmReporter);
     } catch (e) {
       // The hourly sweep settles any match still pending after the vote
       // window, so a dropped call here delays cleanup rather than leaving
