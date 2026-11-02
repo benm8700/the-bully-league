@@ -149,12 +149,30 @@ export default function AdminPage() {
   const [busy, setBusy] = useState(false);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
+  const [refreshing, setRefreshing] = useState(false);
+
   const loadMetrics = useCallback(async () => {
     if (!user) return;
     const res = await authed(user, "/api/admin/metrics");
     if (res.ok) setMetrics(await res.json());
     else setNote(`Metrics error: ${res.status}`);
   }, [user]);
+
+  // The manual Refresh button, with visible feedback - the bare fetch gave
+  // none, so a working refresh looked dead. (The 60s auto-refresh stays silent,
+  // calling loadMetrics directly, so it never flashes a toast every minute.)
+  const manualRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setNote("Refreshing…");
+    try {
+      await loadMetrics();
+      setNote("Refreshed: done");
+      setTimeout(() => setNote((n) => (n === "Refreshed: done" ? "" : n)), 2500);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshing, loadMetrics]);
 
   useEffect(() => {
     if (loading) return;
@@ -262,10 +280,11 @@ export default function AdminPage() {
           )}
         </div>
         <button
-          onClick={loadMetrics}
-          className="rounded bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+          onClick={manualRefresh}
+          disabled={refreshing}
+          className="rounded bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
         >
-          Refresh
+          {refreshing ? "Refreshing…" : "Refresh"}
         </button>
       </div>
 

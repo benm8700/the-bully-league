@@ -132,8 +132,14 @@ async function previewClip(matchId, {blurred = false} = {}) {
   async function urlFor(name) {
     if (!blurred && published && pub[name]) return pub[name];
     const rend = rends[name];
-    if (rend && rend.path) {
-      const [url] = await getStorage().bucket().file(rend.path).getSignedUrl({
+    // Prefer the CAPTIONED cut (what we post), falling back to the uncaptioned
+    // stage-1 render. A captioned rendition stores its file under
+    // `captionedPath`, NOT `path` - reading only `path` made preview return
+    // null (and a 400) for every captioned clip. Same resolution as
+    // clipGrants.js / the publish path.
+    const clipPath = rend && (rend.captionedPath || rend.path);
+    if (clipPath) {
+      const [url] = await getStorage().bucket().file(clipPath).getSignedUrl({
         action: "read",
         expires: Date.now() + PREVIEW_TTL_MS,
       });
