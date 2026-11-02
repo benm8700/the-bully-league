@@ -331,12 +331,12 @@ Future<void> _startMatch(BuildContext context, String mode) async {
     return;
   }
 
-  // The one thing a player must do before a ranked/tournament battle is record
-  // an intro video (the ammo the opponent studies, and the enterQueue gate) -
-  // so if it's missing, route them straight to their profile to record it
-  // rather than letting them walk to the queue and be refused. (The old
-  // required text fields were cut 2026-10-17; the intro is the only gate.)
-  if (!await _ensureIntroReady(context, mode)) return;
+  // What a player must have before a ranked/tournament battle: an intro video
+  // AND a selfie (both enterQueue gates). Checked HERE, before consent / the
+  // camera check / the queue, so an incomplete profile is caught instantly and
+  // they're routed straight to fix it - rather than searching for an opponent
+  // first and being refused (a wasted step, and wasted bandwidth).
+  if (!await _ensureBattleReady(context, mode)) return;
   if (!context.mounted) return;
 
   final consented = await Navigator.of(context).push<bool>(
@@ -513,7 +513,7 @@ Future<void> _showBlockedSheet(
 /// Fails OPEN: if the doc can't be read, the match proceeds and the server's
 /// own enterQueue gate has the final say - a transient read shouldn't block
 /// someone who is actually ready.
-Future<bool> _ensureIntroReady(BuildContext context, String mode) async {
+Future<bool> _ensureBattleReady(BuildContext context, String mode) async {
   // Exhibition and IMPROV are exempt: improv riffs a prompt, not the opponent,
   // so there's no ammo to study (matches enterQueue's server-side exemption).
   if (mode == 'exhibition' || mode == 'improv') return true;
@@ -526,19 +526,43 @@ Future<bool> _ensureIntroReady(BuildContext context, String mode) async {
         .get();
     final profile = snap.data()?['profile'] as Map<String, dynamic>?;
     final introUrl = profile?['introVideoUrl'] as String?;
+    final faceUrl = profile?['facePhotoUrl'] as String?;
     final hasIntro = introUrl != null && introUrl.isNotEmpty;
-    // The intro video is the ONLY ranked requirement now - the structured
-    // profile fields were cut (2026-10-17), so the gate no longer checks them.
-    if (hasIntro) return true;
+    final hasSelfie = faceUrl != null && faceUrl.isNotEmpty;
+    // Both are required for a public battle (intro = the ammo + gate; selfie =
+    // so the opponent sees who they're facing). Matches the enterQueue gates.
+    if (hasIntro && hasSelfie) return true;
   } catch (_) {
-    return true;
+    return true; // fail open - the server still enforces either way
   }
   if (!context.mounted) return false;
-  // Take them straight to where they record the intro and fill the fields,
-  // with a banner explaining why. They'll tap battle again once ready.
-  await Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => const ProfileScreen(promptIntro: true)),
+  // Missing the intro and/or the selfie: pop up RIGHT HERE (the moment they tap
+  // play) so the requirement is clear before any consent/camera/queue effort,
+  // then take them to their profile (hoisted to those cards) to set it up.
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('One step first'),
+      content: const Text(
+          'The Bully League requires an intro video and selfie before '
+          'participating in a public battle.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Not now'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Set it up'),
+        ),
+      ],
+    ),
   );
+  if (go == true && context.mounted) {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ProfileScreen(promptIntro: true)),
+    );
+  }
   return false;
 }
 

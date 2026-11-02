@@ -386,9 +386,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               const SizedBox(height: 10),
                               const Text(
-                                'Tell us what’s interesting about you. '
-                                'Please be honest — it makes the show '
-                                'more fun to watch.',
+                                'Record a quick intro video and take a selfie. '
+                                'Your opponent studies the intro for ammo and '
+                                'sees your face before the battle. Be honest — '
+                                'it makes the show more fun to watch.',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 15,
