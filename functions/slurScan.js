@@ -30,9 +30,10 @@ const PREFIX_SLURS = [
 // only as a complete transcribed word.
 const WORD_SLURS = [
   "fag", "kike", "chink", "spic", "wetback", "beaner", "gook", "coon",
-  // Removed at the developer's request (2026-11-02): "raghead", "towelhead",
-  // "tranny" (note: platforms strike aggressively for "tranny" - re-add via the
-  // custom list if that heads-up is wanted).
+  "raghead", "towelhead",
+  // Removed at the developer's request (2026-11-02): "tranny" (note: platforms
+  // strike aggressively for it - re-add via the custom list if the heads-up is
+  // wanted). "raghead"/"towelhead" were kept in.
 ];
 
 const SLUR_STEMS = [...PREFIX_SLURS, ...WORD_SLURS]; // exported for reference

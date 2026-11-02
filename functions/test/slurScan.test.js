@@ -41,10 +41,13 @@ check("does NOT catch ordinary words", () => {
   }
 });
 check("words removed from the built-in list are NOT flagged", () => {
-  for (const w of ["retard", "retarded", "wigger", "raghead", "towelhead",
-    "tranny"]) {
+  for (const w of ["retard", "retarded", "wigger", "tranny"]) {
     assert.strictEqual(scanWordsForSlurs([w]).detected, false, w);
   }
+});
+check("raghead/towelhead are kept in", () => {
+  assert.strictEqual(scanWordsForSlurs(["raghead"]).detected, true);
+  assert.strictEqual(scanWordsForSlurs(["towelhead"]).detected, true);
 });
 check("short stems need the whole word (coon, not raccoon)", () => {
   assert.strictEqual(wordIsSlur("coon"), true);
