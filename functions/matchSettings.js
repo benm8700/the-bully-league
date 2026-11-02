@@ -37,7 +37,7 @@ const DEFAULTS = {
   // The live "Warmup Round" that opens a battle - both mics open, ~20s of
   // banter/staredown before round 1 (recorded, spectator-visible). Stamped
   // on the match so both players run the same clock. 0 disables it.
-  warmupSeconds: 20,
+  warmupSeconds: 15,
   // CHESS-CLOCK FORMAT (2026-10-11): regular battles now run the same
   // chess-clock-with-floor format as the Main Stage finals, scaled down for
   // the amateur tier. chessClock 1 = on (the current format for every battle

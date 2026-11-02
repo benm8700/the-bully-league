@@ -107,6 +107,7 @@ type BattleItem = {
   completedAtMs: number | null;
   featured: boolean;
   rendered: boolean; // an edit reel exists in Storage -> the clip CAN be published
+  captioned: boolean; // the captioned (postable) cut exists - what should publish
   hasClip: boolean; // published -> playable
   // A public, playable URL when the highlight is published (so the dashboard can
   // preview it before featuring). Null when unpublished - previewing an
@@ -125,6 +126,7 @@ type MatchRow = {
   completedAtMs: number | null;
   published: boolean;
   rendered: boolean;
+  captioned: boolean;
   clipUrl: string | null;
   featName1?: string; // fallback names from the featured doc if the match is gone
   featName2?: string;
@@ -142,7 +144,8 @@ function rowFromMatch(id: string, x: Record<string, unknown>): MatchRow {
     completedAtMs: tsToMs(x.completedAt),
     published,
     rendered: Object.keys(rends).length > 0,
-    clipUrl: published ? (pub.landscape ?? pub.vertical ?? null) : null,
+    captioned: h.captioned === true,
+    clipUrl: published ? (pub.vertical ?? pub.landscape ?? null) : null,
   };
 }
 
@@ -191,6 +194,7 @@ async function recentBattles(): Promise<BattleItem[]> {
           completedAtMs: null,
           published: false,
           rendered: false,
+          captioned: false,
           clipUrl: (feat.clipUrl as string | undefined) ?? null,
           featName1: String(feat.player1Name ?? "Unknown"),
           featName2: String(feat.player2Name ?? "Unknown"),
@@ -217,6 +221,7 @@ async function recentBattles(): Promise<BattleItem[]> {
     completedAtMs: r.completedAtMs,
     featured: featuredIds.has(r.id),
     rendered: r.rendered,
+    captioned: r.captioned,
     hasClip: r.published,
     clipUrl: r.clipUrl,
   }));
@@ -547,6 +552,11 @@ export async function collectMetrics() {
     generatedAt: now,
     users: { total: totalUsers, subscribers, banned, flagged },
     online: {
+      // "App open" right now (foregrounded) - the true "how many people are
+      // using the app" number. See functions/presence.js countAppOpen.
+      appOpen: (presence as Record<string, unknown> | null)?.appOpen ?? null,
+      // Available to battle (in a queue or mid-match) - the honest user-facing
+      // "N roasters online" number.
       total: (presence as Record<string, unknown> | null)?.total ?? null,
       committedTonight:
         (presence as Record<string, unknown> | null)?.committedTonight ?? null,

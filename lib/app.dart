@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'core/route_observer.dart';
 import 'core/services/age_verification_service.dart';
+import 'core/services/app_presence_service.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/cloud_vision_moderation_service.dart';
 import 'core/services/push_notification_service.dart';
@@ -167,6 +168,15 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
     // nothing about signing in should wait on a notification permission
     // prompt resolving.
     unawaited(context.read<PushNotificationService>().register());
+    // "App open" presence for the admin dashboard - foreground-only heartbeat,
+    // no background work, negligible cost. See AppPresenceService.
+    AppPresenceService.instance.start(widget.uid);
+  }
+
+  @override
+  void dispose() {
+    AppPresenceService.instance.stop();
+    super.dispose();
   }
 
   @override

@@ -618,9 +618,10 @@ class _MatchScreenState extends State<MatchScreen>
   /// exactly when its host-ness matches the flip. Identical maths both sides.
   bool get _iGoFirst => _isHost != null && (_isHost! == _hostGoesFirst());
 
-  /// HOST: the opening warmup beat, then open the chess-clock engine and drive
-  /// it. The warmup is a fixed shared beat (both mics open) inside the recorded
-  /// channel - pre-fight banter/staredown, captured and shown to spectators.
+  /// HOST: the opening countdown beat, then open the chess-clock engine and
+  /// drive it. The warmup is a fixed shared MUTED countdown inside the recorded
+  /// channel - a staredown that reveals who goes first, captured and shown to
+  /// spectators, with no forced small talk.
   Future<void> _runHostSequence() async {
     if (_warmupSeconds > 0 && !_violationEnded) {
       await _videoCallService.sendMatchMessage(
@@ -787,16 +788,20 @@ class _MatchScreenState extends State<MatchScreen>
     }
   }
 
-  /// Enter the warmup phase (both mics open) with a cosmetic countdown. Shared
-  /// by the host (who then waits it out) and the guest (mirroring the host's
-  /// broadcast); the first ms_state afterwards flips both into the battle.
+  /// Enter the warmup phase: a short MUTED countdown to the first turn, NOT
+  /// open-mic banter. Mics stay muted the whole time (so two strangers aren't
+  /// forced into awkward small talk and nobody talks over anyone), and the
+  /// chess-clock engine opens the first-floor player's mic the instant the
+  /// battle begins. Shared by the host (who then waits it out) and the guest
+  /// (mirroring the host's broadcast); the first ms_state flips both into the
+  /// battle.
   void _enterWarmup(int seconds) {
     if (!mounted || _phase == _Phase.battle || _phase == _Phase.verdict) return;
     setState(() {
       _phase = _Phase.warmup;
       _secondsRemaining = seconds;
     });
-    _videoCallService.muteLocalAudio(false);
+    _videoCallService.muteLocalAudio(true);
     _startWarmupTicker(seconds);
     // Load both players' ability counts now so the Skip Warm-Up button can
     // appear during the warmup (the engine reuses this cache at battle start).
@@ -1336,66 +1341,62 @@ class _MatchScreenState extends State<MatchScreen>
     });
   }
 
-  /// The Warmup Round banner. Deliberately NON-blocking (a top pill, not a
-  /// full-screen blackout like the countdown) - both players are live on
-  /// camera for the staredown/banter, so blacking the video out would
-  /// defeat the point. States that both mics are open, since that is the one
-  /// beat where that is true.
+  /// The pre-battle countdown: a big CENTERED timer over the live video (both
+  /// faces stay visible), counting down to the first turn and naming who goes
+  /// first. Mics are MUTED throughout - no forced banter between strangers - so
+  /// the first mic opens exactly when the first turn begins. Replaces the old
+  /// open-mic "warmup" beat, which was awkward for strangers and poor clip
+  /// material.
   Widget _buildWarmupOverlay() {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.local_fire_department,
-                      color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Warmup Round · ${_secondsRemaining}s',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              const Text(
-                'Both mics are open - loosen up',
-                style: TextStyle(color: Colors.white70, fontSize: 13),
-              ),
-              // Who takes the floor first, surfaced during the warmup so that
-              // roaster knows to be ready (coin-flipped, not always the same
-              // player). Only shown once host election has resolved who leads.
-              if (_isHost != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _iGoFirst ? "You're up first" : 'Opponent goes first',
-                  style: TextStyle(
-                    color: _iGoFirst
-                        ? Colors.amberAccent
-                        : Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'GET READY',
+              style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 3),
+            ),
+            const SizedBox(height: 8),
+            // The big countdown number.
+            Text(
+              '$_secondsRemaining',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 76,
+                  fontWeight: FontWeight.w800,
+                  height: 1.0),
+            ),
+            const SizedBox(height: 10),
+            // Who takes the floor first (coin-flipped, not always the same
+            // player). Only shown once host election has resolved who leads.
+            if (_isHost != null)
+              Text(
+                _iGoFirst ? "You're up first" : 'Opponent goes first',
+                style: TextStyle(
+                  color: _iGoFirst ? Colors.amberAccent : Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
-              ],
-              const SizedBox(height: 4),
-              _buildWarmupSkipAbility(),
-              _buildWarmupSkip(),
-            ],
-          ),
+              ),
+            const SizedBox(height: 4),
+            const Text(
+              'Mics open when the first turn starts',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            _buildWarmupSkipAbility(),
+            _buildWarmupSkip(),
+          ],
         ),
       ),
     );
@@ -1429,7 +1430,7 @@ class _MatchScreenState extends State<MatchScreen>
   Widget _buildWarmupSkip() {
     if (_mySkipRequested) {
       return const Text(
-        'Waiting for your opponent to skip…',
+        "You're ready — waiting for your opponent…",
         style: TextStyle(color: Colors.white54, fontSize: 12),
       );
     }
@@ -1446,7 +1447,7 @@ class _MatchScreenState extends State<MatchScreen>
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       label: Text(
-        agreeing ? 'Opponent wants to skip — tap to agree' : 'Skip warm-up',
+        agreeing ? "Opponent's ready — tap to start" : 'Start now',
         style: const TextStyle(fontSize: 12),
       ),
     );

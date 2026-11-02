@@ -19,7 +19,7 @@ class MatchSettings {
     this.roundLengthSeconds = 15,
     this.countdownSeconds = 5,
     this.bioRevealSeconds = 60,
-    this.warmupSeconds = 20,
+    this.warmupSeconds = 15,
     this.chessClock = true,
     this.turnSeconds = 30,
     this.interrupts = 0,

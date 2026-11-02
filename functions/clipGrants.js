@@ -190,13 +190,21 @@ function resolveClipGrant({user, match, uid, source, price, entitlement}) {
  */
 function clipDeliverable(match, nowMs) {
   const blocked = publishBlockedReason(match, nowMs);
+  // An ACTIVE objection always blocks, and refunds - we never hand over a clip
+  // a player has asked not to be posted.
   if (blocked === "participant-objected") {
     return {deliverable: false, reason: "objected", refundable: true};
   }
-  if (blocked === "objection-window-open") {
-    return {deliverable: false, reason: "window-open", refundable: false};
+  // INSTANT OWNER DELIVERY (developer's call, 2026-11-02): the objection WINDOW
+  // no longer defers the owner's own download - a user shouldn't wait for their
+  // own clip. As soon as it's rendered, it's theirs. If the opponent objects
+  // later, we take it down from our servers (a copy already saved can't be
+  // recalled - stated in the Terms). The window still gates PUBLIC posting
+  // (publishHighlight); this is only the private owner download. Any OTHER
+  // block reason still holds.
+  if (blocked && blocked !== "objection-window-open") {
+    return {deliverable: false, reason: blocked, refundable: false};
   }
-  if (blocked) return {deliverable: false, reason: blocked, refundable: false};
   if (match?.highlight?.captioned !== true) {
     return {deliverable: false, reason: "rendering", refundable: false};
   }

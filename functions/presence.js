@@ -27,6 +27,11 @@ const {readEventWindowConfig, upcomingWindowDayKey} = require("./eventWindow");
  * logic uses to refuse to pair against them. */
 const PRESENCE_STALE_MS = STALE_ENTRY_MS;
 
+/** "App open" heartbeats older than this are a closed or crashed app and
+ * aren't counted. The client beats every 60s, so 2 minutes tolerates one
+ * missed beat. */
+const APP_OPEN_STALE_MS = 2 * 60 * 1000;
+
 /**
  * Counts live queue entries out of a raw per-mode queue snapshot.
  *
@@ -75,6 +80,7 @@ async function publishOnlineCount() {
 
   const counts = countQueue(queuesByMode, Date.now());
   const committed = await countCommitments();
+  const appOpen = await countAppOpen();
 
   // Heartbeat + uptime for the admin dashboard's ONLINE/OFFLINE status. This
   // job runs every minute, so a FRESH heartbeatMs means the backend's
@@ -94,11 +100,39 @@ async function publishOnlineCount() {
   await fdb.collection("stats").doc("presence").set({
     ...counts,
     ...committed,
+    ...appOpen,
     heartbeatMs: now,
     upSinceMs,
     updatedAt: FieldValue.serverTimestamp(),
   });
-  return {...counts, ...committed};
+  return {...counts, ...committed, ...appOpen};
+}
+
+/**
+ * How many people have the app OPEN right now (foregrounded), for the admin
+ * dashboard. DIFFERENT from `total` above, which is only people available to
+ * battle (in a queue or mid-match) - that one drives the honest user-facing
+ * "N roasters online" banner and must stay that way.
+ *
+ * Counts `presence/{uid}` docs heartbeated within the staleness window. The
+ * client beats every 60s while foregrounded and clears its doc on background,
+ * so a 2-minute window tolerates one missed beat while a closed/crashed app
+ * drops out on its own. Aggregation count(), so it stays cheap as the number
+ * grows. Best-effort: a failure returns nothing rather than taking the whole
+ * presence publish down.
+ */
+async function countAppOpen(now = Date.now()) {
+  try {
+    const db = getFirestore();
+    const cutoff = now - APP_OPEN_STALE_MS;
+    const agg = await db.collection("presence")
+        .where("lastSeenMs", ">=", cutoff)
+        .count().get();
+    return {appOpen: agg.data().count};
+  } catch (e) {
+    console.error("countAppOpen failed:", e.message);
+    return {};
+  }
 }
 
 /**
@@ -134,4 +168,7 @@ async function countCommitments(now = new Date()) {
   }
 }
 
-module.exports = {publishOnlineCount, countQueue, countCommitments, PRESENCE_STALE_MS};
+module.exports = {
+  publishOnlineCount, countQueue, countCommitments, countAppOpen,
+  PRESENCE_STALE_MS, APP_OPEN_STALE_MS,
+};

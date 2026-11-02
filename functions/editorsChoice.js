@@ -86,7 +86,32 @@ async function featureBattle(matchId, adminUid, feature) {
       }
     }
   });
-  return {featured: true, clip: !!clipUrl};
+
+  // ONE-TAP FEATURE (developer's call, 2026-11-02): featuring also PUBLISHES
+  // the clip, so a featured card actually plays instead of being a names-only
+  // spotlight. The 24h objection window still applies (Featured is a PUBLIC
+  // surface) - if it isn't closed yet, publishHighlight refuses, the battle
+  // stays a spotlight, and we report why rather than failing the feature.
+  let publish = null;
+  if (!(m.highlight && m.highlight.published === true)) {
+    try {
+      const {publishHighlight} = require("./publishHighlight");
+      const r = await publishHighlight(matchId);
+      const freshClip = clipFromPublicUrls(r.publicUrls);
+      if (freshClip) await featuredRef.set({clipUrl: freshClip}, {merge: true});
+      publish = {published: true};
+    } catch (e) {
+      // Spotlight-only (window open, no render yet, or an objection). The
+      // founder sees the reason; the feature itself stands.
+      publish = {published: false, reason: e.message};
+    }
+  } else {
+    publish = {published: true};
+  }
+  const note = publish.published ?
+    "now playing on Home" :
+    `featured as a spotlight (${publish.reason || "not published yet"})`;
+  return {featured: true, clip: publish.published, publish, note};
 }
 
 /** Publish (or un-publish) a battle's clip, reusing the real publish gate, then

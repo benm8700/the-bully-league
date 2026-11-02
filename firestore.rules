@@ -455,6 +455,16 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // "App open" presence for the ADMIN dashboard's online count - each signed-in
+    // app heartbeats its own doc while foregrounded (see AppPresenceService).
+    // Own-write only (the count reflects distinct accounts and can't be inflated);
+    // the admin dashboard counts it server-side via the Admin SDK, so clients
+    // need no read. Vanity/ephemeral - nothing downstream trusts it.
+    match /presence/{userId} {
+      allow read: if false;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
     // Live crowd reactions on a Main Stage battle. Reactions ONLY go through the
     // castLiveReaction Cloud Function (session/Turnstile, one-per-account, and
     // the emojiCounts increment all need server-side enforcement - emojiCounts

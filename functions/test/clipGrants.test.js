@@ -142,16 +142,15 @@ check("a negative balance can never be spent from", () => {
 });
 
 // -------------------------------------------------------- delivery
-check("THE RULE: nothing is delivered while the objection window is open", () => {
+check("INSTANT OWNER DELIVERY: a captioned clip is deliverable even while the " +
+    "objection window is open (the owner shouldn't wait for their own clip)", () => {
   const open = matchOf({
     completedAt: {toMillis: () => NOW - 60 * 1000},
     voteFinalized: false,
   });
   const d = clipDeliverable(open, NOW);
-  assert.strictEqual(d.deliverable, false);
-  assert.strictEqual(d.reason, "window-open");
-  // Not refundable: nothing has gone wrong, it is simply not time yet.
-  assert.strictEqual(d.refundable, false);
+  assert.strictEqual(d.deliverable, true,
+      "owner delivery no longer waits on the objection window");
 });
 
 check("an objection blocks delivery AND is refundable", () => {

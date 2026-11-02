@@ -15,7 +15,7 @@ import Link from "next/link";
 type Metrics = {
   generatedAt: number;
   users: { total: number | null; subscribers: number | null; banned: number | null; flagged: number | null };
-  online: { total: number | null; committedTonight: number | null };
+  online: { appOpen: number | null; total: number | null; committedTonight: number | null };
   health: { online: boolean; lastBeatMs: number | null; upSinceMs: number | null };
   signups: { last24h: number | null; last7d: number | null };
   battles: { last24h: number | null; last7d: number | null; total: number | null; publishedClips: number | null };
@@ -49,6 +49,7 @@ type BattleItem = {
   completedAtMs: number | null;
   featured: boolean;
   rendered: boolean;
+  captioned: boolean;
   hasClip: boolean;
   clipUrl: string | null;
 };
@@ -237,7 +238,10 @@ export default function AdminPage() {
       setBusy(true);
       setNote(`${label}…`);
       try {
-        const res = await httpsCallable(functions, name)(data);
+        // 5-min client timeout: renderMatchHighlight (captioning) can take ~1min,
+        // well past the 70s httpsCallable default. The quick callables return
+        // immediately regardless.
+        const res = await httpsCallable(functions, name, { timeout: 300000 })(data);
         const d = (res.data ?? {}) as Record<string, unknown>;
         setNote(d.note ? `${label}: done — ${d.note}` : `${label}: done`);
       } catch (e) {
@@ -312,7 +316,8 @@ export default function AdminPage() {
       ) : (
         <>
           <Section title="Live">
-            <Stat label="Online now" value={fmt(metrics.online.total)} />
+            <Stat label="App open now" value={fmt(metrics.online.appOpen)} />
+            <Stat label="Battling now" value={fmt(metrics.online.total)} />
             <Stat label="In tonight" value={fmt(metrics.online.committedTonight)} />
             <Stat label="Battles (24h)" value={fmt(metrics.battles.last24h)} />
             <Stat label="Votes (24h)" value={fmt(metrics.votes.last24h)} />
@@ -759,11 +764,13 @@ function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (n
         Editor&apos;s Choice <span className="text-zinc-500">({featuredCount} featured)</span>
       </h2>
       <p className="mb-2 text-xs text-zinc-600">
-        Two separate actions. <span className="text-green-300">Publish</span> makes
-        a clip public/playable (allowed once the ~24h objection window has closed).{" "}
-        <span className="text-amber-300">Feature</span> spotlights the battle on
-        Home and earns both roasters the ⭐ badge. A featured battle plays its clip
-        only if it&apos;s also published — publish in either order, it stays in sync.
+        Post a <span className="text-zinc-300">captioned reel</span>, not raw footage.
+        If a battle says <span className="text-sky-300">needs captions</span>, hit{" "}
+        <span className="text-sky-300">Render reel</span> first (≈1 min) — then Preview
+        shows the real captioned cut. <span className="text-amber-300">Feature</span>{" "}
+        is one tap: it spotlights the battle on Home, earns both roasters the ⭐ badge,
+        AND publishes the clip so the card plays (the ~24h objection window still applies —
+        if it&apos;s not closed yet, it features as a spotlight until it is).
       </p>
       {items.length === 0 ? (
         <p className="text-xs text-zinc-600">No recent battles.</p>
@@ -777,8 +784,10 @@ function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (n
                 {b.featured && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">⭐ featured</span>}
                 {b.hasClip ? (
                   <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">published</span>
+                ) : b.captioned ? (
+                  <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">captioned reel ✓</span>
                 ) : b.rendered ? (
-                  <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-300">reel ready</span>
+                  <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">needs captions</span>
                 ) : (
                   <span className="rounded bg-zinc-700/40 px-1.5 py-0.5 text-xs text-zinc-500">no reel yet</span>
                 )}
@@ -795,24 +804,29 @@ function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (n
                       {loadingPreview === b.id ? "…" : preview?.id === b.id ? "Hide" : "▶ Preview"}
                     </button>
                   )}
+                  {!b.captioned && !b.hasClip && b.rendered && (
+                    <button disabled={busy} onClick={() => callFn("renderMatchHighlight", { matchId: b.id }, "Rendering captioned reel — give it a minute")} className="rounded bg-sky-600/80 px-2 py-1 text-xs text-white hover:bg-sky-600 disabled:opacity-50">
+                      Render reel
+                    </button>
+                  )}
                   {b.hasClip ? (
                     <button disabled={busy} onClick={() => { if (confirm("Unpublish this clip? It stops playing everywhere it's public (the website feed, any shared link) and both players are notified it came down.")) callFn("publishBattle", { matchId: b.id, published: false }, "Unpublished"); }} className="rounded border border-green-700/60 px-2 py-1 text-xs text-green-300 hover:bg-green-900/20 disabled:opacity-50">
                       Unpublish
                     </button>
-                  ) : b.rendered ? (
-                    <button disabled={busy} onClick={() => callFn("publishBattle", { matchId: b.id, published: true }, "Published")} className="rounded bg-green-600/80 px-2 py-1 text-xs text-white hover:bg-green-600 disabled:opacity-50">
-                      Publish
+                  ) : b.captioned ? (
+                    <button disabled={busy} onClick={() => callFn("publishBattle", { matchId: b.id, published: true }, "Published")} className="rounded border border-green-700/60 px-2 py-1 text-xs text-green-300 hover:bg-green-900/20 disabled:opacity-50">
+                      Publish only
                     </button>
                   ) : null}
                   {b.featured ? (
                     <button disabled={busy} onClick={() => callFn("featureBattle", { matchId: b.id, feature: false }, "Unfeatured")} className="rounded bg-zinc-700/80 px-2 py-1 text-xs text-white hover:bg-zinc-700 disabled:opacity-50">
                       Remove
                     </button>
-                  ) : (
+                  ) : (b.captioned || b.hasClip) ? (
                     <button disabled={busy} onClick={() => callFn("featureBattle", { matchId: b.id, feature: true }, "Featured")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600 disabled:opacity-50">
                       Feature
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </div>
               {preview?.id === b.id && (
