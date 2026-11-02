@@ -1157,9 +1157,15 @@ class _MatchScreenState extends State<MatchScreen>
             ),
         Positioned(
           right: 16,
-          // Lift the self-view above the chess-clock controls during the
-          // battle so it never sits under the Yield button.
-          bottom: inBattle ? 120 : 16,
+          // Self-view at the TOP-RIGHT, not the bottom (2026-11-01, developer's
+          // call). On a phone the camera is at the top, so people instinctively
+          // watching their own picture at the bottom end up looking DOWN and
+          // away from the lens - the classic FaceTime stare. Putting the
+          // self-view up here makes them look UP toward the camera (slightly
+          // off-lens, the way a TV presenter does), which reads far better in
+          // the recorded clip. 72 clears the top chrome (the clock row during
+          // battle, the warmup pill otherwise).
+          top: 72,
           width: 100,
           height: 140,
           child: ClipRRect(

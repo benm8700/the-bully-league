@@ -22,7 +22,10 @@ const PREVIEW_TTL_MS = 6 * 60 * 60 * 1000; // 6h signed-url lifetime
 
 function clipFromPublicUrls(pub) {
   if (!pub) return null;
-  return pub.landscape || pub.vertical || null;
+  // VERTICAL first: the featured card is an in-app (phone) surface, so it wants
+  // the stacked 9:16 cut, not the side-by-side landscape one (which is the
+  // website's shape). Falls back to landscape if only that was rendered.
+  return pub.vertical || pub.landscape || null;
 }
 
 /** The current playable clip url for a match, or null if not published. */

@@ -387,7 +387,12 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
             ),
         Positioned(
           right: 16,
-          bottom: 120,
+          // Self-view at TOP-RIGHT so the performer looks UP toward the camera
+          // (the phone lens is at the top) instead of down at a bottom inset -
+          // the TV-presenter eye line, which reads far better on the recording.
+          // Default everywhere you're on camera (2026-11-01). 72 clears the
+          // top clock row.
+          top: 72,
           width: 100,
           height: 140,
           child: ClipRRect(

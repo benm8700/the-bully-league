@@ -31,6 +31,15 @@ type Metrics = {
   recentBattles: BattleItem[];
   handled: { reports: HandledItem[]; support: HandledItem[]; appeals: HandledItem[] };
   postStudio: { candidates: PostClip[]; posted: PostClip[]; dismissed: PostClip[]; morningPick: PostClip | null };
+  feedback: FeedbackItem[];
+};
+
+type FeedbackItem = {
+  id: string;
+  username: string | null;
+  message: string;
+  battles: number | null;
+  createdAtMs: number | null;
 };
 
 type BattleItem = {
@@ -311,6 +320,7 @@ export default function AdminPage() {
             </div>
           </div>
 
+          <Feedback items={metrics.feedback} />
           <PostStudio metrics={metrics} callFn={callFn} act={act} busy={busy} />
           <EditorsChoice metrics={metrics} callFn={callFn} busy={busy} />
           <Prizes metrics={metrics} act={act} />
@@ -319,6 +329,35 @@ export default function AdminPage() {
         </>
       )}
     </Shell>
+  );
+}
+
+function Feedback({ items }: { items: FeedbackItem[] }) {
+  return (
+    <div className="mb-8">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+        💬 User feedback <span className="text-zinc-500">({items.length})</span>
+      </h2>
+      <p className="mb-2 text-xs text-zinc-600">
+        What players wrote when the in-app &ldquo;how can we make this more fun?&rdquo; prompt popped up — newest first.
+      </p>
+      {items.length === 0 ? (
+        <p className="text-xs text-zinc-600">No feedback yet. It lands here the moment a player sends one.</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((f) => (
+            <div key={f.id} className="rounded-lg border border-pink-500/30 bg-pink-500/[0.06] p-3 text-sm">
+              <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                <span className="font-semibold text-pink-200">{f.username ?? "player"}</span>
+                {f.battles != null && <span>· {f.battles} battles in</span>}
+                {f.createdAtMs != null && <span>· {new Date(f.createdAtMs).toLocaleString()}</span>}
+              </div>
+              <p className="whitespace-pre-wrap text-zinc-100">{f.message}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -256,6 +256,52 @@ async function recentlyHandled(
   });
 }
 
+// ---- User feedback: the "how can we make this more fun" prompt replies ----
+
+export type FeedbackItem = {
+  id: string;
+  username: string | null;
+  message: string;
+  battles: number | null;
+  createdAtMs: number | null;
+};
+
+// The most recent feedback submissions, newest first, with the author's
+// username resolved. Single-field orderBy, so no composite index.
+async function recentFeedback(): Promise<FeedbackItem[]> {
+  const db = getAdminFirestore();
+  const snap = await db
+    .collection("feedback")
+    .orderBy("createdAt", "desc")
+    .limit(40)
+    .get();
+  const rows = snap.docs.map((d) => {
+    const x = d.data();
+    return {
+      id: d.id,
+      uid: String(x.uid ?? ""),
+      message: String(x.message ?? ""),
+      battles: typeof x.battles === "number" ? x.battles : null,
+      createdAtMs: tsToMs(x.createdAt),
+    };
+  });
+  const uids = [...new Set(rows.map((r) => r.uid).filter(Boolean))];
+  const names: Record<string, string> = {};
+  if (uids.length) {
+    const udocs = await db.getAll(...uids.map((u) => db.collection("users").doc(u)));
+    udocs.forEach((d) => {
+      if (d.exists) names[d.id] = String(d.data()?.username ?? "player");
+    });
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    username: names[r.uid] ?? null,
+    message: r.message,
+    battles: r.battles,
+    createdAtMs: r.createdAtMs,
+  }));
+}
+
 // ---- Post Studio: rank the best finalized clips for the founder to post ----
 
 export type PostClip = {
@@ -456,6 +502,7 @@ export async function collectMetrics() {
     handledSupport,
     handledAppeals,
     postStudioData,
+    feedback,
   ] = await Promise.all([
     count(users),
     count(users.where("subscription.active", "==", true)),
@@ -493,6 +540,7 @@ export async function collectMetrics() {
     safe(() => recentlyHandled("supportRequests")),
     safe(() => recentlyHandled("banAppeals")),
     safe(() => postStudioClips()),
+    safe(() => recentFeedback()),
   ]);
 
   return {
@@ -546,5 +594,6 @@ export async function collectMetrics() {
       posted: PostClip[];
       dismissed: PostClip[];
     } | null) ?? { candidates: [], posted: [], dismissed: [] },
+    feedback: (feedback as FeedbackItem[] | null) ?? [],
   };
 }

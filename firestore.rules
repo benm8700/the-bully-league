@@ -692,5 +692,15 @@ service cloud.firestore {
           ['general_question', 'bug_report', 'account_issue', 'other'];
       allow update, delete: if false;
     }
+
+    match /feedback/{feedbackId} {
+      // The "how can we make this more fun" prompt shown after a few battles.
+      // Same console-review pattern as supportRequests: create-only, bound to
+      // the author, never client-readable.
+      allow read: if false;
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.uid;
+      allow update, delete: if false;
+    }
   }
 }

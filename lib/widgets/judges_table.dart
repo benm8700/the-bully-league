@@ -114,6 +114,12 @@ class JudgesTable extends StatelessWidget {
   Widget _gridOf(BuildContext context, List<JudgeSeat> list) {
     if (list.isEmpty) return const SizedBox.shrink();
     final rows = _rowSizes(list.length);
+    // Put the viewer's OWN tile at the top-right of the grid so a judge on
+    // camera looks UP toward their phone's lens (the TV-presenter eye line)
+    // instead of down at a bottom tile - the same self-view default as the
+    // battle screens (2026-11-01). No-op when the viewer is the spotlight
+    // speaker (they're not in this grid) or isn't on the panel.
+    final ordered = _meTopRight(list, rows.first);
     var i = 0;
     final rowWidgets = <Widget>[];
     for (final count in rows) {
@@ -122,7 +128,7 @@ class JudgesTable extends StatelessWidget {
         tiles.add(Expanded(
           child: Padding(
             padding: const EdgeInsets.all(4),
-            child: _seatTile(context, list[i++]),
+            child: _seatTile(context, ordered[i++]),
           ),
         ));
       }
@@ -132,6 +138,20 @@ class JudgesTable extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       child: Column(children: rowWidgets),
     );
+  }
+
+  /// Moves the viewer's own seat to the top-right slot of the grid (the last
+  /// tile of the first row), so their self-view sits at the TV-camera eye line.
+  /// Returns the list unchanged when there is no "me" seat in it.
+  List<JudgeSeat> _meTopRight(List<JudgeSeat> list, int firstRowSize) {
+    final meIdx = list.indexWhere((s) => s.isMe);
+    if (meIdx < 0) return list;
+    final target = (firstRowSize - 1).clamp(0, list.length - 1);
+    if (meIdx == target) return list;
+    final copy = [...list];
+    final me = copy.removeAt(meIdx);
+    copy.insert(target, me);
+    return copy;
   }
 
   /// Tiles per row for a small panel: 1-2 in one row, 3 as 2-over-1, 4 as 2+2.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/badges/badge_popup.dart';
 import '../../widgets/fame_milestone_popup.dart';
+import '../../widgets/feedback_popup.dart';
 import '../../widgets/main_stage_alert_bar.dart';
 import '../../widgets/rank_change_popup.dart';
 import '../../widgets/service_status_banner.dart';
@@ -69,6 +70,9 @@ class _MainShellState extends State<MainShell> {
       if (mounted) await RankChangePopup.maybeShow(context);
       if (mounted) await BadgePopup.maybeShow(context);
       if (mounted) await FameMilestonePopup.maybeShow(context);
+      // Last, and only once ever: after a few real battles, ask how we can
+      // make it more fun. Lowest priority so it never pre-empts a celebration.
+      if (mounted) await FeedbackPopup.maybeShow(context);
     });
   }
 
