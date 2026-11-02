@@ -91,7 +91,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       rankTitle: "Average Joe", rankedMatchesPlayed: 5, wins: 2, losses: 3,
       points: 0, pointsBalance: 0, isAdmin: false, createdAt: Timestamp.now(),
       liveWatchOptIn: optedIn,
-      profile: {introVideoUrl: "https://example.com/probe-intro.mp4"},
+      profile: {introVideoUrl: "https://example.com/probe-intro.mp4", facePhotoUrl: "https://example.com/probe-face.jpg"},
     });
     made.push(u.uid);
     await signIn(u.uid);

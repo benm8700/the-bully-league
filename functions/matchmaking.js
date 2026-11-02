@@ -296,6 +296,17 @@ async function enterQueue(auth, data) {
           "Record your intro video before you battle - your opponent needs " +
           "something to work with.");
     }
+    // MANDATORY face selfie: shows in the bio reveal + directory so the
+    // opponent sees who they're facing. Written only after moderateFacePhoto
+    // approves (safe + a clear face), so its presence IS the approved flag -
+    // same pattern as introVideoUrl.
+    const facePhotoUrl = user.profile && user.profile.facePhotoUrl;
+    if (typeof facePhotoUrl !== "string" || facePhotoUrl.length === 0) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Add a selfie before you battle - your opponent sees who they're " +
+          "facing.");
+    }
   }
 
   // The ranked unlock gate is GONE - Ranked is available immediately. The

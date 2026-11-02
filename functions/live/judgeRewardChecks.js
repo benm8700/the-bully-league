@@ -90,7 +90,7 @@ async function makeUser(uid) {
     // enterQueue refuses any account without an approved intro video (gate
     // added 2026-08-31), so a queueing probe needs one - same placeholder
     // coreLoop uses.
-    profile: {introVideoUrl: "https://example.com/probe-intro.mp4"},
+    profile: {introVideoUrl: "https://example.com/probe-intro.mp4", facePhotoUrl: "https://example.com/probe-face.jpg"},
     createdAt: Timestamp.now(),
   });
 }

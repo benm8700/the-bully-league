@@ -99,6 +99,37 @@ async function moderateImage(storagePath) {
 }
 
 /**
+ * Moderates a mandatory profile SELFIE: the same strict nudity gate as any
+ * photo, AND a face check so it is actually a clear photo of the person's face
+ * (it shows in the bio reveal + player directory when battling). Reuses the
+ * same Cloud Vision client - no new dependency - for both the SafeSearch and
+ * the face detection. Returns {approved} / {approved:false, reason}.
+ */
+async function moderateFacePhoto(storagePath) {
+  const bucket = getStorage().bucket();
+  const gcsUri = `gs://${bucket.name}/${storagePath}`;
+
+  // 1. Nudity / explicit content (fails CLOSED on an unreadable image).
+  const [ss] = await client.safeSearchDetection(gcsUri);
+  const nudity = prepublishVerdict(ss.safeSearchAnnotation,
+      "Could not read this photo - try taking it again.");
+  if (!nudity.approved) return nudity;
+
+  // 2. Must contain a clear face.
+  const [fd] = await client.faceDetection(gcsUri);
+  const faces = (fd.faceAnnotations || []).filter(
+      (f) => (f.detectionConfidence ?? 0) >= 0.5);
+  if (faces.length === 0) {
+    return {
+      approved: false,
+      reason: "We couldn't see your face clearly. Center your face, find good " +
+        "light, and try again.",
+    };
+  }
+  return {approved: true};
+}
+
+/**
  * Same as moderateImage, but for image bytes that were never uploaded to
  * Storage - used for live match video frames (Build Order step 9a's
  * live-video half). Frames are sampled every few seconds client-side
@@ -198,7 +229,8 @@ async function moderateVideo(storagePath) {
 }
 
 module.exports = {
-  moderateImage, moderateImageContent, moderateVideo, moderateFrameStrict,
+  moderateImage, moderateFacePhoto, moderateImageContent, moderateVideo,
+  moderateFrameStrict,
   // Exported for the pure regression test (functions/test/visualModeration.test.js).
   verdictFromSafeSearch, liveFrameVerdict, prepublishVerdict,
 };

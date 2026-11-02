@@ -5,7 +5,7 @@ const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {finalizeMatch, VOTE_WINDOW_MS, voteWindowEndMs} = require("./matchFinalization");
-const {moderateImage, moderateImageContent, moderateVideo} =
+const {moderateImage, moderateFacePhoto, moderateImageContent, moderateVideo} =
   require("./visualModeration");
 const {generateToken, AGORA_APP_ID} = require("./agoraToken");
 const {onVoteCast} = require("./voteCount");
@@ -867,7 +867,10 @@ exports.moderatePhoto = onCall(async (request) => {
   if (!storagePath.startsWith(`profile_photos/${request.auth.uid}/`)) {
     throw new HttpsError("permission-denied", "Can only moderate your own photos.");
   }
-  return moderateImage(storagePath);
+  // requireFace=true for the mandatory profile selfie: also checks a clear face
+  // is present, not just that it's safe.
+  return request.data?.requireFace === true ?
+    moderateFacePhoto(storagePath) : moderateImage(storagePath);
 });
 
 /**

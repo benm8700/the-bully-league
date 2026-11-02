@@ -75,7 +75,7 @@ const check = (n, ok, d = "") => {
       username: name, accountStatus: "active", rating,
       rankTitle: "Average Joe", rankedMatchesPlayed: 5, wins: 2, losses: 3,
       points: 0, pointsBalance: 0, isAdmin: false, createdAt: Timestamp.now(),
-      profile: {introVideoUrl: "https://example.com/intro.mp4"},
+      profile: {introVideoUrl: "https://example.com/intro.mp4", facePhotoUrl: "https://example.com/probe-face.jpg"},
       liveWatchOptIn: false,
     });
     uids.push(u.uid);

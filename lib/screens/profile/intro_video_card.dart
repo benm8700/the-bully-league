@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/services/visual_moderation_service.dart';
 import '../../widgets/looping_video.dart';
+import 'selfie_card.dart';
 
 /// The MANDATORY 60-second "tell me about yourself" intro video (User
 /// Profile System). This is the opponent's ammo, studied on a loop during
@@ -87,6 +88,7 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
       _status = null;
     });
 
+    bool saved = false;
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final path =
         'profile_videos/$uid/intro_${DateTime.now().millisecondsSinceEpoch}.mp4';
@@ -122,6 +124,7 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
         } catch (_) {}
       }
 
+      saved = true;
       if (mounted) {
         setState(() {
           _videoUrl = url;
@@ -133,6 +136,59 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+
+    // ONE-STEP FEEL: the moment the intro is saved, nudge straight into the
+    // quick selfie if they don't have one yet - so the two required steps feel
+    // like one flow, not two things to hunt for.
+    if (saved && mounted) await _promptSelfieIfNeeded();
+  }
+
+  Future<void> _promptSelfieIfNeeded() async {
+    String? face;
+    try {
+      final snap = await _userRef.get();
+      face = (snap.data()?['profile'] as Map<String, dynamic>?)?['facePhotoUrl']
+          as String?;
+    } catch (_) {
+      return;
+    }
+    if ((face != null && face.isNotEmpty) || !mounted) return;
+
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('One more quick thing'),
+        content: const Text(
+            'Intro saved. Now a quick selfie so your opponent can see who '
+            'they\'re facing — takes a few seconds.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Take selfie'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+
+    setState(() {
+      _busy = true;
+      _status = null;
+    });
+    final result = await SelfieCard.capture(context);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (result.ok) {
+        _status = 'Intro + selfie saved. You\'re ready to battle.';
+      } else if (!result.cancelled) {
+        _status = result.reason;
+      }
+    });
   }
 
   @override

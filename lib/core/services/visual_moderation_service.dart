@@ -23,4 +23,10 @@ abstract class VisualModerationService {
   /// The server samples frames with ffmpeg and runs SafeSearch on each -
   /// the mandatory "tell me about yourself" video (User Profile System).
   Future<String?> checkVideo(String storagePath);
+
+  /// Returns null if the already-uploaded SELFIE at [storagePath] passes - it
+  /// must be safe AND contain a clear face (the mandatory profile face photo,
+  /// shown in the bio reveal + directory when battling). A human-readable
+  /// rejection reason otherwise.
+  Future<String?> checkFacePhoto(String storagePath);
 }

@@ -36,6 +36,16 @@ class CloudVisionModerationService implements VisualModerationService {
     return _reasonFromResult(result.data);
   }
 
+  @override
+  Future<String?> checkFacePhoto(String storagePath) async {
+    final callable = FirebaseFunctions.instance.httpsCallable('moderatePhoto');
+    final result = await callable.call<Map<String, dynamic>>({
+      'storagePath': storagePath,
+      'requireFace': true,
+    });
+    return _reasonFromResult(result.data);
+  }
+
   String? _reasonFromResult(Map<String, dynamic> data) {
     final approved = data['approved'] as bool? ?? false;
     if (approved) return null;

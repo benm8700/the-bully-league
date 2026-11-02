@@ -410,6 +410,9 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
   Widget _buildRevealUi() {
     final profile = (_opponent?['profile'] as Map?)?.cast<String, dynamic>();
     final username = _opponent?['username'] as String? ?? 'Your opponent';
+    final photos = profile?['photoUrls'];
+    final facePhoto = (profile?['facePhotoUrl'] as String?) ??
+        (photos is List && photos.isNotEmpty ? photos.first as String? : null);
 
     return Column(
       children: [
@@ -420,6 +423,21 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Who you're facing: the opponent's selfie.
+                if (facePhoto != null && facePhoto.isNotEmpty) ...[
+                  Center(
+                    child: ClipOval(
+                      child: Image.network(
+                        facePhoto,
+                        width: 96,
+                        height: 96,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Text(
                   username,
                   style: Theme.of(context).textTheme.headlineMedium,

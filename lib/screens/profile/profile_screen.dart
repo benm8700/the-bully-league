@@ -24,6 +24,7 @@ import '../account/delete_account_screen.dart';
 import 'emoji_scrub_sheet.dart';
 import 'form_card.dart';
 import 'intro_video_card.dart';
+import 'selfie_card.dart';
 
 const int kRequiredPhotoCount = 5;
 
@@ -405,6 +406,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       // scrolled to.
                       const IntroVideoCard(),
                       const SizedBox(height: 24),
+                      const SelfieCard(),
+                      const SizedBox(height: 24),
                     ],
                     // The player's actual username as a heading, read-only
                     // (developer's call, 2026-09-14): the top of a profile is
@@ -478,6 +481,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       // (enforced in enterQueue), and it is the ammo the
                       // opponent actually studies pre-match.
                       const IntroVideoCard(),
+                      const SizedBox(height: 24),
+                      const SelfieCard(),
                       const SizedBox(height: 24),
                     ],
                     // States what is TRUE today rather than the eventual

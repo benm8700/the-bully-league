@@ -88,7 +88,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       // Ranked/tournament queueing requires an approved intro video (its
       // presence IS the approved flag). Give probe accounts one so the core
       // loop can still exercise the queue past that gate.
-      profile: {introVideoUrl: "https://example.com/probe-intro.mp4"},
+      profile: {introVideoUrl: "https://example.com/probe-intro.mp4", facePhotoUrl: "https://example.com/probe-face.jpg"},
     }, extra));
     made.push(u.uid);
     await signIn(u.uid);
