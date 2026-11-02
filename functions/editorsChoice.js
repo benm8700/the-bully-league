@@ -40,10 +40,19 @@ async function featureBattle(matchId, adminUid, feature) {
   const db = getFirestore();
   const featuredRef = db.collection("featured").doc(matchId);
   if (feature === false) {
-    // Un-feature: remove from the spotlight. Keeps the clip published (that is a
-    // separate decision) and the performers' badge (being picked happened).
+    // "Remove" from the showcase. Publish and Feature are MERGED into one
+    // "Showcase" action (developer's call, 2026-11-02), so removing takes it
+    // DOWN everywhere: off the Home spotlight AND unpublished (the public link
+    // stops working - a real takedown). The performers' ⭐ badge is kept (being
+    // picked already happened).
     await featuredRef.delete();
-    return {featured: false};
+    try {
+      const {unpublishHighlight} = require("./publishHighlight");
+      await unpublishHighlight(matchId);
+    } catch (e) {
+      console.error("showcase-remove unpublish failed:", e.message);
+    }
+    return {featured: false, published: false, note: "removed everywhere"};
   }
 
   const snap = await db.collection("matches").doc(matchId).get();

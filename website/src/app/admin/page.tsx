@@ -634,7 +634,7 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
         <span className="rounded bg-zinc-800/60 px-1.5 py-0.5 text-xs text-zinc-400">👍 {c.votes}</span>
         <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-xs text-orange-300">🔥 {c.positiveEmoji}</span>
         {c.published ? (
-          <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">on site</span>
+          <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">⭐ showcased</span>
         ) : (
           <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-300">reel ready</span>
         )}
@@ -661,8 +661,8 @@ function PostStudio({ metrics, callFn, act, busy }: { metrics: Metrics; callFn: 
             </>
           )}
           {c.consent === "ok" && !c.published && c.rendered && (
-            <button disabled={busy} onClick={() => callFn("publishBattle", { matchId: c.id, published: true }, "Published")} className="rounded bg-green-600/80 px-2 py-1 text-xs text-white hover:bg-green-600 disabled:opacity-50">
-              Publish to site
+            <button disabled={busy} onClick={() => callFn("featureBattle", { matchId: c.id, feature: true }, "Showcased")} className="rounded bg-green-600/80 px-2 py-1 text-xs text-white hover:bg-green-600 disabled:opacity-50" title="Make it public on your site + spotlight on Home (not your socials)">
+              Showcase
             </button>
           )}
         </div>
@@ -831,16 +831,18 @@ function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (n
   return (
     <div className="mb-8">
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
-        Editor&apos;s Choice <span className="text-zinc-500">({featuredCount} featured)</span>
+        Editor&apos;s Choice <span className="text-zinc-500">({featuredCount} showcased)</span>
       </h2>
       <p className="mb-2 text-xs text-zinc-600">
-        Post a <span className="text-zinc-300">captioned reel</span>, not raw footage.
+        Showcase a <span className="text-zinc-300">captioned reel</span>, not raw footage.
         If a battle says <span className="text-sky-300">needs captions</span>, hit{" "}
-        <span className="text-sky-300">Render reel</span> first (≈1 min) — then Preview
-        shows the real captioned cut. <span className="text-amber-300">Feature</span>{" "}
-        is one tap: it spotlights the battle on Home, earns both roasters the ⭐ badge,
-        AND publishes the clip so the card plays (the ~24h objection window still applies —
-        if it&apos;s not closed yet, it features as a spotlight until it is).
+        <span className="text-sky-300">Render reel</span> first (≈1 min) — then Preview shows
+        the real cut. <span className="text-amber-300">Showcase</span> is one tap: it makes the
+        clip <span className="text-zinc-300">public</span> (plays on the website + any link) AND
+        spotlights it on Home, and earns both roasters the ⭐ badge.{" "}
+        <span className="text-zinc-300">Remove</span> takes it down everywhere. (The ~24h objection
+        window still applies.) This never posts to your socials — that&apos;s a separate manual
+        step in Post Studio.
       </p>
       {items.length === 0 ? (
         <p className="text-xs text-zinc-600">No recent battles.</p>
@@ -852,11 +854,12 @@ function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (n
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-white">{b.player1Name} vs {b.player2Name}</span>
                 <span className="font-mono text-xs text-zinc-600">#{b.id.slice(-6)}</span>
-                {b.featured && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">⭐ featured</span>}
-                {b.hasClip ? (
-                  <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">published</span>
+                {b.featured ? (
+                  <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">⭐ showcased</span>
+                ) : b.hasClip ? (
+                  <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">public</span>
                 ) : b.captioned ? (
-                  <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">captioned reel ✓</span>
+                  <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">ready to showcase</span>
                 ) : b.rendered ? (
                   <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">needs captions</span>
                 ) : (
@@ -880,22 +883,13 @@ function EditorsChoice({ metrics, callFn, busy }: { metrics: Metrics; callFn: (n
                       Render reel
                     </button>
                   )}
-                  {b.hasClip ? (
-                    <button disabled={busy} onClick={() => { if (confirm("Unpublish this clip? It stops playing everywhere it's public (the website feed, any shared link) and both players are notified it came down.")) callFn("publishBattle", { matchId: b.id, published: false }, "Unpublished"); }} className="rounded border border-green-700/60 px-2 py-1 text-xs text-green-300 hover:bg-green-900/20 disabled:opacity-50">
-                      Unpublish
-                    </button>
-                  ) : b.captioned ? (
-                    <button disabled={busy} onClick={() => callFn("publishBattle", { matchId: b.id, published: true }, "Published")} className="rounded border border-green-700/60 px-2 py-1 text-xs text-green-300 hover:bg-green-900/20 disabled:opacity-50">
-                      Publish only
-                    </button>
-                  ) : null}
-                  {b.featured ? (
-                    <button disabled={busy} onClick={() => callFn("featureBattle", { matchId: b.id, feature: false }, "Unfeatured")} className="rounded bg-zinc-700/80 px-2 py-1 text-xs text-white hover:bg-zinc-700 disabled:opacity-50">
+                  {(b.featured || b.hasClip) ? (
+                    <button disabled={busy} onClick={() => { if (confirm("Remove this from the showcase? It comes off the Home spotlight AND stops playing everywhere it's public (the website feed, any shared link), and both players are notified it came down.")) callFn("featureBattle", { matchId: b.id, feature: false }, "Removed"); }} className="rounded bg-zinc-700/80 px-2 py-1 text-xs text-white hover:bg-zinc-700 disabled:opacity-50">
                       Remove
                     </button>
-                  ) : (b.captioned || b.hasClip) ? (
-                    <button disabled={busy} onClick={() => callFn("featureBattle", { matchId: b.id, feature: true }, "Featured")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600 disabled:opacity-50">
-                      Feature
+                  ) : b.captioned ? (
+                    <button disabled={busy} onClick={() => callFn("featureBattle", { matchId: b.id, feature: true }, "Showcased")} className="rounded bg-amber-600/80 px-2 py-1 text-xs text-white hover:bg-amber-600 disabled:opacity-50">
+                      Showcase
                     </button>
                   ) : null}
                 </div>
