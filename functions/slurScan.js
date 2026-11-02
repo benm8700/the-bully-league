@@ -21,8 +21,8 @@
 // various endings are all caught (nigg -> nigger/nigga/niggah; fagg -> faggot;
 // retard -> retarded). These stems are never the start of an ordinary word.
 const PREFIX_SLURS = [
-  "nigg", "fagg", "sandnigg", "jiggaboo", "porchmonkey",
-  "tarbaby", "wigger", "retard",
+  "nigg", "fagg", "sandnigg", "jiggaboo", "porchmonkey", "tarbaby",
+  // Removed at the developer's request (2026-11-02): "wigger", "retard".
 ];
 
 // WHOLE-WORD slurs: must BE the word (or word+s). Used for short ones that could
@@ -30,7 +30,9 @@ const PREFIX_SLURS = [
 // only as a complete transcribed word.
 const WORD_SLURS = [
   "fag", "kike", "chink", "spic", "wetback", "beaner", "gook", "coon",
-  "raghead", "towelhead", "tranny",
+  // Removed at the developer's request (2026-11-02): "raghead", "towelhead",
+  // "tranny" (note: platforms strike aggressively for "tranny" - re-add via the
+  // custom list if that heads-up is wanted).
 ];
 
 const SLUR_STEMS = [...PREFIX_SLURS, ...WORD_SLURS]; // exported for reference

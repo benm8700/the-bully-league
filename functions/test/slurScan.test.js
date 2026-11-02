@@ -36,10 +36,13 @@ check("accepts {text} word objects (the transcript shape)", () => {
 
 // --- what it must NOT catch: ordinary words + allowed profanity ---
 check("does NOT catch ordinary words", () => {
-  for (const w of ["night", "raccoon", "trigger", "scunthorpe", "assassin",
-    "retarded"]) {
-    // "retarded" DOES hit the ableist stem by design (retard*). Exclude it.
-    if (w === "retarded") continue;
+  for (const w of ["night", "raccoon", "trigger", "scunthorpe", "assassin"]) {
+    assert.strictEqual(scanWordsForSlurs([w]).detected, false, w);
+  }
+});
+check("words removed from the built-in list are NOT flagged", () => {
+  for (const w of ["retard", "retarded", "wigger", "raghead", "towelhead",
+    "tranny"]) {
     assert.strictEqual(scanWordsForSlurs([w]).detected, false, w);
   }
 });
