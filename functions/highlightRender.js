@@ -110,6 +110,22 @@ const WATERMARK_LOGO_ALPHA = 0.9;
 const WATERMARK_LOGO = fssync.existsSync(WATERMARK_LOGO_PATH) ?
   WATERMARK_LOGO_PATH : null;
 
+/**
+ * REACTION-CAM PiP (Layer A of the tournament notable-panelist feature). A
+ * celebrity or the founder reacts to the roast on their own camera, recorded as
+ * an extra publisher in the battle channel; the render overlays it as a small
+ * corner box over the stacked performance so the reaction rides along with the
+ * joke. Volunteer judges are never recorded for clips - only "notable" seats -
+ * so in practice this is 1-2 cams. Sizing is PROVISIONAL and tunable: width as
+ * a fraction of canvas width, a square-ish margin, and a gap when two cams
+ * stack down the right edge. See the reaction-cam design note (build-later:
+ * the LIVE capture that produces these tracks is not built yet; this is the
+ * render side, proven with synthetic footage).
+ */
+const REACTION_PIP_WIDTH_RATIO = 0.26;
+const REACTION_PIP_MARGIN_RATIO = 0.035;
+const REACTION_PIP_GAP_RATIO = 0.02;
+
 /** Where rendered clips live. Deliberately a different prefix from the raw
  * `match_recordings/` footage, because the two have different lifetimes:
  * raw footage is purged after 7 days, a published highlight is kept. */
@@ -266,6 +282,11 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
   const canvas = rendition.canvas;
   const tile = rendition.tile;
   const blurUids = options.blurUids ?? [];
+  // Uids that are reaction cams (notable panelists), not battlers. These are
+  // built as time-aligned tracks like a player's, then overlaid as a corner
+  // PiP instead of being stacked, and their audio is dropped (mic muted).
+  const reactionUids = (options.reactionUids ?? []).map(String);
+  const reactionLabels = [];
   const {uids, segments} = timeline;
   const inputs = [];
   const filters = [];
@@ -336,15 +357,25 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
     // heavily blurred - no face detection needed because each player is their
     // own panel. Their audio is untouched, so the exchange still plays. Only
     // applied to the marketing/post render, never the in-app judging clip.
+    let trackLabel = `[v${uid}]`;
     if (blurUids.includes(uid)) {
       filters.push(`[v${uid}]boxblur=30:2[vb${uid}]`);
-      videoLabels.push(`[vb${uid}]`);
+      trackLabel = `[vb${uid}]`;
+    }
+    // A reaction-cam panelist is NOT stacked - set it aside here and overlay
+    // it as a PiP after the main composite is built (see the reaction block
+    // below), so the celebrity/founder reaction rides in the corner.
+    if (reactionUids.includes(uid)) {
+      reactionLabels.push(trackLabel);
     } else {
-      videoLabels.push(`[v${uid}]`);
+      videoLabels.push(trackLabel);
     }
   }
 
-  for (const seg of segments.filter((s) => s.kind === "audio")) {
+  // Reaction cams never contribute audio: their mic is muted during the battle,
+  // and even if it weren't we would not want a panelist's voice over the roast.
+  for (const seg of segments.filter((s) =>
+    s.kind === "audio" && !reactionUids.includes(s.uid))) {
     const index = inputIndex++;
     inputs.push("-i", path.join(localDir, seg.path.split("/").pop()));
     const delay = Math.round(seg.offsetMs);
@@ -369,8 +400,13 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
   // the shortened video.
   // The brand-logo overlay is the LAST video stage, so the rest of the chain
   // ends at [vbeforelogo] and the overlay produces the final [vout].
+  // When reaction PiPs exist the main composite ends at [vmain] and the PiP
+  // overlays below produce the final [vout]; otherwise the main composite IS
+  // [vout]. So a clip with no reaction cams is byte-identical to before.
+  const hasReactionPip = reactionLabels.length > 0;
+  const mainOut = hasReactionPip ? "[vmain]" : "[vout]";
   const applyLogo = !!options.logoPath;
-  const vLast = applyLogo ? "[vbeforelogo]" : "[vout]";
+  const vLast = applyLogo ? "[vbeforelogo]" : mainOut;
   const trim = options.trimFilters ?? null;
   const stacked = trim ? "[vstacked]" :
     options.subtitlePath ? "[vpainted]" : vLast;
@@ -417,7 +453,29 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
     // bottom). `W`/`H` are the main frame, `w`/`h` the scaled logo.
     filters.push(`[${logoIndex}:v]scale=${logoW}:-1,format=rgba,` +
       `colorchannelmixer=aa=${WATERMARK_LOGO_ALPHA}[wm]`);
-    filters.push(`[vbeforelogo][wm]overlay=W-w-${marginX}:H-h-${marginY}[vout]`);
+    filters.push(`[vbeforelogo][wm]overlay=W-w-${marginX}:H-h-${marginY}${mainOut}`);
+  }
+
+  // REACTION-CAM PiP overlays - the tournament notable-panelist reactions
+  // (celebrity / founder), overlaid LAST so they sit above the watermark and
+  // captions. Each reaction track is scaled to a small top-right box with a
+  // thin border, stacked downward for a second cam. When dead-air trimming is
+  // active the SAME cuts are applied to each reaction track first, so it stays
+  // in sync with the trimmed roast.
+  if (hasReactionPip) {
+    const pipW = Math.round(canvas.width * REACTION_PIP_WIDTH_RATIO);
+    const margin = Math.round(canvas.width * REACTION_PIP_MARGIN_RATIO);
+    const gap = Math.round(canvas.width * REACTION_PIP_GAP_RATIO);
+    let prev = mainOut;
+    for (let i = 0; i < reactionLabels.length; i++) {
+      const scaled = `[rc${i}]`;
+      const trimStep = trim ? `${trim.video},` : "";
+      filters.push(`${reactionLabels[i]}${trimStep}scale=${pipW}:-2,setsar=1,` +
+        `drawbox=0:0:iw:ih:color=white@0.85:t=4${scaled}`);
+      const out = i === reactionLabels.length - 1 ? "[vout]" : `[rcov${i}]`;
+      filters.push(`${prev}${scaled}overlay=W-w-${margin}:${margin}+${i}*(h+${gap})${out}`);
+      prev = out;
+    }
   }
 
   // normalize=0 because the segments do not overlap - normalising would
@@ -794,6 +852,18 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
   );
   if (timeline.segments.length === 0) throw new Error("No usable segments in the recording.");
 
+  // Tournament notable-panelist reaction cams (celebrity / founder) record as
+  // EXTRA publishers in the battle channel under their own uids; the two
+  // battlers are always uids 1 and 2. So any other uid in a TOURNAMENT
+  // recording is a reaction cam, overlaid as a corner PiP rather than stacked.
+  // For every other mode - and for every recording that exists today, which
+  // only has uids 1 and 2 - this is empty and nothing changes. The LIVE capture
+  // that produces these extra tracks is not built yet (Layer C); this is the
+  // render side, so a real tournament recording simply has none for now.
+  const mode = snap.data()?.mode;
+  const reactionUids = mode === "tournament" ?
+    timeline.uids.filter((u) => u !== "1" && u !== "2") : [];
+
   const warnings = [];
   if (timeline.dropped.length > 0) {
     warnings.push(`skipped ${timeline.dropped.length} truncated segment(s) too small to decode`);
@@ -951,6 +1021,7 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
       await runFfmpeg(ffmpegPath, buildFfmpegArgs(timeline, workDir, outputPath, {
         subtitlePath, rendition, trimFilters, logoPath: WATERMARK_LOGO,
         blurUids: isBlur ? blurUids : undefined,
+        reactionUids,
       }));
 
       const destination = isBlur ?
@@ -1253,4 +1324,6 @@ module.exports = {
   CANVAS,
   TILE,
   HIGHLIGHT_PREFIX,
+  REACTION_PIP_WIDTH_RATIO,
+  REACTION_PIP_MARGIN_RATIO,
 };

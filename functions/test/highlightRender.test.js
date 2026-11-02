@@ -465,4 +465,80 @@ test("no logoPath means no overlay, so other callers are unaffected", () => {
   assert.ok(!graph.includes("overlay="), graph);
 });
 
+// --- Reaction-cam PiP (tournament notable-panelist reactions) ------------
+// Builds a graph with the two battlers (uids 1,2) plus one or more reaction
+// cams. A reaction cam is a time-aligned track like a player's, but overlaid
+// as a corner PiP instead of stacked, and its audio is dropped (mic muted).
+
+function reactArgs(reactionUids, extra = {}) {
+  const paths = [
+    seg("1", "video", "20260813234113076"),
+    seg("1", "audio", "20260813234113076"),
+    seg("2", "video", "20260813234113076"),
+    seg("2", "audio", "20260813234115076"),
+  ];
+  for (const u of reactionUids) {
+    paths.push(seg(u, "video", "20260813234113076"));
+    paths.push(seg(u, "audio", "20260813234113076"));
+  }
+  return buildFfmpegArgs(buildTimeline(paths), "/tmp/work", "/tmp/out.mp4",
+      {logoPath: "/tmp/wm.png", reactionUids, ...extra});
+}
+
+test("a reaction cam is overlaid as a corner PiP, not stacked", () => {
+  const {graph} = labelsOf(reactArgs(["3"]));
+  // The two battlers stack; the reaction cam is NOT one of the stack inputs.
+  assert.ok(/vstack=inputs=2/.test(graph), `stack should hold only the 2 battlers: ${graph}`);
+  assert.ok(!/inputs=3/.test(graph), "the reaction cam must not be stacked");
+  // It is scaled small, bordered, and overlaid top-right as the final [vout].
+  assert.ok(/scale=\d+:-2,setsar=1,drawbox=/.test(graph), `no PiP scale/border: ${graph}`);
+  assert.ok(/overlay=W-w-\d+:\d+\+0\*\(h\+\d+\)\[vout\]/.test(graph),
+      `reaction PiP not overlaid top-right as final [vout]: ${graph}`);
+});
+
+test("a reaction cam contributes no audio (mic muted during the battle)", () => {
+  const {graph} = labelsOf(reactArgs(["3"]));
+  assert.ok(/amix=inputs=2/.test(graph),
+      `only the 2 battlers' audio should be mixed: ${graph}`);
+});
+
+test("the reaction-PiP graph is fully connected and ends at [vout]", () => {
+  // Same class of bug as the watermark/trim wiring: a mis-wired overlay label
+  // yields a graph ffmpeg rejects, with no symptom until a render fails.
+  const {produced, consumed} = labelsOf(reactArgs(["3"]));
+  assert.ok(produced.has("vout"), "nothing produces [vout]");
+  assert.ok(produced.has("vmain"),
+      "the main composite should end at [vmain] when a PiP is added");
+  for (const label of consumed) {
+    if (/^\d+:[av]$/.test(label)) continue; // a real input stream
+    assert.ok(produced.has(label), `[${label}] is consumed but never produced`);
+  }
+});
+
+test("two reaction cams stack down the right edge with distinct overlays", () => {
+  const {graph, produced} = labelsOf(reactArgs(["3", "4"]));
+  assert.ok(produced.has("rc0") && produced.has("rc1"), "both reaction cams scaled");
+  assert.ok(produced.has("rcov0"), "the first overlay is an intermediate label");
+  assert.ok(produced.has("vout"), "the second overlay produces [vout]");
+  assert.ok(/overlay=W-w-\d+:\d+\+1\*\(h\+\d+\)\[vout\]/.test(graph),
+      `second cam not offset below the first: ${graph}`);
+});
+
+test("no reaction cams leaves the graph unchanged - no PiP, [vout] direct", () => {
+  const {graph, produced} = labelsOf(reactArgs([]));
+  assert.ok(!/\[rc\d/.test(graph), "no reaction labels when none are requested");
+  assert.ok(!produced.has("vmain"),
+      "the composite should be [vout] directly when there is no PiP");
+  assert.ok(produced.has("vout"));
+});
+
+test("dead-air trimming is applied to the reaction track too, to keep sync", () => {
+  // Burning the PiP at its original timing onto a trimmed roast would drift it
+  // out of sync, so the same cuts are applied to the reaction track.
+  const {graph} = labelsOf(reactArgs(["3"], {trimFilters: TRIM, subtitlePath: "/tmp/c.ass"}));
+  const reactionStage = graph.split(";").find((s) => s.includes("drawbox="));
+  assert.ok(reactionStage && /select='between/.test(reactionStage),
+      `reaction track not trimmed in sync with the roast: ${reactionStage}`);
+});
+
 console.log(`highlightRender: ${passed} checks passed`);
