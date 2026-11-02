@@ -293,8 +293,8 @@ async function enterQueue(auth, data) {
     if (typeof introVideoUrl !== "string" || introVideoUrl.length === 0) {
       throw new HttpsError(
           "failed-precondition",
-          "Record your intro video before you battle - your opponent needs " +
-          "something to work with.");
+          "The Bully League requires an intro video and selfie before " +
+          "participating in a public battle.");
     }
     // MANDATORY face selfie: shows in the bio reveal + directory so the
     // opponent sees who they're facing. Written only after moderateFacePhoto
@@ -304,8 +304,8 @@ async function enterQueue(auth, data) {
     if (typeof facePhotoUrl !== "string" || facePhotoUrl.length === 0) {
       throw new HttpsError(
           "failed-precondition",
-          "Add a selfie before you battle - your opponent sees who they're " +
-          "facing.");
+          "The Bully League requires an intro video and selfie before " +
+          "participating in a public battle.");
     }
   }
 
