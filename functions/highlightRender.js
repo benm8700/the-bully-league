@@ -1165,7 +1165,22 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
       // app's marketing accounts, where TikTok/IG/YT would strike the account.
       // FieldValue.delete() clears a stale flag when a re-render comes back clean.
       const {scanWordsForSlurs} = require("./slurScan");
-      const slur = scanWordsForSlurs(transcript.words);
+      // The founder's own flagged-words database (editable in /admin or the
+      // Firebase console). extraWords ADD to the built-in slur list;
+      // disableBuiltin:true uses ONLY the founder's list. Read at render time so
+      // the list changes with no code change. Best-effort - a missing/unreadable
+      // config just falls back to the built-in list.
+      let modCfg = {};
+      try {
+        modCfg = (await db.collection("config").doc("moderationWords").get())
+            .data() || {};
+      } catch (_) {
+        // use built-in list
+      }
+      const slur = scanWordsForSlurs(transcript.words, {
+        extraWords: Array.isArray(modCfg.extraWords) ? modCfg.extraWords : [],
+        disableBuiltin: modCfg.disableBuiltin === true,
+      });
       await matchRef.set({
         highlight: {
           renditions: renditionMerge,

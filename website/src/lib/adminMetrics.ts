@@ -512,6 +512,7 @@ export async function collectMetrics() {
     presence,
     tournamentCfg,
     monetizationCfg,
+    moderationWordsCfg,
     reports,
     support,
     appeals,
@@ -547,6 +548,9 @@ export async function collectMetrics() {
     ),
     safe(async () =>
       (await db.collection("config").doc("monetization").get()).data(),
+    ),
+    safe(async () =>
+      (await db.collection("config").doc("moderationWords").get()).data(),
     ),
     safe(() => recent("reports")),
     // Support/bug reports write status "open", NOT "pending" - querying
@@ -600,6 +604,16 @@ export async function collectMetrics() {
         (tournamentCfg as Record<string, unknown> | null)?.enabled === true,
       monetizationEnabled:
         (monetizationCfg as Record<string, unknown> | null)?.enabled === true,
+    },
+    moderationWords: {
+      extraWords: Array.isArray(
+        (moderationWordsCfg as Record<string, unknown> | null)?.extraWords,
+      )
+        ? ((moderationWordsCfg as Record<string, unknown>).extraWords as string[])
+        : [],
+      disableBuiltin:
+        (moderationWordsCfg as Record<string, unknown> | null)?.disableBuiltin ===
+        true,
     },
     queues: {
       reports: (reports as QueueItem[] | null) ?? [],

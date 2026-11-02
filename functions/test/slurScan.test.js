@@ -59,4 +59,27 @@ check("a clean transcript is clean", () => {
       false);
 });
 
+// --- shows the ACTUAL word said ---
+check("reports the actual spoken word, not the stem", () => {
+  assert.deepStrictEqual(scanWordsForSlurs(["retarded"]).terms, ["retarded"]);
+  assert.deepStrictEqual(scanWordsForSlurs(["Nigga,"]).terms, ["nigga"]);
+});
+
+// --- founder's own database of flagged words ---
+check("extraWords adds to the flagged list", () => {
+  assert.strictEqual(scanWordsForSlurs(["pineapple"]).detected, false);
+  const r = scanWordsForSlurs(["pineapple"], {extraWords: ["pineapple"]});
+  assert.strictEqual(r.detected, true);
+  assert.deepStrictEqual(r.terms, ["pineapple"]);
+});
+check("extraWords still flags the built-in slurs too", () => {
+  const r = scanWordsForSlurs(["nigger", "pineapple"], {extraWords: ["pineapple"]});
+  assert.strictEqual(r.terms.length, 2);
+});
+check("disableBuiltin uses ONLY the founder's list", () => {
+  const r = scanWordsForSlurs(["nigger", "pineapple"],
+      {extraWords: ["pineapple"], disableBuiltin: true});
+  assert.deepStrictEqual(r.terms, ["pineapple"]); // built-in n-word NOT flagged
+});
+
 console.log(`\n${passed} checks passed.`);

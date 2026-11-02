@@ -22,6 +22,7 @@ type Metrics = {
   votes: { last24h: number | null };
   moderation: { reportsPending: number | null; supportOpen: number | null; banAppeals: number | null };
   config: { tournamentEnabled: boolean; monetizationEnabled: boolean };
+  moderationWords: { extraWords: string[]; disableBuiltin: boolean };
   queues: {
     reports: QueueItem[];
     support: QueueItem[];
@@ -362,6 +363,7 @@ export default function AdminPage() {
             </div>
           </div>
 
+          <FlaggedWords metrics={metrics} act={act} />
           <Feedback items={metrics.feedback} />
           <PostStudio metrics={metrics} callFn={callFn} act={act} busy={busy} />
           <EditorsChoice metrics={metrics} callFn={callFn} busy={busy} />
@@ -525,6 +527,51 @@ function SlurWarning({ terms }: { terms: string[] }) {
         YouTube. It can get the account struck or banned. (In-app is fine; this
         is a posting warning only.)
       </span>
+    </div>
+  );
+}
+
+// The founder's OWN editable database of flagged words, added to the built-in
+// slur list. Posting-side warning only - never blocks a battle or a player's
+// own clip.
+function FlaggedWords({ metrics, act }: { metrics: Metrics; act: (p: Record<string, unknown>, l: string) => void }) {
+  const [text, setText] = useState(metrics.moderationWords.extraWords.join("\n"));
+  const [only, setOnly] = useState(metrics.moderationWords.disableBuiltin);
+  const words = [
+    ...new Set(text.split(/[\n,]+/).map((w) => w.trim().toLowerCase()).filter(Boolean)),
+  ];
+  return (
+    <div className="mb-8">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+        🚩 Flagged words <span className="text-zinc-500">(your database)</span>
+      </h2>
+      <p className="mb-2 text-xs text-zinc-600">
+        Your own list of words to flag, <span className="text-zinc-400">added to</span> the built-in hate-slur list.
+        This is a <span className="text-zinc-400">posting warning only</span> — it never blocks a battle or a player&apos;s own clip.
+        One word per line (or comma-separated).
+      </p>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={5}
+        placeholder={"e.g.\nmybrandword\nanother phrase"}
+        className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 font-mono text-sm text-white placeholder:text-zinc-600"
+      />
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-xs text-zinc-400">
+          <input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} />
+          Use ONLY my list (ignore the built-in slur list)
+        </label>
+        <button
+          onClick={() => act({ type: "setModerationWords", words, disableBuiltin: only }, "Flagged words saved")}
+          className="rounded bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+        >
+          Save ({words.length})
+        </button>
+      </div>
+      <p className="mt-1 text-xs text-zinc-600">
+        Changes apply to clips rendered after saving — hit <span className="text-sky-300">Render reel</span> on a clip to re-check it with the new list.
+      </p>
     </div>
   );
 }

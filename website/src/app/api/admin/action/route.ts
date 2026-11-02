@@ -111,6 +111,27 @@ export async function POST(request: Request) {
         return Response.json({ ok: true, doc, enabled });
       }
 
+      case "setModerationWords": {
+        // The founder's own database of flagged words (posting-side slur warning).
+        const raw = Array.isArray(body.words) ? body.words : [];
+        const words = [
+          ...new Set(
+            raw
+              .map((w) => String(w ?? "").trim().toLowerCase())
+              .filter((w) => w.length > 0 && w.length <= 40),
+          ),
+        ].slice(0, 500);
+        const disableBuiltin = body.disableBuiltin === true;
+        await db
+          .collection("config")
+          .doc("moderationWords")
+          .set(
+            { extraWords: words, disableBuiltin, updatedBy: admin.uid },
+            { merge: true },
+          );
+        return Response.json({ ok: true, count: words.length, disableBuiltin });
+      }
+
       case "markPrizeFulfilled": {
         const id = String(body.id ?? "");
         if (!id) return bad("id required");
