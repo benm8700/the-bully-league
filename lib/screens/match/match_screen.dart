@@ -1862,7 +1862,7 @@ class _MatchScreenState extends State<MatchScreen>
               // already looking at this screen. Asking here converts far
               // better than a cold notification later.
               const Text(
-                'Your battle is now with the crowd. They have 24 hours to call it.\n\n'
+                'Your battle is now with the crowd. They have 24 hours to vote on a winner.\n\n'
                 'Vote on a few others while you wait - the more people who vote '
                 'on a battle, the more it counts.',
                 textAlign: TextAlign.center,

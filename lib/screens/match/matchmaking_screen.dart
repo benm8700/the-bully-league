@@ -289,13 +289,11 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
   static const _ladderSize = 10;
 
   String _searchRangeLabel(int band) {
-    if (band == 0) return 'Looking for someone in your tier.';
+    if (band == 0) return 'Searching for an opponent around your skill level.';
     if (band >= _ladderSize) {
-      return 'Still looking - searching across every tier now.';
+      return 'Still looking - searching across all skill levels now.';
     }
-    final tiers = band == 1 ? '1 tier' : '$band tiers';
-    return 'Nobody in your tier right now - widening the search '
-        '($tiers either way).';
+    return 'Nobody around your skill level yet - widening the search.';
   }
 
   String _waitLabel(Duration waited) {
