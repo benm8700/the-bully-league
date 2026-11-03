@@ -371,12 +371,12 @@ export function ScreenMainStage() {
 
       {/* the prize */}
       <div className="rounded-2xl border p-4" style={{ borderColor: "rgba(232,184,75,0.3)", background: "linear-gradient(160deg, rgba(232,184,75,0.10), transparent)" }}>
-        <div className="eyebrow text-muted">This week&apos;s finals — top 4</div>
+        <div className="eyebrow text-muted">The finals — top 4</div>
         <div className="mt-1 flex items-baseline gap-2">
           <span className="display text-[26px]" style={{ color: "var(--reward)" }}>🏆 The Belt</span>
         </div>
         <p className="mt-2 text-[11px] leading-snug text-muted">
-          Four earned it off a week of battles. Win the stage, take the belt.
+          Four earned their spot. Win the stage, take the belt.
         </p>
       </div>
 
@@ -416,7 +416,7 @@ export function ScreenMainStage() {
       <div className="mt-4">
         <div className="eyebrow text-muted">The panel decides</div>
         <p className="mt-2 text-[11px] leading-snug text-muted">
-          Five judges call it live — the founder plus four of the week&apos;s top voters.
+          Five judges call it live — the founder plus four of the top voters.
         </p>
       </div>
 
@@ -439,5 +439,5 @@ export const DEMO_SCREENS: DemoScreen[] = [
   { id: "opponent", label: "Opponent", tagline: "Study your opponent. Load up on ammo.", render: () => <ScreenOpponent /> },
   { id: "battle", label: "Battle", tagline: "Hold the floor, land your shots. No mercy.", render: () => <ScreenBattle /> },
   { id: "vote", label: "Vote", tagline: "The crowd judges every battle.", render: () => <ScreenVote /> },
-  { id: "mainstage", label: "The Main Stage", tagline: "The weekly finals. Win the belt.", render: () => <ScreenMainStage /> },
+  { id: "mainstage", label: "The Main Stage", tagline: "The main event. Win the belt.", render: () => <ScreenMainStage /> },
 ];

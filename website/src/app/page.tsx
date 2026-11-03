@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { getTopRoasters } from "@/lib/leaderboard";
 import { StoreCta } from "@/components/StoreCta";
 import { PhoneFrame } from "@/components/demo/PhoneFrame";
@@ -20,7 +19,6 @@ export default async function Home() {
     <main className="flex-1">
       <Hero />
       <HowItWorks />
-      <Modes />
       <MainStageSection />
       <Rules />
       <Leaderboard roasters={topRoasters} />
@@ -109,57 +107,6 @@ function HowItWorks() {
   );
 }
 
-/* -------------------------------------------------------- Two ways to play */
-function Modes() {
-  const modes = [
-    {
-      img: "/demo/basement.png",
-      h: 430,
-      tag: "Everyday",
-      name: "The Basement",
-      color: "var(--primary)",
-      blurb:
-        "Get matched 1-on-1 with a random stranger, roast them live, and let the crowd vote. Climb the ranks battle by battle — and every ranked battle is your qualifier for the finals.",
-    },
-    {
-      img: "/demo/mainstage.png",
-      h: 440,
-      tag: "Weekly finals",
-      name: "The Main Stage",
-      color: "var(--reward)",
-      blurb:
-        "Each week the top four earn a spot on the Main Stage — one night, one live judged bracket, one belt. The whole League watches.",
-    },
-  ];
-  return (
-    <section className="mx-auto max-w-6xl px-6 py-20">
-      <SectionHead
-        eyebrow="Two ways to play"
-        title="The Basement & the Main Stage"
-        sub="Grind the everyday ladder. Earn the weekly spotlight."
-      />
-      <div className="mt-12 grid gap-8 md:grid-cols-2">
-        {modes.map((m) => (
-          <div key={m.name}>
-            <Image
-              src={m.img}
-              width={1060}
-              height={m.h}
-              alt={m.name}
-              className="block h-auto w-full rounded-2xl"
-            />
-            <div className="mt-4">
-              <span className="eyebrow" style={{ color: m.color }}>{m.tag}</span>
-              <h3 className="mt-1 display text-2xl">{m.name}</h3>
-              <p className="mt-2 text-[14px] leading-relaxed text-muted">{m.blurb}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 /* -------------------------------------------------------- The Main Stage */
 function MainStageSection() {
   return (
@@ -176,15 +123,15 @@ function MainStageSection() {
           </span>
           <h2 className="mt-3 text-4xl sm:text-5xl">The Main Stage</h2>
           <p className="mt-4 text-[15px] leading-relaxed text-muted">
-            Battle all week to climb the leaderboard. The top four earn a spot
-            on the Main Stage — one night, one live bracket, one belt. It&apos;s
-            the weekly finals, and every ranked battle is your road to it.
+            Climb the ranks battle by battle. The best roasters earn their spot
+            on the Main Stage — the big show: a live, judged bracket for the
+            belt. Every battle you win is a step toward it.
           </p>
           <div className="mt-6 space-y-3">
             {[
-              ["Earn your spot", "A week of ranked battles decides the top four. No buy-in — just wins."],
+              ["Earn your spot", "The top climbers get the call — no buy-in, just wins."],
               ["Live, judged finals", "Semis and a final, back to back, called live by a five-judge panel."],
-              ["Winner takes the belt", "The champion wears it until someone takes it off them next week."],
+              ["Winner takes the belt", "The champion wears it until someone takes it off them."],
             ].map(([t, b]) => (
               <div key={t} className="flex gap-3">
                 <span className="mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full" style={{ background: "rgba(232,184,75,0.18)", color: "var(--reward)" }}>
