@@ -434,10 +434,10 @@ export type DemoScreen = {
 };
 
 export const DEMO_SCREENS: DemoScreen[] = [
-  { id: "home", label: "Home", tagline: "Your rank, your quests, and one button to start.", render: () => <ScreenHomeReal /> },
+  { id: "home", label: "Home", tagline: "Your rank, your quests, and where every battle starts.", render: () => <ScreenHomeReal /> },
   { id: "prematch", label: "Pre-match", tagline: "Camera and mic check before you go live.", render: () => <ScreenPreMatch /> },
   { id: "opponent", label: "Opponent", tagline: "Study your opponent. Load up on ammo.", render: () => <ScreenOpponent /> },
-  { id: "battle", label: "Battle", tagline: "Hold the floor, steal the mic. No mercy.", render: () => <ScreenBattle /> },
+  { id: "battle", label: "Battle", tagline: "Hold the floor, land your shots. No mercy.", render: () => <ScreenBattle /> },
   { id: "vote", label: "Vote", tagline: "The crowd judges every battle.", render: () => <ScreenVote /> },
   { id: "mainstage", label: "The Main Stage", tagline: "The weekly finals. Win the belt.", render: () => <ScreenMainStage /> },
 ];
