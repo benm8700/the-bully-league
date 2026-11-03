@@ -62,25 +62,26 @@ export function LaughMeter({ pct }: { pct: number }) {
   );
 }
 
-export type TabId = "battle" | "judge" | "mybattles" | "ranks" | "profile";
+// Labels + icons mirror the app's real bottom nav: Home, Vote, My Battles,
+// Ranks, Profile (confirmed against an on-device capture).
+export type TabId = "home" | "vote" | "mybattles" | "ranks" | "profile";
 
 const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
   {
-    id: "battle",
-    label: "Battle",
+    id: "home",
+    label: "Home",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-        <rect x="9" y="3" width="6" height="11" rx="3" />
-        <path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6" />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 10.5 12 3l9 7.5M5.5 9.5V20h13V9.5M9.5 20v-5h5v5" />
       </svg>
     ),
   },
   {
-    id: "judge",
-    label: "Judge",
+    id: "vote",
+    label: "Vote",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 3v18M5 21h14M7 8l5-3 5 3M4.5 8h5l-2.5 5a2.5 2.5 0 0 1-5 0zM14.5 8h5l-2.5 5a2.5 2.5 0 0 1-5 0z" />
+        <path d="M7 10v10H4V10zM7 10l4-7a2 2 0 0 1 2 2v3h5.5a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 17.3 20H7" />
       </svg>
     ),
   },

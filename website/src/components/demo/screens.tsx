@@ -133,7 +133,7 @@ export function ScreenHome() {
       </div>
 
       <div className="h-3" />
-      <NavBar active="battle" />
+      <NavBar active="home" />
     </ScreenShell>
   );
 }
@@ -208,42 +208,47 @@ export function ScreenOpponent() {
         </span>
       </div>
 
+      {/* Rank is deliberately hidden in the real bio reveal (no sandbagging),
+          so the opponent card shows name only. */}
       <div className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3">
         <Gel initial="R" color="var(--gel-b)" size={46} />
-        <div>
-          <div className="text-[15px] font-bold">RoastdePapi</div>
-          <div className="text-[11px] text-muted">Door Guy · 41–29</div>
-        </div>
+        <div className="text-[15px] font-bold">RoastdePapi</div>
       </div>
 
       <p className="mt-3 text-[13px] font-semibold" style={{ color: "var(--primary-soft)" }}>
         Here&apos;s your ammo. Use it.
       </p>
 
-      {/* their intro video */}
-      <FauxVideo hue="b" className="mt-2 aspect-[3/4] w-full rounded-2xl">
+      {/* their 60-second intro — the real ammo, looping with sound */}
+      <div className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-muted">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 10l5-3v10l-5-3M3 6h12v12H3z" /></svg>
+        Their intro
+      </div>
+      <FauxVideo hue="b" className="mt-1.5 aspect-[3/4] w-full rounded-2xl">
         <div className="absolute inset-0 grid place-items-center">
           <span className="grid h-12 w-12 place-items-center rounded-full bg-white/12 backdrop-blur">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 text-white"><path d="M8 5v14l11-7z" /></svg>
           </span>
         </div>
         <span className="absolute bottom-3 left-3 rounded-full bg-black/50 px-2 py-1 text-[10px] font-semibold text-foreground/90">
-          Their intro · 0:60
+          0:60 · plays on a loop
         </span>
       </FauxVideo>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {[
-          ["Profession", "Substitute teacher"],
-          ["Hometown", "Fresno, CA"],
-          ["Fun fact", "Still on his learner's permit"],
-          ["Pets", "One very judgmental cat"],
-        ].map(([k, v]) => (
-          <div key={k} className="rounded-xl bg-surface px-3 py-2">
-            <div className="text-[9px] uppercase tracking-wide text-muted">{k}</div>
-            <div className="text-[11px] leading-tight">{v}</div>
-          </div>
-        ))}
+      {/* City & State, then their volunteered "about me" — the ammo text */}
+      <div className="mt-3">
+        <div className="text-[9px] uppercase tracking-wide text-muted">City &amp; State</div>
+        <div className="text-[12px]">Fresno, CA</div>
+      </div>
+      <div className="mt-3 rounded-2xl bg-surface px-4 py-3">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2s5 4 5 9a5 5 0 0 1-10 0c0-1.6.6-3 1.4-4.1C9 9.5 9.6 11 11 11c0-2 .3-5.8 1-9z" /></svg>
+          About them
+        </div>
+        <p className="mt-1.5 text-[12px] leading-snug text-foreground/85">
+          Substitute teacher, still on my learner&apos;s permit at 34. I own one
+          very judgmental cat. Do your worst.
+        </p>
       </div>
 
       <button className="mt-4 w-full rounded-2xl py-3.5 text-[15px] font-bold text-white" style={{ background: "var(--primary)", boxShadow: "0 8px 24px rgba(234,76,109,0.35)" }}>
@@ -353,7 +358,7 @@ export function ScreenVote() {
         Tallies stay hidden until you vote — no following the crowd.
       </p>
       <div className="h-3" />
-      <NavBar active="judge" />
+      <NavBar active="vote" />
     </ScreenShell>
   );
 }
