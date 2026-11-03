@@ -46,21 +46,28 @@ class _PhotoViewer extends StatelessWidget {
               maxScale: 5,
               // A little room to pan past the edges once zoomed in.
               boundaryMargin: const EdgeInsets.all(64),
-              child: Image.network(
-                url,
-                fit: BoxFit.contain,
-                loadingBuilder: (context, child, progress) => progress == null
-                    ? child
-                    : const SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: Center(child: CircularProgressIndicator()),
-                      ),
-                errorBuilder: (_, _, _) => const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Text(
-                    "Couldn't load the photo.",
-                    style: TextStyle(color: Colors.white70),
+              child: GestureDetector(
+                // Tap the photo itself to shrink it back. The whole thing is
+                // meant to feel like a toggle - tap the thumbnail to enlarge,
+                // tap the big one to close - so you never have to aim for the
+                // X. Pinch and drag still zoom/pan (those aren't taps).
+                onTap: () => Navigator.of(context).maybePop(),
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, progress) => progress == null
+                      ? child
+                      : const SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                  errorBuilder: (_, _, _) => const Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Text(
+                      "Couldn't load the photo.",
+                      style: TextStyle(color: Colors.white70),
+                    ),
                   ),
                 ),
               ),
