@@ -554,7 +554,13 @@ class _BattleCard extends StatelessWidget {
                             : !finalized
                                 ? _Result.judging
                                 : winnerId == null
-                                    ? _Result.draw
+                                    // An abandoned match (someone left / no-
+                                    // showed) is a no-contest, not a judged
+                                    // tie. A finalized 'completed' match with
+                                    // no winner is a genuine DRAW.
+                                    ? (status == 'abandoned'
+                                        ? _Result.noContest
+                                        : _Result.draw)
                                     : meWon
                                         ? _Result.win
                                         : _Result.loss;
@@ -752,6 +758,17 @@ class _BattleCard extends StatelessWidget {
           border: Colors.white.withValues(alpha: 0.22),
           child: Text('DRAW',
               style: text.labelMedium?.copyWith(
+                  color: Colors.white70, fontWeight: FontWeight.w800)),
+        );
+      case _Result.noContest:
+        // A battle nobody finished (left / no-show) - neutral, no winner, and
+        // it never says DRAW, because nothing was actually judged.
+        badge = _badge(
+          bg: Colors.white.withValues(alpha: 0.06),
+          border: Colors.white.withValues(alpha: 0.22),
+          child: Text('NO CONTEST',
+              textAlign: TextAlign.center,
+              style: text.labelSmall?.copyWith(
                   color: Colors.white70, fontWeight: FontWeight.w800)),
         );
       case _Result.judging:
@@ -997,7 +1014,7 @@ class _BattleCard extends StatelessWidget {
   }
 }
 
-enum _Result { win, loss, draw, judging, disqualified }
+enum _Result { win, loss, draw, noContest, judging, disqualified }
 
 /// Minutes-ago within the hour, hours-ago within the day, and a full
 /// day/month/year date beyond that - no "N days ago" (developer's call).
