@@ -25,12 +25,18 @@ class LoopingVideo extends StatefulWidget {
     this.autoPlay = true,
     this.muted = false,
     this.borderRadius = 12,
+    this.onExpand,
   });
 
   final String url;
   final bool autoPlay;
   final bool muted;
   final double borderRadius;
+
+  /// When set, a small expand button appears in the top-right corner. Tapping
+  /// the video itself is play/pause, so enlarging needs its own control rather
+  /// than a tap. Null = no button (e.g. when already shown full-screen).
+  final VoidCallback? onExpand;
 
   @override
   State<LoopingVideo> createState() => _LoopingVideoState();
@@ -175,9 +181,75 @@ class _LoopingVideoState extends State<LoopingVideo>
               if (!controller.value.isPlaying)
                 const Icon(Icons.play_circle_fill,
                     size: 56, color: Colors.white70),
+              // Expand to full-screen. Its own tap target, since tapping the
+              // video is play/pause; the inner GestureDetector wins over the
+              // outer _toggle for taps that land on it.
+              if (widget.onExpand != null)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: GestureDetector(
+                    onTap: widget.onExpand,
+                    child: Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.fullscreen,
+                          size: 20, color: Colors.white),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Opens the intro video full-screen so it can be studied bigger. Tapping the
+/// video still plays/pauses it (that is what tapping a video means here); the
+/// collapse button shrinks it back. The inline player underneath pauses itself
+/// while this is open - LoopingVideo is route-visibility gated - and resumes
+/// on return, so there is never two of the same audio playing at once.
+void showVideoViewer(BuildContext context, String url) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) => _FullscreenVideo(url: url),
+    ),
+  );
+}
+
+class _FullscreenVideo extends StatelessWidget {
+  const _FullscreenVideo({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // No onExpand here - it is already full-screen. borderRadius 0 so it
+          // sits edge to edge rather than with the inline card's rounding.
+          Center(child: LoopingVideo(url: url, borderRadius: 0)),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: SafeArea(
+              child: IconButton(
+                icon: const Icon(Icons.fullscreen_exit,
+                    color: Colors.white, size: 30),
+                tooltip: 'Close',
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -538,7 +538,12 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
       rows.add(const SizedBox(height: 8));
       rows.add(ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 340),
-        child: Align(child: LoopingVideo(url: introUrl)),
+        child: Align(
+          child: LoopingVideo(
+            url: introUrl,
+            onExpand: () => showVideoViewer(context, introUrl),
+          ),
+        ),
       ));
       rows.add(const SizedBox(height: 16));
     }
