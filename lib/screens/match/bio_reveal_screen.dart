@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../widgets/belt_flair.dart';
 import '../../widgets/looping_video.dart';
+import '../../widgets/photo_viewer.dart';
 import '../../widgets/match/loadout_panel.dart';
 import 'match_screen.dart';
 import 'matchmaking_screen.dart';
@@ -423,16 +424,43 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Who you're facing: the opponent's selfie.
+                // Who you're facing: the opponent's selfie. Tap to see it
+                // bigger and clearer (a 96px circle hides a lot of detail
+                // you might want for ammo).
                 if (facePhoto != null && facePhoto.isNotEmpty) ...[
                   Center(
-                    child: ClipOval(
-                      child: Image.network(
-                        facePhoto,
-                        width: 96,
-                        height: 96,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    child: GestureDetector(
+                      onTap: () => showPhotoViewer(context, facePhoto),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          ClipOval(
+                            child: Image.network(
+                              facePhoto,
+                              width: 96,
+                              height: 96,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) =>
+                                  const SizedBox.shrink(),
+                            ),
+                          ),
+                          // Small cue that the photo opens larger on tap.
+                          Positioned(
+                            right: -2,
+                            bottom: -2,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: Colors.white24, width: 1),
+                              ),
+                              child: const Icon(Icons.zoom_in,
+                                  size: 14, color: Colors.white),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
