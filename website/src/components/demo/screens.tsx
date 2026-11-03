@@ -13,8 +13,8 @@ export function ScreenHomeReal() {
     <ScreenShell pad={false}>
       <Image
         src="/demo/home.png"
-        width={1080}
-        height={2085}
+        width={720}
+        height={1484}
         alt="The Bully League home screen"
         className="block h-auto w-full"
         priority
