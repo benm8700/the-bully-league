@@ -98,6 +98,8 @@ function lockOutcome({
   invites = {},
   judgePool = [],
   handPicked = [],
+  paidSeats = [],
+  paidSeatCap = 0,
   exclude = [],
   minField = MIN_FIELD,
   panelSize = PANEL_SIZE,
@@ -108,11 +110,16 @@ function lockOutcome({
   // founder, if they never confirmed - is dropped and the most-judged pool
   // backfills the seat automatically. That IS the "if I don't show, auto-fill"
   // behaviour; pool judges need no confirmation, they are the fallback.
+  //
+  // PAID seats need no confirmation: paying IS the commitment, so they are
+  // seated like the pool (but prioritised over it). A paid buyer who became a
+  // finalist or was banned is dropped by selectPanel and refunded by the
+  // wiring - which is why the caller gets `judges` back and can diff it.
   const confirmedSet = new Set(confirmed);
   const confirmedHandPicks = handPicked.filter((u) => confirmedSet.has(u));
   const a = assembleMainStage({
     finalists, alternates, confirmed, handPicked: confirmedHandPicks,
-    judgePool, exclude, pick: null, panelSize,
+    paidSeats, paidSeatCap, judgePool, exclude, pick: null, panelSize,
   });
   return {
     field: a.field,

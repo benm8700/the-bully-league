@@ -398,6 +398,17 @@ service cloud.firestore {
       }
     }
 
+    // Bought Main Stage panel seats (the economy model's "panel seats" sink),
+    // keyed by the qualifying week. A fixed-price points buy -> the buyJudgeSeat
+    // Cloud Function charges and records; the panel lock seats and refunds, all
+    // server-side. Fully server-only: the client reads its seat state through
+    // getJudgeSeatState (which never exposes who else bought), so there is no
+    // reason for a client to read the buyer list directly.
+    match /judgeSeats/{weekKey} {
+      allow read: if false;
+      allow write: if false;
+    }
+
     // The Main Stage HUB weekly lobby chat. A standing "this week's" green room
     // (keyed by the qualifying week), the same welfare-bounded animal as the
     // gauntlet lobby: clients READ it live but can only WRITE through the

@@ -17,18 +17,28 @@ const DEFAULT_PANEL_SIZE = 5;
 
 /**
  * Build the panel.
- *   handPicked  - uids the founder chose, IN PRIORITY ORDER (head-judge first,
- *                 then guests/celebrities). Applied before the autofill.
- *   rankedPool  - the most-judged-this-week pool, already ordered desc.
- *   finalists   - the players in the bracket; never eligible to judge.
- *   exclude     - banned/flagged/ineligible uids to keep off the panel.
- *   panelSize   - default 5.
- * Returns {judges, shortfall}. `shortfall` > 0 means not enough eligible
- * judges were available - the caller falls back to crowd voting rather than
- * leaving a result unjudged, never cancels.
+ *   handPicked   - uids the founder chose, IN PRIORITY ORDER (head-judge first,
+ *                  then guests/celebrities). Applied before everything.
+ *   paidSeats    - uids who BOUGHT a seat, in purchase order (first-come). Seated
+ *                  after the hand-picks and before the autofill pool, but only up
+ *                  to paidSeatCap AND never more than a minority of the panel
+ *                  (floor((panelSize-1)/2)) - bought voices can't outnumber the
+ *                  earned/hand-picked ones. A paid buyer who is a finalist or
+ *                  banned (in `blocked`) is skipped here; the wiring refunds them.
+ *   paidSeatCap  - how many paid seats are on sale (config); the minority bound
+ *                  is applied on top, so the effective cap is the smaller.
+ *   rankedPool   - the most-judged-this-week pool, already ordered desc.
+ *   finalists    - the players in the bracket; never eligible to judge.
+ *   exclude      - banned/flagged/ineligible uids to keep off the panel.
+ *   panelSize    - default 5.
+ * Returns {judges, shortfall, standby}. `shortfall` > 0 means not enough
+ * eligible judges were available - the caller falls back to crowd voting rather
+ * than leaving a result unjudged, never cancels.
  */
 function selectPanel({
   handPicked = [],
+  paidSeats = [],
+  paidSeatCap = 0,
   rankedPool = [],
   finalists = [],
   exclude = [],
@@ -45,8 +55,24 @@ function selectPanel({
     judges.push(uid);
   };
   // Hand-picks first, in the founder's order (so the head-judge seat and any
-  // celebrity guest are locked before the autofill), then the most-judged pool.
+  // celebrity guest are locked before anything else).
   for (const uid of handPicked) add(uid);
+
+  // Then the BOUGHT seats, capped to a minority of the panel. floor((5-1)/2)=2,
+  // so at most 2 paid voices on a 5-seat panel however the config is set.
+  const paidCeiling = Math.min(
+      Math.max(0, paidSeatCap), Math.max(0, Math.floor((panelSize - 1) / 2)));
+  let paidSeated = 0;
+  for (const uid of paidSeats) {
+    if (paidSeated >= paidCeiling) break;
+    if (!uid || typeof uid !== "string") continue;
+    if (seen.has(uid) || blocked.has(uid)) continue; // finalist/banned -> refund
+    seen.add(uid);
+    judges.push(uid);
+    paidSeated++;
+  }
+
+  // Then the most-judged pool fills whatever seats remain.
   for (const uid of rankedPool) add(uid);
 
   // Standby: eligible pool judges NOT seated (beyond panelSize or because the

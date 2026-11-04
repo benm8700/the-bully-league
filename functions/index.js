@@ -1296,6 +1296,16 @@ exports.getWildcardAuctionState = onCall((request) => {
   return getWildcardAuctionState(request.auth, request.data);
 });
 
+exports.buyJudgeSeat = onCall((request) => {
+  const {buyJudgeSeat} = require("./judgeSeatPlay");
+  return buyJudgeSeat(request.auth);
+});
+
+exports.getJudgeSeatState = onCall((request) => {
+  const {getJudgeSeatState} = require("./judgeSeatPlay");
+  return getJudgeSeatState(request.auth);
+});
+
 /**
  * Leaves a bio reveal whose opponent has walked away, without spending a
  * skip. This is what makes a long reveal window safe: the maximum only
