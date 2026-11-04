@@ -7,7 +7,6 @@ import '../../core/services/hub_service.dart';
 import '../../core/services/main_stage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/tournament/judge_seat_card.dart';
 import '../profile/performer_profile_screen.dart';
 import 'judges_room_screen.dart';
 
@@ -182,9 +181,6 @@ class _JudgesTabState extends State<JudgesTab> {
             minToQualify: _minToQualify,
             gold: gold,
           ),
-          // The paid shortcut onto the panel, beside the free volunteer route.
-          // Renders nothing unless the seat flag is on.
-          const JudgeSeatCard(),
           const SizedBox(height: 6),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),

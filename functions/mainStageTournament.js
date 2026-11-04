@@ -14,12 +14,6 @@ const {
   storeBracket,
   loadBracket,
 } = require("./mainStageLifecycle");
-const {maxPaidSeats} = require("./judgeSeat");
-const {
-  readJudgeSeatConfig,
-  paidSeatHoldersForWeek,
-  refundJudgeSeat,
-} = require("./judgeSeatPlay");
 
 /**
  * Main Stage tournament - the Firestore wiring around the pure lifecycle core.
@@ -111,57 +105,35 @@ async function lockDueTournaments(db, now = Date.now()) {
       .where("format", "==", "mainstage")
       .where("status", "==", "accepting")
       .get();
-  // Bought panel seats (the economy model's "panel seats" sink). The config is
-  // read once per sweep; a disabled seat flag just yields a 0 cap and no buyers.
-  const seatConfig = readJudgeSeatConfig(
-      (await db.collection("config").doc("tournament").get()).data());
-  const paidSeatCap = maxPaidSeats(seatConfig);
   const results = [];
   for (const d of due.docs) {
     const t = d.data();
     if (!(now >= t.lockAtMs)) continue;
-    // The week's seat buyers, in purchase order (first-come). Keyed by the
-    // tournament's cutoff day, which is exactly the week they bought against.
-    const paidSeats = await paidSeatHoldersForWeek(db, t.cutoffDayKey);
     const exclude = await excludedJudgeUids(
-        db, [...(t.judgePool || []), ...(t.handPickedJudges || []),
-          ...paidSeats]);
+        db, [...(t.judgePool || []), ...(t.handPickedJudges || [])]);
     const out = lockOutcome({
       finalists: t.finalists || [],
       alternates: t.alternates || [],
       invites: t.invites || {},
       judgePool: t.judgePool || [],
       handPicked: t.handPickedJudges || [],
-      paidSeats,
-      paidSeatCap,
       exclude,
     });
     if (out.cancel) {
-      // Cancelled show: no panel, so every seat buyer is made whole.
-      await Promise.all(
-          paidSeats.map((uid) => refundJudgeSeat(db, t.cutoffDayKey, uid)));
       await d.ref.update({status: "cancelled", cancelReason: "not-enough-players",
         lockedAt: FieldValue.serverTimestamp()});
       results.push({id: d.id, cancelled: true});
     } else {
-      // Refund any buyer who did NOT land a seat - they qualified as a finalist
-      // (can't judge their own tournament) or were banned, so selectPanel
-      // dropped them. A seat that was used isn't refunded.
-      const seated = new Set(out.judges);
-      const refunded = paidSeats.filter((uid) => !seated.has(uid));
-      await Promise.all(
-          refunded.map((uid) => refundJudgeSeat(db, t.cutoffDayKey, uid)));
       await d.ref.update({
         status: "locked",
         field: out.field,
         judges: out.judges,
         judgeShortfall: out.judgeShortfall,
         judgeStandby: out.judgeStandby, // backfills a live judge no-show
-        paidSeatRefunds: refunded,
         lockedAt: FieldValue.serverTimestamp(),
       });
       results.push({id: d.id, locked: true, field: out.field.length,
-        judges: out.judges.length, paidRefunds: refunded.length});
+        judges: out.judges.length});
     }
   }
   return results;

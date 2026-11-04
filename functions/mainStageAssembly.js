@@ -34,8 +34,6 @@ function assembleMainStage({
   alternates = [],
   confirmed = [],
   handPicked = [],
-  paidSeats = [],
-  paidSeatCap = 0,
   judgePool = [],
   exclude = [],
   pick = null,
@@ -49,11 +47,9 @@ function assembleMainStage({
       .map((j) => (typeof j === "string" ? j : j && j.uid))
       .filter((u) => typeof u === "string" && u);
   // Finalists can never judge; selectPanel enforces it, so the panel is safe
-  // to finalise at the 4pm lock even before the bracket exists. Bought seats
-  // sit between the hand-picks and the pool, capped to a minority.
+  // to finalise at the 4pm lock even before the bracket exists.
   const {judges, shortfall, standby} = selectPanel({
-    handPicked, paidSeats, paidSeatCap,
-    rankedPool: poolUids, finalists: field, exclude, panelSize,
+    handPicked, rankedPool: poolUids, finalists: field, exclude, panelSize,
   });
 
   let bracket = null;
