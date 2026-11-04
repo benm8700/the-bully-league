@@ -64,7 +64,9 @@ class RulesScreen extends StatelessWidget {
             body: 'Day to day, you roast random strangers any time and climb '
                 'the ranks. The Main Stage is the tournament: the big show, '
                 'where the prizes and the prestige are. Keep winning your '
-                'everyday battles to earn your way up to it.',
+                'everyday battles to earn your way up to it. Three of the four '
+                'finals spots are earned by climbing; the fourth is the '
+                'wildcard - anyone can bid points for it.',
           ),
           const _Rule(
             icon: Icons.emoji_emotions_outlined,

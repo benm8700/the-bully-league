@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../widgets/tournament/wildcard_strip.dart';
 import '../vote/my_battles_screen.dart';
 
 /// The Rewards screen - where the points wallet is spent.
@@ -154,6 +155,10 @@ class _RewardsScreenState extends State<RewardsScreen> {
               _dayPassCard(context),
               const SizedBox(height: 12),
               _clipCard(context),
+              // Renders nothing (zero footprint) unless the wildcard auction is
+              // switched on, so it only appears as a sink once the tournament
+              // is live. It carries its own top spacing when shown.
+              const WildcardSpendTile(),
             ],
           ],
         ),

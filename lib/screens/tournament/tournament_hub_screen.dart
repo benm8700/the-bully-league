@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/tournament/hub_chat.dart';
 import '../../widgets/tournament/prize_tab.dart';
 import '../../widgets/tournament/weekly_standings_board.dart';
+import '../../widgets/tournament/wildcard_strip.dart';
 import 'judges_tab.dart';
 import 'main_stage_rules_screen.dart';
 import 'main_stage_screen.dart';
@@ -107,6 +108,7 @@ class _TournamentHubScreenState extends State<TournamentHubScreen> {
               child: Column(
                 children: [
                   const _HubHeader(),
+                  const WildcardStrip(),
                   const _JoinBar(),
                   TabBar(
                     isScrollable: false,
