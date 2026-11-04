@@ -13,11 +13,15 @@ import 'judges_room_screen.dart';
 /// The Judges tab of the tournament hub.
 ///
 /// Shows how a panel is filled (the founder picks a few seats; the rest autofill
-/// from the top APPLICANTS who've judged the most this week), this week's
+/// from the top APPLICANTS who've judged the most that qualifying period), the
 /// applicant roster ranked by judging volume, and the "Apply to judge" opt-in.
 /// A seat is a coveted try-out, not a chore: you APPLY (a fixed, non-refundable
 /// points fee when the flag is on - a sink that an active judge clears easily),
 /// then judge enough battles to qualify, and the top applicants get the seats.
+///
+/// Cadence-neutral by design: the fee and the opt-in key off the canonical
+/// qualifying-period (qualifyingWeek().cutoffDayKey), so a monthly cadence is
+/// one fee per month with no change here - the copy avoids a time unit too.
 /// All server-published (stats/weeklyJudges); the opt-in + fee go through
 /// HubService.volunteerToJudge (the internal id is unchanged).
 class JudgesTab extends StatefulWidget {
@@ -144,7 +148,7 @@ class _JudgesTabState extends State<JudgesTab> {
         builder: (ctx) => AlertDialog(
           title: const Text('Apply to judge?'),
           content: Text(
-            'It costs $_fee points to throw your hat in for this week\'s panel. '
+            'It costs $_fee points to throw your hat in for the next panel. '
             'It\'s non-refundable — win or lose the seat, the points are spent. '
             'Top applicants get the seats.',
           ),
@@ -185,9 +189,9 @@ class _JudgesTabState extends State<JudgesTab> {
         title: const Text('Withdraw your application?'),
         content: Text(
           _feeEnabled
-              ? "The points you spent to apply aren't refunded — you can "
-                  'apply again this week at no extra cost.'
-              : 'You can apply again this week any time.',
+              ? "The points you spent to apply aren't refunded — but you can "
+                  'apply again before the panel locks at no extra cost.'
+              : 'You can apply again any time before the panel locks.',
         ),
         actions: [
           TextButton(
@@ -276,7 +280,7 @@ class _JudgesTabState extends State<JudgesTab> {
           const SizedBox(height: 6),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Text("This week's applicants",
+            child: Text('Applicants',
                 style: text.labelLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: Colors.white.withValues(alpha: 0.8))),
@@ -414,9 +418,9 @@ class _ApplyCard extends StatelessWidget {
     } else {
       title = 'Apply for a seat on the panel';
       sub = feeEnabled
-          ? 'It costs $fee pts to apply, then judge $minToQualify matches this '
-              'week to qualify. Top applicants get the seats.'
-          : 'Apply, then judge $minToQualify matches this week to qualify.';
+          ? 'It costs $fee pts to apply, then judge $minToQualify matches to '
+              'qualify. Top applicants get the seats.'
+          : 'Apply, then judge $minToQualify matches to qualify.';
     }
 
     // The trailing action.

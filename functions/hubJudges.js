@@ -40,9 +40,17 @@ function resolveJudgeMinToQualify(cfg) {
  *
  * You don't BUY a seat (selection stays pure merit - founder hand-picks + the
  * most-judged applicants). You pay a fixed, NON-REFUNDABLE points fee just to
- * APPLY for a given week. An active judge earns points easily, so the fee is a
- * trivial unlock for them and a real one for a drive-by; and because it's spent
- * win-or-lose, it keeps people earning for the next one. A pure points sink.
+ * APPLY for the current qualifying PERIOD. An active judge earns points easily,
+ * so the fee is a trivial unlock for them and a real one for a drive-by; and
+ * because it's spent win-or-lose, it keeps people earning for the next one.
+ * A pure points sink.
+ *
+ * CADENCE-NEUTRAL: the fee keys off qualifyingWeek().cutoffDayKey - the single
+ * definition of "the current qualifying period" that the applicant collection
+ * and the tournament snapshot also use. It is one fee PER PERIOD, whatever that
+ * period is. If the cadence becomes monthly, that is changed in the one period
+ * definition (+ the lock/show schedule) and the fee follows with NO change
+ * here. Nothing about the fee assumes a week; "week" in names/ids is cosmetic.
  *
  * Gated on config/tournament.enabled AND judgeApplyFeeEnabled, both off by
  * default, so applying is FREE (today's behaviour) until the flag flips. The
@@ -112,10 +120,11 @@ async function collectVolunteers(db, weekKey) {
  * APPLY to judge (or withdraw) THIS week's Main Stage. The week is resolved from
  * the clock here, so the client only sends whether it wants in.
  *
- * Applying charges the fixed fee once per week (idempotent on the ledger key,
- * so withdrawing and re-applying the same week never double-charges). The fee
- * is NON-REFUNDABLE: withdrawing deletes your application but never returns the
- * points - it's a sink, spent win-or-lose. Selection remains pure merit.
+ * Applying charges the fixed fee once per qualifying PERIOD (idempotent on the
+ * ledger key, so withdrawing and re-applying in the same period never
+ * double-charges). The fee is NON-REFUNDABLE: withdrawing deletes your
+ * application but never returns the points - it's a sink, spent win-or-lose.
+ * Selection remains pure merit.
  */
 async function volunteerToJudge(auth, data) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");

@@ -186,8 +186,8 @@ class MainStageBanner extends StatelessWidget {
         if (v.invite == InviteStatus.notInvited) {
           return (
             title: "You're in the judge pool",
-            sub: 'The panel fills from the applicant pool at the Thursday 4pm '
-                'lock — no action needed.',
+            sub: 'The panel fills from the applicant pool when it locks — '
+                'no action needed.',
             icon: Icons.gavel,
             urgent: false,
           );
