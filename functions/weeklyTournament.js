@@ -14,7 +14,8 @@ const {
   resolveJudgeMinToQualify,
 } = require("./hubJudges");
 const {DEFAULT_PANEL_SIZE} = require("./judgePanel");
-const {resolveWildCardConfig, buildField} = require("./wildCard");
+const {resolveWildCardConfig, buildField, SKILL_SEATS} = require("./wildCard");
+const {resolveAndChargeWildcardAuction} = require("./wildcardAuctionPlay");
 
 /**
  * Weekly tournament qualifier - the Firestore wiring around the pure core.
@@ -170,9 +171,16 @@ async function sweepWeeklyQualifier(now = Date.now()) {
       // wildCard.js. The wild-card finalist row carries wildCard:true; the draw
       // is seeded on the week key so the frozen field is reproducible.
       const judgedByUid = new Map(closedJudges.map((j) => [j.uid, j.judged]));
-      const {finalists, wildCardUid, alternates} = buildField(
+      // Resolve the wildcard POINTS AUCTION (and charge the winner) for the
+      // week that just closed; the winner takes seat 4, with the engagement
+      // lottery as the fallback inside buildField when nobody bid.
+      const skillUids = new Set(
+          standings.slice(0, SKILL_SEATS).map((s) => s.uid));
+      const auction = await resolveAndChargeWildcardAuction(
+          db, closed.cutoffDayKey, standings, skillUids, cfgSnap.data());
+      const {finalists, wildCardUid, wildCardSource, alternates} = buildField(
           standings, judgedByUid, resolveWildCardConfig(cfgSnap.data()),
-          closed.cutoffDayKey, ALTERNATES);
+          closed.cutoffDayKey, ALTERNATES, auction.auctionWinnerUid);
       const finalistSet = new Set(finalists.map((f) => f.uid));
       // The panel autofill pool is QUALIFIED VOLUNTEERS of the closed week,
       // ranked by how much they judged - a seat is an opt-in you earn (see
@@ -189,6 +197,7 @@ async function sweepWeeklyQualifier(now = Date.now()) {
         cutoffMs: closed.cutoffMs,
         finalists,
         wildCardUid: wildCardUid || null,
+        wildCardSource: wildCardSource || null,
         alternates,
         judgePool,
         snapshotAt: FieldValue.serverTimestamp(),
@@ -197,6 +206,7 @@ async function sweepWeeklyQualifier(now = Date.now()) {
         tournamentDayKey: closed.cutoffDayKey,
         finalists: finalists.length,
         wildCardUid: wildCardUid || null,
+        wildCardSource: wildCardSource || null,
         alternates: alternates.length,
         judgePool: judgePool.length,
       };

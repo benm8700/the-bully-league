@@ -66,6 +66,9 @@ function buildMainStageDoc({snapshot, nowMs, lockAtMs, showAtMs}) {
     // Carried onto the doc so the client can mark it in the bracket/field and
     // run the "wild-card draw" reveal. Null if the field was too small to draw.
     wildCardUid: snapshot.wildCardUid || null,
+    // "auction" (bought seat) or "lottery" (engagement-drawn fallback), for the
+    // client's wildcard reveal/label. Null if the field was too small to draw.
+    wildCardSource: snapshot.wildCardSource || null,
     alternates, // seed order
     judgePool, // most-judged-this-week, for panel autofill
     handPickedJudges: [], // the founder's picks, set before the lock

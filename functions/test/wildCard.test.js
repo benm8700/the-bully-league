@@ -122,4 +122,36 @@ check("exactly SKILL_SEATS+1 -> the one extra is the wild card", () => {
   assert.strictEqual(finalists[3].wildCard, true);
 });
 
+// --- buildField with an auction winner (auction primary, lottery fallback) ---
+check("buildField: the AUCTION winner takes seat 4 over the lottery", () => {
+  const {finalists, wildCardUid, wildCardSource} =
+    buildField(rows, {}, CFG, "wk", 4, "p6");
+  assert.strictEqual(wildCardUid, "p6");
+  assert.strictEqual(wildCardSource, "auction");
+  assert.strictEqual(finalists[3].uid, "p6");
+  assert.strictEqual(finalists[3].wildCard, true);
+  assert.deepStrictEqual(finalists.slice(0, 3).map((f) => f.uid),
+      ["s1", "s2", "s3"], "skill seats unchanged");
+});
+
+check("buildField: an auction winner who didn't qualify falls back to lottery", () => {
+  const {wildCardUid, wildCardSource} =
+    buildField(rows, {}, CFG, "wk", 4, "ghost");
+  assert.ok(["p4", "p5", "p6"].includes(wildCardUid));
+  assert.strictEqual(wildCardSource, "lottery");
+});
+
+check("buildField: an auction winner who is a skill seat is ignored (lottery)", () => {
+  const {wildCardUid, wildCardSource} =
+    buildField(rows, {}, CFG, "wk", 4, "s1");
+  assert.ok(["p4", "p5", "p6"].includes(wildCardUid));
+  assert.strictEqual(wildCardSource, "lottery");
+});
+
+check("buildField: no auction winner -> lottery, unchanged", () => {
+  const {wildCardUid, wildCardSource} = buildField(rows, {}, CFG, "wk", 4, null);
+  assert.ok(["p4", "p5", "p6"].includes(wildCardUid));
+  assert.strictEqual(wildCardSource, "lottery");
+});
+
 console.log(`wildCard: ${n} checks passed`);

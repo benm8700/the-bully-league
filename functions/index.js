@@ -1286,6 +1286,16 @@ exports.requestMatchClip = onCall((request) => {
   return requestMatchClip(request.auth, request.data);
 });
 
+exports.placeWildcardBid = onCall((request) => {
+  const {placeWildcardBid} = require("./wildcardAuctionPlay");
+  return placeWildcardBid(request.auth, request.data);
+});
+
+exports.getWildcardAuctionState = onCall((request) => {
+  const {getWildcardAuctionState} = require("./wildcardAuctionPlay");
+  return getWildcardAuctionState(request.auth, request.data);
+});
+
 /**
  * Leaves a bio reveal whose opponent has walked away, without spending a
  * skip. This is what makes a long reveal window safe: the maximum only

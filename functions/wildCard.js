@@ -108,7 +108,8 @@ function drawWildCard(pool, seed) {
  * Returns {finalists, wildCardUid, alternates}. The wild-card finalist row
  * carries wildCard:true. Fewer than SKILL_SEATS+1 if the field is small.
  */
-function buildField(standings, judgedByUid, cfg, seed, alternatesCount) {
+function buildField(standings, judgedByUid, cfg, seed, alternatesCount,
+    auctionWinnerUid = null) {
   const rows = Array.isArray(standings) ? standings : [];
   const judgedOf = (uid) => {
     if (judgedByUid instanceof Map) return judgedByUid.get(uid) || 0;
@@ -123,16 +124,32 @@ function buildField(standings, judgedByUid, cfg, seed, alternatesCount) {
         tickets: engagementTickets(
             {games: s.games, judged: judgedOf(s.uid)}, cfg),
       }));
-  const wildCardUid = drawWildCard(pool, seed);
+  // THE WILD CARD: the points AUCTION winner takes seat 4 when there is one,
+  // and the engagement LOTTERY is the fallback that fills the seat when nobody
+  // bid (so the 4th seat is never empty and judging still buys a shot). The
+  // auction winner must be a real pool member - qualified that week and not a
+  // skill seat - or it is ignored and the lottery draws instead; the wiring
+  // already filters bids to eligible ones, this is belt-and-braces.
+  const poolUids = new Set(pool.map((p) => p.uid));
+  let wildCardUid;
+  let wildCardSource;
+  if (auctionWinnerUid && poolUids.has(auctionWinnerUid)) {
+    wildCardUid = auctionWinnerUid;
+    wildCardSource = "auction";
+  } else {
+    wildCardUid = drawWildCard(pool, seed);
+    wildCardSource = wildCardUid ? "lottery" : null;
+  }
   const wildRow = wildCardUid ?
     rows.find((s) => s.uid === wildCardUid) : null;
   const finalists = wildRow ?
-    [...skillSeats, {...wildRow, wildCard: true}] : skillSeats.slice();
+    [...skillSeats, {...wildRow, wildCard: true, wildCardSource}] :
+    skillSeats.slice();
   const finalistUids = new Set(finalists.map((f) => f.uid));
   const alternates = rows
       .filter((s) => !finalistUids.has(s.uid))
       .slice(0, alternatesCount);
-  return {finalists, wildCardUid: wildCardUid || null, alternates};
+  return {finalists, wildCardUid: wildCardUid || null, wildCardSource, alternates};
 }
 
 module.exports = {
