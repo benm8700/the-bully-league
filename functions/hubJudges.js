@@ -1,6 +1,7 @@
 const {getFirestore} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {qualifyingWeek} = require("./weeklyQualifier");
+const {spendPoints} = require("./clipGrants");
 
 /**
  * JUDGE VOLUNTEERING - the "I'll judge the Main Stage" opt-in.
@@ -32,6 +33,30 @@ function resolveJudgeMinToQualify(cfg) {
   const n = Number(cfg && cfg.judgeMinToQualify);
   if (Number.isFinite(n) && n >= 0 && n <= 1000) return Math.floor(n);
   return 10;
+}
+
+/**
+ * THE APPLY FEE - the economy model's "panel seats" sink, done right.
+ *
+ * You don't BUY a seat (selection stays pure merit - founder hand-picks + the
+ * most-judged applicants). You pay a fixed, NON-REFUNDABLE points fee just to
+ * APPLY for a given week. An active judge earns points easily, so the fee is a
+ * trivial unlock for them and a real one for a drive-by; and because it's spent
+ * win-or-lose, it keeps people earning for the next one. A pure points sink.
+ *
+ * Gated on config/tournament.enabled AND judgeApplyFeeEnabled, both off by
+ * default, so applying is FREE (today's behaviour) until the flag flips. The
+ * price is a placeholder in config/tournament, per the advisor-review record.
+ */
+const APPLY_FEE_DEFAULT = 50;
+function resolveApplyFee(cfg) {
+  const enabled = !!(cfg && cfg.enabled === true &&
+    cfg.judgeApplyFeeEnabled === true);
+  let fee = Number(cfg && cfg.judgeApplyFee);
+  if (!(Number.isFinite(fee) && fee >= 1 && fee <= 1_000_000)) {
+    fee = APPLY_FEE_DEFAULT;
+  }
+  return {enabled, fee};
 }
 
 /**
@@ -84,8 +109,13 @@ async function collectVolunteers(db, weekKey) {
 }
 
 /**
- * Opt in or out of judging THIS week's Main Stage. The week is resolved from
+ * APPLY to judge (or withdraw) THIS week's Main Stage. The week is resolved from
  * the clock here, so the client only sends whether it wants in.
+ *
+ * Applying charges the fixed fee once per week (idempotent on the ledger key,
+ * so withdrawing and re-applying the same week never double-charges). The fee
+ * is NON-REFUNDABLE: withdrawing deletes your application but never returns the
+ * points - it's a sink, spent win-or-lose. Selection remains pure merit.
  */
 async function volunteerToJudge(auth, data) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -101,12 +131,36 @@ async function volunteerToJudge(auth, data) {
   const weekKey = qualifyingWeek(Date.now()).cutoffDayKey;
   const ref = db.collection("judgeVolunteers").doc(weekKey)
       .collection("volunteers").doc(auth.uid);
-  if (opt) {
-    await ref.set({uid: auth.uid, at: Date.now()});
-  } else {
+
+  if (!opt) {
+    // Withdraw. No refund - the apply fee is spent whether or not you got a
+    // seat (that is the whole point of the sink).
     await ref.delete().catch(() => {});
+    return {ok: true, volunteered: false, weekKey};
   }
-  return {ok: true, volunteered: opt, weekKey};
+
+  // Applying. Charge the fee first (the authoritative gate) so an unaffordable
+  // application never lands in the pool; then record it.
+  const cfg = (await db.collection("config").doc("tournament").get()).data();
+  const {enabled: feeOn, fee} = resolveApplyFee(cfg);
+  let feeCharged = false;
+  if (feeOn && fee > 0) {
+    const spend = await spendPoints(auth.uid, {
+      reason: "judgeApply", sourceId: weekKey, amount: fee,
+    });
+    if (spend.spent === 0 && spend.reason === "insufficient") {
+      throw new HttpsError("failed-precondition",
+          `Applying to judge costs ${fee} points - you have ${spend.balance}.`,
+          {reason: "insufficient"});
+    }
+    feeCharged = spend.spent > 0; // false when already applied this week
+  }
+  await ref.set({
+    uid: auth.uid, at: Date.now(),
+    ...(feeCharged ? {paidAt: Date.now()} : {}),
+  }, {merge: true});
+  return {ok: true, volunteered: true, weekKey, fee: feeOn ? fee : 0,
+    feeCharged};
 }
 
 module.exports = {
@@ -116,4 +170,5 @@ module.exports = {
   rankVolunteers,
   qualifiedPool,
   resolveJudgeMinToQualify,
+  resolveApplyFee,
 };

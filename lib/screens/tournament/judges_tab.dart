@@ -13,11 +13,13 @@ import 'judges_room_screen.dart';
 /// The Judges tab of the tournament hub.
 ///
 /// Shows how a panel is filled (the founder picks a few seats; the rest autofill
-/// from the top VOLUNTEERS who've judged the most this week), this week's
-/// volunteer roster ranked by judging volume, and the "I'll judge" opt-in.
-/// Judging a live panel is a role you CHOOSE - you volunteer, then judge enough
-/// battles to qualify for a seat. All server-published (stats/weeklyJudges); the
-/// opt-in goes through HubService.volunteerToJudge.
+/// from the top APPLICANTS who've judged the most this week), this week's
+/// applicant roster ranked by judging volume, and the "Apply to judge" opt-in.
+/// A seat is a coveted try-out, not a chore: you APPLY (a fixed, non-refundable
+/// points fee when the flag is on - a sink that an active judge clears easily),
+/// then judge enough battles to qualify, and the top applicants get the seats.
+/// All server-published (stats/weeklyJudges); the opt-in + fee go through
+/// HubService.volunteerToJudge (the internal id is unchanged).
 class JudgesTab extends StatefulWidget {
   const JudgesTab({super.key, required this.weekKey});
 
@@ -37,8 +39,12 @@ class _JudgesTabState extends State<JudgesTab> {
   List<Map<String, dynamic>> _volunteers = const [];
   final Map<String, String> _names = {};
   int _minToQualify = _defaultMinToQualify;
-  bool _volunteered = false;
+  bool _volunteered = false; // "applied" (collection id is unchanged)
   bool _acting = false;
+  // The apply fee, read from config/tournament. Off (free) until the flag flips.
+  bool _feeEnabled = false;
+  int _fee = 0;
+  int _balance = 0;
   final _mainStage = MainStageService();
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
@@ -96,12 +102,32 @@ class _JudgesTabState extends State<JudgesTab> {
             .get();
         volunteered = v.exists;
       }
+      // The apply fee (config) + the viewer's balance, for the apply button.
+      // The fee is only live when the tournament AND the fee flag are both on;
+      // otherwise applying is free. 50 mirrors the server default.
+      bool feeEnabled = false;
+      int fee = 0;
+      int balance = 0;
+      final cfg = (await db.collection('config').doc('tournament').get()).data();
+      if (cfg?['enabled'] == true && cfg?['judgeApplyFeeEnabled'] == true) {
+        feeEnabled = true;
+        final f = (cfg?['judgeApplyFee'] as num?)?.toInt();
+        fee = (f != null && f >= 1) ? f : 50;
+      }
+      if (me != null) {
+        final u = (await db.collection('users').doc(me).get()).data();
+        balance = (u?['pointsBalance'] as num?)?.toInt() ??
+            (u?['points'] as num?)?.toInt() ?? 0;
+      }
       if (!mounted) return;
       setState(() {
         _volunteers = rows;
         _minToQualify =
             (data?['minToQualify'] as num?)?.toInt() ?? _defaultMinToQualify;
         _volunteered = volunteered;
+        _feeEnabled = feeEnabled;
+        _fee = fee;
+        _balance = balance;
         _loading = false;
       });
     } catch (_) {
@@ -109,19 +135,81 @@ class _JudgesTabState extends State<JudgesTab> {
     }
   }
 
-  Future<void> _toggleVolunteer() async {
+  Future<void> _apply() async {
     if (_acting) return;
+    // Spending points needs a confirm, and a non-refundable one doubly so.
+    if (_feeEnabled) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Apply to judge?'),
+          content: Text(
+            'It costs $_fee points to throw your hat in for this week\'s panel. '
+            'It\'s non-refundable — win or lose the seat, the points are spent. '
+            'Top applicants get the seats.',
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Apply')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
     setState(() => _acting = true);
-    final want = !_volunteered;
     try {
-      final now = await HubService.volunteerToJudge(want);
+      await HubService.volunteerToJudge(true);
       if (!mounted) return;
-      setState(() => _volunteered = now);
+      setState(() => _volunteered = true);
       await _load();
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? 'Could not update.')),
+          SnackBar(content: Text(e.message ?? 'Could not apply.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _withdraw() async {
+    if (_acting) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Withdraw your application?'),
+        content: Text(
+          _feeEnabled
+              ? "The points you spent to apply aren't refunded — you can "
+                  'apply again this week at no extra cost.'
+              : 'You can apply again this week any time.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Never mind')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Withdraw')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _acting = true);
+    try {
+      await HubService.volunteerToJudge(false);
+      if (!mounted) return;
+      setState(() => _volunteered = false);
+      await _load();
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'Could not withdraw.')),
         );
       }
     } finally {
@@ -173,18 +261,22 @@ class _JudgesTabState extends State<JudgesTab> {
               ],
             ),
           ),
-          // Your opt-in / status.
-          _StatusCard(
-            volunteered: _volunteered,
+          // Your application / status.
+          _ApplyCard(
+            applied: _volunteered,
             acting: _acting,
-            onToggle: _toggleVolunteer,
+            feeEnabled: _feeEnabled,
+            fee: _fee,
+            balance: _balance,
             minToQualify: _minToQualify,
             gold: gold,
+            onApply: _apply,
+            onWithdraw: _withdraw,
           ),
           const SizedBox(height: 6),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Text("This week's volunteers",
+            child: Text("This week's applicants",
                 style: text.labelLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: Colors.white.withValues(alpha: 0.8))),
@@ -194,9 +286,9 @@ class _JudgesTabState extends State<JudgesTab> {
               padding: EdgeInsets.only(top: 24),
               child: EmptyState(
                 icon: Icons.how_to_reg_outlined,
-                title: 'No volunteers yet',
-                message: 'Be the first to put your hand up. Volunteer, then '
-                    'vote on matches to climb the roster.',
+                title: 'No applicants yet',
+                message: 'Be the first to throw your hat in. Apply, then '
+                    'judge matches to climb the roster.',
               ),
             )
           else
@@ -285,24 +377,69 @@ class _JudgesTabState extends State<JudgesTab> {
   }
 }
 
-class _StatusCard extends StatelessWidget {
-  const _StatusCard({
-    required this.volunteered,
+class _ApplyCard extends StatelessWidget {
+  const _ApplyCard({
+    required this.applied,
     required this.acting,
-    required this.onToggle,
+    required this.feeEnabled,
+    required this.fee,
+    required this.balance,
     required this.minToQualify,
     required this.gold,
+    required this.onApply,
+    required this.onWithdraw,
   });
 
-  final bool volunteered;
+  final bool applied;
   final bool acting;
-  final VoidCallback onToggle;
+  final bool feeEnabled;
+  final int fee;
+  final int balance;
   final int minToQualify;
   final Color gold;
+  final VoidCallback onApply;
+  final VoidCallback onWithdraw;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final canAfford = !feeEnabled || balance >= fee;
+
+    final String title;
+    final String sub;
+    if (applied) {
+      title = 'Your application is in';
+      sub = 'Keep judging to climb the roster — the top applicants get the '
+          'open seats.';
+    } else {
+      title = 'Apply for a seat on the panel';
+      sub = feeEnabled
+          ? 'It costs $fee pts to apply, then judge $minToQualify matches this '
+              'week to qualify. Top applicants get the seats.'
+          : 'Apply, then judge $minToQualify matches this week to qualify.';
+    }
+
+    // The trailing action.
+    Widget action;
+    if (applied) {
+      action = OutlinedButton(
+        onPressed: acting ? null : onWithdraw,
+        child: const Text('Withdraw'),
+      );
+    } else if (!canAfford) {
+      // Can't cover the fee yet - judge more battles to earn it.
+      action = Text('${fee - balance} more',
+          style: text.labelMedium
+              ?.copyWith(color: Colors.white.withValues(alpha: 0.6)));
+    } else {
+      action = FilledButton(
+        onPressed: acting ? null : onApply,
+        style: FilledButton.styleFrom(
+            backgroundColor: gold, foregroundColor: const Color(0xFF3D2C00)),
+        child: Text(feeEnabled ? 'Apply · $fee pts' : 'Apply'),
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: const EdgeInsets.all(14),
@@ -310,52 +447,31 @@ class _StatusCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         color: Colors.black.withValues(alpha: 0.35),
         border: Border.all(
-            color: volunteered
+            color: applied
                 ? gold.withValues(alpha: 0.6)
                 : Colors.white.withValues(alpha: 0.12)),
       ),
       child: Row(
         children: [
-          Icon(volunteered ? Icons.how_to_reg : Icons.pan_tool_alt_outlined,
-              color: volunteered ? gold : Colors.white.withValues(alpha: 0.7)),
+          Icon(applied ? Icons.how_to_reg : Icons.pan_tool_alt_outlined,
+              color: applied ? gold : Colors.white.withValues(alpha: 0.7)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  volunteered
-                      ? "You're in for this week"
-                      : 'Want a seat on the panel?',
-                  style: text.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800, color: Colors.white),
-                ),
+                Text(title,
+                    style: text.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800, color: Colors.white)),
                 const SizedBox(height: 2),
-                Text(
-                  volunteered
-                      ? 'Keep voting to climb the roster — top volunteers get '
-                          'the open seats.'
-                      : 'Volunteer, then vote on $minToQualify matches this week '
-                          'to qualify.',
-                  style: text.bodySmall
-                      ?.copyWith(color: Colors.white.withValues(alpha: 0.7)),
-                ),
+                Text(sub,
+                    style: text.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.7))),
               ],
             ),
           ),
           const SizedBox(width: 10),
-          volunteered
-              ? OutlinedButton(
-                  onPressed: acting ? null : onToggle,
-                  child: const Text('Withdraw'),
-                )
-              : FilledButton(
-                  onPressed: acting ? null : onToggle,
-                  style: FilledButton.styleFrom(
-                      backgroundColor: gold,
-                      foregroundColor: const Color(0xFF3D2C00)),
-                  child: const Text('Volunteer'),
-                ),
+          action,
         ],
       ),
     );

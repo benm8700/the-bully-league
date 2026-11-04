@@ -448,8 +448,8 @@ class _MainStageScreenState extends State<MainStageScreen> {
       _headline("You're in the judge pool", gold),
       const SizedBox(height: 8),
       Text(
-        "You volunteered to judge this week. The five-seat panel fills from "
-        "the volunteer pool when it locks Thursday 4pm — no action needed. If "
+        "You applied to judge this week. The five-seat panel fills from "
+        "the applicant pool when it locks Thursday 4pm — no action needed. If "
         "you're picked, your green room opens then.",
         style: _muted(),
       ),
