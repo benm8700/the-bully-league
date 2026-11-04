@@ -1296,6 +1296,21 @@ exports.getWildcardAuctionState = onCall((request) => {
   return getWildcardAuctionState(request.auth, request.data);
 });
 
+// The try-out ticket - the weekly entry pass into the Main Stage. Buying it
+// (points; free for members) is what makes your weekly-Elo eligible to be
+// PICKED UP for the finals; without one you still play ranked but aren't drawn
+// into the field. The period + price are resolved server-side. See
+// tournamentTicket.js.
+exports.secureTournamentTicket = onCall((request) => {
+  const {secureTournamentTicket} = require("./tournamentTicket");
+  return secureTournamentTicket(request.auth);
+});
+
+exports.getTournamentTicketState = onCall((request) => {
+  const {getTournamentTicketState} = require("./tournamentTicket");
+  return getTournamentTicketState(request.auth);
+});
+
 /**
  * Leaves a bio reveal whose opponent has walked away, without spending a
  * skip. This is what makes a long reveal window safe: the maximum only

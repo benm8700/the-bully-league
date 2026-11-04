@@ -16,6 +16,9 @@ const {
 const {DEFAULT_PANEL_SIZE} = require("./judgePanel");
 const {resolveWildCardConfig, buildField, SKILL_SEATS} = require("./wildCard");
 const {resolveAndChargeWildcardAuction} = require("./wildcardAuctionPlay");
+const {
+  resolveTicketGate, eligibleStandings, collectTicketHolders,
+} = require("./tournamentTicket");
 
 /**
  * Weekly tournament qualifier - the Firestore wiring around the pure core.
@@ -114,12 +117,19 @@ async function sweepWeeklyQualifier(now = Date.now()) {
   const live = computeStandings(liveEntries, {
     startMs: week.startMs, cutoffMs: week.cutoffMs, minGames: MIN_GAMES,
   });
+  // The ticket gate does NOT filter the live board (see tournamentTicket.js):
+  // an empty early-week board looks like a dead tournament. The board shows the
+  // real Elo race; `ticketGate` tells the client to note that a ticket is
+  // needed to actually be PICKED UP, and the per-viewer "you haven't got yours"
+  // nudge comes from the Home banner (getTournamentTicketState).
+  const ticketGate = resolveTicketGate(cfgSnap.data());
   await db.collection("stats").doc("weeklyQualifier").set({
     tournamentDayKey: week.cutoffDayKey,
     startMs: week.startMs,
     cutoffMs: week.cutoffMs,
     standings: topN(live, LIVE_BOARD_SIZE),
     eligibleCount: live.length,
+    ticketGate,
     updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -161,6 +171,16 @@ async function sweepWeeklyQualifier(now = Date.now()) {
       const standings = computeStandings(entries, {
         startMs: closed.startMs, cutoffMs: closed.cutoffMs, minGames: MIN_GAMES,
       });
+      // THE TICKET GATE bites here, at the freeze: only ticket-holders get
+      // drawn into the field. Open eligibility (unchanged) when the gate is
+      // off. The UNFILTERED standings still feed the wildcard auction below -
+      // the auction's entry fee is that player's ticket, so a non-ticketed but
+      // qualified bidder can still win seat 4 without double-paying.
+      const closedTicketGate = resolveTicketGate(cfgSnap.data());
+      const ticketHolders = closedTicketGate ?
+        await collectTicketHolders(db, closed.cutoffDayKey) : [];
+      const field = eligibleStandings(
+          standings, ticketHolders, closedTicketGate);
       const ballots = await collectWeekBallots(
           db, closed.startMs, closed.cutoffMs);
       const closedJudges = computeJudgeStandings(ballots, {
@@ -174,12 +194,15 @@ async function sweepWeeklyQualifier(now = Date.now()) {
       // Resolve the wildcard POINTS AUCTION (and charge the winner) for the
       // week that just closed; the winner takes seat 4, with the engagement
       // lottery as the fallback inside buildField when nobody bid.
+      // Skill seats come from the TICKETED field; the auction resolver gets
+      // the UNFILTERED standings (auction qualification is skill + fee, not a
+      // ticket), excluding whoever already took a skill seat.
       const skillUids = new Set(
-          standings.slice(0, SKILL_SEATS).map((s) => s.uid));
+          field.slice(0, SKILL_SEATS).map((s) => s.uid));
       const auction = await resolveAndChargeWildcardAuction(
           db, closed.cutoffDayKey, standings, skillUids, cfgSnap.data());
       const {finalists, wildCardUid, wildCardSource, alternates} = buildField(
-          standings, judgedByUid, resolveWildCardConfig(cfgSnap.data()),
+          field, judgedByUid, resolveWildCardConfig(cfgSnap.data()),
           closed.cutoffDayKey, ALTERNATES, auction.auctionWinnerUid);
       const finalistSet = new Set(finalists.map((f) => f.uid));
       // The panel autofill pool is QUALIFIED VOLUNTEERS of the closed week,

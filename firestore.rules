@@ -420,6 +420,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // The TRY-OUT TICKET holders, per qualifying period. Holding a ticket is
+    // what makes your weekly-Elo eligible to be picked up for the Main Stage
+    // field (see tournamentTicket.js). Written ONLY by the
+    // secureTournamentTicket Cloud Function (which derives the period from the
+    // clock and spends real points), so a client can't grant itself a ticket
+    // or enter some other period. A client may read its OWN holder doc to
+    // confirm it; its full state comes from getTournamentTicketState.
+    match /tournamentTickets/{weekKey}/holders/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
     // Founder "Editor's Choice" spotlight - the battles the house has featured,
     // shown in the Home Featured row. Readable by any signed-in client (it's a
     // public showcase); written only from the /admin dashboard (Admin SDK,

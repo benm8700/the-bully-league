@@ -16,6 +16,7 @@ import '../../core/services/matchmaking_service.dart';
 import '../../widgets/admin_only.dart';
 import '../../widgets/home/goat_throne_banner.dart';
 import '../../widgets/home/main_stage_banner.dart';
+import '../../widgets/home/tournament_ticket_banner.dart';
 import '../../widgets/home/prize_claim_banner.dart';
 import '../../widgets/home/home_action_card.dart';
 import '../../widgets/home/player_status_card.dart';
@@ -180,6 +181,11 @@ class HomeScreen extends StatelessWidget {
                     // judge), the front door to the Main Stage - confirm your
                     // spot, make your callout. Nothing otherwise.
                     const MainStageBanner(),
+                    // Before you're a finalist: the weekly reminder to secure
+                    // your try-out ticket (the entry pass into the qualifying)
+                    // before the Wednesday-night deadline. Hides when ticketing
+                    // is off or the ticket's already held.
+                    const TournamentTicketBanner(),
                     const PrizeClaimBanner(),
                     // The "defend your throne" warning - shown only to a GOAT
                     // under threat or the challenger closing on their spot.
