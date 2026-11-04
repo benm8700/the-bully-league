@@ -999,6 +999,21 @@ Raised by the developer: what protects someone who is unhappy that their match f
     - **Verified by running the real sweep against real Firestore**: an open round is announced to both players and marked on the bracket, a second sweep says nothing, near the deadline only the absentee is warned, nobody is chased once both have checked in, and closed or decided rounds send nothing. **7 live checks plus 15 local tests.**
 
 ## Problems To Solve Later (Backlog — flagged during planning, not yet designed)
+- **PITCH DECK — comedian partnerships + investors — NEW, flagged to build
+  later (2026-11-03, developer's explicit ask to track).** The developer wants
+  a pitch deck to (a) recruit comedians into partnering with the app (the
+  comedian-promo / guest-judge / "Talent" plan — see Marketing — Comedian Promo
+  Stunts and the Main Stage guest-judge seat) and (b) show potential investors.
+  Likely ONE deck with two framings or two cuts of a shared core, since the
+  story overlaps (the product, the clip-flywheel growth loop, the fame/creator
+  moat, the tournament/Main Stage format). Lots of material already exists to
+  draw on: the Cost Planning numbers, the Monetization Model, the creator-economy
+  /gifting plan, Distribution (TikTok-first), and the founder-led-commercial
+  idea. **Ties into [[blitzkrieg-rollout-plan]]** (the coordinated launch push —
+  financing + marketing). Not yet designed: audience split (comedian vs investor
+  slides), what traction/numbers to show (the beta hasn't run), and format
+  (likely a real Slides deck). Capture for now; build when there's early traction
+  worth putting in front of money, and real clips/metrics to anchor it.
 - **SEAMLESS / AUTOMATIC POSTING OF CLIPS TO SOCIALS — NEW, flagged to build
   later (2026-10-11, developer's explicit ask to track).** The developer wants a
   seamless way to post — and eventually AUTO-post — published highlight clips to
