@@ -233,8 +233,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
     return _RewardTile(
       emoji: '🎬',
       title: 'Highlight Reel',
-      subtitle: 'A studio-style edit of one of your battles — captioned, '
-          'polished, and ready to share. Yours to keep.',
+      subtitle: 'A studio-quality edit of your performance — download it and '
+          'share it with your friends or post it on your socials.',
       price: _clipPrice,
       affordable: affordable,
       actionLabel: 'My Battles',
