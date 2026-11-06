@@ -883,11 +883,31 @@ function EditorsChoice({ metrics, callFn, busy, renderReel, rendering, now }: { 
         window still applies.) This never posts to your socials — that&apos;s a separate manual
         step in Post Studio.
       </p>
-      {items.length === 0 ? (
-        <p className="text-xs text-zinc-600">No recent battles.</p>
+      {/* What's live on the app's Home "Featured" section right now, split out
+          on its own so it is obvious what is posted and can be pulled. */}
+      <div className="mb-5 rounded-lg border-2 border-amber-500/60 bg-amber-500/5 p-3">
+        <h3 className="mb-2 text-sm font-semibold text-amber-300">
+          ⭐ On the Home Featured section now ({featuredCount})
+        </h3>
+        {featuredCount === 0 ? (
+          <p className="text-xs text-zinc-500">Nothing is featured. Home shows no Featured section.</p>
+        ) : (
+          <div className="space-y-2">{items.filter((b) => b.featured).map((b) => renderRow(b))}</div>
+        )}
+      </div>
+      <h3 className="mb-2 text-sm font-semibold text-zinc-400">Other recent battles</h3>
+      {items.filter((b) => !b.featured).length === 0 ? (
+        <p className="text-xs text-zinc-600">No other recent battles.</p>
       ) : (
         <div className="space-y-2">
-          {items.map((b) => (
+          {items.filter((b) => !b.featured).map((b) => renderRow(b))}
+        </div>
+      )}
+    </div>
+  );
+
+  function renderRow(b: BattleItem) {
+    return (
             <div key={b.id} className={`rounded-lg border p-3 text-sm ${b.slurTerms ? "border-2 border-red-500 bg-zinc-900/60" : b.featured ? "border-amber-500/50 bg-amber-500/10" : "border-zinc-800 bg-zinc-900/60"}`}>
               {b.slurTerms && <SlurWarning terms={b.slurTerms} />}
               <div className="flex flex-wrap items-center gap-2">
@@ -980,11 +1000,8 @@ function EditorsChoice({ metrics, callFn, busy, renderReel, rendering, now }: { 
                 </div>
               )}
             </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+    );
+  }
 }
 
 function Prizes({ metrics, act }: { metrics: Metrics; act: (p: Record<string, unknown>, l: string) => void }) {
