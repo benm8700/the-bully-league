@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/age_verification_service.dart';
 import '../../core/services/auth_service.dart';
@@ -41,6 +42,11 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _finalizing = false; // creating the account after the code is confirmed
   String? _errorMessage;
   String? _phoneE164; // normalized number the code was sent to
+  // How this person was cleared as 18+: 'platform_signal' when the app store
+  // confirmed it, 'self_attested' when the store had no answer and they rely
+  // on the "Before you roast" confirmation. Written to the user doc at signup;
+  // never a birthdate.
+  String _ageAssurance = 'self_attested';
 
   @override
   void dispose() {
@@ -98,9 +104,17 @@ class _SignupScreenState extends State<SignupScreen> {
       }
 
       final ageService = context.read<AgeVerificationService>();
-      final isAdult = await ageService.isAdult();
+      final age = await ageService.check();
       if (!mounted) return;
-      if (!isAdult) {
+      if (age == AgeCheckOutcome.verifyInStore) {
+        setState(() => _isSubmitting = false);
+        await _showVerifyInPlayStore();
+        return;
+      }
+      _ageAssurance = age == AgeCheckOutcome.adult
+          ? 'platform_signal'
+          : 'self_attested';
+      if (age == AgeCheckOutcome.minor) {
         setState(() => _isSubmitting = false);
         await showDialog<void>(
           context: context,
@@ -221,6 +235,7 @@ class _SignupScreenState extends State<SignupScreen> {
           'losses': 0,
           'accountStatus': 'active',
           'isAdmin': false,
+          'ageAssurance': _ageAssurance,
           'createdAt': FieldValue.serverTimestamp(),
         });
 
@@ -304,6 +319,44 @@ class _SignupScreenState extends State<SignupScreen> {
       // this screen (now showing the error) if it was rolled back.
       authService.signupInProgress.value = false;
     }
+  }
+
+  /// Play requires this person to verify their age in the Play Store before
+  /// it will share it. There's no in-app way to do that, so explain and send
+  /// them to the store; they tap Continue again when they're back.
+  Future<void> _showVerifyInPlayStore() {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Verify your age in Google Play'),
+        content: const Text(
+          'Google Play needs to confirm your age before you can join. Open '
+          'the Play Store, follow its age check, then come back and tap '
+          'Continue again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              launchUrl(
+                Uri.parse('market://details?id=com.bullyleague.app'),
+                mode: LaunchMode.externalApplication,
+              ).catchError(
+                (_) => launchUrl(
+                  Uri.parse('https://play.google.com/store'),
+                  mode: LaunchMode.externalApplication,
+                ),
+              );
+            },
+            child: const Text('Open Play Store'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

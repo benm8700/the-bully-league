@@ -87,7 +87,7 @@ class BullyLeagueApp extends StatelessWidget {
           create: (_) => AuthService(FirebaseAuth.instance),
         ),
         Provider<AgeVerificationService>(
-          create: (_) => StubAgeVerificationService(),
+          create: (_) => PlatformAgeVerificationService(),
         ),
         Provider<VisualModerationService>(
           create: (_) => CloudVisionModerationService(),
