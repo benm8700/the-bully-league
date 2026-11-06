@@ -52,6 +52,12 @@ const DEFAULTS = {
   interrupts: 0,
   shotClockSeconds: 7,
   graceMs: 1500,
+  // SILENCE AUTO-PASS (2026-11-06): the floor-holder's own phone listens to
+  // its mic and yields for them after silenceYieldSeconds of quiet once they
+  // have spoken, or firstWordsSeconds if they never start. Kills dead air
+  // without capping a turn. 0 disables either. Tune these during the beta.
+  silenceYieldSeconds: 5,
+  firstWordsSeconds: 5,
   /**
    * Vote weight at which a result counts for full rating movement (see
    * voteConfidence in rating.js).
@@ -99,6 +105,8 @@ const LIMITS = {
   interrupts: {min: 0, max: 10},
   shotClockSeconds: {min: 2, max: 30},
   graceMs: {min: 0, max: 10000},
+  silenceYieldSeconds: {min: 0, max: 30},
+  firstWordsSeconds: {min: 0, max: 30},
   // At least 1 (0 would make every result count for nothing), and capped
   // well above any plausible per-match vote count so it can grow with the
   // platform without needing a code change.

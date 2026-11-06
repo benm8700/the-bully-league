@@ -1399,26 +1399,26 @@ class _MoreWaysToPlay extends StatelessWidget {
         children: [
           Expanded(
             child: _MiniPlay(
-              icon: Icons.flash_on,
-              label: 'Face-Off',
-              iconColor: const Color(0xFF19B3A6),
-              locked: true,
-              onTap: () => _showFaceOffLocked(context),
+              icon: Icons.group,
+              label: 'Roast a friend',
+              iconColor: scheme.secondary,
+              // Friend battles are the main way the app spreads (you bring
+              // someone in to roast them), so this pill sits on the LEFT (read
+              // first) with a glowing border and a periodic shine sweep.
+              highlight: true,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ChallengeScreen()),
+              ),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: _MiniPlay(
-              icon: Icons.group,
-              label: 'Roast a friend',
-              iconColor: scheme.secondary,
-              // Friend battles are the main way the app spreads (you bring
-              // someone in to roast them), so this pill gets a glowing border
-              // to stand out from the quieter Face-Off pill beside it.
-              highlight: true,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ChallengeScreen()),
-              ),
+              icon: Icons.flash_on,
+              label: 'Face-Off',
+              iconColor: const Color(0xFF19B3A6),
+              locked: true,
+              onTap: () => _showFaceOffLocked(context),
             ),
           ),
         ],
@@ -1491,51 +1491,123 @@ class _MiniPlay extends StatelessWidget {
                 ]
               : null,
         ),
-        child: Material(
-          color: scheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(14),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: glow
-                    ? Border.all(color: iconColor, width: 2)
-                    : Border.all(color: scheme.outlineVariant),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              child: Row(
-                children: [
-                  Icon(
-                    icon,
-                    color: locked ? scheme.onSurfaceVariant : iconColor,
-                    size: 22,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: labelColor,
+        child: _withShine(
+          glow,
+          Material(
+            color: scheme.surfaceContainer,
+            borderRadius: BorderRadius.circular(14),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: glow
+                      ? Border.all(color: iconColor, width: 2)
+                      : Border.all(color: scheme.outlineVariant),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      icon,
+                      color: locked ? scheme.onSurfaceVariant : iconColor,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: labelColor,
+                        ),
                       ),
                     ),
-                  ),
-                  if (locked)
-                    Icon(
-                      Icons.lock_outline,
-                      size: 16,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                ],
+                    if (locked)
+                      Icon(
+                        Icons.lock_outline,
+                        size: 16,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  /// Lays the shine sweep over the pill (clipped to its rounded corners)
+  /// when [on]; otherwise returns the pill unchanged.
+  static Widget _withShine(bool on, Widget child) {
+    if (!on) return child;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Stack(
+        children: [
+          child,
+          const Positioned.fill(child: IgnorePointer(child: _ShineSweep())),
+        ],
+      ),
+    );
+  }
+}
+
+/// A soft diagonal highlight that glides across its parent every few
+/// seconds - the "shine" on the Roast a friend pill. Purely decorative and
+/// ignores taps.
+class _ShineSweep extends StatefulWidget {
+  const _ShineSweep();
+
+  @override
+  State<_ShineSweep> createState() => _ShineSweepState();
+}
+
+class _ShineSweepState extends State<_ShineSweep>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 3200),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) {
+        // The sweep crosses in the first ~35% of each cycle, then rests, so
+        // it reads as an occasional glint rather than a constant flicker.
+        final t = (_c.value / 0.35).clamp(0.0, 1.0);
+        final x = -1.6 + 3.2 * t;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment(x - 0.6, -1),
+              end: Alignment(x + 0.6, 1),
+              colors: [
+                Colors.white.withValues(alpha: 0),
+                Colors.white.withValues(alpha: t < 1 ? 0.22 : 0),
+                Colors.white.withValues(alpha: 0),
+              ],
+              stops: const [0.35, 0.5, 0.65],
+            ),
+          ),
+        );
+      },
     );
   }
 }

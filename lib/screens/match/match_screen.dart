@@ -7,7 +7,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-
 import 'package:provider/provider.dart';
 
 import '../../core/main_stage_battle.dart';
@@ -72,11 +71,11 @@ class _MatchScreenState extends State<MatchScreen>
 
   /// The chess-clock config, from the stamped settings so both devices agree.
   MainStageBattleConfig get _battleConfig => MainStageBattleConfig(
-        turnMs: _settings.turnSeconds * 1000,
-        interrupts: _settings.interrupts,
-        shotClockMs: _settings.shotClockSeconds * 1000,
-        graceMs: _settings.graceMs,
-      );
+    turnMs: _settings.turnSeconds * 1000,
+    interrupts: _settings.interrupts,
+    shotClockMs: _settings.shotClockSeconds * 1000,
+    graceMs: _settings.graceMs,
+  );
 
   late final VideoCallService _videoCallService;
   late final VisualModerationService _moderationService;
@@ -167,6 +166,23 @@ class _MatchScreenState extends State<MatchScreen>
   // yield/interrupt intents back. Mirrors MainStageBattleScreen.
   MainStageBattleState? _battle;
   Timer? _battleTick;
+
+  // SILENCE AUTO-PASS. While THIS player holds the floor, their own phone
+  // listens to their mic level. After [MatchSettings.silenceYieldSeconds] of
+  // quiet once they've spoken (or [firstWordsSeconds] if they never start),
+  // it yields for them - so a silent floor-holder can't leave everyone in
+  // dead air. Measured locally (no network). The last 3 seconds show a
+  // countdown on the Yield button ("Out of material? Passing mic in 3..." /
+  // "Bombing already? ..." if they never started); talking again cancels it.
+  Timer? _silenceTimer;
+  int? _silenceFloorTakenMs; // which floor-hold we're tracking
+  int _silenceQuietSinceMs = 0;
+  bool _silenceSpoke = false;
+  bool _silenceYieldSent = false;
+  int? _passInSeconds; // shown in the UI during the warning
+  // The last [_kPassWarningMs] of the silence window show a countdown.
+  static const int _kPassWarningMs = 3000;
+  static const int _kVoiceLevel = 10; // same bar as the pre-match mic check
   bool _engineStarted = false;
 
   // Interrupt grace cue: the floor-holder's clock flashes red + buzzes while a
@@ -200,7 +216,9 @@ class _MatchScreenState extends State<MatchScreen>
   void initState() {
     super.initState();
     _pulse = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 450));
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
     _videoCallService = AgoraVideoCallService();
     // Read before any async gap - see the note on this pattern in
     // ProfileScreen._addPhoto.
@@ -261,11 +279,15 @@ class _MatchScreenState extends State<MatchScreen>
     // caught live during step 9a testing). The pairing now supplies the
     // opponent's uid before this screen is even built, so that race is
     // structurally impossible rather than merely ordered around.
-    _frameSampleSub = _videoCallService.remoteFrameSamples.listen(_onRemoteFrameSample);
+    _frameSampleSub = _videoCallService.remoteFrameSamples.listen(
+      _onRemoteFrameSample,
+    );
     // Your OWN camera and mic. Warning someone that their opponent is in
     // the dark is information they can do nothing with; warning them
     // about themselves is the only version they can act on.
-    _localFrameSub = _videoCallService.localFrameSamples.listen(_onLocalFrameSample);
+    _localFrameSub = _videoCallService.localFrameSamples.listen(
+      _onLocalFrameSample,
+    );
     _videoCallService.localAudioLevel.addListener(_onLocalAudioLevel);
     _videoCallService.localUid.addListener(_maybeElectHost);
     _videoCallService.remoteUid.addListener(_maybeElectHost);
@@ -298,8 +320,9 @@ class _MatchScreenState extends State<MatchScreen>
   }
 
   void _onLocalAudioLevel() {
-    final message =
-        _quality.recordAudioLevel(_videoCallService.localAudioLevel.value);
+    final message = _quality.recordAudioLevel(
+      _videoCallService.localAudioLevel.value,
+    );
     if (message != null) {
       _quality.noteEpisode(dark: false, quiet: true);
       _showQualityWarning(message);
@@ -329,7 +352,10 @@ class _MatchScreenState extends State<MatchScreen>
     if (_violationEnded || _processingFrame) return;
     _processingFrame = true;
     try {
-      final jpeg = await compute(i420ToJpeg, I420FrameData.fromRawVideoFrame(frame));
+      final jpeg = await compute(
+        i420ToJpeg,
+        I420FrameData.fromRawVideoFrame(frame),
+      );
       final reason = await _moderationService.checkImageBytes(jpeg);
       if (reason != null) {
         await _handleContentViolation(reason, iAmReporter: true);
@@ -352,7 +378,10 @@ class _MatchScreenState extends State<MatchScreen>
   /// suspend decision is still admin review, not automatic) and tells the
   /// other device to end too, since only one side can see any given
   /// remote stream.
-  Future<void> _handleContentViolation(String reason, {required bool iAmReporter}) async {
+  Future<void> _handleContentViolation(
+    String reason, {
+    required bool iAmReporter,
+  }) async {
     if (_violationEnded) return;
     _violationEnded = true;
     _violationIAmReporter = iAmReporter;
@@ -372,7 +401,8 @@ class _MatchScreenState extends State<MatchScreen>
             // which a violation never reached.
             'matchId': widget.pairing.matchId,
             'reason': 'inappropriate_content',
-            'details': 'Automatically detected by live visual content moderation: $reason',
+            'details':
+                'Automatically detected by live visual content moderation: $reason',
             'status': 'pending',
             'createdAt': FieldValue.serverTimestamp(),
           });
@@ -381,7 +411,9 @@ class _MatchScreenState extends State<MatchScreen>
         }
       }
       try {
-        await _videoCallService.sendMatchMessage({'type': 'matchEndedViolation'});
+        await _videoCallService.sendMatchMessage({
+          'type': 'matchEndedViolation',
+        });
       } catch (_) {
         // Best-effort - still proceed to leave below even if this drops.
       }
@@ -395,8 +427,11 @@ class _MatchScreenState extends State<MatchScreen>
       // on the opponent's feed); the server disqualifies the reporter's
       // opponent and flags the match so no clip of it can be delivered. The
       // other device just abandons.
-      await _matchmakingService.completeMatch(widget.pairing.matchId,
-          outcome: 'abandoned', violation: iAmReporter);
+      await _matchmakingService.completeMatch(
+        widget.pairing.matchId,
+        outcome: 'abandoned',
+        violation: iAmReporter,
+      );
     } catch (e) {
       // The hourly sweep settles any match still pending after the vote
       // window, so a dropped call here delays cleanup rather than leaving
@@ -484,7 +519,9 @@ class _MatchScreenState extends State<MatchScreen>
     } else {
       _forfeitTimer?.cancel();
       _forfeitTimer = null;
-      if (_opponentDisconnecting) setState(() => _opponentDisconnecting = false);
+      if (_opponentDisconnecting) {
+        setState(() => _opponentDisconnecting = false);
+      }
     }
   }
 
@@ -493,11 +530,14 @@ class _MatchScreenState extends State<MatchScreen>
     if (!mounted || _phase == _Phase.verdict || _violationEnded) return;
     // Came back in the meantime - no forfeit.
     if (_videoCallService.remoteUid.value != null) {
-      if (_opponentDisconnecting) setState(() => _opponentDisconnecting = false);
+      if (_opponentDisconnecting) {
+        setState(() => _opponentDisconnecting = false);
+      }
       return;
     }
-    final r =
-        await _matchmakingService.claimBattleForfeit(widget.pairing.matchId);
+    final r = await _matchmakingService.claimBattleForfeit(
+      widget.pairing.matchId,
+    );
     if (!mounted) return;
     if (r.settled) {
       // Either a forfeit win (round had started) or a no-contest (warm-up
@@ -524,8 +564,12 @@ class _MatchScreenState extends State<MatchScreen>
       // The OTHER device detected a violation in what it saw of MY stream and
       // already auto-filed a report - this side doesn't file a second one
       // (iAmReporter: false), just ends the match.
-      unawaited(_handleContentViolation(
-          'Reported by the other participant.', iAmReporter: false));
+      unawaited(
+        _handleContentViolation(
+          'Reported by the other participant.',
+          iAmReporter: false,
+        ),
+      );
       return;
     }
     if (message['type'] == 'warmup') {
@@ -587,8 +631,11 @@ class _MatchScreenState extends State<MatchScreen>
     } else if (t == 'ms_intent' && _isHost == true) {
       final ev = _eventFromName(message['ev'] as String?);
       if (ev != null) {
-        _hostApply(ev,
-            by: message['by'] as String?, instant: message['instant'] == true);
+        _hostApply(
+          ev,
+          by: message['by'] as String?,
+          instant: message['instant'] == true,
+        );
       }
     }
   }
@@ -618,8 +665,7 @@ class _MatchScreenState extends State<MatchScreen>
   /// whoever drew the lower Agora uid a consistent going-first position every
   /// round of every match. matchId is a random id, so this is an even flip.
   bool _hostGoesFirst() {
-    final sum = widget.pairing.matchId.codeUnits
-        .fold<int>(0, (a, b) => a + b);
+    final sum = widget.pairing.matchId.codeUnits.fold<int>(0, (a, b) => a + b);
     return sum.isEven;
   }
 
@@ -635,8 +681,10 @@ class _MatchScreenState extends State<MatchScreen>
   /// spectators, with no forced small talk.
   Future<void> _runHostSequence() async {
     if (_warmupSeconds > 0 && !_violationEnded) {
-      await _videoCallService.sendMatchMessage(
-          {'type': 'warmup', 'duration': _warmupSeconds});
+      await _videoCallService.sendMatchMessage({
+        'type': 'warmup',
+        'duration': _warmupSeconds,
+      });
       _enterWarmup(_warmupSeconds);
       // Wait out the warmup, OR end it early when both players agree to skip
       // (whichever comes first). The early end completes _warmupSkip from
@@ -672,7 +720,8 @@ class _MatchScreenState extends State<MatchScreen>
     var oppGoSecond = false;
     try {
       // Reuse the counts already loaded at warmup start when present.
-      final ab = _matchAbilities ??
+      final ab =
+          _matchAbilities ??
           await AbilitiesService.getMatchAbilities(widget.pairing.matchId);
       _matchAbilities = ab;
       if (ab.enabled) {
@@ -766,6 +815,10 @@ class _MatchScreenState extends State<MatchScreen>
   void _afterBattleState({required bool broadcast}) {
     final b = _battle;
     if (b == null) return;
+    _silenceTimer ??= Timer.periodic(
+      const Duration(milliseconds: 200),
+      (_) => _silenceTick(),
+    );
     _videoCallService.muteLocalAudio(b.mutedPlayer == _myFirebaseUid);
     if (broadcast && _isHost == true) {
       _videoCallService.sendMatchMessage({'t': 'ms_state', 's': b.toMap()});
@@ -826,7 +879,9 @@ class _MatchScreenState extends State<MatchScreen>
     if (_matchAbilities != null || _loadingAbilities) return;
     _loadingAbilities = true;
     try {
-      final ab = await AbilitiesService.getMatchAbilities(widget.pairing.matchId);
+      final ab = await AbilitiesService.getMatchAbilities(
+        widget.pairing.matchId,
+      );
       if (mounted) setState(() => _matchAbilities = ab);
     } catch (_) {
       // No button; fine.
@@ -856,8 +911,10 @@ class _MatchScreenState extends State<MatchScreen>
   }
 
   void _sendSkipIntent() {
-    _videoCallService
-        .sendMatchMessage({'type': 'skipWarmup', 'by': _myFirebaseUid});
+    _videoCallService.sendMatchMessage({
+      'type': 'skipWarmup',
+      'by': _myFirebaseUid,
+    });
   }
 
   /// Ends the warmup early once BOTH players have asked to skip. Only the HOST
@@ -881,8 +938,10 @@ class _MatchScreenState extends State<MatchScreen>
       _forceEndWarmup();
     } else {
       // The host owns the timeline; ask it to end and broadcast battle start.
-      _videoCallService
-          .sendMatchMessage({'type': 'forceSkipWarmup', 'by': _myFirebaseUid});
+      _videoCallService.sendMatchMessage({
+        'type': 'forceSkipWarmup',
+        'by': _myFirebaseUid,
+      });
     }
   }
 
@@ -943,8 +1002,7 @@ class _MatchScreenState extends State<MatchScreen>
     // If the opponent left the battle, say so on the verdict screen rather
     // than "Good battle. Run it back?" - they didn't finish a battle, the
     // other person bailed.
-    if (status == 'abandoned' &&
-        data?['abandonedReason'] == 'opponent-left') {
+    if (status == 'abandoned' && data?['abandonedReason'] == 'opponent-left') {
       _opponentLeft = true;
     }
     _goToVerdict();
@@ -1003,9 +1061,65 @@ class _MatchScreenState extends State<MatchScreen>
     await _videoCallService.dispose();
   }
 
+  /// One step of the silence auto-pass (see [_silenceTimer]).
+  void _silenceTick() {
+    final b = _battle;
+    void clearWarning() {
+      if (_passInSeconds != null && mounted) {
+        setState(() => _passInSeconds = null);
+      }
+    }
+
+    if (b == null || b.isOver || _violationEnded) {
+      _silenceTimer?.cancel();
+      clearWarning();
+      return;
+    }
+    // Only the floor-holder's own phone acts, and not while an interrupt is
+    // winding up (the floor is already about to change hands).
+    if (b.floor != _myFirebaseUid || b.pendingBy != null) {
+      _silenceFloorTakenMs = null;
+      clearWarning();
+      return;
+    }
+    final now = _nowMs;
+    if (_silenceFloorTakenMs != b.floorTakenMs) {
+      // A new hold of the floor: start fresh.
+      _silenceFloorTakenMs = b.floorTakenMs;
+      _silenceQuietSinceMs = now;
+      _silenceSpoke = false;
+      _silenceYieldSent = false;
+    }
+    if (_videoCallService.localAudioLevel.value >= _kVoiceLevel) {
+      _silenceSpoke = true;
+      _silenceQuietSinceMs = now;
+    }
+    final limitSec = _silenceSpoke
+        ? _settings.silenceYieldSeconds
+        : _settings.firstWordsSeconds;
+    // Passing is pointless if the opponent has no time left to take it.
+    final oppHasTime = (b.remaining[_oppFirebaseUid] ?? 0) > 0;
+    if (limitSec <= 0 || !oppHasTime || _silenceYieldSent) {
+      clearWarning();
+      return;
+    }
+    final leftMs = limitSec * 1000 - (now - _silenceQuietSinceMs);
+    if (leftMs <= 0) {
+      _silenceYieldSent = true;
+      clearWarning();
+      _intent(MsEvent.yield);
+      return;
+    }
+    final passIn = leftMs <= _kPassWarningMs ? (leftMs / 1000).ceil() : null;
+    if (passIn != _passInSeconds && mounted) {
+      setState(() => _passInSeconds = passIn);
+    }
+  }
+
   @override
   void dispose() {
     _ticker?.cancel();
+    _silenceTimer?.cancel();
     _battleTick?.cancel();
     _skipResend?.cancel();
     _splatTimer?.cancel();
@@ -1027,7 +1141,8 @@ class _MatchScreenState extends State<MatchScreen>
     // the system back gesture with a confirmation. Once the match is over
     // (verdict or a violation end) or it never really started (error/
     // loading), leaving is free and the normal back button applies.
-    final canLeaveFreely = _error != null ||
+    final canLeaveFreely =
+        _error != null ||
         !_initialized ||
         _violationEnded ||
         _phase == _Phase.verdict;
@@ -1055,12 +1170,17 @@ class _MatchScreenState extends State<MatchScreen>
           automaticallyImplyLeading: canLeaveFreely,
         ),
         body: _error != null
-            ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(_error!),
+                ),
+              )
             : !_initialized
-                ? const Center(child: CircularProgressIndicator())
-                : _violationEnded
-                    ? _buildViolationEndedUi()
-                    : _buildMatchUi(),
+            ? const Center(child: CircularProgressIndicator())
+            : _violationEnded
+            ? _buildViolationEndedUi()
+            : _buildMatchUi(),
       ),
     );
   }
@@ -1080,10 +1200,10 @@ class _MatchScreenState extends State<MatchScreen>
           // penalty at all (not scored, not recorded).
           widget.pairing.mode == 'friend'
               ? 'The battle is still going. Leaving now ends it - but a '
-                  'friend battle is just for fun, so there is no penalty. '
-                  'You can challenge them again any time.'
+                    'friend battle is just for fun, so there is no penalty. '
+                    'You can challenge them again any time.'
               : 'The battle is still going. If you leave now it can count '
-                  'as a loss.',
+                    'as a loss.',
         ),
         actions: [
           TextButton(
@@ -1127,25 +1247,29 @@ class _MatchScreenState extends State<MatchScreen>
           children: [
             const Icon(Icons.report_gmailerrorred_outlined, size: 48),
             const SizedBox(height: 16),
-            Text('Match ended', style: Theme.of(context).textTheme.headlineSmall),
+            Text(
+              'Match ended',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(height: 12),
             Text(
               _violationIAmReporter
                   ? 'Our automated visual check flagged something on camera and '
-                      'ended the match. This is about video only - never anything '
-                      'said - and it doesn\'t mean anyone\'s been banned; a human '
-                      'will take a look. If it got it wrong, reach out via Support '
-                      '& Feedback on Home.'
+                        'ended the match. This is about video only - never anything '
+                        'said - and it doesn\'t mean anyone\'s been banned; a human '
+                        'will take a look. If it got it wrong, reach out via Support '
+                        '& Feedback on Home.'
                   : 'The automated visual check flagged something on camera and '
-                      'ended the match. This was NOT your opponent reporting you, '
-                      'and it is never about anything said - only video. If you '
-                      'think it got it wrong, reach out via Support & Feedback on '
-                      'Home.',
+                        'ended the match. This was NOT your opponent reporting you, '
+                        'and it is never about anything said - only video. If you '
+                        'think it got it wrong, reach out via Support & Feedback on '
+                        'Home.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+              onPressed: () =>
+                  Navigator.of(context).popUntil((route) => route.isFirst),
               child: const Text('Back to Home'),
             ),
           ],
@@ -1167,7 +1291,10 @@ class _MatchScreenState extends State<MatchScreen>
             const ColoredBox(
               color: Colors.black,
               child: Center(
-                child: Text('Waiting for opponent...', style: TextStyle(color: Colors.white70)),
+                child: Text(
+                  'Waiting for opponent...',
+                  style: TextStyle(color: Colors.white70),
+                ),
               ),
             ),
         Positioned(
@@ -1195,7 +1322,8 @@ class _MatchScreenState extends State<MatchScreen>
         if (_phase == _Phase.warmup || inBattle)
           Positioned(
             left: 16,
-            bottom: (inBattle ? 92 : 16) + MediaQuery.of(context).padding.bottom,
+            bottom:
+                (inBattle ? 92 : 16) + MediaQuery.of(context).padding.bottom,
             child: AbilityDeployBar(
               matchId: widget.pairing.matchId,
               onDeploy: _onDeployAbility,
@@ -1215,7 +1343,8 @@ class _MatchScreenState extends State<MatchScreen>
           ),
         if (_stealFlash) Positioned.fill(child: _buildStealFlash()),
         // Opponent's video dropped - settling rather than frozen-and-broken.
-        if (_opponentDisconnecting) Positioned.fill(child: _buildDisconnectOverlay()),
+        if (_opponentDisconnecting)
+          Positioned.fill(child: _buildDisconnectOverlay()),
       ],
     );
   }
@@ -1228,17 +1357,24 @@ class _MatchScreenState extends State<MatchScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
-                width: 30, height: 30,
-                child: CircularProgressIndicator(strokeWidth: 2.5)),
+              width: 30,
+              height: 30,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            ),
             SizedBox(height: 16),
-            Text('Opponent disconnected',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold)),
+            Text(
+              'Opponent disconnected',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             SizedBox(height: 6),
-            Text('Settling the result…',
-                style: TextStyle(color: Colors.white70)),
+            Text(
+              'Settling the result…',
+              style: TextStyle(color: Colors.white70),
+            ),
           ],
         ),
       ),
@@ -1257,21 +1393,30 @@ class _MatchScreenState extends State<MatchScreen>
         _intent(MsEvent.extend);
         _toast('+5 seconds');
       case 'tomato':
-        _videoCallService
-            .sendMatchMessage({'t': 'ability', 'id': 'tomato', 'by': _myFirebaseUid});
+        _videoCallService.sendMatchMessage({
+          't': 'ability',
+          'id': 'tomato',
+          'by': _myFirebaseUid,
+        });
         _toast('Tomato thrown');
       case 'fart':
         // Fires a random fart on the opponent's phone (local sound only, never
         // recorded). Nothing plays on this device - it's their hindrance.
-        _videoCallService
-            .sendMatchMessage({'t': 'ability', 'id': 'fart', 'by': _myFirebaseUid});
+        _videoCallService.sendMatchMessage({
+          't': 'ability',
+          'id': 'fart',
+          'by': _myFirebaseUid,
+        });
         _toast('Fart deployed');
     }
   }
 
   void _toast(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(duration: const Duration(milliseconds: 1200), content: Text(message)),
+      SnackBar(
+        duration: const Duration(milliseconds: 1200),
+        content: Text(message),
+      ),
     );
   }
 
@@ -1281,8 +1426,11 @@ class _MatchScreenState extends State<MatchScreen>
   void _deployInstant() {
     _intent(MsEvent.interrupt, instant: true);
     _showStealFlash();
-    _videoCallService
-        .sendMatchMessage({'t': 'fx', 'id': 'instantSteal', 'by': _myFirebaseUid});
+    _videoCallService.sendMatchMessage({
+      't': 'fx',
+      'id': 'instantSteal',
+      'by': _myFirebaseUid,
+    });
   }
 
   void _showStealFlash() {
@@ -1316,18 +1464,21 @@ class _MatchScreenState extends State<MatchScreen>
               color: gold.withValues(alpha: 0.16 * (1 - t)),
               alignment: Alignment.center,
               child: Transform.scale(
-                scale: 0.6 + 0.6 * Curves.easeOutBack.transform(t.clamp(0.0, 1.0)),
+                scale:
+                    0.6 + 0.6 * Curves.easeOutBack.transform(t.clamp(0.0, 1.0)),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.bolt, color: gold, size: 52),
-                    const Text('CUT IN!',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 42,
-                          fontWeight: FontWeight.w900,
-                          shadows: [Shadow(color: Colors.black, blurRadius: 8)],
-                        )),
+                    const Text(
+                      'CUT IN!',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 42,
+                        fontWeight: FontWeight.w900,
+                        shadows: [Shadow(color: Colors.black, blurRadius: 8)],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1372,20 +1523,22 @@ class _MatchScreenState extends State<MatchScreen>
             const Text(
               'GET READY',
               style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 3),
+                color: Colors.white70,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 3,
+              ),
             ),
             const SizedBox(height: 8),
             // The big countdown number.
             Text(
               '$_secondsRemaining',
               style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 76,
-                  fontWeight: FontWeight.w800,
-                  height: 1.0),
+                color: Colors.white,
+                fontSize: 76,
+                fontWeight: FontWeight.w800,
+                height: 1.0,
+              ),
             ),
             const SizedBox(height: 10),
             // Who takes the floor first (coin-flipped, not always the same
@@ -1418,7 +1571,8 @@ class _MatchScreenState extends State<MatchScreen>
   /// hasn't spent it. One tap ends the warmup for both - no waiting on the
   /// opponent, unlike the mutual control below.
   Widget _buildWarmupSkipAbility() {
-    final have = (_matchAbilities?.count(_myFirebaseUid, 'skipWarmup') ?? 0) > 0;
+    final have =
+        (_matchAbilities?.count(_myFirebaseUid, 'skipWarmup') ?? 0) > 0;
     if (!have || _skipWarmupUsed) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
@@ -1448,8 +1602,11 @@ class _MatchScreenState extends State<MatchScreen>
     final agreeing = _oppSkipRequested;
     return TextButton.icon(
       onPressed: _requestSkipWarmup,
-      icon: Icon(Icons.fast_forward,
-          size: 16, color: agreeing ? Colors.amberAccent : Colors.white70),
+      icon: Icon(
+        Icons.fast_forward,
+        size: 16,
+        color: agreeing ? Colors.amberAccent : Colors.white70,
+      ),
       style: TextButton.styleFrom(
         foregroundColor: agreeing ? Colors.amberAccent : Colors.white70,
         visualDensity: VisualDensity.compact,
@@ -1495,21 +1652,34 @@ class _MatchScreenState extends State<MatchScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            _clockChip('You', b.remaining[_myFirebaseUid] ?? 0,
-                b.floor == _myFirebaseUid, b.steals[_myFirebaseUid] ?? 0,
-                flash: target == _myFirebaseUid),
+            _clockChip(
+              'You',
+              b.remaining[_myFirebaseUid] ?? 0,
+              b.floor == _myFirebaseUid,
+              b.steals[_myFirebaseUid] ?? 0,
+              flash: target == _myFirebaseUid,
+            ),
             const SizedBox(height: 8),
-            _clockChip('Them', b.remaining[_oppFirebaseUid] ?? 0,
-                b.floor == _oppFirebaseUid, b.steals[_oppFirebaseUid] ?? 0,
-                flash: target == _oppFirebaseUid),
+            _clockChip(
+              'Them',
+              b.remaining[_oppFirebaseUid] ?? 0,
+              b.floor == _oppFirebaseUid,
+              b.steals[_oppFirebaseUid] ?? 0,
+              flash: target == _oppFirebaseUid,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _clockChip(String label, int ms, bool onFloor, int steals,
-      {bool flash = false}) {
+  Widget _clockChip(
+    String label,
+    int ms,
+    bool onFloor,
+    int steals, {
+    bool flash = false,
+  }) {
     final gold = context.palette.reward;
     const hotRed = Color(0xFFFF2D3A);
     final t = flash ? Curves.easeInOut.transform(_pulse.value) : 0.0;
@@ -1521,7 +1691,9 @@ class _MatchScreenState extends State<MatchScreen>
         color: onFloor ? gold.withValues(alpha: 0.9) : Colors.black54,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: flash ? Color.lerp(baseBorder, hotRed, 0.4 + 0.6 * t)! : baseBorder,
+          color: flash
+              ? Color.lerp(baseBorder, hotRed, 0.4 + 0.6 * t)!
+              : baseBorder,
           width: flash ? 2.5 : (onFloor ? 2 : 1),
         ),
         boxShadow: flash
@@ -1536,23 +1708,32 @@ class _MatchScreenState extends State<MatchScreen>
       ),
       child: Column(
         children: [
-          Text(label,
-              style: TextStyle(
-                  color: onFloor ? Colors.black : Colors.white70,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
-          Text(_fmt(ms),
-              style: TextStyle(
-                  color: onFloor ? Colors.black : Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900)),
+          Text(
+            label,
+            style: TextStyle(
+              color: onFloor ? Colors.black : Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            _fmt(ms),
+            style: TextStyle(
+              color: onFloor ? Colors.black : Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           // Interrupt pips only when interrupts are in play (loadout granted
           // some). Yield-only battles show no pip row.
           if (totalSteals > 0 || steals > 0)
-            Text('${'●' * steals}${'○' * (totalSteals - steals).clamp(0, 99)}',
-                style: TextStyle(
-                    color: onFloor ? Colors.black87 : Colors.white54,
-                    fontSize: 12)),
+            Text(
+              '${'●' * steals}${'○' * (totalSteals - steals).clamp(0, 99)}',
+              style: TextStyle(
+                color: onFloor ? Colors.black87 : Colors.white54,
+                fontSize: 12,
+              ),
+            ),
         ],
       ),
     );
@@ -1563,7 +1744,8 @@ class _MatchScreenState extends State<MatchScreen>
     final oppHoldsFloor = b.floor == _oppFirebaseUid;
     final oppOutOfTime = (b.remaining[_oppFirebaseUid] ?? 0) == 0;
     final iAmInterrupting = b.pendingBy == _myFirebaseUid;
-    final canInterrupt = oppHoldsFloor &&
+    final canInterrupt =
+        oppHoldsFloor &&
         (b.steals[_myFirebaseUid] ?? 0) > 0 &&
         (b.remaining[_myFirebaseUid] ?? 0) > 0 &&
         b.pendingBy == null;
@@ -1603,9 +1785,11 @@ class _MatchScreenState extends State<MatchScreen>
     }
     // Interrupt only appears when the player actually has steals (loadout);
     // the amateur base is yield-only, so most battles show Yield alone.
-    final showInterrupt = (b.steals[_myFirebaseUid] ?? 0) > 0 || iAmInterrupting;
+    final showInterrupt =
+        (b.steals[_myFirebaseUid] ?? 0) > 0 || iAmInterrupting;
     final instantN = b.instantSteals[_myFirebaseUid] ?? 0;
-    final canInstant = oppHoldsFloor &&
+    final canInstant =
+        oppHoldsFloor &&
         instantN > 0 &&
         (b.remaining[_myFirebaseUid] ?? 0) > 0 &&
         b.pendingBy == null;
@@ -1619,16 +1803,32 @@ class _MatchScreenState extends State<MatchScreen>
             child: FilledButton(
               onPressed: iHoldFloor ? () => _intent(MsEvent.yield) : null,
               style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 54),
-                  backgroundColor: Colors.white24),
-              child: const Text('Yield'),
+                minimumSize: const Size(0, 54),
+                backgroundColor: iHoldFloor && _passInSeconds != null
+                    ? context.palette.live
+                    : Colors.white24,
+              ),
+              // During the silence warning the button itself says what is
+              // about to happen; talking again cancels it.
+              child: Text(
+                iHoldFloor && _passInSeconds != null
+                    ? (_silenceSpoke
+                          ? 'Out of material? Passing mic in $_passInSeconds...'
+                          : 'Bombing already? Passing mic in '
+                                '$_passInSeconds...')
+                    : 'Yield',
+                textAlign: TextAlign.center,
+                maxLines: 2,
+              ),
             ),
           ),
           if (showInterrupt) ...[
             const SizedBox(width: 12),
             Expanded(
               child: FilledButton(
-                onPressed: canInterrupt ? () => _intent(MsEvent.interrupt) : null,
+                onPressed: canInterrupt
+                    ? () => _intent(MsEvent.interrupt)
+                    : null,
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(0, 54),
                   backgroundColor: iAmInterrupting
@@ -1636,9 +1836,11 @@ class _MatchScreenState extends State<MatchScreen>
                       : context.palette.live,
                   foregroundColor: iAmInterrupting ? Colors.black : null,
                 ),
-                child: Text(iAmInterrupting
-                    ? 'Cutting in...'
-                    : 'Interrupt (${b.steals[_myFirebaseUid] ?? 0})'),
+                child: Text(
+                  iAmInterrupting
+                      ? 'Cutting in...'
+                      : 'Interrupt (${b.steals[_myFirebaseUid] ?? 0})',
+                ),
               ),
             ),
           ],
@@ -1678,19 +1880,21 @@ class _MatchScreenState extends State<MatchScreen>
     try {
       // Did they beat me to it? Accept their incoming rematch instead of
       // creating a second, competing challenge.
-      final mine = await fns.httpsCallable('getMyChallenges')
+      final mine = await fns
+          .httpsCallable('getMyChallenges')
           .call<Map<String, dynamic>>();
       final incoming = (mine.data['incoming'] as List?) ?? const [];
       final theirs = incoming.cast<dynamic>().firstWhere(
-            (c) => (c as Map)['fromUid'] == oppId,
-            orElse: () => null,
-          );
+        (c) => (c as Map)['fromUid'] == oppId,
+        orElse: () => null,
+      );
       if (theirs != null) {
-        final r = await fns.httpsCallable('respondToChallenge')
+        final r = await fns
+            .httpsCallable('respondToChallenge')
             .call<Map<String, dynamic>>({
-          'challengeId': (theirs as Map)['challengeId'],
-          'accept': true,
-        });
+              'challengeId': (theirs as Map)['challengeId'],
+              'accept': true,
+            });
         final matchId = r.data['matchId'] as String?;
         if (matchId != null) {
           await _joinRematch(matchId);
@@ -1699,8 +1903,9 @@ class _MatchScreenState extends State<MatchScreen>
       }
 
       // Nobody's waiting yet - send mine and poll for them to take it up.
-      await fns.httpsCallable('challengeFriend')
-          .call<Map<String, dynamic>>({'toUid': oppId});
+      await fns.httpsCallable('challengeFriend').call<Map<String, dynamic>>({
+        'toUid': oppId,
+      });
       if (!mounted) return;
       setState(() {
         _rematchSent = true;
@@ -1708,12 +1913,16 @@ class _MatchScreenState extends State<MatchScreen>
       });
       _rematchPoll?.cancel();
       _rematchPoll = Timer.periodic(
-          const Duration(seconds: 3), (_) => _pollRematch());
+        const Duration(seconds: 3),
+        (_) => _pollRematch(),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _rematchSending = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not send the rematch - try again.')),
+        const SnackBar(
+          content: Text('Could not send the rematch - try again.'),
+        ),
       );
     }
   }
@@ -1727,13 +1936,14 @@ class _MatchScreenState extends State<MatchScreen>
     final oppId = widget.pairing.opponentId;
     final fns = FirebaseFunctions.instance;
     try {
-      final r =
-          await fns.httpsCallable('getMyChallenges').call<Map<String, dynamic>>();
+      final r = await fns
+          .httpsCallable('getMyChallenges')
+          .call<Map<String, dynamic>>();
       final accepted = (r.data['accepted'] as List?) ?? const [];
       final taken = accepted.cast<dynamic>().firstWhere(
-            (c) => (c as Map)['toUid'] == oppId,
-            orElse: () => null,
-          );
+        (c) => (c as Map)['toUid'] == oppId,
+        orElse: () => null,
+      );
       if (taken != null) {
         await _joinRematch((taken as Map)['matchId'] as String);
         return;
@@ -1742,15 +1952,16 @@ class _MatchScreenState extends State<MatchScreen>
       if (_myFirebaseUid.compareTo(oppId) < 0) {
         final incoming = (r.data['incoming'] as List?) ?? const [];
         final theirs = incoming.cast<dynamic>().firstWhere(
-              (c) => (c as Map)['fromUid'] == oppId,
-              orElse: () => null,
-            );
+          (c) => (c as Map)['fromUid'] == oppId,
+          orElse: () => null,
+        );
         if (theirs != null) {
-          final resp = await fns.httpsCallable('respondToChallenge')
+          final resp = await fns
+              .httpsCallable('respondToChallenge')
               .call<Map<String, dynamic>>({
-            'challengeId': (theirs as Map)['challengeId'],
-            'accept': true,
-          });
+                'challengeId': (theirs as Map)['challengeId'],
+                'accept': true,
+              });
           final matchId = resp.data['matchId'] as String?;
           if (matchId != null) await _joinRematch(matchId);
         }
@@ -1801,40 +2012,51 @@ class _MatchScreenState extends State<MatchScreen>
             const Icon(Icons.emoji_events_outlined, size: 48),
             const SizedBox(height: 16),
             Text(
-                _wonByForfeit
-                    ? 'You win!'
-                    : _noContest
-                        ? 'No contest'
-                        : _opponentLeft
-                            ? 'Your opponent left'
-                            : 'Match complete!',
-                style: Theme.of(context).textTheme.headlineSmall),
+              _wonByForfeit
+                  ? 'You win!'
+                  : _noContest
+                  ? 'No contest'
+                  : _opponentLeft
+                  ? 'Your opponent left'
+                  : 'Match complete!',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(height: 12),
             if (isFriend) ...[
               Text(
-                  _opponentLeft
-                      ? 'They bailed on the battle. No harm - want to run it '
+                _opponentLeft
+                    ? 'They bailed on the battle. No harm - want to run it '
                           'back?'
-                      : 'Good battle. Run it back?',
-                  textAlign: TextAlign.center),
+                    : 'Good battle. Run it back?',
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 24),
               if (_rematchJoining)
-                const Column(mainAxisSize: MainAxisSize.min, children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 10),
-                  Text('Starting the rematch…', textAlign: TextAlign.center),
-                ])
+                const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 10),
+                    Text('Starting the rematch…', textAlign: TextAlign.center),
+                  ],
+                )
               else if (_rematchSent)
-                const Column(mainAxisSize: MainAxisSize.min, children: [
-                  SizedBox(
+                const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2)),
-                  SizedBox(height: 10),
-                  Text("Rematch sent - waiting for them to jump back in…",
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    SizedBox(height: 10),
+                    Text(
+                      "Rematch sent - waiting for them to jump back in…",
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Color(0xFF4FD69A))),
-                ])
+                      style: TextStyle(color: Color(0xFF4FD69A)),
+                    ),
+                  ],
+                )
               else
                 FilledButton.icon(
                   onPressed: _rematchSending ? null : _sendRematch,
@@ -1922,15 +2144,17 @@ class _MatchScreenState extends State<MatchScreen>
                 ),
               ] else if (_matchSaveError != null) ...[
                 const SizedBox(height: 12),
-                Text(_matchSaveError!,
-                    style: TextStyle(
-                        color: Theme.of(context).colorScheme.error)),
+                Text(
+                  _matchSaveError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ] else ...[
                 const SizedBox(height: 16),
                 const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               ],
             ],
             // Back-to-home for the non-standard endings (friend scrimmage,
@@ -1958,8 +2182,9 @@ class _MatchScreenState extends State<MatchScreen>
                       Navigator.of(context).popUntil((route) => route.isFirst),
                   icon: const Icon(Icons.home_outlined),
                   label: const Text('Back to home'),
-                  style:
-                      FilledButton.styleFrom(minimumSize: const Size(200, 48)),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(200, 48),
+                  ),
                 ),
             ],
           ],

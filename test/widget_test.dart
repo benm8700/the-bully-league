@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 void main() {
-  testWidgets('SignupScreen renders username, email, and password fields',
+  testWidgets('Signup opens on step 1 of 4: just the username',
       (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -16,9 +16,12 @@ void main() {
       ),
     );
 
+    expect(find.text('Step 1 of 4'), findsOneWidget);
+    expect(find.text('Pick your username'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Username'), findsOneWidget);
-    expect(find.widgetWithText(TextFormField, 'Email'), findsOneWidget);
-    expect(find.widgetWithText(TextFormField, 'Password'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Continue'), findsOneWidget);
+    // Later steps are not on screen yet.
+    expect(find.widgetWithText(TextFormField, 'Email'), findsNothing);
+    expect(find.widgetWithText(TextFormField, 'Password'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Next'), findsOneWidget);
   });
 }

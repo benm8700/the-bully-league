@@ -25,6 +25,8 @@ class MatchSettings {
     this.interrupts = 0,
     this.shotClockSeconds = 7,
     this.graceMs = 1500,
+    this.silenceYieldSeconds = 5,
+    this.firstWordsSeconds = 5,
   });
 
   final int roundCount;
@@ -49,6 +51,13 @@ class MatchSettings {
   final int shotClockSeconds;
   final int graceMs;
 
+  /// SILENCE AUTO-PASS: the floor-holder's phone yields for them after this
+  /// many seconds of quiet once they have started talking (0 = off).
+  final int silenceYieldSeconds;
+
+  /// ...or after this many seconds if they never start talking (0 = off).
+  final int firstWordsSeconds;
+
   /// Total turns in a match - each round gives both players one turn. Legacy
   /// (the old round-loop format); unused by the chess-clock battle.
   int get totalTurns => roundCount * 2;
@@ -59,7 +68,10 @@ class MatchSettings {
     int read(String key, int orElse) => (map[key] as num?)?.toInt() ?? orElse;
     return MatchSettings(
       roundCount: read('roundCount', fallback.roundCount),
-      roundLengthSeconds: read('roundLengthSeconds', fallback.roundLengthSeconds),
+      roundLengthSeconds: read(
+        'roundLengthSeconds',
+        fallback.roundLengthSeconds,
+      ),
       countdownSeconds: read('countdownSeconds', fallback.countdownSeconds),
       bioRevealSeconds: read('bioRevealSeconds', fallback.bioRevealSeconds),
       warmupSeconds: read('warmupSeconds', fallback.warmupSeconds),
@@ -70,6 +82,11 @@ class MatchSettings {
       interrupts: read('interrupts', fallback.interrupts),
       shotClockSeconds: read('shotClockSeconds', fallback.shotClockSeconds),
       graceMs: read('graceMs', fallback.graceMs),
+      silenceYieldSeconds: read(
+        'silenceYieldSeconds',
+        fallback.silenceYieldSeconds,
+      ),
+      firstWordsSeconds: read('firstWordsSeconds', fallback.firstWordsSeconds),
     );
   }
 }
@@ -110,7 +127,10 @@ class MatchPairing {
   /// announcing a match.
   final String origin;
 
-  factory MatchPairing.fromMap(Map<String, dynamic> data, {String? fallbackMode}) {
+  factory MatchPairing.fromMap(
+    Map<String, dynamic> data, {
+    String? fallbackMode,
+  }) {
     return MatchPairing(
       matchId: data['matchId'] as String,
       channelName: data['channelName'] as String,
@@ -177,16 +197,19 @@ class MatchmakingProgress {
 /// Android dependency in a toolchain CLAUDE.md documents as fragile.
 class MatchmakingService {
   MatchmakingService({FirebaseFunctions? functions})
-      : _functions = functions ?? FirebaseFunctions.instance;
+    : _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFunctions _functions;
 
   static const pollInterval = Duration(seconds: 3);
 
   Future<Map<String, dynamic>> _call(
-      String name, Map<String, dynamic> args) async {
-    final result =
-        await _functions.httpsCallable(name).call<Map<String, dynamic>>(args);
+    String name,
+    Map<String, dynamic> args,
+  ) async {
+    final result = await _functions
+        .httpsCallable(name)
+        .call<Map<String, dynamic>>(args);
     return result.data;
   }
 
@@ -212,10 +235,12 @@ class MatchmakingService {
     var cancelled = false;
     var keepEntry = false;
     unawaited(cancel.then((_) => cancelled = true));
-    unawaited(standDown?.then((_) {
-      keepEntry = true;
-      cancelled = true;
-    }));
+    unawaited(
+      standDown?.then((_) {
+        keepEntry = true;
+        cancelled = true;
+      }),
+    );
 
     try {
       // Any head start today's judging earned. Read once at entry - it
@@ -275,11 +300,15 @@ class MatchmakingService {
             // a queue we're no longer in.
             await _call('enterMatchmakingQueue', {'mode': mode});
           default:
-            onProgress?.call(MatchmakingProgress(
-              waited: Duration(milliseconds: (data['waitedMs'] as num?)?.toInt() ?? 0),
-              tierBand: (data['tierBand'] as num?)?.toInt() ?? 0,
-              judgePriorityMs: judgePriorityMs,
-            ));
+            onProgress?.call(
+              MatchmakingProgress(
+                waited: Duration(
+                  milliseconds: (data['waitedMs'] as num?)?.toInt() ?? 0,
+                ),
+                tierBand: (data['tierBand'] as num?)?.toInt() ?? 0,
+                judgePriorityMs: judgePriorityMs,
+              ),
+            );
         }
 
         // Race the sleep against cancellation so tapping Cancel doesn't
@@ -307,15 +336,14 @@ class MatchmakingService {
     }
   }
 
-
-
   /// Recovers a match this player was paired into but never collected, AND/OR
   /// reports a queue entry with no opponent yet (so Home can show an "in the
   /// queue" banner). One callable returns both.
   Future<ActiveStatus> activeStatus() async {
     try {
-      final result =
-          await _functions.httpsCallable('getActiveMatch').call<Map<String, dynamic>>();
+      final result = await _functions
+          .httpsCallable('getActiveMatch')
+          .call<Map<String, dynamic>>();
       final data = result.data;
       final pairing = data['found'] == true ? MatchPairing.fromMap(data) : null;
       final q = (data['queued'] as Map?)?.cast<String, dynamic>();
@@ -323,7 +351,8 @@ class MatchmakingService {
           ? null
           : QueueStatus(
               mode: q['mode'] as String? ?? 'ranked',
-              joinedAtMs: (q['joinedAtMs'] as num?)?.toInt() ??
+              joinedAtMs:
+                  (q['joinedAtMs'] as num?)?.toInt() ??
                   DateTime.now().millisecondsSinceEpoch,
             );
       return ActiveStatus(pairing: pairing, queued: queued);
@@ -393,7 +422,10 @@ class MatchmakingService {
           .httpsCallable('claimBattleForfeit')
           .call<Map<String, dynamic>>({'matchId': matchId});
       final settled = result.data['settled'] == true;
-      return (settled: settled, won: settled && result.data['winnerId'] != null);
+      return (
+        settled: settled,
+        won: settled && result.data['winnerId'] != null,
+      );
     } catch (_) {
       return (settled: false, won: false);
     }
@@ -417,9 +449,10 @@ class MatchmakingService {
   /// Best-effort; the server only honours it before a round has started.
   Future<void> cancelPendingMatch(String matchId) async {
     try {
-      await _functions
-          .httpsCallable('leaveMatch')
-          .call<Map<String, dynamic>>({'matchId': matchId, 'cancel': true});
+      await _functions.httpsCallable('leaveMatch').call<Map<String, dynamic>>({
+        'matchId': matchId,
+        'cancel': true,
+      });
     } catch (_) {
       // Best-effort: the opponent's own escape / the sweep still clean up.
     }
@@ -460,8 +493,9 @@ class MatchmakingService {
   /// reward nobody knows they got - and the skip button is the one place
   /// the reward is actually spent.
   Future<SkipAllowance> skipsRemaining() async {
-    final result =
-        await _functions.httpsCallable('getSkipAllowance').call<Map<String, dynamic>>();
+    final result = await _functions
+        .httpsCallable('getSkipAllowance')
+        .call<Map<String, dynamic>>();
     return SkipAllowance(
       remaining: (result.data['remaining'] as num?)?.toInt() ?? 0,
       earned: (result.data['earned'] as num?)?.toInt() ?? 0,

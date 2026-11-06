@@ -11,13 +11,18 @@ import '../../core/services/age_verification_service.dart';
 import '../../core/services/auth_service.dart';
 import 'login_screen.dart';
 
-/// Signup has two steps on one screen (not two routes), deliberately: the
-/// email/password account is NOT created until the phone code is confirmed,
-/// so AuthGate's auth-state StreamBuilder never fires HomeScreen underneath a
-/// half-finished signup. If this were two routes, creating the account to
-/// link the phone would sign the user in and AuthGate would replace the
-/// signup route with Home before the OTP step could run.
-enum _SignupStep { details, verify }
+/// Signup is a short sequence of screens - username, then email + password,
+/// then phone, then the texted code - with a "Step N of 4" bar and a back
+/// arrow. One question per screen feels lighter than one long form, and it
+/// surfaces each error next to the thing that caused it.
+///
+/// It stays ONE route with internal steps (not four routes), deliberately:
+/// the email/password account is NOT created until the phone code is
+/// confirmed, and creating it signs the user in. AuthGate keeps this same
+/// SignupScreen mounted while signupInProgress is true, so the steps, the
+/// typed values and any error all survive that moment. Separate routes would
+/// be torn down by AuthGate instead.
+enum _SignupStep { username, account, phone, verify }
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -27,18 +32,22 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
-  final _detailsKey = GlobalKey<FormState>();
+  // One form per input step, so "Next" only validates what is on screen.
+  final _usernameKey = GlobalKey<FormState>();
+  final _accountKey = GlobalKey<FormState>();
+  final _phoneKey = GlobalKey<FormState>();
+  // Controllers live for the whole screen, so going Back never loses what
+  // was typed.
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmController = TextEditingController();
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
 
   bool _obscurePassword = true;
 
-  _SignupStep _step = _SignupStep.details;
-  bool _isSubmitting = false; // sending the code / verifying
+  _SignupStep _step = _SignupStep.username;
+  bool _isSubmitting = false; // checking the name / sending or verifying a code
   bool _finalizing = false; // creating the account after the code is confirmed
   String? _errorMessage;
   String? _phoneE164; // normalized number the code was sent to
@@ -53,7 +62,6 @@ class _SignupScreenState extends State<SignupScreen> {
     _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _confirmController.dispose();
     _phoneController.dispose();
     _codeController.dispose();
     super.dispose();
@@ -75,24 +83,42 @@ class _SignupScreenState extends State<SignupScreen> {
     return null;
   }
 
-  // --- Step 1: validate details, then send the code ---------------------
-  Future<void> _sendCode() async {
-    if (!_detailsKey.currentState!.validate()) return;
+  void _goTo(_SignupStep step) => setState(() {
+    _step = step;
+    _errorMessage = null;
+  });
 
+  void _back() {
+    if (_isSubmitting) return;
+    switch (_step) {
+      case _SignupStep.account:
+        _goTo(_SignupStep.username);
+      case _SignupStep.phone:
+        _goTo(_SignupStep.account);
+      case _SignupStep.verify:
+        _codeController.clear();
+        _goTo(_SignupStep.phone);
+      case _SignupStep.username:
+        break;
+    }
+  }
+
+  // --- Step 1: username --------------------------------------------------
+  // Checked first, deliberately: a taken or refused name is the most common
+  // reason signup fails, and finding out before typing anything else saves
+  // the frustration (and never leaves a half-made account with no name).
+  Future<void> _usernameNext() async {
+    if (!_usernameKey.currentState!.validate()) return;
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
     });
-
     try {
-      // The name is checked BEFORE anything else, deliberately. A taken or
-      // refused name discovered after an account exists leaves someone
-      // holding a half-made account with no name, which reads as a broken
-      // signup rather than as "pick another".
-      final username = _usernameController.text.trim();
       final check = await FirebaseFunctions.instance
           .httpsCallable('checkUsername')
-          .call<Map<String, dynamic>>({'username': username});
+          .call<Map<String, dynamic>>({
+            'username': _usernameController.text.trim(),
+          });
       if (!mounted) return;
       if (check.data['available'] != true) {
         setState(() {
@@ -102,49 +128,84 @@ class _SignupScreenState extends State<SignupScreen> {
         });
         return;
       }
-
-      final ageService = context.read<AgeVerificationService>();
-      final age = await ageService.check();
-      if (!mounted) return;
-      if (age == AgeCheckOutcome.verifyInStore) {
-        setState(() => _isSubmitting = false);
-        await _showVerifyInPlayStore();
-        return;
-      }
-      _ageAssurance = age == AgeCheckOutcome.adult
-          ? 'platform_signal'
-          : 'self_attested';
-      if (age == AgeCheckOutcome.minor) {
-        setState(() => _isSubmitting = false);
-        await showDialog<void>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Age requirement not met'),
-            content: const Text(
-              'The Bully League is only available to users 18 and older. '
-              'Your account was not created.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
-
-      final phone = _normalizePhone(_phoneController.text);
-      if (phone == null) {
+      setState(() => _isSubmitting = false);
+      _goTo(_SignupStep.account);
+    } catch (_) {
+      if (mounted) {
         setState(() {
-          _errorMessage = 'Enter a valid mobile number.';
+          _errorMessage = 'Something went wrong. Try again.';
           _isSubmitting = false;
         });
-        return;
       }
-      _phoneE164 = phone;
+    }
+  }
 
+  // --- Step 2: email + password (checked on the device) -------------------
+  void _accountNext() {
+    if (!_accountKey.currentState!.validate()) return;
+    _goTo(_SignupStep.phone);
+  }
+
+  // --- Step 3: phone - age check, then text the code ----------------------
+  Future<void> _phoneNext() async {
+    if (!_phoneKey.currentState!.validate()) return;
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    final ageService = context.read<AgeVerificationService>();
+    final age = await ageService.check();
+    if (!mounted) return;
+    if (age == AgeCheckOutcome.verifyInStore) {
+      setState(() => _isSubmitting = false);
+      await _showVerifyInPlayStore();
+      return;
+    }
+    _ageAssurance = age == AgeCheckOutcome.adult
+        ? 'platform_signal'
+        : 'self_attested';
+    if (age == AgeCheckOutcome.minor) {
+      setState(() => _isSubmitting = false);
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Age requirement not met'),
+          content: const Text(
+            'The Bully League is only available to users 18 and older. '
+            'Your account was not created.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    await _sendCode();
+  }
+
+  /// Texts the code to the number on the phone step. Also used by "Resend
+  /// code", which skips the age check (already done for this signup).
+  Future<void> _sendCode() async {
+    final phone = _normalizePhone(_phoneController.text);
+    if (phone == null) {
+      setState(() {
+        _errorMessage = 'Enter a valid mobile number.';
+        _isSubmitting = false;
+      });
+      return;
+    }
+    _phoneE164 = phone;
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+    try {
       final authService = context.read<AuthService>();
       await authService.sendPhoneCode(
         phoneE164: phone,
@@ -169,13 +230,6 @@ class _SignupScreenState extends State<SignupScreen> {
           });
         },
       );
-    } on FirebaseFunctionsException catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = e.message ?? 'Something went wrong. Try again.';
-          _isSubmitting = false;
-        });
-      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -294,10 +348,10 @@ class _SignupScreenState extends State<SignupScreen> {
             _errorMessage =
                 'That phone number is already on another account. '
                 'Log in instead.';
-            _step = _SignupStep.details;
+            _step = _SignupStep.phone;
           case 'email-already-in-use':
             _errorMessage = 'That email is already registered. Log in instead.';
-            _step = _SignupStep.details;
+            _step = _SignupStep.account;
           case 'invalid-verification-code':
             _errorMessage = "That code wasn't right. Check it and try again.";
           case 'session-expired':
@@ -361,30 +415,112 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Join The Bully League'),
-        leading: _step == _SignupStep.verify
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _isSubmitting
-                    ? null
-                    : () => setState(() {
-                        _step = _SignupStep.details;
-                        _errorMessage = null;
-                        _codeController.clear();
-                      }),
-              )
-            : null,
+    final stepNumber = _step.index + 1;
+    return PopScope(
+      // The system back gesture steps back through signup instead of leaving
+      // it; only on the first step does it leave (or pop back to Log in).
+      canPop: _step == _SignupStep.username && !_finalizing,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_finalizing) _back();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Join The Bully League'),
+          leading: _step != _SignupStep.username && !_finalizing
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back',
+                  onPressed: _isSubmitting ? null : _back,
+                )
+              : null,
+        ),
+        body: _finalizing
+            ? _buildFinishing(context)
+            : SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _progress(context, stepNumber),
+                    const SizedBox(height: 28),
+                    switch (_step) {
+                      _SignupStep.username => _buildUsername(context),
+                      _SignupStep.account => _buildAccount(context),
+                      _SignupStep.phone => _buildPhone(context),
+                      _SignupStep.verify => _buildVerify(context),
+                    },
+                  ],
+                ),
+              ),
       ),
-      body: _finalizing
-          ? _buildFinishing(context)
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: _step == _SignupStep.details
-                  ? _buildDetails(context)
-                  : _buildVerify(context),
+    );
+  }
+
+  Widget _progress(BuildContext context, int stepNumber) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Step $stepNumber of 4',
+          style: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: stepNumber / 4,
+            minHeight: 6,
+            backgroundColor: scheme.surfaceContainerHighest,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _heading(BuildContext context, String title, [String? subtitle]) {
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: text.headlineSmall),
+        if (subtitle != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: text.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
+          ),
+        ],
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _error() {
+    if (_errorMessage == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Text(
+        _errorMessage!,
+        style: const TextStyle(color: Color(0xFFE05252)),
+      ),
+    );
+  }
+
+  Widget _nextButton(VoidCallback onPressed, {String label = 'Next'}) {
+    return FilledButton(
+      onPressed: _isSubmitting ? null : onPressed,
+      child: _isSubmitting
+          ? const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Text(label),
     );
   }
 
@@ -417,94 +553,31 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _buildDetails(BuildContext context) {
+  Widget _buildUsername(BuildContext context) {
     return Form(
-      key: _detailsKey,
+      key: _usernameKey,
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _heading(
+            context,
+            'Pick your username',
+            'Public. Shown on the leaderboard and on clips.',
+          ),
           TextFormField(
             controller: _usernameController,
-            decoration: const InputDecoration(
-              labelText: 'Username',
-              helperText: 'Public. Shown on the leaderboard and on clips.',
-            ),
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Username'),
             maxLength: 20,
+            textInputAction: TextInputAction.next,
+            onFieldSubmitted: (_) => _usernameNext(),
             validator: (value) => (value == null || value.trim().isEmpty)
                 ? 'Username is required'
                 : null,
           ),
           const SizedBox(height: 16),
-          TextFormField(
-            controller: _emailController,
-            decoration: const InputDecoration(labelText: 'Email'),
-            keyboardType: TextInputType.emailAddress,
-            validator: (value) => (value == null || !value.contains('@'))
-                ? 'Enter a valid email'
-                : null,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _passwordController,
-            decoration: InputDecoration(
-              labelText: 'Password',
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                ),
-                tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-                onPressed: () =>
-                    setState(() => _obscurePassword = !_obscurePassword),
-              ),
-            ),
-            obscureText: _obscurePassword,
-            validator: (value) =>
-                (value == null || value.length < 6) ? 'Min 6 characters' : null,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _confirmController,
-            decoration: const InputDecoration(labelText: 'Confirm password'),
-            // Shares the one show/hide toggle above - typing the same thing
-            // twice is the safeguard, so there's no reason to hide one and
-            // show the other.
-            obscureText: _obscurePassword,
-            validator: (value) => (value != _passwordController.text)
-                ? "Passwords don't match"
-                : null,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _phoneController,
-            decoration: const InputDecoration(
-              labelText: 'Mobile number',
-              helperText: "We'll text a code to confirm it's really you.",
-              prefixText: '',
-            ),
-            keyboardType: TextInputType.phone,
-            validator: (value) =>
-                (value == null || _normalizePhone(value) == null)
-                ? 'Enter a valid mobile number'
-                : null,
-          ),
-          const SizedBox(height: 24),
-          if (_errorMessage != null) ...[
-            Text(
-              _errorMessage!,
-              style: const TextStyle(color: Color(0xFFE05252)),
-            ),
-            const SizedBox(height: 16),
-          ],
-          FilledButton(
-            onPressed: _isSubmitting ? null : _sendCode,
-            child: _isSubmitting
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Continue'),
-          ),
+          _error(),
+          _nextButton(_usernameNext),
           const SizedBox(height: 16),
           TextButton(
             onPressed: _isSubmitting
@@ -517,6 +590,92 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
             child: const Text('Already have an account? Log in'),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccount(BuildContext context) {
+    return Form(
+      key: _accountKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _heading(
+            context,
+            'Email and password',
+            "You'll use these to log in.",
+          ),
+          TextFormField(
+            controller: _emailController,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Email'),
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.email],
+            validator: (value) => (value == null || !value.contains('@'))
+                ? 'Enter a valid email'
+                : null,
+          ),
+          const SizedBox(height: 16),
+          // No "confirm password" field: the eye icon lets people check what
+          // they typed, which is how most modern apps handle it.
+          TextFormField(
+            controller: _passwordController,
+            decoration: InputDecoration(
+              labelText: 'Password',
+              helperText: 'At least 6 characters',
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                ),
+                tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
+            ),
+            obscureText: _obscurePassword,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.newPassword],
+            onFieldSubmitted: (_) => _accountNext(),
+            validator: (value) =>
+                (value == null || value.length < 6) ? 'Min 6 characters' : null,
+          ),
+          const SizedBox(height: 24),
+          _error(),
+          _nextButton(_accountNext),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhone(BuildContext context) {
+    return Form(
+      key: _phoneKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _heading(
+            context,
+            "What's your phone number?",
+            "We'll text you a code to confirm it's you. One account per number.",
+          ),
+          TextFormField(
+            controller: _phoneController,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Mobile number'),
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.telephoneNumber],
+            onFieldSubmitted: (_) => _phoneNext(),
+            validator: (value) =>
+                (value == null || _normalizePhone(value) == null)
+                ? 'Enter a valid mobile number'
+                : null,
+          ),
+          const SizedBox(height: 24),
+          _error(),
+          _nextButton(_phoneNext, label: 'Send code'),
         ],
       ),
     );
@@ -579,7 +738,6 @@ class _SignupScreenState extends State<SignupScreen> {
               ? null
               : () {
                   _codeController.clear();
-                  setState(() => _errorMessage = null);
                   _sendCode();
                 },
           child: const Text('Resend code'),

@@ -142,9 +142,11 @@ right, not because the absolute values are known to be correct.
 ### Match format
 | Value | Now | Note |
 |---|---|---|
-| Rounds / turn length / countdown | 3 / 15s / 5s | |
+| Battle clock | 30s each, chess clock + Yield | (Replaced the old 3×15s rounds.) |
+| Opening countdown | 15s, muted | |
+| **Silence auto-pass** | **5s** of silence passes the mic (`silenceYieldSeconds` / `firstWordsSeconds`); the last 3s show "Out of material? / Bombing already? Passing mic in 3..." | **CHECK DURING THE BETA (developer asked to be reminded, 2026-11-06).** Built so a floor-holder who goes quiet can't leave everyone in dead air. Watch for: (1) passes firing mid-pause on a comedic beat or for quiet talkers -> raise the seconds (the 3s warning window is a code constant, `_kPassWarningMs`); (2) dead air still happening in loud rooms (bar/music reads as talking, so it never fires); (3) people complaining the floor "got taken". The voice bar is mic level 10/255, the same as the pre-match check. Both numbers are live in `config/matchSettings` (0 disables). **There is no analytics tracking for this yet** - no `firebase_analytics` in the app - so judge it from watching real battles/clips and asking testers, or add a counter of auto-passes per match before the beta if numbers are wanted. |
 | Bio reveal | **600s (10 min)** | Long by design; safe because presence heartbeats release an absent opponent. Watch whether people actually use the time or just tap Ready. |
-| Event window | 18:00–19:00 Pacific | Name and hours both provisional. |
+| Event window ("Happy Hour") | 18:00–19:00 Pacific | Name and hours both provisional. |
 
 ### Rank thresholds and K-factors
 Still explicit placeholders in `functions/rating.js` (`RANK_TIERS`,
