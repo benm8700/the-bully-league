@@ -27,7 +27,7 @@ class MainStageCard extends StatelessWidget {
     // Watches the tournament flag so a "COMING SOON" badge shows while it is
     // switched off (which it is now). Everything underneath - the card, the
     // hub, all the features - stays fully intact and tappable; this is only a
-    // reminder to users that the monthly Main Stage is not live yet, and it
+    // reminder to users that the weekly Main Stage is not live yet, and it
     // disappears automatically the moment config/tournament.enabled flips true.
     //
     // Same slim side margin as the Play/Watch cards so all three line up.
@@ -58,8 +58,8 @@ class MainStageCard extends StatelessWidget {
             title: 'Main Stage',
             body:
                 'The tournament. The top roasters earn their spot and battle '
-                'live for the title and the belt. Win money, prizes, and fame. '
-                'Coming soon.',
+                'live for the title and the belt, every Thursday night. Win '
+                'money, prizes, and fame. Coming soon.',
             accent: _kGold,
           ),
         );

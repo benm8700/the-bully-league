@@ -66,7 +66,7 @@ Solo practice only (local camera, no channel, no recording), reached from "Warm 
 Anyone except the two players. 24-hour window after the battle ends. Tap the top/bottom half to pick the winner, then rate BOTH players with an emoji (🔥 Fire, 🧠 Clever, 🥱 Boring, 💩 Trash, 🚩 Red Flag); submit unlocks after enough of the clip has played. Accounts under 24h old vote at half weight. Tie = no rating change.
 
 ### Main Stage (built, switched OFF)
-- Code is **weekly**: qualifying = weekly hidden-Elo gain (5+ distinct opponents), week closes Wed 11:59pm PT, field locks Thu 4pm, show Thu 6pm PT. **Home copy says "monthly" - the cadence is undecided; do not assume either.**
+- **WEEKLY - decided 2026-11-06, and uniform across code and copy.** Qualifying = weekly hidden-Elo gain (5+ distinct opponents), week closes Wed 11:59pm PT, field locks Thu 4pm, show Thu 6pm PT. (An earlier Home comment said "monthly"; that is gone. Older notes below calling the cadence undecided/"maybe monthly" are superseded.)
 - Field of 4: top 3 by skill + a wildcard (points auction if `wildcardAuctionEnabled`, otherwise an engagement lottery). 4 alternates.
 - Battle: 15s muted countdown, 60s chess clock each, 2 interrupts each (1.5s grace), no abilities. A 5-seat judge panel (founder hand-picks, rest from the most-active voters) watches, then votes openly in the judges' room; founder breaks ties. Crowd reacts with emoji and a non-binding Crowd Favourite.
 - Hub tabs: LOBBY / THE CUT / JUDGES / PRIZE. Flag-off extras: try-out ticket, wildcard auction, judge apply fee.

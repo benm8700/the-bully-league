@@ -65,8 +65,9 @@ class RulesScreen extends StatelessWidget {
             title: 'Battle your way to the Main Stage',
             body: 'Day to day, you roast random strangers any time and climb '
                 'the ranks. The Main Stage is the tournament: the big show, '
-                'where the prizes and the prestige are. Keep winning your '
-                'everyday battles to earn your way up to it. Three of the four '
+                'where the prizes and the prestige are. It runs every week: '
+                'your ranked wins through Wednesday night decide who makes the '
+                'Thursday night show (6pm Pacific). Three of the four '
                 'finals spots are earned by climbing; the fourth is the '
                 'wildcard - anyone can bid points for it.',
           ),

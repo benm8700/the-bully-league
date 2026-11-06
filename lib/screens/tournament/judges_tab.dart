@@ -20,8 +20,8 @@ import 'judges_room_screen.dart';
 /// then judge enough battles to qualify, and the top applicants get the seats.
 ///
 /// Cadence-neutral by design: the fee and the opt-in key off the canonical
-/// qualifying-period (qualifyingWeek().cutoffDayKey), so a monthly cadence is
-/// one fee per month with no change here - the copy avoids a time unit too.
+/// qualifying-period (qualifyingWeek().cutoffDayKey). The cadence is weekly
+/// (decided 2026-11-06), so this is one fee per week.
 /// All server-published (stats/weeklyJudges); the opt-in + fee go through
 /// HubService.volunteerToJudge (the internal id is unchanged).
 class JudgesTab extends StatefulWidget {
