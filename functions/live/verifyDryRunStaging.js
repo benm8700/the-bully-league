@@ -2,8 +2,9 @@
  * Verifies the Main Stage DRY-RUN STAGING end to end against the deployed
  * backend, headlessly: seeds three throwaway accounts, runs the REAL
  * primeMainStageDryRun.js script, then drives the exact callables the two
- * devices + judge would (startMainStageBattle x2, the real completeMatch, and
- * castMainStageJudgeVote) and asserts the staged bracket settles and advances.
+ * devices + judge would (startMainStageBattle x2, the real completeMatch,
+ * castMainStageJudgeVote, then settleMainStageBattle after the 30s judges'-room
+ * grace) and asserts the staged bracket settles and advances to the winner.
  * Finally runs the REAL teardown script and asserts it cleaned up + restored.
  *
  * This proves the thing the developer will run actually works, AND closes the
@@ -145,19 +146,45 @@ async function run() {
     assert.match(r.body.error.message, /already been played/);
   });
 
-  await check("the one-judge panel's vote settles + advances the bracket", async () => {
+  await check("the one-judge panel's vote LOCKS the verdict (no advance yet)", async () => {
+    // Current model (judges'-room grace split, 2026-10-12): a deciding vote
+    // STAMPS judgeWinnerId immediately but does NOT advance the bracket - the
+    // judges stay on camera through a 30s grace, then settleMainStageBattle
+    // finalizes. So the verdict is locked here; the matchup winner is still null.
     const r = await callFn("castMainStageJudgeVote", tokTJ, {matchId, winnerUid: T1});
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
-    await new Promise((res) => setTimeout(res, 1500)); // let the forced finalize run
+    assert.strictEqual(r.body.result.decided, true, JSON.stringify(r.body));
+    assert.strictEqual(r.body.result.winner, T1, JSON.stringify(r.body));
     const m = (await db.collection("matches").doc(matchId).get()).data();
-    assert.strictEqual(m.judgeWinnerId, T1);
+    assert.strictEqual(m.judgeWinnerId, T1, "verdict stamped synchronously on the deciding vote");
     const t = (await db.collection("tournaments").doc(TID).get()).data();
-    assert.strictEqual(t.bracket.rounds[0].matches[0].winner, T1);
+    assert.strictEqual(t.bracket.rounds[0].matches[0].winner, null,
+        "bracket must NOT advance until the grace settles");
   });
 
   // (The panel gate - a non-judge refused on an UNDECIDED match - is covered
   // by mainStageSettleChecks; here the battle is already decided, where the
   // `already` short-circuit correctly returns the known result as a no-op.)
+
+  await check("after the grace, settleMainStageBattle finalizes + advances the bracket", async () => {
+    // settleMainStageBattle is the client nudge at the end of the 30s grace; the
+    // server re-checks the buffer, so it refuses (settled:false, remainingMs>0)
+    // until the grace elapses. Poll it to the finish rather than hardcoding 30s.
+    let settled = false;
+    for (let i = 0; i < 10 && !settled; i++) {
+      const r = await callFn("settleMainStageBattle", tokT1, {matchId});
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      const res = r.body.result || {};
+      if (res.settled) { settled = true; break; }
+      const waitMs = Number.isFinite(res.remainingMs) ? res.remainingMs + 500 : 4000;
+      await new Promise((res2) => setTimeout(res2, Math.min(waitMs, 8000)));
+    }
+    assert.ok(settled, "battle settled after the grace");
+    const m = (await db.collection("matches").doc(matchId).get()).data();
+    assert.strictEqual(m.voteFinalized, true, "match finalized");
+    const t = (await db.collection("tournaments").doc(TID).get()).data();
+    assert.strictEqual(t.bracket.rounds[0].matches[0].winner, T1, "bracket advanced to the winner");
+  });
 
   await check("teardown removes the tournament, bench, and battle match", async () => {
     execFileSync("node", ["live/teardownMainStageDryRun.js"], {encoding: "utf8"});
