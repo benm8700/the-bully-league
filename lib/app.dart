@@ -83,10 +83,18 @@ class BullyLeagueApp extends StatelessWidget {
     wireActiveTheme();
     return MultiProvider(
       providers: [
-        Provider<AuthService>(create: (_) => AuthService(FirebaseAuth.instance)),
-        Provider<AgeVerificationService>(create: (_) => StubAgeVerificationService()),
-        Provider<VisualModerationService>(create: (_) => CloudVisionModerationService()),
-        Provider<PushNotificationService>(create: (_) => PushNotificationService()),
+        Provider<AuthService>(
+          create: (_) => AuthService(FirebaseAuth.instance),
+        ),
+        Provider<AgeVerificationService>(
+          create: (_) => StubAgeVerificationService(),
+        ),
+        Provider<VisualModerationService>(
+          create: (_) => CloudVisionModerationService(),
+        ),
+        Provider<PushNotificationService>(
+          create: (_) => PushNotificationService(),
+        ),
       ],
       child: ValueListenableBuilder<String>(
         valueListenable: kActiveTheme,
@@ -113,26 +121,51 @@ class BullyLeagueApp extends StatelessWidget {
   }
 }
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final authService = context.read<AuthService>();
+  State<AuthGate> createState() => _AuthGateState();
+}
 
+class _AuthGateState extends State<AuthGate> {
+  // Created ONCE. authStateChanges() returns a new Stream object on every
+  // call, and handing StreamBuilder a different stream makes it drop back to
+  // "waiting" (a spinner), which unmounts SignupScreen and throws away its
+  // state - including the error message a failed signup just set.
+  late final AuthService _authService = context.read<AuthService>();
+  late final Stream<User?> _authStream = _authService.authStateChanges();
+
+  @override
+  Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream: authService.authStateChanges(),
+      stream: _authStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
-        if (snapshot.hasData) {
-          // Keyed by uid so signing in as a different account builds a
-          // fresh State - otherwise Flutter reuses the element and the new
-          // user's push token never gets registered.
-          return _AccountStatusGate(key: ValueKey(snapshot.data!.uid), uid: snapshot.data!.uid);
-        }
-        return const SignupScreen();
+        return ValueListenableBuilder<bool>(
+          valueListenable: _authService.signupInProgress,
+          builder: (context, signingUp, _) {
+            // Mid-signup the account already exists (so the user is "signed
+            // in"), but it isn't finished and may still be rolled back. Keep
+            // the same SignupScreen mounted so its state and any error
+            // survive.
+            if (signingUp) return const SignupScreen();
+            if (snapshot.hasData) {
+              // Keyed by uid so signing in as a different account builds a
+              // fresh State - otherwise Flutter reuses the element and the
+              // new user's push token never gets registered.
+              return _AccountStatusGate(
+                key: ValueKey(snapshot.data!.uid),
+                uid: snapshot.data!.uid,
+              );
+            }
+            return const SignupScreen();
+          },
+        );
       },
     );
   }
@@ -181,12 +214,16 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
 
   @override
   Widget build(BuildContext context) {
-    final userRef = FirebaseFirestore.instance.collection('users').doc(widget.uid);
+    final userRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.uid);
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: userRef.snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
         // Restore the persisted skin (CLAUDE.md's earned-skins system) from
         // the user document, which this gate already streams. Done in a
@@ -202,10 +239,9 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
           // account never renders a skin no longer offered. The window
           // override, if live, wins over this via kActiveTheme.
           final skin = data['equippedSkin'] as String?;
-          final effective =
-              (skin != null && kEquippableSkins.contains(skin))
-                  ? skin
-                  : kBaseSkin;
+          final effective = (skin != null && kEquippableSkins.contains(skin))
+              ? skin
+              : kBaseSkin;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             kEquippedSkin.value = effective;
           });

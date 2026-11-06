@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 /// Wraps Firebase Auth so screens never call the Firebase SDK directly —
 /// consistent with the "risky/replaceable dependency behind an interface"
@@ -9,6 +10,14 @@ class AuthService {
   final FirebaseAuth _auth;
 
   User? get currentUser => _auth.currentUser;
+
+  /// True while the signup screen is finishing an account (create -> link
+  /// phone -> write profile). Creating the account signs the user in, and
+  /// without this AuthGate would swap to Home mid-signup - then, if linking
+  /// the phone fails and the half-made account is rolled back, back to a
+  /// FRESH SignupScreen whose state (and error message) was thrown away.
+  /// AuthGate keeps showing the same SignupScreen while this is true.
+  final ValueNotifier<bool> signupInProgress = ValueNotifier<bool>(false);
 
   /// Uses userChanges() rather than authStateChanges() so the UI also
   /// rebuilds after profile updates (e.g. setting displayName right after

@@ -77,8 +77,8 @@ dev_dependencies:
 #   dart run flutter_launcher_icons
 flutter_launcher_icons:
   android: true
-  ios: false
-  remove_alpha_ios: false
+  ios: true
+  remove_alpha_ios: true
   image_path: "assets/icon/the_bully_league_head_to_head_app_icon_1024.png"
   adaptive_icon_background: "#12100F"
   adaptive_icon_foreground: "assets/icon/the_bully_league_head_to_head_app_icon_1024.png"

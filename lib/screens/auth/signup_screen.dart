@@ -192,6 +192,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
     final username = _usernameController.text.trim();
     final authService = context.read<AuthService>();
+    authService.signupInProgress.value = true;
     try {
       // Creates the email/password account (signs in) AND links the verified
       // phone. If the phone is already on another account this throws
@@ -223,20 +224,25 @@ class _SignupScreenState extends State<SignupScreen> {
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-        try {
-          await FirebaseFunctions.instance
-              .httpsCallable('setUsername')
-              .call<Map<String, dynamic>>({'username': username});
-        } catch (_) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Your account is ready, but that username was just taken. '
-                  'Pick one from Profile.',
+        // These two server calls are independent, so run them side by side.
+        // Each can hit a cold-start Cloud Function; one after the other they
+        // took ~45s in testing, which read as the app having frozen.
+        Future<void> claimUsername() async {
+          try {
+            await FirebaseFunctions.instance
+                .httpsCallable('setUsername')
+                .call<Map<String, dynamic>>({'username': username});
+          } catch (_) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Your account is ready, but that username was just taken. '
+                    'Pick one from Profile.',
+                  ),
                 ),
-              ),
-            );
+              );
+            }
           }
         }
 
@@ -246,14 +252,18 @@ class _SignupScreenState extends State<SignupScreen> {
         // user doc, and attaches any pending phone challenges aimed at it.
         // Best-effort: a failure here must not strand a real, signed-in
         // account on the signup screen - the number can be recorded later.
-        try {
-          await user.getIdToken(true);
-          await FirebaseFunctions.instance
-              .httpsCallable('finalizePhoneSignup')
-              .call<Map<String, dynamic>>(<String, dynamic>{});
-        } catch (_) {
-          // non-fatal
+        Future<void> recordPhone() async {
+          try {
+            await user.getIdToken(true);
+            await FirebaseFunctions.instance
+                .httpsCallable('finalizePhoneSignup')
+                .call<Map<String, dynamic>>(<String, dynamic>{});
+          } catch (_) {
+            // non-fatal
+          }
         }
+
+        await Future.wait([claimUsername(), recordPhone()]);
       }
       // AuthGate already swapped to HomeScreen when the account was created;
       // pop this route if signup was reached via the Log in <-> Sign up link.
@@ -266,7 +276,8 @@ class _SignupScreenState extends State<SignupScreen> {
         switch (e.code) {
           case 'credential-already-in-use':
           case 'account-exists-with-different-credential':
-            _errorMessage = 'That phone number is already on another account. '
+            _errorMessage =
+                'That phone number is already on another account. '
                 'Log in instead.';
             _step = _SignupStep.details;
           case 'email-already-in-use':
@@ -288,6 +299,10 @@ class _SignupScreenState extends State<SignupScreen> {
           _errorMessage = 'Sign up failed. Try again.';
         });
       }
+    } finally {
+      // Lets AuthGate move on: to Home if the account finished, or stay on
+      // this screen (now showing the error) if it was rolled back.
+      authService.signupInProgress.value = false;
     }
   }
 
@@ -302,18 +317,49 @@ class _SignupScreenState extends State<SignupScreen> {
                 onPressed: _isSubmitting
                     ? null
                     : () => setState(() {
-                          _step = _SignupStep.details;
-                          _errorMessage = null;
-                          _codeController.clear();
-                        }),
+                        _step = _SignupStep.details;
+                        _errorMessage = null;
+                        _codeController.clear();
+                      }),
               )
             : null,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: _step == _SignupStep.details
-            ? _buildDetails(context)
-            : _buildVerify(context),
+      body: _finalizing
+          ? _buildFinishing(context)
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: _step == _SignupStep.details
+                  ? _buildDetails(context)
+                  : _buildVerify(context),
+            ),
+    );
+  }
+
+  /// Shown once the code is accepted, while the account is created and the
+  /// server sets the username and records the verified phone. That can take
+  /// a while (the backend may be starting up), and before this the screen
+  /// just sat there looking reset, so people assumed it had failed.
+  Widget _buildFinishing(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 24),
+            Text(
+              'Setting up your account...',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'This can take up to a minute. Keep the app open.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -383,13 +429,17 @@ class _SignupScreenState extends State<SignupScreen> {
               prefixText: '',
             ),
             keyboardType: TextInputType.phone,
-            validator: (value) => (value == null || _normalizePhone(value) == null)
+            validator: (value) =>
+                (value == null || _normalizePhone(value) == null)
                 ? 'Enter a valid mobile number'
                 : null,
           ),
           const SizedBox(height: 24),
           if (_errorMessage != null) ...[
-            Text(_errorMessage!, style: const TextStyle(color: Color(0xFFE05252))),
+            Text(
+              _errorMessage!,
+              style: const TextStyle(color: Color(0xFFE05252)),
+            ),
             const SizedBox(height: 16),
           ],
           FilledButton(
@@ -410,8 +460,8 @@ class _SignupScreenState extends State<SignupScreen> {
                 // underneath as the root route for its auth-state
                 // StreamBuilder to fire HomeScreen once sign-in succeeds.
                 : () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    ),
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  ),
             child: const Text('Already have an account? Log in'),
           ),
         ],
