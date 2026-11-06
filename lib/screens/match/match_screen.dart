@@ -229,6 +229,12 @@ class _MatchScreenState extends State<MatchScreen>
       setState(() => _error = 'Match setup failed: $e');
       return;
     }
+    // Start muted. Agora joins with the mic live, and nothing muted it until
+    // the warmup countdown began - so while waiting for the opponent to
+    // arrive, each player's mic was open (and could land in the recording).
+    // The warmup keeps it muted; the battle engine opens the first-floor
+    // player's mic the moment the battle begins.
+    _videoCallService.muteLocalAudio(true);
     if (!mounted) return;
     setState(() => _initialized = true);
     _msgSub = _videoCallService.matchMessages.listen(_onMessage);

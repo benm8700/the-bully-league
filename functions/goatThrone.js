@@ -119,7 +119,7 @@ async function sweepGoatThrone(nowMs = Date.now()) {
   try {
     await sendToUsers([t.goat.uid], {
       title: "Your throne is under threat",
-      body: `${t.challenger.name} is closing in. Defend it in the Daily Gauntlet.`,
+      body: `${t.challenger.name} is closing in. Win your ranked battles to hold it.`,
       category: "rank_change",
       data: {type: "goat_throne", role: "defender"},
     });
@@ -129,8 +129,8 @@ async function sweepGoatThrone(nowMs = Date.now()) {
   try {
     await sendToUsers([t.challenger.uid], {
       title: "A GOAT throne is in reach",
-      body: `You're closing in on ${t.goat.name}. Win in the Daily Gauntlet ` +
-        "and it could be yours.",
+      body: `You're closing in on ${t.goat.name}. Keep winning ranked ` +
+        "battles and it could be yours.",
       category: "rank_change",
       data: {type: "goat_throne", role: "challenger"},
     });

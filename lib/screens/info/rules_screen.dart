@@ -32,20 +32,22 @@ class RulesScreen extends StatelessWidget {
           const _Rule(
             icon: Icons.sports_mma_outlined,
             title: 'The battle',
-            body: 'You are matched one-on-one. First a short warmup - both '
-                'mics open, size each other up. Then it is on the clock: you '
-                'each get about 30 seconds that only counts down while YOU are '
-                'talking. Hold the floor and roast, then tap Yield to hand it '
-                'over (it also passes when your time runs out). While your '
-                'opponent has the floor, your mic is muted. When both clocks '
-                'hit zero, it is done - so pick your moments and land them.',
+            body: "You're randomly paired with a stranger close to your skill "
+                'level for a one-on-one roast battle. You each get 30 seconds '
+                'to roast your opponent, and your clock only runs during your '
+                'turn. You can yield at any point to hand the floor over and '
+                'let them roast you - and they can yield it right back '
+                "whenever they want. While it's their turn, your mic is muted. "
+                'The battle ends when both clocks hit zero.',
           ),
           const _Rule(
             icon: Icons.how_to_vote_outlined,
             title: 'How you win',
-            body: 'The crowd decides. People watch the battle and vote for who '
-                'was funnier - most votes wins. A tie counts as neither a win '
-                'nor a loss. It is skill, not luck: win, and you climb.',
+            body: 'The crowd votes for the winner. App users can watch your '
+                'battle live or afterwards, and vote for who was funnier up to '
+                '24 hours after it ends. Most votes wins, and a tie counts as '
+                'neither a win nor a loss. Players may opt out of live '
+                'viewing.',
           ),
           const _Rule(
             icon: Icons.videocam_outlined,

@@ -189,7 +189,7 @@ void main() {
     });
 
     test('a blank name falls back rather than rendering an empty banner', () {
-      expect(EventWindowConfig.fromMap({'name': '   '}).name, 'Daily Gauntlet');
+      expect(EventWindowConfig.fromMap({'name': '   '}).name, 'Happy Hour');
     });
 
     test('the window can be switched off entirely from config', () {

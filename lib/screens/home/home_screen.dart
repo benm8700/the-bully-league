@@ -61,8 +61,7 @@ class HomeScreen extends StatelessWidget {
           'assets/home/home_background.png',
           fit: BoxFit.fitWidth,
           alignment: Alignment.topCenter,
-          errorBuilder: (_, _, _) =>
-              const ColoredBox(color: Color(0xFF0E0B14)),
+          errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF0E0B14)),
         ),
         const DecoratedBox(
           decoration: BoxDecoration(
@@ -78,216 +77,219 @@ class HomeScreen extends StatelessWidget {
         // Main Stage banners keep their full brightness.
         const ColoredBox(color: Color(0x40000000)),
         Scaffold(
-      // Transparent so the stage background above shows through the whole
-      // screen rather than being hidden behind a solid Scaffold/app bar.
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        // The header logo is the WORDMARK-ONLY branding asset
-        // (assets/branding/bully_league_wordmark.png) - the approved
-        // bully_league_header.png with the "REAL PEOPLE. REAL ROASTS." tagline
-        // cropped off (developer's call, 2026-09-14). The full header PNG is
-        // kept in the repo untouched; this is a separate cropped file, so
-        // restoring the tagline is a one-line asset-path change. Sized by
-        // height only (BoxFit.contain preserves the aspect ratio - never
-        // stretched, cropped or recoloured), kept compact.
-        toolbarHeight: 72,
-        centerTitle: true,
-        title: Image.asset(
-          'assets/branding/bully_league_wordmark.png',
-          height: 44,
-          fit: BoxFit.contain,
-        ),
-        actions: [
-          // The bell shows notification settings (no badge count).
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            tooltip: 'Notifications',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const NotificationSettingsScreen(),
-              ),
+          // Transparent so the stage background above shows through the whole
+          // screen rather than being hidden behind a solid Scaffold/app bar.
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            // The header logo is the WORDMARK-ONLY branding asset
+            // (assets/branding/bully_league_wordmark.png) - the approved
+            // bully_league_header.png with the "REAL PEOPLE. REAL ROASTS." tagline
+            // cropped off (developer's call, 2026-09-14). The full header PNG is
+            // kept in the repo untouched; this is a separate cropped file, so
+            // restoring the tagline is a one-line asset-path change. Sized by
+            // height only (BoxFit.contain preserves the aspect ratio - never
+            // stretched, cropped or recoloured), kept compact.
+            toolbarHeight: 72,
+            centerTitle: true,
+            title: Image.asset(
+              'assets/branding/bully_league_wordmark.png',
+              height: 44,
+              fit: BoxFit.contain,
             ),
-          ),
-          // The profile avatar opens ACCOUNT & SETTINGS - deliberately NOT
-          // the public Profile tab, which is the player's public identity.
-          // (Sign out used to be a top-right one-tap button that a real user
-          // hit by accident; it now lives one level in, inside Account.)
-          Padding(
-            padding: const EdgeInsets.only(right: 12, left: 4),
-            child: Tooltip(
-              message: 'Account',
-              child: InkResponse(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AccountScreen()),
-                ),
-                child: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: scheme.surfaceContainerHighest,
-                  child: Icon(Icons.person,
-                      size: 18, color: scheme.onSurfaceVariant),
+            actions: [
+              // The bell shows notification settings (no badge count).
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                tooltip: 'Notifications',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const NotificationSettingsScreen(),
+                  ),
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
-      // Listens rather than reading currentUser once: right after sign-up,
-      // the account is created (and this screen shown) before the
-      // displayName update lands, so this needs to pick up that follow-up
-      // update once it arrives instead of freezing on the first snapshot.
-      body: StreamBuilder<User?>(
-        stream: authService.authStateChanges(),
-        initialData: authService.currentUser,
-        builder: (context, snapshot) {
-          final uid = snapshot.data?.uid;
-          // Scrollable rather than a bare centred Column: Home has grown
-          // past what a small screen can show at once (seen live as a
-          // 156px overflow on a 320x640 device), and it will keep growing.
-          // Centred only when there's room to spare, so it still looks
-          // deliberate on a large phone rather than pinned to the top.
-          // The system gesture/nav bar inset at the bottom. Without adding it
-          // to the scroll padding, when the content height is close to the
-          // viewport height (seen on the S22) the centred Column sits its
-          // bottom items - the Find a Match CTA - flush against the nav bar
-          // with no room to scroll clear of it.
-          final bottomInset = MediaQuery.of(context).viewPadding.bottom;
-          return LayoutBuilder(
-            builder: (context, constraints) => SingleChildScrollView(
-              padding: EdgeInsets.only(top: 16, bottom: 16 + bottomInset),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight - 32 - bottomInset,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // The Player Status card IS the identity block now - the
-                    // old username greeting above it was redundant furniture
-                    // (the name is on the card's trophy context and the
-                    // header carries the brand), so it was removed in the
-                    // 2026-09-14 Home overhaul to match the reference.
-                    if (uid != null) _RankBadge(uid: uid),
-                    // Tightened so the compact HUD sits closer to the Tournament
-                    // hero, leaving a little more of Roast a Stranger visible.
-                    const SizedBox(height: 12),
-                    // Anything urgent stays at the very top: a match
-                    // waiting, or somebody challenging you.
-                    const _ActiveMatchBanner(),
-                    const _IncomingChallengeBanner(),
-                    // When you're in this week's finals (finalist/alternate/
-                    // judge), the front door to the Main Stage - confirm your
-                    // spot, make your callout. Nothing otherwise.
-                    const MainStageBanner(),
-                    // Before you're a finalist: the weekly reminder to secure
-                    // your try-out ticket (the entry pass into the qualifying)
-                    // before the Wednesday-night deadline. Hides when ticketing
-                    // is off or the ticket's already held.
-                    const TournamentTicketBanner(),
-                    const PrizeClaimBanner(),
-                    // The "defend your throne" warning - shown only to a GOAT
-                    // under threat or the challenger closing on their spot.
-                    const GoatThroneBanner(),
-                    const _TrialStatus(),
-                    const SizedBox(height: 8),
-                    // The daily 6-7pm "power hour" (2x points) now rides as a
-                    // small line INSIDE the Play box (see _PlayWatchDoors), not a
-                    // full-width banner: the name + hours read as redundant, so
-                    // only "2X POINTS" + how long until it starts is kept.
-                    // TWO FRONT DOORS: PLAY / WATCH (Home redesign,
-                    // 2026-10-22). The old Home stacked four mode heroes
-                    // (Basement, Main Stage, Friend, Face-Off) which read as a
-                    // confusing wall of categories to a newcomer. The one
-                    // decision anyone understands is "make it" vs "watch it", so
-                    // that owns the screen: PLAY -> roast a stranger (the
-                    // everyday Basement battle), WATCH -> the Vote feed. The
-                    // modes and their wiring are untouched - this is just the
-                    // front door.
-                    const _PlayWatchDoors(),
-                    const SizedBox(height: 18),
-                    // The WEEKLY Main Stage tournament stays its own distinct
-                    // card - it is the EVENT/destination, not an everyday mode,
-                    // so it earns a spot below the doors rather than hiding
-                    // under "more ways to play". Taps to the hub.
-                    const MainStageCard(),
-                    const SizedBox(height: 20),
-                    // The other two ways to play, demoted to a compact secondary
-                    // row so they are reachable without crowding the two doors:
-                    // Face-Off (improv) and Challenge a Friend.
-                    const _MoreWaysToPlay(),
-                    const SizedBox(height: 18),
-                    // Quick Actions row (Home overhaul): Daily Challenges /
-                    // Free Rewards / Current Streak. The Daily Challenges card
-                    // opens the full quests in a sheet, so the tall inline
-                    // quest list is no longer shown here (one route, not two).
-                    if (uid != null) HomeQuickActions(uid: uid),
-                    const SizedBox(height: 18),
-                    // Slim wallet line: "N Points" + Rewards ->. The old
-                    // milestone bar moved into the Rewards screen; Home keeps
-                    // only the glanceable balance and a way in.
-                    if (uid != null) _WalletBarForUser(uid: uid),
-                    // Featured spotlight - the founder's Editor's Choice picks,
-                    // streamed live from the `featured` collection. Renders
-                    // NOTHING when there are no picks (empty/loading/error), so
-                    // it never leaves a broken-looking gap. See HomeFeatured /
-                    // FeaturedSection.
-                    const HomeFeatured(),
-                    const SizedBox(height: 24),
-                    // Everything below is navigation rather than the
-                    // day's business, and the rule says so without a
-                    // heading nobody would read.
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 32),
-                      child: Divider(),
+              // The profile avatar opens ACCOUNT & SETTINGS - deliberately NOT
+              // the public Profile tab, which is the player's public identity.
+              // (Sign out used to be a top-right one-tap button that a real user
+              // hit by accident; it now lives one level in, inside Account.)
+              Padding(
+                padding: const EdgeInsets.only(right: 12, left: 4),
+                child: Tooltip(
+                  message: 'Account',
+                  child: InkResponse(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AccountScreen()),
                     ),
-                    const SizedBox(height: 20),
-                    // Practice-vs-a-stranger (the `exhibition` matchmaking
-                    // mode) is gone from Home, collapsed into SOLO practice
-                    // (2026-08-31): less is better, and the two real draws are
-                    // the nightly tournament and Roast Someone Now. Warming up
-                    // is a solo activity anyway, and solo practice still lives
-                    // where it is actually wanted - the matchmaking screen
-                    // offers "Warm up solo instead" for the empty-queue case.
-                    // Battle a Friend is now a FEATURED hero pill up top (under
-                    // the two mode heroes), not a quiet nav-list card - so it is
-                    // deliberately not repeated down here.
-                    //
-                    // Solo practice is no longer offered here - Home is for
-                    // battling and the day's business, not warm-ups. It
-                    // still lives where it is actually wanted: the
-                    // matchmaking screen offers "Warm up solo instead" for
-                    // the empty-queue case, which is its real job.
-                    //
-                    // Judging, My Battles, Ranks and Profile are bottom-nav
-                    // destinations now (see MainShell), so they are
-                    // deliberately not repeated here - a second route to
-                    // the same screen just makes this list longer and the
-                    // tabs look decorative.
-                    AdminOnly(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const FinalizeTestScreen(),
-                            ),
-                          ),
-                          child: const Text('Finalize Match (test)'),
-                        ),
+                    child: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: scheme.surfaceContainerHighest,
+                      child: Icon(
+                        Icons.person,
+                        size: 18,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
-                    // "How it works" moved off Home into Account & Settings
-                    // (the top-right profile icon), under the account/email.
-                  ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
-      ),
-      ),
+            ],
+          ),
+          // Listens rather than reading currentUser once: right after sign-up,
+          // the account is created (and this screen shown) before the
+          // displayName update lands, so this needs to pick up that follow-up
+          // update once it arrives instead of freezing on the first snapshot.
+          body: StreamBuilder<User?>(
+            stream: authService.authStateChanges(),
+            initialData: authService.currentUser,
+            builder: (context, snapshot) {
+              final uid = snapshot.data?.uid;
+              // Scrollable rather than a bare centred Column: Home has grown
+              // past what a small screen can show at once (seen live as a
+              // 156px overflow on a 320x640 device), and it will keep growing.
+              // Centred only when there's room to spare, so it still looks
+              // deliberate on a large phone rather than pinned to the top.
+              // The system gesture/nav bar inset at the bottom. Without adding it
+              // to the scroll padding, when the content height is close to the
+              // viewport height (seen on the S22) the centred Column sits its
+              // bottom items - the Find a Match CTA - flush against the nav bar
+              // with no room to scroll clear of it.
+              final bottomInset = MediaQuery.of(context).viewPadding.bottom;
+              return LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  padding: EdgeInsets.only(top: 16, bottom: 16 + bottomInset),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - 32 - bottomInset,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // The Player Status card IS the identity block now - the
+                        // old username greeting above it was redundant furniture
+                        // (the name is on the card's trophy context and the
+                        // header carries the brand), so it was removed in the
+                        // 2026-09-14 Home overhaul to match the reference.
+                        if (uid != null) _RankBadge(uid: uid),
+                        // Tightened so the compact HUD sits closer to the Tournament
+                        // hero, leaving a little more of Roast a Stranger visible.
+                        const SizedBox(height: 12),
+                        // Anything urgent stays at the very top: a match
+                        // waiting, or somebody challenging you.
+                        const _ActiveMatchBanner(),
+                        const _IncomingChallengeBanner(),
+                        // When you're in this week's finals (finalist/alternate/
+                        // judge), the front door to the Main Stage - confirm your
+                        // spot, make your callout. Nothing otherwise.
+                        const MainStageBanner(),
+                        // Before you're a finalist: the weekly reminder to secure
+                        // your try-out ticket (the entry pass into the qualifying)
+                        // before the Wednesday-night deadline. Hides when ticketing
+                        // is off or the ticket's already held.
+                        const TournamentTicketBanner(),
+                        const PrizeClaimBanner(),
+                        // The "defend your throne" warning - shown only to a GOAT
+                        // under threat or the challenger closing on their spot.
+                        const GoatThroneBanner(),
+                        const _TrialStatus(),
+                        const SizedBox(height: 8),
+                        // The daily 6-7pm "power hour" (2x points) now rides as a
+                        // small line INSIDE the Play box (see _PlayWatchDoors), not a
+                        // full-width banner: the name + hours read as redundant, so
+                        // only "2X POINTS" + how long until it starts is kept.
+                        // TWO FRONT DOORS: PLAY / WATCH (Home redesign,
+                        // 2026-10-22). The old Home stacked four mode heroes
+                        // (Basement, Main Stage, Friend, Face-Off) which read as a
+                        // confusing wall of categories to a newcomer. The one
+                        // decision anyone understands is "make it" vs "watch it", so
+                        // that owns the screen: PLAY -> roast a stranger (the
+                        // everyday Basement battle), WATCH -> the Vote feed. The
+                        // modes and their wiring are untouched - this is just the
+                        // front door.
+                        const _PlayWatchDoors(),
+                        const SizedBox(height: 18),
+                        // The WEEKLY Main Stage tournament stays its own distinct
+                        // card - it is the EVENT/destination, not an everyday mode,
+                        // so it earns a spot below the doors rather than hiding
+                        // under "more ways to play". Taps to the hub.
+                        const MainStageCard(),
+                        const SizedBox(height: 20),
+                        // The other two ways to play, demoted to a compact secondary
+                        // row so they are reachable without crowding the two doors:
+                        // Face-Off (improv) and Challenge a Friend.
+                        const _MoreWaysToPlay(),
+                        const SizedBox(height: 18),
+                        // Quick Actions row (Home overhaul): Daily Challenges /
+                        // Free Rewards / Current Streak. The Daily Challenges card
+                        // opens the full quests in a sheet, so the tall inline
+                        // quest list is no longer shown here (one route, not two).
+                        if (uid != null) HomeQuickActions(uid: uid),
+                        const SizedBox(height: 18),
+                        // Slim wallet line: "N Points" + Rewards ->. The old
+                        // milestone bar moved into the Rewards screen; Home keeps
+                        // only the glanceable balance and a way in.
+                        if (uid != null) _WalletBarForUser(uid: uid),
+                        // Featured spotlight - the founder's Editor's Choice picks,
+                        // streamed live from the `featured` collection. Renders
+                        // NOTHING when there are no picks (empty/loading/error), so
+                        // it never leaves a broken-looking gap. See HomeFeatured /
+                        // FeaturedSection.
+                        const HomeFeatured(),
+                        const SizedBox(height: 24),
+                        // Everything below is navigation rather than the
+                        // day's business, and the rule says so without a
+                        // heading nobody would read.
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 32),
+                          child: Divider(),
+                        ),
+                        const SizedBox(height: 20),
+                        // Practice-vs-a-stranger (the `exhibition` matchmaking
+                        // mode) is gone from Home, collapsed into SOLO practice
+                        // (2026-08-31): less is better, and the two real draws are
+                        // the nightly tournament and Roast Someone Now. Warming up
+                        // is a solo activity anyway, and solo practice still lives
+                        // where it is actually wanted - the matchmaking screen
+                        // offers "Warm up solo instead" for the empty-queue case.
+                        // Battle a Friend is now a FEATURED hero pill up top (under
+                        // the two mode heroes), not a quiet nav-list card - so it is
+                        // deliberately not repeated down here.
+                        //
+                        // Solo practice is no longer offered here - Home is for
+                        // battling and the day's business, not warm-ups. It
+                        // still lives where it is actually wanted: the
+                        // matchmaking screen offers "Warm up solo instead" for
+                        // the empty-queue case, which is its real job.
+                        //
+                        // Judging, My Battles, Ranks and Profile are bottom-nav
+                        // destinations now (see MainShell), so they are
+                        // deliberately not repeated here - a second route to
+                        // the same screen just makes this list longer and the
+                        // tabs look decorative.
+                        AdminOnly(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const FinalizeTestScreen(),
+                                ),
+                              ),
+                              child: const Text('Finalize Match (test)'),
+                            ),
+                          ),
+                        ),
+                        // "How it works" moved off Home into Account & Settings
+                        // (the top-right profile icon), under the account/email.
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ],
     );
   }
@@ -330,7 +332,10 @@ Future<void> _startMatch(BuildContext context, String mode) async {
   // the FIRST one after a cold app launch is slow - without feedback the first
   // tap looked completely dead and people tapped again (seen on both phones).
   // The modal barrier also stops a double-tap starting two flows at once.
-  final entitlement = await _withSpinner(context, EntitlementService().current());
+  final entitlement = await _withSpinner(
+    context,
+    EntitlementService().current(),
+  );
   if (entitlement == null || !context.mounted) return;
   if (!entitlement.allows(mode)) {
     await _showBlockedSheet(context, entitlement, mode);
@@ -350,9 +355,8 @@ Future<void> _startMatch(BuildContext context, String mode) async {
       // Everyday ranked matches can opt into being watched live; tournaments
       // are already opted in by entering, and friend/practice aren't
       // spectatable, so they don't show the opt-in.
-      builder: (_) => RecordingConsentScreen(
-        showLiveWatchOptIn: mode == 'ranked',
-      ),
+      builder: (_) =>
+          RecordingConsentScreen(showLiveWatchOptIn: mode == 'ranked'),
     ),
   );
   if (consented != true || !context.mounted) return;
@@ -405,7 +409,7 @@ class _TrialStatusState extends State<_TrialStatus> {
       if (daysLeft == null) return const SizedBox.shrink();
       message = daysLeft <= 1
           ? 'Last day of full access. After that, the nightly $windowName '
-              'tournament stays free.'
+                'tournament stays free.'
           : '$daysLeft days of full access left.';
     } else {
       message = e.inWindow
@@ -432,7 +436,10 @@ class _TrialStatusState extends State<_TrialStatus> {
 /// are real alternatives available today, not just a subscribe button - a
 /// paywall with no free path is how an app teaches people to close it.
 Future<void> _showBlockedSheet(
-    BuildContext context, Entitlement entitlement, String mode) {
+  BuildContext context,
+  Entitlement entitlement,
+  String mode,
+) {
   final windowName = entitlement.windowName ?? 'the daily window';
   final practiceDuringWindow = mode != 'ranked' && entitlement.inWindow;
   return showModalBottomSheet<void>(
@@ -487,9 +494,7 @@ Future<void> _showBlockedSheet(
             onPressed: () {
               Navigator.of(sheetContext).pop();
               Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const SoloPracticeScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const SoloPracticeScreen()),
               );
             },
             child: const Text('Warm up solo instead'),
@@ -550,8 +555,9 @@ Future<bool> _ensureBattleReady(BuildContext context, String mode) async {
     builder: (ctx) => AlertDialog(
       title: const Text('One step first'),
       content: const Text(
-          'The Bully League requires an intro video and selfie before '
-          'participating in a public battle.'),
+        'The Bully League requires an intro video and selfie before '
+        'participating in a public battle.',
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
@@ -676,7 +682,8 @@ class _DayPassOfferState extends State<_DayPassOffer> {
       // Short of the price, we show the GAP rather than nothing, because a
       // visible target is the whole reason to keep earning. Already bought
       // or already running shows nothing - there is nothing to offer.
-      if (state['active'] == true || state['boughtToday'] == true ||
+      if (state['active'] == true ||
+          state['boughtToday'] == true ||
           balance >= price) {
         return const SizedBox.shrink();
       }
@@ -792,9 +799,11 @@ class _IncomingChallengeBannerState extends State<_IncomingChallengeBanner>
       // self-clears when the battle ends. (An earlier "accepted" banner here
       // keyed off the challenge, which never clears, so it lingered after the
       // battle was over and duplicated the active-match banner.)
-      setState(() => _challenge = incoming.isEmpty
-          ? null
-          : (incoming.first as Map).cast<String, dynamic>());
+      setState(
+        () => _challenge = incoming.isEmpty
+            ? null
+            : (incoming.first as Map).cast<String, dynamic>(),
+      );
     } catch (_) {
       // Nothing rather than an error: a failed check must not make Home
       // look broken.
@@ -982,10 +991,10 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
 
   /// Human label for a queue mode.
   static String _modeLabel(String mode) => switch (mode) {
-        'improv' => 'Face-Off',
-        'exhibition' => 'Practice',
-        _ => 'Ranked',
-      };
+    'improv' => 'Face-Off',
+    'exhibition' => 'Practice',
+    _ => 'Ranked',
+  };
 
   /// Elapsed since joining the queue, compact: 45s, 3m, 1h 12m.
   static String _elapsed(int joinedAtMs) {
@@ -1003,9 +1012,9 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
     final q = _queued;
     if (q == null) return;
     Navigator.of(context)
-        .push(MaterialPageRoute(
-          builder: (_) => MatchmakingScreen(mode: q.mode),
-        ))
+        .push(
+          MaterialPageRoute(builder: (_) => MatchmakingScreen(mode: q.mode)),
+        )
         .then((_) => _check());
   }
 
@@ -1030,7 +1039,9 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
                   width: 22,
                   height: 22,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2.5, color: scheme.primary),
+                    strokeWidth: 2.5,
+                    color: scheme.primary,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -1040,15 +1051,18 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
                       Text(
                         'In the ${_modeLabel(q.mode)} queue · ${_elapsed(q.joinedAtMs)}',
                         style: TextStyle(
-                            color: scheme.onSurface,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15),
+                          color: scheme.onSurface,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         "Waiting for an opponent — we'll notify you.",
                         style: TextStyle(
-                            color: scheme.onSurfaceVariant, fontSize: 12.5),
+                          color: scheme.onSurfaceVariant,
+                          fontSize: 12.5,
+                        ),
                       ),
                     ],
                   ),
@@ -1126,13 +1140,11 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
                     backgroundColor: const Color(0xFF221015),
                     foregroundColor: const Color(0xFFFFF2F4),
                   ),
-                  child: Text(
-                    switch (_pending?.origin) {
-                      'standing' => 'Battle now',
-                      'friend' => 'Battle now',
-                      _ => 'Rejoin',
-                    },
-                  ),
+                  child: Text(switch (_pending?.origin) {
+                    'standing' => 'Battle now',
+                    'friend' => 'Battle now',
+                    _ => 'Rejoin',
+                  }),
                 ),
               ],
             ),
@@ -1228,9 +1240,9 @@ class _WalletBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const RewardsScreen()),
-          ),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const RewardsScreen())),
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
@@ -1251,8 +1263,9 @@ class _WalletBar extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   'Points',
-                  style: text.bodyMedium
-                      ?.copyWith(color: scheme.onSurfaceVariant),
+                  style: text.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
                 const Spacer(),
                 Text(
@@ -1397,8 +1410,12 @@ class _MoreWaysToPlay extends StatelessWidget {
           Expanded(
             child: _MiniPlay(
               icon: Icons.group,
-              label: 'Challenge a friend',
+              label: 'Roast a friend',
               iconColor: scheme.secondary,
+              // Friend battles are the main way the app spreads (you bring
+              // someone in to roast them), so this pill gets a glowing border
+              // to stand out from the quieter Face-Off pill beside it.
+              highlight: true,
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const ChallengeScreen()),
               ),
@@ -1440,6 +1457,7 @@ class _MiniPlay extends StatelessWidget {
     required this.iconColor,
     required this.onTap,
     this.locked = false,
+    this.highlight = false,
   });
 
   final IconData icon;
@@ -1448,41 +1466,72 @@ class _MiniPlay extends StatelessWidget {
   final VoidCallback onTap;
   final bool locked;
 
+  /// A glowing border in [iconColor], for the one secondary pill we want
+  /// people to notice (Roast a friend).
+  final bool highlight;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final labelColor = locked ? scheme.onSurfaceVariant : scheme.onSurface;
+    final glow = highlight && !locked;
     return Opacity(
       opacity: locked ? 0.55 : 1,
-      child: Material(
-        color: scheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(14),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: scheme.outlineVariant),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            child: Row(
-              children: [
-                Icon(icon, color: locked ? scheme.onSurfaceVariant : iconColor,
-                    size: 22),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(label,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: glow
+              ? [
+                  BoxShadow(
+                    color: iconColor.withValues(alpha: 0.45),
+                    blurRadius: 14,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
+        ),
+        child: Material(
+          color: scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: glow
+                    ? Border.all(color: iconColor, width: 2)
+                    : Border.all(color: scheme.outlineVariant),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              child: Row(
+                children: [
+                  Icon(
+                    icon,
+                    color: locked ? scheme.onSurfaceVariant : iconColor,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: text.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800, color: labelColor)),
-                ),
-                if (locked)
-                  Icon(Icons.lock_outline,
-                      size: 16, color: scheme.onSurfaceVariant),
-              ],
+                        fontWeight: FontWeight.w800,
+                        color: labelColor,
+                      ),
+                    ),
+                  ),
+                  if (locked)
+                    Icon(
+                      Icons.lock_outline,
+                      size: 16,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1490,5 +1539,3 @@ class _MiniPlay extends StatelessWidget {
     );
   }
 }
-
-

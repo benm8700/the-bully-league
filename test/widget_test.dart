@@ -19,6 +19,6 @@ void main() {
     expect(find.widgetWithText(TextFormField, 'Username'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Email'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Password'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Sign up'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Continue'), findsOneWidget);
   });
 }

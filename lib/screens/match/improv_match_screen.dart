@@ -40,7 +40,19 @@ class ImprovMatchScreen extends StatefulWidget {
   State<ImprovMatchScreen> createState() => _ImprovMatchScreenState();
 }
 
-enum _Phase { connecting, performing, done }
+enum _Phase { connecting, countdown, performing, done }
+
+/// Seconds of countdown before the first prompt: both players see themselves,
+/// mics muted, prompt hidden - so nobody is ambushed by prompt 1 the instant
+/// the opponent connects. Matches the roast battle's opening countdown.
+const int _kCountdownSeconds = 15;
+
+/// Recording starts this many seconds before the countdown ends, not when it
+/// begins. A Face-Off clip plays each performer's WHOLE recording back to
+/// back, so recording the full countdown would open every set with 15s of
+/// silent staring. Starting a little early still absorbs the recorder's
+/// spin-up, so the first words of prompt 1 are never clipped.
+const int _kRecordLeadSeconds = 3;
 
 class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
   final AgoraVideoCallService _video = AgoraVideoCallService();
@@ -97,9 +109,14 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
         if (raw is List && raw.isNotEmpty) {
           _prompts = raw.whereType<String>().toList();
         }
-      } catch (_) {/* fallback below */}
+      } catch (_) {
+        /* fallback below */
+      }
       if (_prompts.isEmpty) {
-        _prompts = List.generate(_roundCount, (i) => 'Riff for ${_turnLength}s');
+        _prompts = List.generate(
+          _roundCount,
+          (i) => 'Riff for ${_turnLength}s',
+        );
       }
       _roundCount = _prompts.length;
 
@@ -138,7 +155,6 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
     _isHost = myUid < oppUid;
     if (_isHost! && !_sequenceStarted) {
       _sequenceStarted = true;
-      unawaited(_matchmaking.startRecording(widget.pairing.matchId));
       unawaited(_runSequence());
     }
   }
@@ -147,6 +163,20 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
   /// full round length (no separate think beat; people just start talking).
   /// Broadcasts each prompt; the guest mirrors it.
   Future<void> _runSequence() async {
+    // Opening countdown: everyone sees it, mics stay muted, prompt hidden.
+    _broadcast({
+      'type': 'improvState',
+      'phase': 'countdown',
+      'seconds': _kCountdownSeconds,
+    });
+    _enterCountdown(_kCountdownSeconds);
+    await Future<void>.delayed(
+      const Duration(seconds: _kCountdownSeconds - _kRecordLeadSeconds),
+    );
+    if (!mounted || _phase == _Phase.done || _violationEnded) return;
+    unawaited(_matchmaking.startRecording(widget.pairing.matchId));
+    await Future<void>.delayed(const Duration(seconds: _kRecordLeadSeconds));
+
     for (var i = 0; i < _roundCount; i++) {
       if (!mounted || _phase == _Phase.done || _violationEnded) return;
       _applyPhase(promptIndex: i);
@@ -163,12 +193,21 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
 
   void _onMessage(Map<String, dynamic> message) {
     if (message['type'] == 'matchEndedViolation') {
-      _handleContentViolation('flagged by the other device', iAmReporter: false);
+      _handleContentViolation(
+        'flagged by the other device',
+        iAmReporter: false,
+      );
       return;
     }
     if (message['type'] != 'improvState') return;
     if (message['phase'] == 'done') {
       _goToDone();
+      return;
+    }
+    if (message['phase'] == 'countdown') {
+      _enterCountdown(
+        (message['seconds'] as num?)?.toInt() ?? _kCountdownSeconds,
+      );
       return;
     }
     final prompt = (message['prompt'] as num?)?.toInt() ?? 0;
@@ -189,10 +228,23 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
     _startDisplayTicker();
   }
 
+  /// The opening countdown, on both devices. Mics muted, prompt hidden.
+  void _enterCountdown(int seconds) {
+    if (!mounted || _phase != _Phase.connecting) return;
+    setState(() {
+      _phase = _Phase.countdown;
+      _secondsRemaining = seconds;
+    });
+    _video.muteLocalAudio(true);
+    _video.muteRemoteAudio(true);
+    _startDisplayTicker();
+  }
+
   void _startDisplayTicker() {
     _displayTicker?.cancel();
+    final phase = _phase;
     _displayTicker = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted || _secondsRemaining <= 1 || _phase != _Phase.performing) {
+      if (!mounted || _secondsRemaining <= 1 || _phase != phase) {
         t.cancel();
         if (mounted && _secondsRemaining > 0) {
           setState(() => _secondsRemaining = 0);
@@ -207,13 +259,17 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
   /// video is mounted (behind yours) so frames flow even though you can't see
   /// them. Same Cloud Vision check + auto-end + report as the roast mode.
   Future<void> _onRemoteFrame(RawVideoFrame frame) async {
-    if (_violationEnded || _processingFrame || _phase != _Phase.performing) {
+    if (_violationEnded ||
+        _processingFrame ||
+        (_phase != _Phase.performing && _phase != _Phase.countdown)) {
       return;
     }
     _processingFrame = true;
     try {
-      final jpeg =
-          await compute(i420ToJpeg, I420FrameData.fromRawVideoFrame(frame));
+      final jpeg = await compute(
+        i420ToJpeg,
+        I420FrameData.fromRawVideoFrame(frame),
+      );
       final reason = await _moderation.checkImageBytes(jpeg);
       if (reason != null) {
         await _handleContentViolation(reason, iAmReporter: true);
@@ -225,8 +281,10 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
     }
   }
 
-  Future<void> _handleContentViolation(String reason,
-      {required bool iAmReporter}) async {
+  Future<void> _handleContentViolation(
+    String reason, {
+    required bool iAmReporter,
+  }) async {
     if (_violationEnded) return;
     _violationEnded = true;
     _violationIAmReporter = iAmReporter;
@@ -254,8 +312,10 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
       } catch (_) {}
     }
     try {
-      await _matchmaking.completeMatch(widget.pairing.matchId,
-          outcome: 'abandoned');
+      await _matchmaking.completeMatch(
+        widget.pairing.matchId,
+        outcome: 'abandoned',
+      );
     } catch (e) {
       debugPrint('Failed to mark improv violation match abandoned: $e');
     }
@@ -302,7 +362,9 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
     _completeRequested = true;
     try {
       await _matchmaking.completeMatch(widget.pairing.matchId);
-    } catch (_) {/* backstop + sweep settle it */}
+    } catch (_) {
+      /* backstop + sweep settle it */
+    }
   }
 
   void _home() => Navigator.of(context).popUntil((r) => r.isFirst);
@@ -321,7 +383,8 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canLeaveFreely = _error != null ||
+    final canLeaveFreely =
+        _error != null ||
         !_initialized ||
         _phase == _Phase.done ||
         _violationEnded;
@@ -335,15 +398,18 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
           builder: (c) => AlertDialog(
             title: const Text('Leave the match?'),
             content: const Text(
-                "You're in the middle of an Improv battle. Leaving now ends "
-                'it for you.'),
+              "You're in the middle of an Improv battle. Leaving now ends "
+              'it for you.',
+            ),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(c, false),
-                  child: const Text('Stay')),
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Stay'),
+              ),
               TextButton(
-                  onPressed: () => Navigator.pop(c, true),
-                  child: const Text('Leave')),
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Leave'),
+              ),
             ],
           ),
         );
@@ -375,8 +441,10 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('Setting up the stage…',
-                style: TextStyle(color: Colors.white70)),
+            Text(
+              'Setting up the stage…',
+              style: TextStyle(color: Colors.white70),
+            ),
           ],
         ),
       );
@@ -386,7 +454,8 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
         return _centered(
           icon: Icons.person_off_outlined,
           title: 'No battle this time',
-          body: "Your opponent didn't make it, so this one didn't happen. "
+          body:
+              "Your opponent didn't make it, so this one didn't happen. "
               'No harm done - jump back in and find another.',
           buttonLabel: 'Back to home',
           onButton: _home,
@@ -400,7 +469,61 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
         onButton: _home,
       );
     }
+    if (_phase == _Phase.countdown) return _countdown(context);
     return _performing(context);
+  }
+
+  /// The opening countdown: your own camera, a big number, no prompt yet.
+  Widget _countdown(BuildContext context) {
+    final accent = context.palette.accent;
+    return Stack(
+      children: [
+        // Opponent mounted underneath for moderation only (the blind rule).
+        Positioned.fill(
+          child: _video.remoteVideoView() ?? const SizedBox.shrink(),
+        ),
+        Positioned.fill(child: _video.localVideoView()),
+        Positioned.fill(
+          child: Container(color: Colors.black.withValues(alpha: 0.45)),
+        ),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'First prompt in',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$_secondsRemaining',
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 96,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  '$_roundCount prompts, $_turnLength seconds each. '
+                  "You won't see or hear your opponent - "
+                  'just riff on the prompt.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _performing(BuildContext context) {
@@ -414,19 +537,24 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
         // the blind rule), with your own camera opaque on top, so you only
         // ever see yourself.
         Positioned.fill(
-            child: _video.remoteVideoView() ?? const SizedBox.shrink()),
+          child: _video.remoteVideoView() ?? const SizedBox.shrink(),
+        ),
         Positioned.fill(child: _video.localVideoView()),
         // Big, unmissable timer, top-right.
         Positioned(top: 14, right: 14, child: _timerChip(accent)),
         // Status + the shared prompt, top-left (clear of the timer).
         Positioned(
-          top: 14, left: 14, right: 100,
+          top: 14,
+          left: 14,
+          right: 100,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: accent,
                   borderRadius: BorderRadius.circular(20),
@@ -434,15 +562,18 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
                 child: Text(
                   "You're on · Round ${_promptIndex + 1} of $_roundCount",
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13),
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(16),
@@ -475,29 +606,32 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
         border: Border.all(color: color, width: 4),
       ),
       alignment: Alignment.center,
-      child: Text('$_secondsRemaining',
-          style: const TextStyle(
-              color: Colors.white,
-              fontSize: 34,
-              height: 1.0,
-              fontWeight: FontWeight.w900)),
+      child: Text(
+        '$_secondsRemaining',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 34,
+          height: 1.0,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
     );
   }
 
   Widget _violationUi(BuildContext context) => _centered(
-        icon: Icons.gpp_maybe,
-        iconColor: Colors.orangeAccent,
-        title: 'Match ended',
-        body: _violationIAmReporter
-            ? 'The automated visual check flagged something on your '
-                "opponent's camera, so the match was ended. It's never about "
-                'anything said - only video.'
-            : 'The automated visual check flagged something on camera, so the '
-                'match was ended. This was NOT your opponent reporting you, '
-                'and it is never about anything said - only video.',
-        buttonLabel: 'Back to home',
-        onButton: _home,
-      );
+    icon: Icons.gpp_maybe,
+    iconColor: Colors.orangeAccent,
+    title: 'Match ended',
+    body: _violationIAmReporter
+        ? 'The automated visual check flagged something on your '
+              "opponent's camera, so the match was ended. It's never about "
+              'anything said - only video.'
+        : 'The automated visual check flagged something on camera, so the '
+              'match was ended. This was NOT your opponent reporting you, '
+              'and it is never about anything said - only video.',
+    buttonLabel: 'Back to home',
+    onButton: _home,
+  );
 
   Widget _centered({
     required IconData icon,
@@ -515,22 +649,26 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
           children: [
             Icon(icon, size: 48, color: iconColor),
             const SizedBox(height: 14),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold)),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 10),
-            Text(body,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 15)),
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 15),
+            ),
             if (buttonLabel != null && onButton != null) ...[
               const SizedBox(height: 22),
               FilledButton(
                 onPressed: onButton,
-                style: FilledButton.styleFrom(
-                    minimumSize: const Size(200, 48)),
+                style: FilledButton.styleFrom(minimumSize: const Size(200, 48)),
                 child: Text(buttonLabel),
               ),
             ],
