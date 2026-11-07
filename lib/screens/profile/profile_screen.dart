@@ -1,12 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/badges/badges.dart';
@@ -14,7 +11,6 @@ import '../../core/emoji_ratings.dart';
 import '../../core/social_links.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/push_notification_service.dart';
-import '../../core/services/visual_moderation_service.dart';
 import '../../widgets/badges/badge_case.dart';
 import '../../widgets/belt_flair.dart';
 import '../../widgets/emoji_stats_card.dart';
@@ -37,7 +33,11 @@ const int kRequiredPhotoCount = 5;
 /// section). Manual profile approval (approvalStatus) is a separate V1
 /// admin workflow via the Firebase console, not enforced by this screen.
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key, this.embedded = false, this.promptIntro = false});
+  const ProfileScreen({
+    super.key,
+    this.embedded = false,
+    this.promptIntro = false,
+  });
 
   /// True when shown as a bottom-nav tab.
   final bool embedded;
@@ -104,7 +104,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _nameController.text = profile['name'] as String? ?? '';
     _hometownController.text = profile['hometown'] as String? ?? '';
     _ammoTextController.text = profile['ammoText'] as String? ?? '';
-    final photoUrls = (profile['photoUrls'] as List<dynamic>?)?.cast<String>() ?? [];
+    final photoUrls =
+        (profile['photoUrls'] as List<dynamic>?)?.cast<String>() ?? [];
     final listed = data?['directoryListed'];
     final username = data?['username'] as String?;
     final rankTitle = data?['rankTitle'] as String?;
@@ -124,8 +125,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// gates the "Clean up bad ratings" action. Derived from the removable set,
   /// so a future negative emoji is covered automatically.
   bool get _hasNegativeRatings {
-    final counts =
-        (_userData?['emojiCounts'] as Map?)?.cast<String, dynamic>();
+    final counts = (_userData?['emojiCounts'] as Map?)?.cast<String, dynamic>();
     for (final r in kRemovableEmojiRatings) {
       if (emojiCountOf(counts, r.key) > 0) return true;
     }
@@ -144,9 +144,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await _userRef.update({'directoryListed': value});
       if (mounted) {
-        setState(() => _statusMessage = value
-            ? 'People can find you by name.'
-            : 'You no longer appear in search.');
+        setState(
+          () => _statusMessage = value
+              ? 'People can find you by name.'
+              : 'You no longer appear in search.',
+        );
       }
     } catch (e) {
       // Reverted on failure, so the switch never claims a state the
@@ -188,18 +190,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
         ScaffoldMessenger.of(context)
           ..clearSnackBars()
-          ..showSnackBar(const SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Color(0xFF2E7D4F),
-            duration: Duration(seconds: 2),
-            content: Row(children: [
-              Icon(Icons.check_circle, color: Colors.white, size: 20),
-              SizedBox(width: 10),
-              Text('Profile saved',
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold)),
-            ]),
-          ));
+          ..showSnackBar(
+            const SnackBar(
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Color(0xFF2E7D4F),
+              duration: Duration(seconds: 2),
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  SizedBox(width: 10),
+                  Text(
+                    'Profile saved',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
         // Settle back to the normal button after a beat.
         _savedTimer?.cancel();
         _savedTimer = Timer(const Duration(seconds: 2), () {
@@ -213,73 +223,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _addPhoto() async {
-    // Read the service before any await - context.read after an async gap
-    // risks using a BuildContext that's no longer valid if this State was
-    // disposed while awaiting (e.g. user navigated away mid-upload).
-    final moderationService = context.read<VisualModerationService>();
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (picked == null || !mounted) return;
+  bool _retakingSelfie = false;
 
-    setState(() {
-      _statusMessage = null;
-      _saving = true;
-    });
-
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final storagePath = 'profile_photos/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
-    final storageRef = FirebaseStorage.instance.ref(storagePath);
-
-    try {
-      await storageRef.putFile(File(picked.path));
-
-      final rejectionReason = await moderationService.checkImage(storagePath);
-      if (rejectionReason != null) {
-        await storageRef.delete();
-        if (mounted) setState(() => _statusMessage = 'Photo rejected: $rejectionReason');
-        return;
-      }
-
-      final downloadUrl = await storageRef.getDownloadURL();
-      await _userRef.update({
-        'profile.photoUrls': FieldValue.arrayUnion([downloadUrl]),
-      });
-      if (mounted) {
-        setState(() {
-          _photoUrls = [..._photoUrls, downloadUrl];
-          _statusMessage = 'Photo added.';
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _statusMessage = 'Failed to add photo: $e');
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _removePhoto(String url) async {
-    setState(() {
-      _saving = true;
-      _statusMessage = null;
-    });
-    try {
-      await _userRef.update({
-        'profile.photoUrls': FieldValue.arrayRemove([url]),
-      });
-      // Best-effort Storage cleanup - refFromURL works for Firebase
-      // Storage download URLs. Not fatal if this fails (e.g. already
-      // deleted); the Firestore removal above is the source of truth for
-      // what's actually shown on the profile.
-      try {
-        await FirebaseStorage.instance.refFromURL(url).delete();
-      } catch (_) {}
-      if (mounted) setState(() => _photoUrls = _photoUrls.where((u) => u != url).toList());
-    } catch (e) {
-      if (mounted) setState(() => _statusMessage = 'Failed to remove photo: $e');
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
+  Future<void> _retakeSelfie() async {
+    setState(() => _retakingSelfie = true);
+    final result = await SelfieCard.capture(context);
+    if (!mounted) return;
+    setState(() => _retakingSelfie = false);
+    if (result.cancelled) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.ok
+              ? 'Photo updated.'
+              : (result.reason ?? 'Could not update photo.'),
+        ),
+      ),
+    );
   }
 
   @override
@@ -310,9 +270,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: Stack(
         children: [
-          const Positioned.fill(
-            child: ColoredBox(color: Color(0xFF0E0B14)),
-          ),
+          const Positioned.fill(child: ColoredBox(color: Color(0xFF0E0B14))),
           Positioned.fill(
             child: Image.asset(
               'assets/home/profile_background.png',
@@ -357,297 +315,347 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       24 + MediaQuery.of(context).padding.bottom,
                     ),
                     child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (widget.promptIntro) ...[
-                      Card(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Before you unleash your trauma on a '
-                                'complete stranger, please…',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleLarge
-                                    ?.copyWith(
-                                      // A bright, vivid pink so the headline
-                                      // actually invites reading - the muted
-                                      // container colours were too flat.
-                                      color: const Color(0xFFFF4D8D),
-                                      fontWeight: FontWeight.bold,
-                                      height: 1.15,
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (widget.promptIntro) ...[
+                            Card(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Before you unleash your trauma on a '
+                                      'complete stranger, please…',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge
+                                          ?.copyWith(
+                                            // A bright, vivid pink so the headline
+                                            // actually invites reading - the muted
+                                            // container colours were too flat.
+                                            color: const Color(0xFFFF4D8D),
+                                            fontWeight: FontWeight.bold,
+                                            height: 1.15,
+                                          ),
                                     ),
+                                    const SizedBox(height: 10),
+                                    const Text(
+                                      'Record a quick intro video and take a selfie. '
+                                      'Your opponent studies the intro for ammo and '
+                                      'sees your face before the battle. Be honest — '
+                                      'it makes the show more fun to watch.',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              const SizedBox(height: 10),
-                              const Text(
-                                'Record a quick intro video and take a selfie. '
-                                'Your opponent studies the intro for ammo and '
-                                'sees your face before the battle. Be honest — '
-                                'it makes the show more fun to watch.',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  height: 1.3,
+                            ),
+                            const SizedBox(height: 20),
+                            // Hoisted to the very top for onboarding: this is the
+                            // thing they came here to do, so it should not be below
+                            // the identity header and badge case where it has to be
+                            // scrolled to.
+                            const IntroVideoCard(),
+                            const SizedBox(height: 24),
+                            const SelfieCard(),
+                            const SizedBox(height: 24),
+                          ],
+                          // The player's actual username as a heading, read-only
+                          // (developer's call, 2026-09-14): the top of a profile is
+                          // your identity, not a prompt to rename yourself. The
+                          // change-username control and the "your form" stats card
+                          // that used to sit here are gone; the referral bits moved
+                          // down near settings, where occasional actions belong.
+                          // Streams the user doc so the photo appears the moment a
+                          // selfie is saved (the selfie card writes it directly, so
+                          // the one-time profile load would otherwise keep showing
+                          // the empty placeholder). The selfie IS the profile photo.
+                          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                            stream: _userRef.snapshots(),
+                            builder: (context, snap) {
+                              final profile =
+                                  snap.data?.data()?['profile']
+                                      as Map<String, dynamic>?;
+                              final photos = profile?['photoUrls'];
+                              final photo =
+                                  (profile?['facePhotoUrl'] as String?) ??
+                                  (photos is List && photos.isNotEmpty
+                                      ? photos.first as String?
+                                      : null) ??
+                                  (_photoUrls.isNotEmpty
+                                      ? _photoUrls.first
+                                      : null);
+                              return _IdentityHeader(
+                                username: _username,
+                                rankTitle: _rankTitle,
+                                photoUrl: photo,
+                                onPhotoTap: _retakeSelfie,
+                                photoBusy: _retakingSelfie,
+                              );
+                            },
+                          ),
+                          // The Belt (if you hold it) - the reigning Main Stage
+                          // champion wears it on their own profile too. Renders
+                          // nothing when you don't hold it.
+                          if (FirebaseAuth.instance.currentUser != null) ...[
+                            const SizedBox(height: 10),
+                            Center(
+                              child: BeltFlair(
+                                uid: FirebaseAuth.instance.currentUser!.uid,
+                              ),
+                            ),
+                          ],
+                          // Career record strip - the "homebase" numbers that live
+                          // nowhere else (Home shows XP + rank, not W-L). Hidden for a
+                          // brand-new player with no history so a fresh profile stays
+                          // clean.
+                          if (!widget.promptIntro)
+                            _CareerStats(user: _userData),
+                          const SizedBox(height: 24),
+                          // Badges and the (normal-position) intro card only when NOT
+                          // onboarding - in promptIntro mode the intro card is hoisted
+                          // to the top and a brand-new player has no badges to show.
+                          if (!widget.promptIntro) ...[
+                            // The crowd/emoji cards (Crowd read + Crowd badges) sit
+                            // ABOVE the Awards achievements - the developer's call, so
+                            // "Crowd badges" reads above "Awards" while the emoji pair
+                            // stays together.
+                            EmojiStatsCard(
+                              counts: (_userData?['emojiCounts'] as Map?)
+                                  ?.cast<String, dynamic>(),
+                            ),
+                            // Spend points to shave down your negative ratings
+                            // (🥱/💩). Shown only when there is something to clean up,
+                            // on your OWN profile only (the sheet writes via a Cloud
+                            // Function). A quiet secondary action, not a pitch.
+                            if (_hasNegativeRatings) ...[
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: () async {
+                                    await EmojiScrubSheet.show(context);
+                                    await _loadProfile();
+                                  },
+                                  icon: const Icon(
+                                    Icons.cleaning_services,
+                                    size: 16,
+                                  ),
+                                  label: const Text('Clean up bad ratings'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.white.withValues(
+                                      alpha: 0.6,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
+                            const SizedBox(height: 20),
+                            BadgeCase(
+                              stats: BadgeStats.fromUser(_userData),
+                              earnedIds: resolveEarnedIds(_userData),
+                            ),
+                            const SizedBox(height: 28),
+                            // The mandatory intro video sits above photos because it
+                            // is the one profile item a player CANNOT battle without
+                            // (enforced in enterQueue), and it is the ammo the
+                            // opponent actually studies pre-match.
+                            const IntroVideoCard(),
+                            const SizedBox(height: 24),
+                            // The selfie IS the profile photo at the top (tap
+                            // it to retake), so this section only appears while
+                            // there is no selfie yet - it's required to battle.
+                            StreamBuilder<
+                              DocumentSnapshot<Map<String, dynamic>>
+                            >(
+                              stream: _userRef.snapshots(),
+                              builder: (context, snap) {
+                                final face =
+                                    (snap.data?.data()?['profile']
+                                            as Map<
+                                              String,
+                                              dynamic
+                                            >?)?['facePhotoUrl']
+                                        as String?;
+                                if (!snap.hasData ||
+                                    (face != null && face.isNotEmpty)) {
+                                  return const SizedBox.shrink();
+                                }
+                                return const Padding(
+                                  padding: EdgeInsets.only(bottom: 24),
+                                  child: SelfieCard(),
+                                );
+                              },
+                            ),
+                          ],
+                          // The structured questions (profession, education,
+                          // interests, relationship, pets, favorite food) were cut
+                          // (2026-10-17): self-reported blanks make weak ammo and add
+                          // friction. The INTRO VIDEO is the real ammo; this leaves
+                          // just where you live (opponent-only) and an open "about
+                          // you" box people can volunteer. Nothing is labelled
+                          // "optional" even though only the intro gates ranked -
+                          // labels suppress fill-in.
+                          Text(
+                            'Name',
+                            style: Theme.of(context).textTheme.titleMedium,
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      // Hoisted to the very top for onboarding: this is the
-                      // thing they came here to do, so it should not be below
-                      // the identity header and badge case where it has to be
-                      // scrolled to.
-                      const IntroVideoCard(),
-                      const SizedBox(height: 24),
-                      const SelfieCard(),
-                      const SizedBox(height: 24),
-                    ],
-                    // The player's actual username as a heading, read-only
-                    // (developer's call, 2026-09-14): the top of a profile is
-                    // your identity, not a prompt to rename yourself. The
-                    // change-username control and the "your form" stats card
-                    // that used to sit here are gone; the referral bits moved
-                    // down near settings, where occasional actions belong.
-                    _IdentityHeader(
-                      username: _username,
-                      rankTitle: _rankTitle,
-                      photoUrl: _photoUrls.isNotEmpty ? _photoUrls.first : null,
-                    ),
-                    // The Belt (if you hold it) - the reigning Main Stage
-                    // champion wears it on their own profile too. Renders
-                    // nothing when you don't hold it.
-                    if (FirebaseAuth.instance.currentUser != null) ...[
-                      const SizedBox(height: 10),
-                      Center(
-                        child: BeltFlair(
-                            uid: FirebaseAuth.instance.currentUser!.uid),
-                      ),
-                    ],
-                    // Career record strip - the "homebase" numbers that live
-                    // nowhere else (Home shows XP + rank, not W-L). Hidden for a
-                    // brand-new player with no history so a fresh profile stays
-                    // clean.
-                    if (!widget.promptIntro) _CareerStats(user: _userData),
-                    const SizedBox(height: 24),
-                    // Badges and the (normal-position) intro card only when NOT
-                    // onboarding - in promptIntro mode the intro card is hoisted
-                    // to the top and a brand-new player has no badges to show.
-                    if (!widget.promptIntro) ...[
-                      // The crowd/emoji cards (Crowd read + Crowd badges) sit
-                      // ABOVE the Awards achievements - the developer's call, so
-                      // "Crowd badges" reads above "Awards" while the emoji pair
-                      // stays together.
-                      EmojiStatsCard(
-                        counts: (_userData?['emojiCounts'] as Map?)
-                            ?.cast<String, dynamic>(),
-                      ),
-                      // Spend points to shave down your negative ratings
-                      // (🥱/💩). Shown only when there is something to clean up,
-                      // on your OWN profile only (the sheet writes via a Cloud
-                      // Function). A quiet secondary action, not a pitch.
-                      if (_hasNegativeRatings) ...[
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: () async {
-                              await EmojiScrubSheet.show(context);
-                              await _loadProfile();
-                            },
-                            icon: const Icon(Icons.cleaning_services, size: 16),
-                            label: const Text('Clean up bad ratings'),
-                            style: TextButton.styleFrom(
-                              foregroundColor:
-                                  Colors.white.withValues(alpha: 0.6),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _nameController,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: const InputDecoration(
+                              labelText: 'Name',
+                              hintText: 'What should we call you? e.g. Mike',
                             ),
                           ),
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      BadgeCase(
-                        stats: BadgeStats.fromUser(_userData),
-                        earnedIds: resolveEarnedIds(_userData),
-                      ),
-                      const SizedBox(height: 28),
-                      // The mandatory intro video sits above photos because it
-                      // is the one profile item a player CANNOT battle without
-                      // (enforced in enterQueue), and it is the ammo the
-                      // opponent actually studies pre-match.
-                      const IntroVideoCard(),
-                      const SizedBox(height: 24),
-                      const SelfieCard(),
-                      const SizedBox(height: 24),
-                    ],
-                    // States what is TRUE today rather than the eventual
-                    // rule. Photos and manual approval are deliberately
-                    // unenforced for the private beta, so a header reading
-                    // "0/5, first must show your face" describes a
-                    // requirement nothing checks - and a tester who
-                    // believes it will think they cannot play until they
-                    // have uploaded five.
-                    Text(
-                      'Photos',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Your first photo is the one other players see when they find you.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 12),
-                    _PhotoGrid(
-                      photoUrls: _photoUrls,
-                      busy: _saving,
-                      onAdd: _addPhoto,
-                      onRemove: _removePhoto,
-                    ),
-                    const SizedBox(height: 24),
-                    // The structured questions (profession, education,
-                    // interests, relationship, pets, favorite food) were cut
-                    // (2026-10-17): self-reported blanks make weak ammo and add
-                    // friction. The INTRO VIDEO is the real ammo; this leaves
-                    // just where you live (opponent-only) and an open "about
-                    // you" box people can volunteer. Nothing is labelled
-                    // "optional" even though only the intro gates ranked -
-                    // labels suppress fill-in.
-                    Text('Name', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _nameController,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Name',
-                        hintText: 'What should we call you? e.g. Mike',
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text('City & State', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _hometownController,
-                      decoration: const InputDecoration(
-                        labelText: 'City & State',
-                        hintText: 'e.g. San Diego, CA',
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text('About you', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _ammoTextController,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        labelText: 'About me',
-                        hintText: 'Who you are, what you do, something '
-                            'embarrassing - whatever you want them to have.',
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    if (_statusMessage != null) ...[
-                      Text(_statusMessage!, style: Theme.of(context).textTheme.bodyMedium),
-                      const SizedBox(height: 16),
-                    ],
-                    FilledButton(
-                      onPressed: (_saving || _justSaved) ? null : _save,
-                      style: _justSaved
-                          ? FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF2E7D4F),
-                              disabledBackgroundColor: const Color(0xFF2E7D4F),
-                              disabledForegroundColor: Colors.white)
-                          : null,
-                      child: _saving
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : _justSaved
-                              ? const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.check, size: 18),
-                                    SizedBox(width: 6),
-                                    Text('Saved'),
-                                  ],
-                                )
-                              : const Text('Save'),
-                    ),
-                    const SizedBox(height: 28),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    // Curated external links (socials / tickets) shown on the
-                    // fame page - the payoff of being followed. Its own save,
-                    // separate from the profile-field Save above.
-                    SocialLinksEditor(
-                      initialLinks: socialLinksOf(_userData),
-                      onSaved: _loadProfile,
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    // Referral bits live down here, not at the top - inviting a
-                    // friend and recording who invited you are occasional
-                    // actions, not what a player opens their profile to do.
-                    const InviteCard(),
-                    const ReferrerField(),
-                    const SizedBox(height: 8),
-                    const Divider(),
-                    // Sits with the profile because being findable is a
-                    // property of the profile, and it is the one control
-                    // here that affects who can reach you rather than
-                    // what they see.
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: _directoryListed,
-                      onChanged: _saving ? null : _setDirectoryListed,
-                      title: const Text('Let people find me by name'),
-                      subtitle: const Text(
-                        'Subscribers can search for your username and see '
-                        'your first photo and rank. Turn this off and you '
-                        'stop appearing in search entirely.',
-                      ),
-                    ),
-                    // Appearance and Blocked players deliberately live only in
-                    // the Account hub (the Home avatar), not here - they were
-                    // duplicated in both places. The profile keeps the controls
-                    // that are properties of the profile itself.
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    const SizedBox(height: 12),
-                    // Sign out lives here now, off the Home app bar where a
-                    // one-tap logout was too easy to hit by accident. A
-                    // deliberate action in the account area, but plainly
-                    // findable (unlike delete, which is quieter still).
-                    OutlinedButton.icon(
-                      onPressed: _signingOut ? null : _signOut,
-                      icon: const Icon(Icons.logout, size: 18),
-                      label: const Text('Sign out'),
-                    ),
-                    const SizedBox(height: 8),
-                    // CCPA requires a user-facing way to delete an account
-                    // and its data (see CLAUDE.md's Compliance / Account
-                    // Management item). Placed here because this is where
-                    // a user's personal data lives, and kept visually
-                    // quiet - it should be findable, not easy to hit by
-                    // accident. The screen itself explains exactly what is
-                    // deleted and what is kept before anything happens.
-                    TextButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const DeleteAccountScreen()),
-                      ),
-                      child: const Text(
-                        'Delete my account',
-                        style: TextStyle(color: Color(0xFFE05252)),
-                      ),
-                    ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'City & State',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _hometownController,
+                            decoration: const InputDecoration(
+                              labelText: 'City & State',
+                              hintText: 'e.g. San Diego, CA',
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'About you',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _ammoTextController,
+                            maxLines: 4,
+                            decoration: const InputDecoration(
+                              labelText: 'About me',
+                              hintText:
+                                  'Who you are, what you do, something '
+                                  'embarrassing - whatever you want them to have.',
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          if (_statusMessage != null) ...[
+                            Text(
+                              _statusMessage!,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          FilledButton(
+                            onPressed: (_saving || _justSaved) ? null : _save,
+                            style: _justSaved
+                                ? FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2E7D4F),
+                                    disabledBackgroundColor: const Color(
+                                      0xFF2E7D4F,
+                                    ),
+                                    disabledForegroundColor: Colors.white,
+                                  )
+                                : null,
+                            child: _saving
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : _justSaved
+                                ? const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.check, size: 18),
+                                      SizedBox(width: 6),
+                                      Text('Saved'),
+                                    ],
+                                  )
+                                : const Text('Save'),
+                          ),
+                          const SizedBox(height: 28),
+                          const Divider(),
+                          const SizedBox(height: 8),
+                          // Curated external links (socials / tickets) shown on the
+                          // fame page - the payoff of being followed. Its own save,
+                          // separate from the profile-field Save above.
+                          SocialLinksEditor(
+                            initialLinks: socialLinksOf(_userData),
+                            onSaved: _loadProfile,
+                          ),
+                          const SizedBox(height: 16),
+                          const Divider(),
+                          const SizedBox(height: 8),
+                          // Referral bits live down here, not at the top - inviting a
+                          // friend and recording who invited you are occasional
+                          // actions, not what a player opens their profile to do.
+                          const InviteCard(),
+                          const ReferrerField(),
+                          const SizedBox(height: 8),
+                          const Divider(),
+                          // Sits with the profile because being findable is a
+                          // property of the profile, and it is the one control
+                          // here that affects who can reach you rather than
+                          // what they see.
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            value: _directoryListed,
+                            onChanged: _saving ? null : _setDirectoryListed,
+                            title: const Text('Let people find me by name'),
+                            subtitle: const Text(
+                              'Subscribers can search for your username and see '
+                              'your photo and rank. Turn this off and you '
+                              'stop appearing in search entirely.',
+                            ),
+                          ),
+                          // Appearance and Blocked players deliberately live only in
+                          // the Account hub (the Home avatar), not here - they were
+                          // duplicated in both places. The profile keeps the controls
+                          // that are properties of the profile itself.
+                          const SizedBox(height: 24),
+                          const Divider(),
+                          const SizedBox(height: 12),
+                          // Sign out lives here now, off the Home app bar where a
+                          // one-tap logout was too easy to hit by accident. A
+                          // deliberate action in the account area, but plainly
+                          // findable (unlike delete, which is quieter still).
+                          OutlinedButton.icon(
+                            onPressed: _signingOut ? null : _signOut,
+                            icon: const Icon(Icons.logout, size: 18),
+                            label: const Text('Sign out'),
+                          ),
+                          const SizedBox(height: 8),
+                          // CCPA requires a user-facing way to delete an account
+                          // and its data (see CLAUDE.md's Compliance / Account
+                          // Management item). Placed here because this is where
+                          // a user's personal data lives, and kept visually
+                          // quiet - it should be findable, not easy to hit by
+                          // accident. The screen itself explains exactly what is
+                          // deleted and what is kept before anything happens.
+                          TextButton(
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const DeleteAccountScreen(),
+                              ),
+                            ),
+                            child: const Text(
+                              'Delete my account',
+                              style: TextStyle(color: Color(0xFFE05252)),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -674,37 +682,80 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await auth.signOut();
     // No setState after: signing out swaps this whole tree out via AuthGate.
   }
-
 }
 
 /// The read-only identity at the top of the profile: avatar, username and
 /// rank title. The username is deliberately not editable here.
 class _IdentityHeader extends StatelessWidget {
-  const _IdentityHeader(
-      {this.username, this.rankTitle, this.photoUrl});
+  const _IdentityHeader({
+    this.username,
+    this.rankTitle,
+    this.photoUrl,
+    this.onPhotoTap,
+    this.photoBusy = false,
+  });
 
   final String? username;
   final String? rankTitle;
   final String? photoUrl;
 
+  /// Tapping the photo retakes the selfie - the photo lives here, not in a
+  /// separate section further down the page.
+  final VoidCallback? onPhotoTap;
+  final bool photoBusy;
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
-    final name =
-        (username != null && username!.isNotEmpty) ? username! : 'Your profile';
+    final name = (username != null && username!.isNotEmpty)
+        ? username!
+        : 'Your profile';
     // The two top tiers get a gold title (matching the Home status card) so the
     // most prestigious ranks read as prestige; lower tiers stay muted.
     final prestige = rankTitle == 'Legend' || rankTitle == 'GOAT';
     return Column(
       children: [
-        CircleAvatar(
-          radius: 42,
-          backgroundColor: scheme.surfaceContainerHighest,
-          backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
-          child: photoUrl == null
-              ? Icon(Icons.person, size: 44, color: scheme.onSurfaceVariant)
-              : null,
+        GestureDetector(
+          onTap: photoBusy ? null : onPhotoTap,
+          child: Stack(
+            children: [
+              CircleAvatar(
+                radius: 42,
+                backgroundColor: scheme.surfaceContainerHighest,
+                backgroundImage: photoUrl != null
+                    ? NetworkImage(photoUrl!)
+                    : null,
+                child: photoBusy
+                    ? const CircularProgressIndicator(strokeWidth: 2)
+                    : photoUrl == null
+                    ? Icon(
+                        Icons.person,
+                        size: 44,
+                        color: scheme.onSurfaceVariant,
+                      )
+                    : null,
+              ),
+              if (onPhotoTap != null)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: scheme.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: scheme.surface, width: 2),
+                    ),
+                    child: Icon(
+                      Icons.photo_camera,
+                      size: 14,
+                      color: scheme.onPrimary,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: 14),
         Text(
@@ -728,9 +779,12 @@ class _IdentityHeader extends StatelessWidget {
               ),
               // The ladder rung as a Roman numeral ("· V"), matching Home.
               if (rankTierNumeral(rankTitle) != null) ...[
-                Text('  ·  ',
-                    style: text.titleSmall?.copyWith(
-                        color: scheme.onSurfaceVariant.withValues(alpha: 0.6))),
+                Text(
+                  '  ·  ',
+                  style: text.titleSmall?.copyWith(
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.6),
+                  ),
+                ),
                 Text(
                   rankTierNumeral(rankTitle)!,
                   style: text.titleSmall?.copyWith(
@@ -791,8 +845,12 @@ class _CareerStats extends StatelessWidget {
           children: [
             _cell(context, '$wins–$losses', 'Record'),
             _divider(context),
-            _cell(context, winRate, 'Win rate',
-                accent: const Color(0xFFF4C838)),
+            _cell(
+              context,
+              winRate,
+              'Win rate',
+              accent: const Color(0xFFF4C838),
+            ),
             _divider(context),
             _cell(context, '$judged', 'Judged'),
           ],
@@ -802,13 +860,17 @@ class _CareerStats extends StatelessWidget {
   }
 
   Widget _divider(BuildContext context) => Container(
-        width: 1,
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
-      );
+    width: 1,
+    margin: const EdgeInsets.symmetric(vertical: 4),
+    color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
+  );
 
-  Widget _cell(BuildContext context, String value, String label,
-      {Color? accent}) {
+  Widget _cell(
+    BuildContext context,
+    String value,
+    String label, {
+    Color? accent,
+  }) {
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
     return Expanded(
@@ -830,77 +892,6 @@ class _CareerStats extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PhotoGrid extends StatelessWidget {
-  const _PhotoGrid({
-    required this.photoUrls,
-    required this.busy,
-    required this.onAdd,
-    required this.onRemove,
-  });
-
-  final List<String> photoUrls;
-  final bool busy;
-  final VoidCallback onAdd;
-  final ValueChanged<String> onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        for (var i = 0; i < photoUrls.length; i++) _photoTile(context, photoUrls[i]),
-        if (photoUrls.length < kRequiredPhotoCount) _addTile(context),
-      ],
-    );
-  }
-
-  Widget _photoTile(BuildContext context, String url) {
-    return Stack(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(url, width: 96, height: 96, fit: BoxFit.cover),
-        ),
-        Positioned(
-          top: -8,
-          right: -8,
-          child: IconButton(
-            icon: const Icon(Icons.cancel, size: 20),
-            onPressed: busy ? null : () => onRemove(url),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _addTile(BuildContext context) {
-    final isFacePhoto = photoUrls.isEmpty;
-    return InkWell(
-      onTap: busy ? null : onAdd,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        width: 96,
-        height: 96,
-        decoration: BoxDecoration(
-          border: Border.all(color: Theme.of(context).colorScheme.outline),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.add_a_photo_outlined),
-            if (isFacePhoto) ...[
-              const SizedBox(height: 4),
-              Text('Face', style: Theme.of(context).textTheme.labelSmall),
-            ],
-          ],
-        ),
       ),
     );
   }

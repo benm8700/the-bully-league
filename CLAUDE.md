@@ -56,6 +56,7 @@ Interrupt, Instant Interrupt, Tomato, Fart (opponent's phone only, not recorded)
 
 ### Face-Off (mode `improv`, `lib/screens/match/improv_match_screen.dart`)
 3 prompts × 15 seconds, both players riff on the same prompt **at the same time and blind** (you only see/hear yourself). A **15-second muted countdown** comes first (added 2026-11-06; recording starts 3s before it ends so clips don't open on silence). One overall crowd vote; its clip plays the two sets back to back. Separate hidden `improvRating`; counts toward career XP, never roast rating or the Main Stage. **Locked on Home** for now.
+- **FUTURE IDEA (2026-11-07, developer, not a priority): Face-Off prompts written by the judges, or even a live audience**, instead of only the stock `config/improvPrompts` list. Face-Off only, not regular roast battles. Came out of a "Judges' Lounge" brainstorm (a daily one-liner prompt game for when the Vote tab is empty), where the best audience-written prompts could feed Face-Off. Not designed. Things to solve when it's picked up: prompts are user-written text, so they need moderation, a report path and Apple's 24h report SLA; prompts must target situations or made-up people, never real users; and someone (founder or a vote) has to pick which prompts go into a battle.
 
 ### Roast a friend (mode `friend`)
 Same chess-clock format against a specific person, challenged by username. **Private**: not recorded, not voted on, no rating, no points. Rematch button at the end. Challenges expire after 1 hour; max 3 outstanding.
