@@ -20,6 +20,8 @@ This file gives Claude Code full context on this project. Read this before start
 - **iOS: set up 2026-11-06** on the Mac mini (Flutter 3.47.9, Xcode 27.2). Bundle `com.bullyleague.app`, team `MW2XN6UY2K`, Push Notifications capability, APNs key uploaded to Firebase (dev + prod). Build 1.0.0 (1) uploaded to App Store Connect / TestFlight. Firebase test phone numbers `+1 650 555 1234` and `+1 650 555 1235` (code `123456`) exist for testing; the second backs the **AppReviewer** account for Apple's reviewers. Only sign-up/login has been verified on iPhone so far - battles, intro recording, clip playback and pushes are still to test on iOS.
 - Debug builds on iPhone must be launched from Xcode/flutter (iOS 14+ rule). `FlutterDeepLinkingEnabled=false` in Info.plist so Flutter never swallows the Firebase reCAPTCHA return link.
 
+- **Android on the Mac (set up 2026-11-07)**: Android SDK installed via Homebrew (`/opt/homebrew/share/android-commandlinetools`, JDK 17 at `/opt/homebrew/opt/openjdk@17`). The Mac's Flutter 3.47.9 refuses AGP below 8.11.1 and Kotlin below 2.2.20, so the pins moved **AGP 8.9.1 -> 8.11.1** and **KGP 2.1.0 -> 2.2.20** (still below AGP 9, the real Agora limit). The debug APK builds and runs on a moto g 2026; the Android age-signals plugin now at least builds. Older notes below quoting 8.9.1 / 2.1.0 are superseded.
+
 ### Navigation
 Bottom tabs (`lib/screens/home/main_shell.dart`): **Home · Vote · My Battles · Ranks · Profile**. The "Vote" tab is the voting feed (the Home door for it is labelled JUDGE).
 

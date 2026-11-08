@@ -22,7 +22,11 @@ import 'selfie_card.dart';
 /// frame by frame at upload, before anyone sees it, rather than a live
 /// stranger feed sampled every few seconds.
 class IntroVideoCard extends StatefulWidget {
-  const IntroVideoCard({super.key});
+  const IntroVideoCard({super.key, this.active = true});
+
+  /// False while the Profile tab is hidden behind another tab. See
+  /// [LoopingVideo.active].
+  final bool active;
 
   @override
   State<IntroVideoCard> createState() => _IntroVideoCardState();
@@ -49,16 +53,19 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
     // and the video would look lost even though it is safely in Firestore.
     // Watching the doc means the card always reflects what is actually saved,
     // immediately after recording and whenever the profile is reopened.
-    _sub = _userRef.snapshots().listen((snap) {
-      if (!mounted) return;
-      final profile = snap.data()?['profile'] as Map<String, dynamic>? ?? {};
-      setState(() {
-        _videoUrl = profile['introVideoUrl'] as String?;
-        _loading = false;
-      });
-    }, onError: (_) {
-      if (mounted) setState(() => _loading = false);
-    });
+    _sub = _userRef.snapshots().listen(
+      (snap) {
+        if (!mounted) return;
+        final profile = snap.data()?['profile'] as Map<String, dynamic>? ?? {};
+        setState(() {
+          _videoUrl = profile['introVideoUrl'] as String?;
+          _loading = false;
+        });
+      },
+      onError: (_) {
+        if (mounted) setState(() => _loading = false);
+      },
+    );
   }
 
   @override
@@ -147,8 +154,9 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
     String? face;
     try {
       final snap = await _userRef.get();
-      face = (snap.data()?['profile'] as Map<String, dynamic>?)?['facePhotoUrl']
-          as String?;
+      face =
+          (snap.data()?['profile'] as Map<String, dynamic>?)?['facePhotoUrl']
+              as String?;
     } catch (_) {
       return;
     }
@@ -159,8 +167,9 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
       builder: (ctx) => AlertDialog(
         title: const Text('One more quick thing'),
         content: const Text(
-            'Intro saved. Now a quick selfie so your opponent can see who '
-            'they\'re facing — takes a few seconds.'),
+          'Intro saved. Now a quick selfie so your opponent can see who '
+          'they\'re facing — takes a few seconds.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -206,14 +215,15 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
             const SizedBox(width: 8),
             if (!hasVideo)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: scheme.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text('Required',
-                    style: text.labelSmall?.copyWith(color: scheme.primary)),
+                child: Text(
+                  'Required',
+                  style: text.labelSmall?.copyWith(color: scheme.primary),
+                ),
               ),
           ],
         ),
@@ -221,11 +231,11 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
         Text(
           hasVideo
               ? 'Your 60-second "tell me about yourself". Opponents watch it '
-                  'before your battle to find their angle. It is saved - you '
-                  'can leave and come back.'
+                    'before your battle to find their angle. It is saved - you '
+                    'can leave and come back.'
               : 'Record a 60-second "tell me about yourself". This is what '
-                  'your opponent studies for ammo - you cannot battle without '
-                  'it. Funnier if it is honest.',
+                    'your opponent studies for ammo - you cannot battle without '
+                    'it. Funnier if it is honest.',
           style: text.bodySmall,
         ),
         if (!hasVideo) ...[
@@ -247,7 +257,15 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 320),
                 child: Align(
-                  child: LoopingVideo(url: _videoUrl!, muted: true),
+                  // Your OWN intro: tap to play rather than looping at you every
+                  // time you open Profile (you have seen it). Sound on, since
+                  // pressing play means you want to hear it. Also paused while
+                  // the Profile tab is hidden, since the tab stays loaded.
+                  child: LoopingVideo(
+                    url: _videoUrl!,
+                    autoPlay: false,
+                    active: widget.active,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -270,9 +288,10 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
             child: Row(
               children: [
                 SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
                 SizedBox(width: 12),
                 Expanded(child: Text('Checking your video...')),
               ],

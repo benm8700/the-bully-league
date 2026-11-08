@@ -37,7 +37,13 @@ class ProfileScreen extends StatefulWidget {
     super.key,
     this.embedded = false,
     this.promptIntro = false,
+    this.isActiveTab = true,
   });
+
+  /// False while this is the Profile tab and another tab is on screen. The
+  /// tab shell keeps every tab loaded, so without this the intro video kept
+  /// decoding in the background.
+  final bool isActiveTab;
 
   /// True when shown as a bottom-nav tab.
   final bool embedded;
@@ -365,7 +371,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             // thing they came here to do, so it should not be below
                             // the identity header and badge case where it has to be
                             // scrolled to.
-                            const IntroVideoCard(),
+                            IntroVideoCard(active: widget.isActiveTab),
                             const SizedBox(height: 24),
                             const SelfieCard(),
                             const SizedBox(height: 24),
@@ -470,7 +476,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             // is the one profile item a player CANNOT battle without
                             // (enforced in enterQueue), and it is the ammo the
                             // opponent actually studies pre-match.
-                            const IntroVideoCard(),
+                            IntroVideoCard(active: widget.isActiveTab),
                             const SizedBox(height: 24),
                             // The selfie IS the profile photo at the top (tap
                             // it to retake), so this section only appears while
@@ -515,7 +521,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             controller: _nameController,
                             textCapitalization: TextCapitalization.words,
                             decoration: const InputDecoration(
-                              labelText: 'Name',
                               hintText: 'What should we call you? e.g. Mike',
                             ),
                           ),
@@ -528,13 +533,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           TextFormField(
                             controller: _hometownController,
                             decoration: const InputDecoration(
-                              labelText: 'City & State',
                               hintText: 'e.g. San Diego, CA',
                             ),
                           ),
                           const SizedBox(height: 24),
                           Text(
-                            'About you',
+                            'About me',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 8),
@@ -542,7 +546,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             controller: _ammoTextController,
                             maxLines: 4,
                             decoration: const InputDecoration(
-                              labelText: 'About me',
                               hintText:
                                   'Who you are, what you do, something '
                                   'embarrassing - whatever you want them to have.',

@@ -91,6 +91,9 @@ class _MainShellState extends State<MainShell> {
   /// otherwise never appear until an app restart.
   static const _myBattlesTabIndex = 2;
 
+  /// Profile. Told when it is hidden so its intro video pauses.
+  static const _profileTabIndex = 4;
+
   @override
   Widget build(BuildContext context) {
     // Kept alive across tab switches via IndexedStack rather than rebuilt,
@@ -105,9 +108,11 @@ class _MainShellState extends State<MainShell> {
       const HomeScreen(),
       WatchFeedScreen(embedded: true, isActiveTab: _index == _voteTabIndex),
       MyBattlesScreen(
-          embedded: true, isActiveTab: _index == _myBattlesTabIndex),
+        embedded: true,
+        isActiveTab: _index == _myBattlesTabIndex,
+      ),
       const LeaderboardScreen(embedded: true),
-      const ProfileScreen(embedded: true),
+      ProfileScreen(embedded: true, isActiveTab: _index == _profileTabIndex),
     ];
     return Scaffold(
       // Above the tabs rather than on Home, deliberately: an outage
@@ -126,7 +131,9 @@ class _MainShellState extends State<MainShell> {
           // (developer's call, 2026-09-14) - the red top bar during the window
           // was getting in the way of Home design review. The widget still
           // exists; re-add `const WindowLiveBar(),` here to restore it.
-          Expanded(child: IndexedStack(index: _index, children: screens)),
+          Expanded(
+            child: IndexedStack(index: _index, children: screens),
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(

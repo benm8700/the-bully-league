@@ -14,7 +14,7 @@ import '../core/route_observer.dart';
 ///
 /// PLAYBACK IS GATED ON VISIBILITY. A looping clip only actually plays when
 /// the caller wants it playing AND the app is foreground AND this widget is
-/// the visible route. It pauses if the app is backgrounded OR another screen
+/// the visible route (and, for a kept-alive tab, [active]). It pauses if the app is backgrounded OR another screen
 /// is pushed over it, and resumes only when all three are true again. Without
 /// the route half, an intro kept looping its audio underneath whatever you
 /// navigated to (heard on a device, 2026-09-16).
@@ -26,9 +26,17 @@ class LoopingVideo extends StatefulWidget {
     this.muted = false,
     this.borderRadius = 12,
     this.onExpand,
+    this.active = true,
   });
 
   final String url;
+
+  /// False while the screen holding this video is mounted but not on screen -
+  /// e.g. the Profile tab, which the tab shell keeps alive in the background.
+  /// Route tracking cannot see a tab switch, so the caller passes this and the
+  /// clip stops while it is false. Coming back never restarts it - the viewer
+  /// taps play again.
+  final bool active;
   final bool autoPlay;
   final bool muted;
   final double borderRadius;
@@ -73,7 +81,8 @@ class _LoopingVideoState extends State<LoopingVideo>
   void _syncPlayback() {
     final c = _controller;
     if (c == null || !_ready) return;
-    final shouldPlay = _wantPlaying && _appForeground && _routeVisible;
+    final shouldPlay =
+        _wantPlaying && _appForeground && _routeVisible && widget.active;
     if (shouldPlay && !c.value.isPlaying) {
       c.play();
     } else if (!shouldPlay && c.value.isPlaying) {
@@ -104,6 +113,19 @@ class _LoopingVideoState extends State<LoopingVideo>
   @override
   void didUpdateWidget(LoopingVideo old) {
     super.didUpdateWidget(old);
+    if (old.active != widget.active && !widget.active) {
+      // Leaving the tab STOPS the clip for good (it does not resume when the
+      // tab comes back - the viewer taps play again). Starting playback in the
+      // middle of the tab-switch rebuild stalled the switch on a device
+      // (audio came back while the old tab stayed on screen, 2026-11-07), so
+      // nothing here ever calls play, and the pause waits for the frame.
+      _wantPlaying = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _syncPlayback();
+        setState(() {}); // show the play button again
+      });
+    }
     if (old.url != widget.url) {
       _controller?.dispose();
       _controller = null;
@@ -153,8 +175,10 @@ class _LoopingVideoState extends State<LoopingVideo>
         child: ColoredBox(
           color: scheme.surfaceContainerHighest,
           child: Center(
-            child: Text('Video unavailable',
-                style: TextStyle(color: scheme.onSurfaceVariant)),
+            child: Text(
+              'Video unavailable',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
           ),
         ),
       );
@@ -179,8 +203,11 @@ class _LoopingVideoState extends State<LoopingVideo>
             children: [
               VideoPlayer(controller),
               if (!controller.value.isPlaying)
-                const Icon(Icons.play_circle_fill,
-                    size: 56, color: Colors.white70),
+                const Icon(
+                  Icons.play_circle_fill,
+                  size: 56,
+                  color: Colors.white70,
+                ),
               // Expand to full-screen. Its own tap target, since tapping the
               // video is play/pause; the inner GestureDetector wins over the
               // outer _toggle for taps that land on it.
@@ -196,8 +223,11 @@ class _LoopingVideoState extends State<LoopingVideo>
                         color: Colors.black54,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.fullscreen,
-                          size: 20, color: Colors.white),
+                      child: const Icon(
+                        Icons.fullscreen,
+                        size: 20,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -242,8 +272,11 @@ class _FullscreenVideo extends StatelessWidget {
             right: 0,
             child: SafeArea(
               child: IconButton(
-                icon: const Icon(Icons.fullscreen_exit,
-                    color: Colors.white, size: 30),
+                icon: const Icon(
+                  Icons.fullscreen_exit,
+                  color: Colors.white,
+                  size: 30,
+                ),
                 tooltip: 'Close',
                 onPressed: () => Navigator.of(context).maybePop(),
               ),

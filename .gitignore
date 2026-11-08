@@ -65,3 +65,6 @@ functions/.env.*
 
 # Generated sting prototypes - regenerate with tools/makeStingCandidates.js
 sting_candidates/
+
+# Claude Code personal settings
+.claude/settings.local.json

@@ -62,13 +62,14 @@ class _MyBattlesScreenState extends State<MyBattlesScreen> {
     super.didUpdateWidget(oldWidget);
     // Refetch each time the tab is switched TO, so a battle finished while
     // this (always-mounted) tab was in the background shows up.
-    if (!oldWidget.isActiveTab && widget.isActiveTab) _refresh();
-  }
-
-  void _refresh() {
-    final uid = _uid;
-    if (uid == null) return;
-    setState(() => _matchesFuture = _myMatches(uid));
+    // Assigned directly, NOT via setState: this runs mid-rebuild (a build
+    // follows anyway), and the old `setState(() => _matchesFuture = ...)`
+    // returned the Future from the closure, which throws - and that throw
+    // aborted the tab switch, freezing the bottom tabs on whatever screen
+    // was showing (seen on iPhone, 2026-11-07).
+    if (!oldWidget.isActiveTab && widget.isActiveTab && _uid != null) {
+      _matchesFuture = _myMatches(_uid!);
+    }
   }
 
   /// Win / loss / tie / still-judging, from the current user's perspective.
