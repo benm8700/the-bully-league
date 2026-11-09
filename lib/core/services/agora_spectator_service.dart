@@ -1,4 +1,5 @@
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'agora_render.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -22,6 +23,12 @@ import 'spectator_service.dart';
 /// backed by a CDN - not changes here or in any screen.
 class AgoraSpectatorService implements SpectatorService {
   RtcEngine? _engine;
+
+  /// The channel being watched. A remote video view must name it: Agora
+  /// asserts `connection.channelId != null`, and the empty RtcConnection used
+  /// before tripped that assert - a red error screen in debug builds the
+  /// moment a live battle's video appeared (seen on a device, 2026-11-08).
+  String? _channelName;
 
   final _present = ValueNotifier<Set<int>>({});
   final _watching = ValueNotifier<bool>(false);
@@ -57,57 +64,71 @@ class AgoraSpectatorService implements SpectatorService {
     // Report remote speakers' volumes so the judges'-table spotlight can follow
     // whoever is talking. Audience-side, so only remote uids are ever reported.
     await engine.enableAudioVolumeIndication(
-        interval: 500, smooth: 3, reportVad: false);
+      interval: 500,
+      smooth: 3,
+      reportVad: false,
+    );
 
-    engine.registerEventHandler(RtcEngineEventHandler(
-      onJoinChannelSuccess: (connection, elapsed) {
-        _watching.value = true;
-        _failure.value = null;
-      },
-      onAudioVolumeIndication: (connection, speakers, speakerNumber, total) {
-        int? loudUid;
-        var loudVol = 0;
-        for (final s in speakers) {
-          final v = s.volume ?? 0;
-          if (v > loudVol) {
-            loudVol = v;
-            loudUid = s.uid;
+    engine.registerEventHandler(
+      RtcEngineEventHandler(
+        onJoinChannelSuccess: (connection, elapsed) {
+          _watching.value = true;
+          _failure.value = null;
+        },
+        onAudioVolumeIndication: (connection, speakers, speakerNumber, total) {
+          int? loudUid;
+          var loudVol = 0;
+          for (final s in speakers) {
+            final v = s.volume ?? 0;
+            if (v > loudVol) {
+              loudVol = v;
+              loudUid = s.uid;
+            }
           }
-        }
-        if (loudVol >= _speakThreshold &&
-            loudUid != null &&
-            loudUid != 0 &&
-            loudUid != _activeUid.value) {
-          _activeUid.value = loudUid;
-        }
-      },
-      // Without this a rejected token is completely silent: the join call
-      // returns fine and the screen waits forever for video that will
-      // never arrive.
-      onError: (err, msg) {
-        if (err == ErrorCodeType.errInvalidToken ||
-            err == ErrorCodeType.errTokenExpired) {
+          if (loudVol >= _speakThreshold &&
+              loudUid != null &&
+              loudUid != 0 &&
+              loudUid != _activeUid.value) {
+            _activeUid.value = loudUid;
+          }
+        },
+        // Without this a rejected token is completely silent: the join call
+        // returns fine and the screen waits forever for video that will
+        // never arrive.
+        onError: (err, msg) {
+          if (err == ErrorCodeType.errInvalidToken ||
+              err == ErrorCodeType.errTokenExpired) {
+            _failure.value = 'This stream expired. Reopen it to keep watching.';
+          } else if (!_watching.value) {
+            _failure.value = 'Could not connect to the battle.';
+          }
+        },
+        onRequestToken: (connection) {
+          // An hour-long token outlasts any single battle, so reaching this
+          // means something is wrong rather than merely stale.
           _failure.value = 'This stream expired. Reopen it to keep watching.';
-        } else if (!_watching.value) {
-          _failure.value = 'Could not connect to the battle.';
-        }
-      },
-      onRequestToken: (connection) {
-        // An hour-long token outlasts any single battle, so reaching this
-        // means something is wrong rather than merely stale.
-        _failure.value = 'This stream expired. Reopen it to keep watching.';
-      },
-      onUserJoined: (connection, remoteUid, elapsed) {
-        _present.value = {..._present.value, remoteUid};
-      },
-      onUserOffline: (connection, remoteUid, reason) {
-        _present.value = {..._present.value}..remove(remoteUid);
-      },
-      onLeaveChannel: (connection, stats) {
-        _watching.value = false;
-        _present.value = {};
-      },
-    ));
+        },
+        onUserJoined: (connection, remoteUid, elapsed) {
+          debugPrint('Spectator: performer $remoteUid joined');
+          _present.value = {..._present.value, remoteUid};
+        },
+        onUserOffline: (connection, remoteUid, reason) {
+          debugPrint('Spectator: performer $remoteUid left ($reason)');
+          _present.value = {..._present.value}..remove(remoteUid);
+        },
+        // Diagnostic (2026-11-08): a live watcher saw one performer's video
+        // while the other stayed "Waiting for the other performer". This
+        // records what the SDK actually reports for each performer's video.
+        onRemoteVideoStateChanged:
+            (connection, remoteUid, state, reason, elapsed) {
+          debugPrint('Spectator: video of $remoteUid -> $state ($reason)');
+        },
+        onLeaveChannel: (connection, stats) {
+          _watching.value = false;
+          _present.value = {};
+        },
+      ),
+    );
     _engine = engine;
   }
 
@@ -121,6 +142,7 @@ class AgoraSpectatorService implements SpectatorService {
     if (engine == null) {
       throw StateError('initialize() must be called before watch()');
     }
+    _channelName = channelName;
     await engine.joinChannel(
       token: token,
       channelId: channelName,
@@ -144,7 +166,9 @@ class AgoraSpectatorService implements SpectatorService {
     // even if leaveChannel lags - the audio leak the live test hit.
     try {
       await _engine?.muteAllRemoteAudioStreams(true);
-    } catch (_) {/* leaving anyway */}
+    } catch (_) {
+      /* leaving anyway */
+    }
     await _engine?.leaveChannel();
     _watching.value = false;
     _present.value = {};
@@ -171,13 +195,15 @@ class AgoraSpectatorService implements SpectatorService {
   @override
   Widget? playerVideo(int playerUid) {
     final engine = _engine;
-    if (engine == null) return null;
+    final channelName = _channelName;
+    if (engine == null || channelName == null) return null;
     if (!_present.value.contains(playerUid)) return null;
     return AgoraVideoView(
       controller: VideoViewController.remote(
+        useFlutterTexture: agoraUseFlutterTexture,
         rtcEngine: engine,
         canvas: VideoCanvas(uid: playerUid),
-        connection: const RtcConnection(),
+        connection: RtcConnection(channelId: channelName),
       ),
     );
   }

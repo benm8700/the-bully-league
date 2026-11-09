@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import 'clip_scrubber.dart';
+
 import '../core/route_observer.dart';
 
 /// A minimal looping video player for a network URL - used for the
@@ -208,6 +210,24 @@ class _LoopingVideoState extends State<LoopingVideo>
                   size: 56,
                   color: Colors.white70,
                 ),
+              // The app-wide scrubber, so an intro can be rewound to re-hear
+              // a line (developer, 2026-11-09). Its own taps win over _toggle.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 2),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black54],
+                    ),
+                  ),
+                  child: ClipScrubber(controller: controller),
+                ),
+              ),
               // Expand to full-screen. Its own tap target, since tapping the
               // video is play/pause; the inner GestureDetector wins over the
               // outer _toggle for taps that land on it.

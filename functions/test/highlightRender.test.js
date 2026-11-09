@@ -433,16 +433,16 @@ test("an unreadable playlist measures zero rather than guessing", () => {
 
 // --- brand watermark overlay --------------------------------------------
 
-test("the brand logo is overlaid, scaled small, in the bottom-right", () => {
+test("the brand logo is overlaid, scaled small, in the TOP-right", () => {
   // The watermark is an image overlay of the home-page logo, not ASS text.
-  // Bottom-right (x=W-w-marginX, y=H-h-marginY) - the developer's placement -
-  // sits in the clearest corner of the judge feed (the reaction strip runs
-  // along the bottom-left/centre); scaled so it reads as a mark, not a banner.
+  // TOP-right (x=W-w-marginX, y=fixed top inset) since 2026-11-08: on TikTok /
+  // Reels / Shorts the platform's own buttons and caption cover the
+  // bottom-right, hiding the mark exactly where clips are watched.
   const args = trimArgs({logoPath: "/tmp/wm.png"});
   assert.ok(args.includes("/tmp/wm.png"), "logo is not an ffmpeg input");
   const {graph} = labelsOf(args);
-  assert.ok(/overlay=W-w-\d+:H-h-\d+/.test(graph),
-      `logo not overlaid bottom-right: ${graph}`);
+  assert.ok(/\[wm\]overlay=W-w-\d+:\d+\[/.test(graph),
+      `logo not overlaid top-right: ${graph}`);
   assert.ok(graph.includes("scale=") && graph.includes("[wm]"),
       "logo is not scaled to a small mark");
 });
@@ -494,6 +494,13 @@ test("a reaction cam is overlaid as a corner PiP, not stacked", () => {
   assert.ok(/scale=\d+:-2,setsar=1,drawbox=/.test(graph), `no PiP scale/border: ${graph}`);
   assert.ok(/overlay=W-w-\d+:\d+\+0\*\(h\+\d+\)\[vout\]/.test(graph),
       `reaction PiP not overlaid top-right as final [vout]: ${graph}`);
+});
+
+test("with a reaction cam the logo drops to bottom-right, clear of the PiP", () => {
+  // Reaction PiPs own the top-right corner; the logo must not sit under them.
+  const {graph} = labelsOf(reactArgs(["3"]));
+  assert.ok(/\[wm\]overlay=W-w-\d+:H-h-\d+/.test(graph),
+      `logo should fall back to bottom-right with a PiP: ${graph}`);
 });
 
 test("a reaction cam contributes no audio (mic muted during the battle)", () => {

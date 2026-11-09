@@ -66,6 +66,9 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
 
   Timer? _ticker;
   Timer? _heartbeat;
+  Timer? _readyCheck;
+  Timer? _readyArm;
+  bool _readyArmed = false;
   bool _opponentGone = false;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _matchSub;
 
@@ -82,6 +85,14 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     _watchMatch();
     _startTicker();
     _startHeartbeat();
+    // Ignore taps for a moment after the screen appears. When the opponent
+    // is already waiting, pairing is instant and this screen lands right
+    // where "Find an Opponent" was - a second tap on that button became an
+    // accidental "I'm Ready" before the player had seen who they were facing
+    // (seen on a device, 2026-11-08).
+    _readyArm = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted) setState(() => _readyArmed = true);
+    });
   }
 
   /// Says "still here" without saying "ready".
@@ -140,10 +151,56 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
         .collection('matches')
         .doc(widget.pairing.matchId)
         .snapshots()
-        .listen((snap) {
-      final data = snap.data();
-      if (data == null || !mounted) return;
+        .listen(
+          (snap) {
+            final data = snap.data();
+            if (data == null || !mounted) return;
+            _onMatchState(data);
+          },
+          onError: (Object e) {
+            // A blocked listener used to mean waiting forever on "Waiting for
+            // opponent" even after BOTH had tapped Ready (seen on a device,
+            // 2026-11-08). Poll the server instead; it reports readiness too.
+            debugPrint('bio reveal match listener failed: $e');
+            _startReadyCheck();
+          },
+        );
+  }
 
+  /// Server answers from setMatchReady ({status, ready, lastSeenAt}),
+  /// mapped onto the match-document shape the listener sees.
+  void _applyServerAnswer(Map<String, dynamic>? r) {
+    if (r == null || !mounted) return;
+    final status = r['status'];
+    if (status is! String) return;
+    if (status != 'pending') {
+      // Only ends things when the server is sure; the skip reason is not in
+      // this answer, so a requeue still relies on the listener.
+      return;
+    }
+    _onMatchState({
+      'status': status,
+      'readyPlayerIds': r['ready'] ?? const [],
+      if (r['lastSeenAt'] != null) 'lastSeenAt': r['lastSeenAt'],
+    });
+  }
+
+  /// Once I'm ready and waiting, check the server every few seconds so the
+  /// battle starts even if the live listener isn't delivering. Stops the
+  /// moment we leave this screen. Bounded by the reveal timer.
+  void _startReadyCheck() {
+    if (_readyCheck != null) return;
+    _readyCheck = Timer.periodic(const Duration(seconds: 3), (t) async {
+      if (!mounted || _navigated || _endedReason != null) {
+        t.cancel();
+        return;
+      }
+      _applyServerAnswer(await _service.sendPresence(widget.pairing.matchId));
+    });
+  }
+
+  void _onMatchState(Map<String, dynamic> data) {
+    {
       if (data['status'] != 'pending') {
         final skippedBy = data['skippedByUserId'] as String?;
         if (skippedBy == widget.pairing.opponentId) {
@@ -157,15 +214,18 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
           // Friend battles have no queue to fall back into, so the honest
           // next step is to challenge them again rather than "find someone
           // else". A ranked pairing just says the pairing is gone.
-          _endMatch(widget.pairing.mode == 'friend'
-              ? 'That battle ended before it started. '
-                  'Challenge them again any time.'
-              : 'This match ended before it started.');
+          _endMatch(
+            widget.pairing.mode == 'friend'
+                ? 'That battle ended before it started. '
+                      'Challenge them again any time.'
+                : 'This match ended before it started.',
+          );
         }
         return;
       }
 
-      final ready = (data['readyPlayerIds'] as List?)?.cast<String>() ?? const [];
+      final ready =
+          (data['readyPlayerIds'] as List?)?.cast<String>() ?? const [];
       if (ready.length >= 2 && !_bothReady) {
         setState(() => _bothReady = true);
         _goToMatch();
@@ -182,14 +242,16 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
       if (opponentReady != _opponentReady) {
         setState(() => _opponentReady = opponentReady);
       }
-      final referenceMs = theirLastSeen ??
+      final referenceMs =
+          theirLastSeen ??
           (data['createdAt'] as Timestamp?)?.millisecondsSinceEpoch;
-      final gone = !opponentReady &&
+      final gone =
+          !opponentReady &&
           referenceMs != null &&
           DateTime.now().millisecondsSinceEpoch - referenceMs >
               _opponentStaleAfter.inMilliseconds;
       if (gone != _opponentGone) setState(() => _opponentGone = gone);
-    });
+    }
   }
 
   Future<void> _leaveUnresponsive() async {
@@ -252,7 +314,8 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
       _iAmReady = true;
     });
     try {
-      await _service.setReady(widget.pairing.matchId);
+      _applyServerAnswer(await _service.setReady(widget.pairing.matchId));
+      _startReadyCheck();
     } catch (e) {
       // Not fatal: the timer still starts the match, and the opponent's
       // own timer will too. Undo the local flag so they can retry.
@@ -269,16 +332,22 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
       final remaining = await _service.skipMatch(widget.pairing.matchId);
       if (!mounted) return;
       setState(() => _skipsLeft = remaining);
-      _endMatch('Match skipped. $remaining ${remaining == 1 ? 'skip' : 'skips'} left today.');
+      _endMatch(
+        'Match skipped. $remaining ${remaining == 1 ? 'skip' : 'skips'} left today.',
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
       final exhausted = e.toString().contains('skips');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(exhausted
-            ? "You've used all of today's skips."
-            : "Couldn't skip this match: $e"),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            exhausted
+                ? "You've used all of today's skips."
+                : "Couldn't skip this match: $e",
+          ),
+        ),
+      );
     }
   }
 
@@ -307,10 +376,14 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     _ticker?.cancel();
     _matchSub?.cancel();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Your opponent passed. Finding someone else...')),
+      const SnackBar(
+        content: Text('Your opponent passed. Finding someone else...'),
+      ),
     );
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => MatchmakingScreen(mode: widget.pairing.mode)),
+      MaterialPageRoute(
+        builder: (_) => MatchmakingScreen(mode: widget.pairing.mode),
+      ),
     );
   }
 
@@ -318,6 +391,8 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
   void dispose() {
     _ticker?.cancel();
     _heartbeat?.cancel();
+    _readyCheck?.cancel();
+    _readyArm?.cancel();
     _matchSub?.cancel();
     super.dispose();
   }
@@ -398,8 +473,7 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
               // single pop() returned to the dead PreMatchScreen/challenge
               // route the player came through, which is the "I can only press
               // Back and it goes nowhere useful" dead end.
-              onPressed: () =>
-                  Navigator.of(context).popUntil((r) => r.isFirst),
+              onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
               child: const Text('Back to home'),
             ),
           ],
@@ -412,7 +486,8 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     final profile = (_opponent?['profile'] as Map?)?.cast<String, dynamic>();
     final username = _opponent?['username'] as String? ?? 'Your opponent';
     final photos = profile?['photoUrls'];
-    final facePhoto = (profile?['facePhotoUrl'] as String?) ??
+    final facePhoto =
+        (profile?['facePhotoUrl'] as String?) ??
         (photos is List && photos.isNotEmpty ? photos.first as String? : null);
 
     return Column(
@@ -454,10 +529,15 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
                                 color: Colors.black54,
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                    color: Colors.white24, width: 1),
+                                  color: Colors.white24,
+                                  width: 1,
+                                ),
                               ),
-                              child: const Icon(Icons.zoom_in,
-                                  size: 14, color: Colors.white),
+                              child: const Icon(
+                                Icons.zoom_in,
+                                size: 14,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ],
@@ -483,16 +563,19 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 10),
                   child: Center(
-                      child: BeltFlair(uid: widget.pairing.opponentId)),
+                    child: BeltFlair(uid: widget.pairing.opponentId),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 if (_loadError != null)
                   Text(_loadError!, textAlign: TextAlign.center)
                 else if (_opponent == null)
-                  const Center(child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: CircularProgressIndicator(),
-                  ))
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
                 else
                   ..._buildProfileFields(profile),
                 // Pre-match loadout: bring power-ups to throw the opponent off.
@@ -516,10 +599,7 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     // real ammo. All that is left is City & State (shown here, to the matched
     // opponent only - never on the public study profile) and the volunteered
     // "about me" below.
-    const fields = <String, String>{
-      'name': 'Name',
-      'hometown': 'City & State',
-    };
+    const fields = <String, String>{'name': 'Name', 'hometown': 'City & State'};
 
     final rows = <Widget>[];
 
@@ -528,23 +608,27 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     // the text fields, which are secondary detail.
     final introUrl = profile?['introVideoUrl'] as String?;
     if (introUrl != null && introUrl.trim().isNotEmpty) {
-      rows.add(Row(
-        children: [
-          const Icon(Icons.videocam_outlined, size: 18),
-          const SizedBox(width: 6),
-          Text('Their intro', style: Theme.of(context).textTheme.labelLarge),
-        ],
-      ));
+      rows.add(
+        Row(
+          children: [
+            const Icon(Icons.videocam_outlined, size: 18),
+            const SizedBox(width: 6),
+            Text('Their intro', style: Theme.of(context).textTheme.labelLarge),
+          ],
+        ),
+      );
       rows.add(const SizedBox(height: 8));
-      rows.add(ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 340),
-        child: Align(
-          child: LoopingVideo(
-            url: introUrl,
-            onExpand: () => showVideoViewer(context, introUrl),
+      rows.add(
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 340),
+          child: Align(
+            child: LoopingVideo(
+              url: introUrl,
+              onExpand: () => showVideoViewer(context, introUrl),
+            ),
           ),
         ),
-      ));
+      );
       rows.add(const SizedBox(height: 16));
     }
 
@@ -557,28 +641,30 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     final ammo = profile?['ammoText'] as String?;
     if (ammo != null && ammo.trim().isNotEmpty) {
       rows.add(const SizedBox(height: 12));
-      rows.add(Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.local_fire_department_outlined, size: 18),
-                  const SizedBox(width: 6),
-                  Text(
-                    'About them',
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(ammo),
-            ],
+      rows.add(
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.local_fire_department_outlined, size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      'About them',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(ammo),
+              ],
+            ),
           ),
         ),
-      ));
+      );
     }
 
     if (rows.isEmpty) {
@@ -599,8 +685,9 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     // Guarded because bioRevealSeconds is live-configurable and 0 is a
     // legitimate value (skip the reveal entirely) - dividing by it would
     // hand LinearProgressIndicator a NaN.
-    final fraction =
-        _revealSeconds > 0 ? (_secondsLeft / _revealSeconds).clamp(0.0, 1.0) : 0.0;
+    final fraction = _revealSeconds > 0
+        ? (_secondsLeft / _revealSeconds).clamp(0.0, 1.0)
+        : 0.0;
     return Column(
       children: [
         LinearProgressIndicator(value: fraction, minHeight: 4),
@@ -610,13 +697,11 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
             _iAmReady && !_bothReady
                 ? 'Waiting for your opponent... ${_secondsLeft}s'
                 : _opponentReady && !_iAmReady
-                    ? 'Your opponent is ready - tap when you are'
-                    : 'Match starts in ${_secondsLeft}s',
+                ? 'Your opponent is ready - tap when you are'
+                : 'Match starts in ${_secondsLeft}s',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: _opponentReady && !_iAmReady
-                      ? FontWeight.bold
-                      : null,
-                ),
+              fontWeight: _opponentReady && !_iAmReady ? FontWeight.bold : null,
+            ),
           ),
         ),
       ],
@@ -629,13 +714,19 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
       // Bottom inset clears the system gesture bar (real-S22 occlusion fix,
       // 2026-09-01) so "I'm Ready" / skip / decline are never under it.
       padding: EdgeInsets.fromLTRB(
-          16, 8, 16, 16 + MediaQuery.of(context).padding.bottom),
+        16,
+        8,
+        16,
+        16 + MediaQuery.of(context).padding.bottom,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           FilledButton(
-            onPressed: (_busy || _iAmReady) ? null : _onReady,
-            child: Text(_iAmReady ? 'Ready - waiting for opponent' : "I'm Ready"),
+            onPressed: (_busy || _iAmReady || !_readyArmed) ? null : _onReady,
+            child: Text(
+              _iAmReady ? 'Ready - waiting for opponent' : "I'm Ready",
+            ),
           ),
           // Only ever offered once the opponent has genuinely gone quiet,
           // and it costs no skip - they declined nobody, they were stood up.
@@ -646,9 +737,11 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
               icon: const Icon(Icons.person_off_outlined),
               // "find someone else" is nonsense for a friend battle - there is
               // no queue, and the person who stepped away may be rejoining.
-              label: Text(widget.pairing.mode == 'friend'
-                  ? 'Opponent stepped away - leave'
-                  : 'Opponent left - find someone else'),
+              label: Text(
+                widget.pairing.mode == 'friend'
+                    ? 'Opponent stepped away - leave'
+                    : 'Opponent left - find someone else',
+              ),
             ),
           ],
           const SizedBox(height: 8),
@@ -686,9 +779,9 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
                     // base allowance, and an unexplained mention of
                     // judging would be noise.
                     : _skipsEarned > 0
-                        ? 'Skip this opponent ($skipsLeft left today, '
-                            '$_skipsEarned from voting)'
-                        : 'Skip this opponent ($skipsLeft left today)',
+                    ? 'Skip this opponent ($skipsLeft left today, '
+                          '$_skipsEarned from voting)'
+                    : 'Skip this opponent ($skipsLeft left today)',
               ),
             )
           else

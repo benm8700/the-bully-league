@@ -197,6 +197,20 @@ function resolveClipGrant({user, match, uid, source, price, entitlement}) {
  *
  * Pure.
  */
+/**
+ * Whether the captioned (postable) cut exists. The caption pass ALWAYS writes
+ * the trimmed, watermarked file and stamps captionedRenderedAt - but it only
+ * sets `captioned: true` when it found speech. A battle with no clear speech
+ * therefore used to stay "rendering" forever: the owner's claimed clip never
+ * became deliverable and the sweep kept retrying (found 2026-11-08, every test
+ * battle that night came back with 0 cues). The pass having RUN is what makes
+ * the clip ready; captions are a bonus when there is speech. Pure.
+ */
+function captionPassDone(match) {
+  const h = match?.highlight;
+  return h?.captioned === true || h?.captionedRenderedAt != null;
+}
+
 function clipDeliverable(match, nowMs) {
   const blocked = publishBlockedReason(match, nowMs);
   // An ACTIVE objection always blocks, and refunds - we never hand over a clip
@@ -214,7 +228,7 @@ function clipDeliverable(match, nowMs) {
   if (blocked && blocked !== "objection-window-open") {
     return {deliverable: false, reason: blocked, refundable: false};
   }
-  if (match?.highlight?.captioned !== true) {
+  if (!captionPassDone(match)) {
     return {deliverable: false, reason: "rendering", refundable: false};
   }
   return {deliverable: true, reason: null, refundable: false};
@@ -575,6 +589,7 @@ function voteCloseHint(match) {
 }
 
 module.exports = {
+  captionPassDone,
   requestMatchClip,
   getClipDownload,
   DOWNLOAD_URL_TTL_MS,

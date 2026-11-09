@@ -147,14 +147,53 @@ function groupWordsIntoCues(words, options = {}) {
     }
   }
 
-  return cues.map((c) => ({
+  return dropHallucinatedCues(cues.map((c) => ({
     uid: c.uid,
     start: c.start,
     // Hold each cue a beat past the last word so it doesn't vanish the
     // instant someone stops speaking.
     end: Math.max(c.end + 0.15, c.start + 0.4),
     text: c.words.join(" "),
-  }));
+  })));
+}
+
+/** A caption with no letters at all - "0 0 0 0", "1", "2 3 0", "...". */
+function isNumberOrPunctuationOnly(text) {
+  return !/\p{L}/u.test(String(text || ""));
+}
+
+/** Runs of identical consecutive captions at least this long are dropped. */
+const MAX_REPEAT_RUN = 3;
+
+/**
+ * Removes captions the recognizer INVENTED rather than heard.
+ *
+ * On silence, music or muddy audio Chirp hallucinates - most visibly long
+ * strings of "0 0 0 0" and stray digits ("1", "2 3 0"), often with no
+ * confidence score attached, so MIN_RESULT_CONFIDENCE never sees them. A
+ * real clip came back with a dozen "0 0 0 0" cues at its end (developer's
+ * report, 2026-11-08: "random numbers from the subtitles... the user's not
+ * going to want that in their clip"). Two content rules, both conservative:
+ *   1. a cue with NO letters is dropped - real roast lines are words; a
+ *      number spoken inside a sentence ("I'm 30") keeps its cue because the
+ *      cue has letters too;
+ *   2. the same text repeated MAX_REPEAT_RUN+ times back to back is dropped
+ *      as a whole run - people don't say one line three times in a row, a
+ *      looping recognizer does.
+ * Pure.
+ */
+function dropHallucinatedCues(cues) {
+  const lettered = (cues || []).filter((c) => !isNumberOrPunctuationOnly(c.text));
+  const out = [];
+  for (let i = 0; i < lettered.length;) {
+    const key = lettered[i].text.trim().toLowerCase();
+    let j = i + 1;
+    while (j < lettered.length &&
+        lettered[j].text.trim().toLowerCase() === key) j++;
+    if (j - i < MAX_REPEAT_RUN) out.push(...lettered.slice(i, j));
+    i = j;
+  }
+  return out;
 }
 
 /** ASS timestamps are H:MM:SS.cc with centisecond precision. */
@@ -315,6 +354,7 @@ async function transcribeSegments(segments, localDir, ffmpegPath, workDir) {
 }
 
 module.exports = {
+  dropHallucinatedCues,
   transcribeSegments,
   groupWordsIntoCues,
   buildAssFile,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'agora_render.dart';
 import 'dart:convert';
 
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
@@ -100,7 +101,11 @@ class AgoraVideoCallService implements VideoCallService {
     // Volume indication only reports once a user is publishing in a
     // channel (see localAudioLevel doc comment) - enabling here just
     // arms it for whenever joinChannel happens.
-    await _engine.enableAudioVolumeIndication(interval: 200, smooth: 3, reportVad: true);
+    await _engine.enableAudioVolumeIndication(
+      interval: 200,
+      smooth: 3,
+      reportVad: true,
+    );
 
     // Must be registered before joinChannel per Agora's docs. Despite
     // earlier CLAUDE.md notes claiming this API is an unimplemented stub,
@@ -125,19 +130,21 @@ class AgoraVideoCallService implements VideoCallService {
         final yBuffer = videoFrame.yBuffer;
         if (width == null || height == null || yBuffer == null) return;
         _lastLocalSampleTime = now;
-        _localFrameSamples.add(RawVideoFrame(
-          remoteUid: 0,
-          width: width,
-          height: height,
-          yStride: videoFrame.yStride ?? width,
-          uStride: videoFrame.uStride ?? (width ~/ 2),
-          vStride: videoFrame.vStride ?? (width ~/ 2),
-          yBuffer: yBuffer,
-          // Only the Y plane is needed for brightness, and the chroma
-          // planes are the expensive half to carry around.
-          uBuffer: videoFrame.uBuffer ?? Uint8List(0),
-          vBuffer: videoFrame.vBuffer ?? Uint8List(0),
-        ));
+        _localFrameSamples.add(
+          RawVideoFrame(
+            remoteUid: 0,
+            width: width,
+            height: height,
+            yStride: videoFrame.yStride ?? width,
+            uStride: videoFrame.uStride ?? (width ~/ 2),
+            vStride: videoFrame.vStride ?? (width ~/ 2),
+            yBuffer: yBuffer,
+            // Only the Y plane is needed for brightness, and the chroma
+            // planes are the expensive half to carry around.
+            uBuffer: videoFrame.uBuffer ?? Uint8List(0),
+            vBuffer: videoFrame.vBuffer ?? Uint8List(0),
+          ),
+        );
       },
       onRenderVideoFrame: (channelId, remoteUid, videoFrame) {
         final now = DateTime.now();
@@ -150,21 +157,27 @@ class AgoraVideoCallService implements VideoCallService {
         final yBuffer = videoFrame.yBuffer;
         final uBuffer = videoFrame.uBuffer;
         final vBuffer = videoFrame.vBuffer;
-        if (width == null || height == null || yBuffer == null || uBuffer == null || vBuffer == null) {
+        if (width == null ||
+            height == null ||
+            yBuffer == null ||
+            uBuffer == null ||
+            vBuffer == null) {
           return;
         }
         _lastFrameSampleTime = now;
-        _remoteFrameSamples.add(RawVideoFrame(
-          remoteUid: remoteUid,
-          width: width,
-          height: height,
-          yStride: videoFrame.yStride ?? width,
-          uStride: videoFrame.uStride ?? (width ~/ 2),
-          vStride: videoFrame.vStride ?? (width ~/ 2),
-          yBuffer: yBuffer,
-          uBuffer: uBuffer,
-          vBuffer: vBuffer,
-        ));
+        _remoteFrameSamples.add(
+          RawVideoFrame(
+            remoteUid: remoteUid,
+            width: width,
+            height: height,
+            yStride: videoFrame.yStride ?? width,
+            uStride: videoFrame.uStride ?? (width ~/ 2),
+            vStride: videoFrame.vStride ?? (width ~/ 2),
+            yBuffer: yBuffer,
+            uBuffer: uBuffer,
+            vBuffer: vBuffer,
+          ),
+        );
       },
     );
     _engine.getMediaEngine().registerVideoFrameObserver(_frameObserver!);
@@ -185,28 +198,33 @@ class AgoraVideoCallService implements VideoCallService {
           // see the Completer note on joinChannel below.
           _joinCompleter?.complete();
         },
-        onUserJoined: (connection, remoteUid, elapsed) => _remoteUid.value = remoteUid,
-        onUserOffline: (connection, remoteUid, reason) => _remoteUid.value = null,
+        onUserJoined: (connection, remoteUid, elapsed) =>
+            _remoteUid.value = remoteUid,
+        onUserOffline: (connection, remoteUid, reason) =>
+            _remoteUid.value = null,
         onLeaveChannel: (connection, stats) {
           _isJoined.value = false;
           _remoteUid.value = null;
           _localUid.value = null;
           _dataStreamId = null;
         },
-        onAudioVolumeIndication: (connection, speakers, speakerNumber, totalVolume) {
-          final local = speakers.where((s) => s.uid == 0);
-          if (local.isNotEmpty) {
-            _localAudioLevel.value = local.first.volume ?? 0;
-          }
-        },
-        onStreamMessage: (connection, remoteUid, streamId, data, length, sentTs) {
-          try {
-            final decoded = jsonDecode(utf8.decode(data)) as Map<String, dynamic>;
-            _matchMessages.add(decoded);
-          } catch (e) {
-            debugPrint('Agora onStreamMessage decode failed: $e');
-          }
-        },
+        onAudioVolumeIndication:
+            (connection, speakers, speakerNumber, totalVolume) {
+              final local = speakers.where((s) => s.uid == 0);
+              if (local.isNotEmpty) {
+                _localAudioLevel.value = local.first.volume ?? 0;
+              }
+            },
+        onStreamMessage:
+            (connection, remoteUid, streamId, data, length, sentTs) {
+              try {
+                final decoded =
+                    jsonDecode(utf8.decode(data)) as Map<String, dynamic>;
+                _matchMessages.add(decoded);
+              } catch (e) {
+                debugPrint('Agora onStreamMessage decode failed: $e');
+              }
+            },
         onError: (err, msg) => debugPrint('Agora error: $err $msg'),
         onConnectionStateChanged: (connection, state, reason) =>
             debugPrint('Agora connection state: $state, reason: $reason'),
@@ -215,7 +233,11 @@ class AgoraVideoCallService implements VideoCallService {
   }
 
   @override
-  Future<void> joinChannel({required String channelName, required int uid, String token = ''}) async {
+  Future<void> joinChannel({
+    required String channelName,
+    required int uid,
+    String token = '',
+  }) async {
     _channelName = channelName;
     // await _engine.joinChannel(...) resolves once the join REQUEST is
     // accepted, not once the join actually completes - the real signal is
@@ -247,7 +269,8 @@ class AgoraVideoCallService implements VideoCallService {
   }
 
   @override
-  Future<void> muteLocalAudio(bool muted) => _engine.muteLocalAudioStream(muted);
+  Future<void> muteLocalAudio(bool muted) =>
+      _engine.muteLocalAudioStream(muted);
 
   @override
   // Mutes every remote stream on this device (a 2-person channel = just the
@@ -271,6 +294,7 @@ class AgoraVideoCallService implements VideoCallService {
   Widget localVideoView() {
     return AgoraVideoView(
       controller: VideoViewController(
+        useFlutterTexture: agoraUseFlutterTexture,
         rtcEngine: _engine,
         canvas: const VideoCanvas(uid: 0),
       ),
@@ -285,6 +309,7 @@ class AgoraVideoCallService implements VideoCallService {
 
     return AgoraVideoView(
       controller: VideoViewController.remote(
+        useFlutterTexture: agoraUseFlutterTexture,
         rtcEngine: _engine,
         canvas: VideoCanvas(uid: uid),
         connection: RtcConnection(channelId: channelName),

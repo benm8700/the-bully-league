@@ -115,7 +115,11 @@ class _MyBattlesScreenState extends State<MyBattlesScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0x2E000000), Color(0x0A000000), Color(0x66000000)],
+                colors: [
+                  Color(0x2E000000),
+                  Color(0x0A000000),
+                  Color(0x66000000),
+                ],
               ),
             ),
           ),
@@ -185,7 +189,7 @@ class _MyBattlesScreenState extends State<MyBattlesScreen> {
                 : 'Nothing here',
             message: _filter == _BattleFilter.all
                 ? 'Once you finish a battle, it shows up here so you can '
-                    'watch the crowd\'s verdict come in.'
+                      'watch the crowd\'s verdict come in.'
                 : 'No battles match this filter yet.',
           );
         }
@@ -207,7 +211,8 @@ class _MyBattlesScreenState extends State<MyBattlesScreen> {
   /// player's matches take two queries - one for each side of the pairing -
   /// merged and re-sorted here.
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _myMatches(
-      String uid) async {
+    String uid,
+  ) async {
     final matches = FirebaseFirestore.instance.collection('matches');
     final results = await Future.wait([
       matches
@@ -295,18 +300,29 @@ class _CareerSummary extends StatelessWidget {
             child: IntrinsicHeight(
               child: Row(
                 children: [
-                  _stat(context, '$wins', 'WINS',
-                      valueColor: palette.winner),
+                  _stat(context, '$wins', 'WINS', valueColor: palette.winner),
                   _divider(),
-                  _stat(context, '$losses', 'LOSSES',
-                      valueColor: palette.accent),
+                  _stat(
+                    context,
+                    '$losses',
+                    'LOSSES',
+                    valueColor: palette.accent,
+                  ),
                   _divider(),
-                  _stat(context, '$winRate%', 'WIN RATE',
-                      valueColor: Colors.white,
-                      labelColor: const Color(0xFF7FD3E6)),
+                  _stat(
+                    context,
+                    '$winRate%',
+                    'WIN RATE',
+                    valueColor: Colors.white,
+                    labelColor: const Color(0xFF7FD3E6),
+                  ),
                   _divider(),
-                  _stat(context, '🔥 $streak', 'STREAK',
-                      valueColor: const Color(0xFFFFA31E)),
+                  _stat(
+                    context,
+                    '🔥 $streak',
+                    'STREAK',
+                    valueColor: const Color(0xFFFFA31E),
+                  ),
                 ],
               ),
             ),
@@ -317,13 +333,18 @@ class _CareerSummary extends StatelessWidget {
   }
 
   Widget _divider() => Container(
-        width: 1,
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        color: Colors.white.withValues(alpha: 0.10),
-      );
+    width: 1,
+    margin: const EdgeInsets.symmetric(vertical: 2),
+    color: Colors.white.withValues(alpha: 0.10),
+  );
 
-  Widget _stat(BuildContext context, String value, String label,
-      {required Color valueColor, Color? labelColor}) {
+  Widget _stat(
+    BuildContext context,
+    String value,
+    String label, {
+    required Color valueColor,
+    Color? labelColor,
+  }) {
     final text = Theme.of(context).textTheme;
     return Expanded(
       child: Column(
@@ -392,9 +413,7 @@ class _Filters extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
               border: Border.all(
-                color: isSel
-                    ? accent
-                    : Colors.white.withValues(alpha: 0.16),
+                color: isSel ? accent : Colors.white.withValues(alpha: 0.16),
               ),
               boxShadow: isSel
                   ? [
@@ -412,12 +431,12 @@ class _Filters extends StatelessWidget {
                 label,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: isSel
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.75),
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                    ),
+                  color: isSel
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.75),
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
           ),
@@ -450,13 +469,24 @@ class _BattleCard extends StatelessWidget {
     final winnerId = match['winnerId'] as String?;
     final mode = match['mode'] as String? ?? 'exhibition';
     final isTournament = mode == 'tournament';
+    // Friend battles are PRIVATE: never recorded, judged or clipped. Treating
+    // them like ranked showed "JUDGING" forever plus a "Get clip" for a video
+    // that does not exist (found on a device, 2026-11-08).
+    final isFriend = mode == 'friend';
+    final hasClip = mode != 'exhibition' && !isFriend;
+    // Once you've claimed this battle's clip, the button says where it is
+    // in its life - so "where is my clip?" always has an answer on the card.
+    final myClipClaimed =
+        (match['clipGrants'] as Map<String, dynamic>?)?[uid] != null;
+    final clipCaptioned = clipReady(match);
     final palette = context.palette;
 
     // A battle flagged for inappropriate content: it keeps its place in your
     // record (you DID play it) but shows as disqualified, with who triggered it
     // and no clip.
     final contentViolation = match['contentViolation'] as Map<String, dynamic>?;
-    final isDisqualified = status == 'disqualified' ||
+    final isDisqualified =
+        status == 'disqualified' ||
         match['disqualifyReason'] == 'inappropriate-content' ||
         contentViolation != null;
     final dqTriggerUid = contentViolation?['reportedUserId'] as String?;
@@ -473,7 +503,8 @@ class _BattleCard extends StatelessWidget {
     return FutureBuilder<List<({String name, String? photo})>>(
       future: _players(player1Id, player2Id),
       builder: (context, infoSnap) {
-        final info = infoSnap.data ??
+        final info =
+            infoSnap.data ??
             const [
               (name: 'Player 1', photo: null),
               (name: 'Player 2', photo: null),
@@ -494,7 +525,8 @@ class _BattleCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: borderColor.withValues(
-                      alpha: isTournament ? 0.6 : 0.35),
+                    alpha: isTournament ? 0.6 : 0.35,
+                  ),
                   width: isTournament ? 1.4 : 1,
                 ),
                 boxShadow: [
@@ -520,11 +552,10 @@ class _BattleCard extends StatelessWidget {
                         const Spacer(),
                         Text(
                           when,
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelSmall
+                          style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.55)),
+                                color: Colors.white.withValues(alpha: 0.55),
+                              ),
                         ),
                       ],
                     ),
@@ -545,26 +576,31 @@ class _BattleCard extends StatelessWidget {
                         final oppVotes = iAmP1 ? p2 : p1;
                         final total = p1 + p2;
 
-                        final decided = finalized &&
-                            winnerId != null &&
-                            !isDisqualified;
+                        final decided =
+                            finalized && winnerId != null && !isDisqualified;
                         final meWon = decided && winnerId == uid;
                         final oppWon = decided && winnerId == oppId;
                         final result = isDisqualified
                             ? _Result.disqualified
+                            : isFriend
+                            ? (status == 'abandoned'
+                                  ? _Result.noContest
+                                  : status == 'completed'
+                                  ? _Result.friendly
+                                  : _Result.judging)
                             : !finalized
-                                ? _Result.judging
-                                : winnerId == null
-                                    // An abandoned match (someone left / no-
-                                    // showed) is a no-contest, not a judged
-                                    // tie. A finalized 'completed' match with
-                                    // no winner is a genuine DRAW.
-                                    ? (status == 'abandoned'
-                                        ? _Result.noContest
-                                        : _Result.draw)
-                                    : meWon
-                                        ? _Result.win
-                                        : _Result.loss;
+                            ? _Result.judging
+                            : winnerId == null
+                            // An abandoned match (someone left / no-
+                            // showed) is a no-contest, not a judged
+                            // tie. A finalized 'completed' match with
+                            // no winner is a genuine DRAW.
+                            ? (status == 'abandoned'
+                                  ? _Result.noContest
+                                  : _Result.draw)
+                            : meWon
+                            ? _Result.win
+                            : _Result.loss;
 
                         return Column(
                           children: [
@@ -572,44 +608,56 @@ class _BattleCard extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Expanded(
-                                  child: _playerColumn(context,
-                                      name: me.name,
-                                      photo: me.photo,
-                                      votes: meVotes,
-                                      isWinner: meWon,
-                                      isLoser: oppWon,
-                                      showVotes: !isDisqualified),
+                                  child: _playerColumn(
+                                    context,
+                                    name: me.name,
+                                    photo: me.photo,
+                                    votes: meVotes,
+                                    isWinner: meWon,
+                                    isLoser: oppWon,
+                                    showVotes: !isDisqualified && !isFriend,
+                                  ),
                                 ),
                                 const SizedBox(width: 6),
                                 _centre(context, result),
                                 const SizedBox(width: 6),
                                 Expanded(
-                                  child: _playerColumn(context,
-                                      name: opp.name,
-                                      photo: opp.photo,
-                                      votes: oppVotes,
-                                      isWinner: oppWon,
-                                      isLoser: meWon,
-                                      showVotes: !isDisqualified),
+                                  child: _playerColumn(
+                                    context,
+                                    name: opp.name,
+                                    photo: opp.photo,
+                                    votes: oppVotes,
+                                    isWinner: oppWon,
+                                    isLoser: meWon,
+                                    showVotes: !isDisqualified && !isFriend,
+                                  ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 8),
                             if (isDisqualified)
-                              _dqLine(context,
-                                  triggerUid: dqTriggerUid,
-                                  uid: uid,
-                                  oppId: oppId,
-                                  oppName: opp.name)
+                              _dqLine(
+                                context,
+                                triggerUid: dqTriggerUid,
+                                uid: uid,
+                                oppId: oppId,
+                                oppName: opp.name,
+                              )
                             else
                               // Judged count + a compact clip button (the clip
                               // is the growth engine, kept VISIBLE - not buried
                               // in the options sheet - just smaller now).
-                              _footerRow(context,
-                                  total: total,
-                                  result: result,
-                                  showClip: mode != 'exhibition' &&
-                                      status == 'completed'),
+                              _footerRow(
+                                context,
+                                total: total,
+                                result: result,
+                                showClip: hasClip && status == 'completed',
+                                clipLabel: myClipClaimed
+                                    ? (clipCaptioned
+                                          ? 'Watch clip'
+                                          : 'Clip coming...')
+                                    : null,
+                              ),
                           ],
                         );
                       },
@@ -624,14 +672,14 @@ class _BattleCard extends StatelessWidget {
     );
   }
 
-  Widget _typePill(
-      BuildContext context, String mode, Color gold, Color pink) {
+  Widget _typePill(BuildContext context, String mode, Color gold, Color pink) {
     // Categorised by mode so Roast and Face-Off battles are told apart. The
     // improv mode is branded "Face-Off" everywhere user-facing; teal matches
     // its Home card. (Code id stays "improv".)
     final (String label, Color color) = switch (mode) {
       'tournament' => ('TOURNAMENT', gold),
       'improv' => ('FACE-OFF', const Color(0xFF2BC4B0)),
+      'friend' => ('FRIEND', const Color(0xFF8E9BFF)),
       _ => ('ROAST', pink),
     };
     return Container(
@@ -643,29 +691,31 @@ class _BattleCard extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
+          color: color,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
 
-  Widget _playerColumn(BuildContext context,
-      {required String name,
-      required String? photo,
-      required int votes,
-      required bool isWinner,
-      required bool isLoser,
-      bool showVotes = true}) {
+  Widget _playerColumn(
+    BuildContext context, {
+    required String name,
+    required String? photo,
+    required int votes,
+    required bool isWinner,
+    required bool isLoser,
+    bool showVotes = true,
+  }) {
     final text = Theme.of(context).textTheme;
     final green = context.palette.winner;
     final pink = context.palette.accent;
     final voteColor = isWinner
         ? green
         : isLoser
-            ? pink
-            : Colors.white.withValues(alpha: 0.6);
+        ? pink
+        : Colors.white.withValues(alpha: 0.6);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -705,8 +755,10 @@ class _BattleCard extends StatelessWidget {
         if (showVotes)
           Text(
             '$votes ${votes == 1 ? 'vote' : 'votes'}',
-            style: text.labelSmall
-                ?.copyWith(color: voteColor, fontWeight: FontWeight.w700),
+            style: text.labelSmall?.copyWith(
+              color: voteColor,
+              fontWeight: FontWeight.w700,
+            ),
           ),
       ],
     );
@@ -730,10 +782,13 @@ class _BattleCard extends StatelessWidget {
             children: [
               const Text('👑', style: TextStyle(fontSize: 12)),
               const SizedBox(width: 3),
-              Text('WIN',
-                  style: text.labelMedium?.copyWith(
-                      color: const Color(0xFF6BE0A0),
-                      fontWeight: FontWeight.w900)),
+              Text(
+                'WIN',
+                style: text.labelMedium?.copyWith(
+                  color: const Color(0xFF6BE0A0),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ],
           ),
         );
@@ -747,9 +802,13 @@ class _BattleCard extends StatelessWidget {
             children: [
               Icon(Icons.close_rounded, size: 14, color: pink),
               const SizedBox(width: 2),
-              Text('LOSS',
-                  style: text.labelMedium
-                      ?.copyWith(color: pink, fontWeight: FontWeight.w900)),
+              Text(
+                'LOSS',
+                style: text.labelMedium?.copyWith(
+                  color: pink,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ],
           ),
         );
@@ -757,9 +816,13 @@ class _BattleCard extends StatelessWidget {
         badge = _badge(
           bg: Colors.white.withValues(alpha: 0.06),
           border: Colors.white.withValues(alpha: 0.22),
-          child: Text('DRAW',
-              style: text.labelMedium?.copyWith(
-                  color: Colors.white70, fontWeight: FontWeight.w800)),
+          child: Text(
+            'DRAW',
+            style: text.labelMedium?.copyWith(
+              color: Colors.white70,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         );
       case _Result.noContest:
         // A battle nobody finished (left / no-show) - neutral, no winner, and
@@ -767,18 +830,39 @@ class _BattleCard extends StatelessWidget {
         badge = _badge(
           bg: Colors.white.withValues(alpha: 0.06),
           border: Colors.white.withValues(alpha: 0.22),
-          child: Text('NO CONTEST',
-              textAlign: TextAlign.center,
-              style: text.labelSmall?.copyWith(
-                  color: Colors.white70, fontWeight: FontWeight.w800)),
+          child: Text(
+            'NO CONTEST',
+            textAlign: TextAlign.center,
+            style: text.labelSmall?.copyWith(
+              color: Colors.white70,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        );
+      case _Result.friendly:
+        // Played, but nobody judges a friend battle - so no winner to show.
+        badge = _badge(
+          bg: Colors.white.withValues(alpha: 0.06),
+          border: Colors.white.withValues(alpha: 0.22),
+          child: Text(
+            'PLAYED',
+            style: text.labelSmall?.copyWith(
+              color: Colors.white70,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         );
       case _Result.judging:
         badge = _badge(
           bg: Colors.white.withValues(alpha: 0.06),
           border: Colors.white.withValues(alpha: 0.22),
-          child: Text('JUDGING',
-              style: text.labelSmall?.copyWith(
-                  color: Colors.white70, fontWeight: FontWeight.w800)),
+          child: Text(
+            'JUDGING',
+            style: text.labelSmall?.copyWith(
+              color: Colors.white70,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         );
       case _Result.disqualified:
         final red = const Color(0xFFE5484D);
@@ -791,9 +875,13 @@ class _BattleCard extends StatelessWidget {
             children: [
               Icon(Icons.block, size: 13, color: red),
               const SizedBox(width: 3),
-              Text('DQ',
-                  style: text.labelMedium
-                      ?.copyWith(color: red, fontWeight: FontWeight.w900)),
+              Text(
+                'DQ',
+                style: text.labelMedium?.copyWith(
+                  color: red,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ],
           ),
         );
@@ -806,20 +894,24 @@ class _BattleCard extends StatelessWidget {
           const SizedBox(height: 4),
           badge,
           const SizedBox(height: 4),
-          Text('VS',
-              style: text.labelSmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontWeight: FontWeight.w800)),
+          Text(
+            'VS',
+            style: text.labelSmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.5),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _badge(
-      {required Color bg,
-      required Color border,
-      Color? glow,
-      required Widget child}) {
+  Widget _badge({
+    required Color bg,
+    required Color border,
+    Color? glow,
+    required Widget child,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -837,10 +929,13 @@ class _BattleCard extends StatelessWidget {
   /// Compact footer: "N judged" on the left, and - kept VISIBLE because the
   /// clip is the growth engine - a small clip button on the right. Replaces the
   /// old full-width clip button + separate judged row, to shrink the card.
-  Widget _footerRow(BuildContext context,
-      {required int total,
-      required _Result result,
-      required bool showClip}) {
+  Widget _footerRow(
+    BuildContext context, {
+    required int total,
+    required _Result result,
+    required bool showClip,
+    String? clipLabel,
+  }) {
     final muted = Colors.white.withValues(alpha: 0.55);
     final won = result == _Result.win;
     final green = context.palette.winner;
@@ -849,7 +944,9 @@ class _BattleCard extends StatelessWidget {
         Icon(Icons.groups, size: 15, color: muted),
         const SizedBox(width: 5),
         Text(
-          total == 0
+          result == _Result.friendly
+              ? 'Private - not judged'
+              : total == 0
               ? 'No votes yet'
               : '$total ${total == 1 ? 'person' : 'people'} judged',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: muted),
@@ -859,21 +956,26 @@ class _BattleCard extends StatelessWidget {
           FilledButton.tonalIcon(
             onPressed: () => GetClipSheet.show(context, matchId),
             icon: const Icon(Icons.ios_share, size: 15),
-            label: Text(won ? 'Share win' : 'Get clip'),
+            label: Text(clipLabel ?? (won ? 'Share win' : 'Get clip')),
             style: FilledButton.styleFrom(
               visualDensity: VisualDensity.compact,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
               minimumSize: const Size(0, 30),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               textStyle: const TextStyle(
-                  fontSize: 12.5, fontWeight: FontWeight.w700),
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
               backgroundColor: won ? green.withValues(alpha: 0.18) : null,
               foregroundColor: won ? const Color(0xFF6BE0A0) : null,
             ),
           )
         else
-          Icon(Icons.chevron_right,
-              size: 20, color: Colors.white.withValues(alpha: 0.45)),
+          Icon(
+            Icons.chevron_right,
+            size: 20,
+            color: Colors.white.withValues(alpha: 0.45),
+          ),
       ],
     );
   }
@@ -891,28 +993,30 @@ class _BattleCard extends StatelessWidget {
       child: Text(
         'DISQUALIFIED',
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: red,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
+          color: red,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
 
   /// The disqualified detail line: what happened + WHO triggered it, so you
   /// still have the record of the battle and know the result.
-  Widget _dqLine(BuildContext context,
-      {required String? triggerUid,
-      required String uid,
-      required String oppId,
-      required String oppName}) {
+  Widget _dqLine(
+    BuildContext context, {
+    required String? triggerUid,
+    required String uid,
+    required String oppId,
+    required String oppName,
+  }) {
     final who = triggerUid == null
         ? 'A player was disqualified'
         : triggerUid == uid
-            ? 'You were disqualified'
-            : triggerUid == oppId
-                ? '$oppName was disqualified'
-                : 'A player was disqualified';
+        ? 'You were disqualified'
+        : triggerUid == oppId
+        ? '$oppName was disqualified'
+        : 'A player was disqualified';
     return Row(
       children: [
         const Icon(Icons.gavel, size: 15, color: Color(0xFFE5A24D)),
@@ -921,8 +1025,8 @@ class _BattleCard extends StatelessWidget {
           child: Text(
             '$who — inappropriate content. No clip for this battle.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.7),
-                ),
+              color: Colors.white.withValues(alpha: 0.7),
+            ),
           ),
         ),
       ],
@@ -931,8 +1035,13 @@ class _BattleCard extends StatelessWidget {
 
   /// The card's actions - kept reachable (clip, takedown, block) via a sheet
   /// so the WHOLE card stays tappable, per the spec.
-  void _showOptions(BuildContext context, String mode, String status,
-      String oppId, String oppName) {
+  void _showOptions(
+    BuildContext context,
+    String mode,
+    String status,
+    String oppId,
+    String oppName,
+  ) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -948,11 +1057,16 @@ class _BattleCard extends StatelessWidget {
                 trailing: FollowButton(uid: oppId, compact: true),
                 onTap: () {
                   Navigator.pop(sheetCtx);
-                  PerformerProfileScreen.open(context, oppId,
-                      username: oppName);
+                  PerformerProfileScreen.open(
+                    context,
+                    oppId,
+                    username: oppName,
+                  );
                 },
               ),
-            if (mode != 'exhibition' && status == 'completed')
+            if (mode != 'exhibition' &&
+                mode != 'friend' &&
+                status == 'completed')
               ListTile(
                 leading: const Icon(Icons.movie_outlined),
                 title: const Text('Get your clip'),
@@ -961,7 +1075,9 @@ class _BattleCard extends StatelessWidget {
                   GetClipSheet.show(context, matchId);
                 },
               ),
-            if (mode != 'exhibition' && status == 'completed')
+            if (mode != 'exhibition' &&
+                mode != 'friend' &&
+                status == 'completed')
               ListTile(
                 leading: const Icon(Icons.campaign_outlined),
                 title: const Text('Use in our promos'),
@@ -994,14 +1110,18 @@ class _BattleCard extends StatelessWidget {
   }
 
   Future<List<({String name, String? photo})>> _players(
-      String player1Id, String player2Id) async {
+    String player1Id,
+    String player2Id,
+  ) async {
     final db = FirebaseFirestore.instance;
     final snaps = await Future.wait([
       db.collection('users').doc(player1Id).get(),
       db.collection('users').doc(player2Id).get(),
     ]);
     ({String name, String? photo}) read(
-        DocumentSnapshot<Map<String, dynamic>> s, String fallback) {
+      DocumentSnapshot<Map<String, dynamic>> s,
+      String fallback,
+    ) {
       final data = s.data();
       final name = (data?['username'] as String?) ?? fallback;
       final photos = (data?['profile'] as Map?)?['photoUrls'];
@@ -1015,7 +1135,7 @@ class _BattleCard extends StatelessWidget {
   }
 }
 
-enum _Result { win, loss, draw, noContest, judging, disqualified }
+enum _Result { win, loss, draw, noContest, judging, disqualified, friendly }
 
 /// Minutes-ago within the hour, hours-ago within the day, and a full
 /// day/month/year date beyond that - no "N days ago" (developer's call).
@@ -1033,8 +1153,18 @@ String _relativeDate(Object? ts) {
     return '$h ${h == 1 ? 'hour' : 'hours'} ago';
   }
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   return '${months[then.month - 1]} ${then.day}, ${then.year}';
 }

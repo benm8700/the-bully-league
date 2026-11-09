@@ -54,6 +54,18 @@ class PushNotificationService {
         return;
       }
 
+      // iOS drops a push that arrives while the app is open unless told to
+      // show it. Show it as a normal banner (developer, 2026-11-09: e.g. a
+      // friend accepting your challenge while you browse Ranks). Android
+      // shows nothing in the foreground either way; it has in-app banners.
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        await _messaging.setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      }
+
       // Listen FIRST, so a token that only arrives later (see below) or
       // rotates (reinstall, restore, FCM's own rotation) is still saved.
       _tokenRefreshSub ??= _messaging.onTokenRefresh.listen(_saveToken);

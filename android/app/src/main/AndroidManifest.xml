@@ -10,9 +10,15 @@
          silently never displayed, which looks exactly like a broken backend.
          Requested at runtime by PushNotificationService.register(). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- "Save to device" puts battle clips in the gallery (package gal).
+         Android 10+ needs no permission for that; only Android 9 and older
+         do, so the grant is capped there and never asked for elsewhere. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
     <application
+        android:requestLegacyExternalStorage="true"
         android:label="The Bully League"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">

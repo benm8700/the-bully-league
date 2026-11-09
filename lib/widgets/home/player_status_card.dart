@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/route_observer.dart';
 import '../../core/services/belt_service.dart';
 import '../../screens/profile/profile_screen.dart';
 import 'rank_badges.dart';
@@ -51,7 +52,8 @@ class PlayerStatusCard extends StatefulWidget {
   State<PlayerStatusCard> createState() => _PlayerStatusCardState();
 }
 
-class _PlayerStatusCardState extends State<PlayerStatusCard> {
+class _PlayerStatusCardState extends State<PlayerStatusCard>
+    with RouteAware {
   Map<String, dynamic>? _meter;
   int? _rank;
 
@@ -65,6 +67,36 @@ class _PlayerStatusCardState extends State<PlayerStatusCard> {
     _loadMeter();
     _loadRank();
     _loadBelt();
+  }
+
+  // This card is built once and never re-inits (see below), so without this
+  // XP, title and global rank stayed frozen at their login values for the
+  // whole session - a battle's XP or a promotion only showed after an app
+  // restart (seen on a device, 2026-11-08). Re-load whenever Home becomes
+  // visible again after a pushed screen (a battle, a vote, the profile) pops.
+  ModalRoute<dynamic>? _route;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null && route != _route) {
+      if (_route != null) appRouteObserver.unsubscribe(this);
+      _route = route;
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    _loadMeter();
+    _loadRank();
+  }
+
+  @override
+  void dispose() {
+    appRouteObserver.unsubscribe(this);
+    super.dispose();
   }
 
   Future<void> _loadBelt() async {

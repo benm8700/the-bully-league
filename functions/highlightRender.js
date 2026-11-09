@@ -94,7 +94,10 @@ const OUTPUT_FPS = 30;
  * small so it hugs the bottom rather than riding up into frame.
  */
 const WATERMARK_LOGO_PATH = path.join(__dirname, "assets", "watermark.png");
-const WATERMARK_LOGO_WIDTH_RATIO = 0.17;
+// 0.17 -> 0.25 (developer, 2026-11-08: watching a finished clip they said it
+// "is not watermarked" - it was, but too small to register). Every shared
+// clip is free advertising, so the mark has to be noticed.
+const WATERMARK_LOGO_WIDTH_RATIO = 0.25;
 // Tightened toward the corner again (developer's call, 2026-10-20 - wants it
 // hugging the bottom-right). Still a small inset, not flush: the posted clip -
 // the watermark's real job - reads as a clean corner mark, and the inset plus
@@ -103,6 +106,13 @@ const WATERMARK_LOGO_WIDTH_RATIO = 0.17;
 // crop) over the in-app feed look, per the developer.
 const WATERMARK_LOGO_MARGIN_X_RATIO = 0.05;
 const WATERMARK_LOGO_MARGIN_Y_RATIO = 0.02;
+// TOP-RIGHT now (developer's call, 2026-11-08), replacing bottom-right: on
+// TikTok / Reels / Shorts the platform's like-comment-share column and the
+// caption/username block cover the BOTTOM-RIGHT, so the mark was hidden
+// exactly where clips get watched. The top inset is a fraction of canvas
+// HEIGHT, deep enough to clear the platforms' top bar (For You / Following,
+// Reels header) on a 9:16 post.
+const WATERMARK_LOGO_TOP_RATIO = 0.07;
 const WATERMARK_LOGO_ALPHA = 0.9;
 // Resolved once at load. If the asset ever fails to deploy, this is null and
 // renders proceed WITHOUT a watermark rather than failing outright - a missing
@@ -447,13 +457,18 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
     inputs.push("-i", options.logoPath);
     const logoW = Math.round(canvas.width * WATERMARK_LOGO_WIDTH_RATIO);
     const marginX = Math.round(canvas.width * WATERMARK_LOGO_MARGIN_X_RATIO);
+    const marginTop = Math.round(canvas.height * WATERMARK_LOGO_TOP_RATIO);
     const marginY = Math.round(canvas.width * WATERMARK_LOGO_MARGIN_Y_RATIO);
-    // BOTTOM-RIGHT: x = frame width - logo width - marginX (marginX clears the
-    // in-app side-crop); y = frame height - logo height - marginY (hugs the
-    // bottom). `W`/`H` are the main frame, `w`/`h` the scaled logo.
+    // TOP-RIGHT: x = frame width - logo width - marginX (marginX clears the
+    // in-app side-crop); y = marginTop (clears the platforms' top bar).
+    // EXCEPT when reaction-cam PiPs are present - they own the top-right
+    // corner (below), so the logo falls back to its old bottom-right spot
+    // rather than being buried under a judge's face.
+    // `W`/`H` are the main frame, `w`/`h` the scaled logo.
+    const logoY = hasReactionPip ? `H-h-${marginY}` : `${marginTop}`;
     filters.push(`[${logoIndex}:v]scale=${logoW}:-1,format=rgba,` +
       `colorchannelmixer=aa=${WATERMARK_LOGO_ALPHA}[wm]`);
-    filters.push(`[vbeforelogo][wm]overlay=W-w-${marginX}:H-h-${marginY}${mainOut}`);
+    filters.push(`[vbeforelogo][wm]overlay=W-w-${marginX}:${logoY}${mainOut}`);
   }
 
   // REACTION-CAM PiP overlays - the tournament notable-panelist reactions
@@ -775,10 +790,11 @@ function buildImprovFfmpegArgs(performers, localDir, outputPath, options = {}) {
     inputs.push("-i", options.logoPath);
     const logoW = Math.round(canvas.width * WATERMARK_LOGO_WIDTH_RATIO);
     const marginX = Math.round(canvas.width * WATERMARK_LOGO_MARGIN_X_RATIO);
-    const marginY = Math.round(canvas.width * WATERMARK_LOGO_MARGIN_Y_RATIO);
+    // TOP-RIGHT, same as the roast clips (see WATERMARK_LOGO_TOP_RATIO).
+    const marginTop = Math.round(canvas.height * WATERMARK_LOGO_TOP_RATIO);
     filters.push(`[${logoIndex}:v]scale=${logoW}:-1,format=rgba,` +
       `colorchannelmixer=aa=${WATERMARK_LOGO_ALPHA}[iwm]`);
-    filters.push(`${vlabel}[iwm]overlay=W-w-${marginX}:H-h-${marginY}[vout]`);
+    filters.push(`${vlabel}[iwm]overlay=W-w-${marginX}:${marginTop}[vout]`);
   } else {
     filters.push(`${vlabel}null[vout]`);
   }

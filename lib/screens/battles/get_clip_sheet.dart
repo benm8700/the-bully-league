@@ -1,12 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../widgets/match_clip_player.dart';
 
@@ -53,11 +55,41 @@ class _GetClipSheetState extends State<GetClipSheet> {
   bool _freeClipAvailable = false;
   bool _subscriber = false;
   bool _alreadyOwned = false;
+  String? _savedNotice;
+
+  // Whether the captioned cut exists yet - the moment Watch/Share/Save can
+  // actually work. Watched LIVE while the sheet is open, so a claimed clip
+  // goes from "Making your clip" to "ready" in front of the user instead of
+  // the old dead-end "check back and tap Watch" with no Watch button in
+  // sight (developer's report, 2026-11-08).
+  bool _captioned = false;
+  bool _justFinished = false;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _matchSub;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _matchSub = FirebaseFirestore.instance
+        .collection('matches')
+        .doc(widget.matchId)
+        .snapshots()
+        .listen((snap) {
+          final captioned = clipReady(snap.data());
+          if (!mounted || captioned == _captioned) return;
+          setState(() {
+            // Celebrate only a transition seen while they waited, not a clip
+            // that was already done when the sheet opened.
+            _justFinished = captioned && _alreadyOwned && !_loading;
+            _captioned = captioned;
+          });
+        }, onError: (_) {});
+  }
+
+  @override
+  void dispose() {
+    _matchSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -85,13 +117,14 @@ class _GetClipSheetState extends State<GetClipSheet> {
       setState(() {
         _balance = (rawBalance as num?)?.toInt() ?? 0;
         _price = (settings['clipPrice'] as num?)?.toInt() ?? 250;
-        _subscriber = (user['subscription']
-            as Map<String, dynamic>?)?['active'] == true;
+        _subscriber =
+            (user['subscription'] as Map<String, dynamic>?)?['active'] == true;
         // Mirrors hasUsedFreeClip in functions/clipGrants.js: only an
         // explicit true counts, so an account predating the free clip
         // still has one rather than being told it is spent.
         _freeClipAvailable = user['freeClipUsed'] != true;
         _alreadyOwned = grants?[uid] != null;
+        _captioned = clipReady(match);
         _loading = false;
       });
     } catch (_) {
@@ -113,18 +146,15 @@ class _GetClipSheetState extends State<GetClipSheet> {
       final result = await FirebaseFunctions.instance
           .httpsCallable('requestMatchClip')
           .call<Map<String, dynamic>>({
-        'matchId': widget.matchId,
-        'source': source,
-      });
+            'matchId': widget.matchId,
+            'source': source,
+          });
       final data = result.data;
       if (!mounted) return;
       setState(() {
         _busy = false;
         _alreadyOwned = true;
-        _done = data['deliverable'] == true
-            ? "It's ready — watch, save, or share it below."
-            : "We're adding captions now. Your clip will be ready here in a "
-                'minute or two — check back and tap Watch.';
+        if (data['deliverable'] == true) _captioned = true;
         // The server decides what it actually cost - it grants the free
         // clip regardless of what the client asked for, so deducting the
         // price here would show a balance that never left the account.
@@ -147,46 +177,27 @@ class _GetClipSheetState extends State<GetClipSheet> {
     }
   }
 
-  /// Fetches a short-lived signed URL and opens it.
+  /// Saves the clip straight into the phone's photo library.
   ///
-  /// The server refuses if the clip is still rendering, still inside the
-  /// opponent's objection window, or was taken down - and its message says
-  /// which, so a refusal is informative rather than a dead end.
+  /// Used to open the download URL in the browser, which on an iPhone lands
+  /// the file in the Files app - not where anyone posts from (developer's
+  /// report, 2026-11-08). The camera roll is where TikTok / Instagram pick
+  /// videos from, so that is where it goes.
   Future<void> _download() async {
     setState(() {
       _busy = true;
       _error = null;
     });
-    try {
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('getClipDownload')
-          .call<Map<String, dynamic>>({'matchId': widget.matchId});
-      final urls = (result.data['urls'] as Map?)?.cast<String, dynamic>();
-      // Vertical first: this is the cut people actually post, and the
-      // landscape one is a letterboxed strip on a phone.
-      final url = urls?['vertical'] ?? urls?['landscape'];
-      if (url == null) throw Exception('no url');
-      final opened = await launchUrl(Uri.parse(url as String),
-          mode: LaunchMode.externalApplication);
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _done = opened ? 'Downloading your clip.' : null;
-        if (!opened) _error = "Couldn't open the download.";
-      });
-    } on FirebaseFunctionsException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = e.message ?? 'Your clip is not ready yet.';
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = "Couldn't start the download.";
-      });
-    }
+    final message = await ClipActions.saveToPhotos(widget.matchId);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (message.saved) {
+        _savedNotice = message.text;
+      } else {
+        _error = message.text;
+      }
+    });
   }
 
   /// Plays the finished captioned clip IN-APP, so you can watch the edit
@@ -207,10 +218,12 @@ class _GetClipSheetState extends State<GetClipSheet> {
       if (url == null) throw Exception('no url');
       if (!mounted) return;
       setState(() => _busy = false);
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => _ClipPreviewScreen(url: url),
-        fullscreenDialog: true,
-      ));
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => _ClipPreviewScreen(url: url, matchId: widget.matchId),
+          fullscreenDialog: true,
+        ),
+      );
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -226,75 +239,19 @@ class _GetClipSheetState extends State<GetClipSheet> {
     }
   }
 
-  /// Downloads the clip to a temp file and opens the OS share sheet, so it can
-  /// go straight into Instagram / TikTok / Reels / Facebook with the video
-  /// attached. Sharing the FILE (not a link) is what lands the clip in the
-  /// composer, and the watermark is already burned in, so every share carries
-  /// attribution. Gated by owning the clip - the same objection-window check
-  /// the download path runs, since it calls the same endpoint.
+  /// Opens the phone's share sheet with the video file attached (TikTok,
+  /// Instagram, Snapchat, Messages...). See [ClipActions.share].
   Future<void> _share() async {
     setState(() {
       _busy = true;
       _error = null;
     });
-    try {
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('getClipDownload')
-          .call<Map<String, dynamic>>({'matchId': widget.matchId});
-      final urls = (result.data['urls'] as Map?)?.cast<String, dynamic>();
-      // Vertical is what people post; landscape is a letterboxed strip.
-      final url = urls?['vertical'] ?? urls?['landscape'];
-      if (url == null) throw Exception('no url');
-      final file = await _downloadToTemp(url as String);
-      if (!mounted) return;
-      // Deliberately does NOT set _done: the share sheet is the feedback, and
-      // keeping the buttons lets them share to another app or save as well.
-      setState(() => _busy = false);
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'video/mp4')],
-        // Every shared clip is free acquisition, so the caption RECRUITS: a
-        // dare + the site (which carries the download CTA) + hashtags, rather
-        // than a flat "my roast". Kept here as one string so it is trivial to
-        // retune; swap the URL for the real store/landing link when there is
-        // one.
-        text: 'Think you can roast me better? Come get cooked on The Bully '
-            'League 🎤🔥 the-bully-league.vercel.app\n'
-            '#TheBullyLeague #roastbattle #comedy',
-      );
-    } on FirebaseFunctionsException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = e.message ?? 'Your clip is not ready yet.';
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = "Couldn't prepare the clip to share.";
-      });
-    }
-  }
-
-  /// Fetches the clip bytes to a temp file. Uses dart:io directly to avoid
-  /// adding an HTTP dependency; the same file name per match so re-sharing
-  /// overwrites rather than piling up cache files.
-  Future<File> _downloadToTemp(String url) async {
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/bully_league_${widget.matchId}.mp4');
-    final client = HttpClient();
-    try {
-      final req = await client.getUrl(Uri.parse(url));
-      final resp = await req.close();
-      if (resp.statusCode != 200) {
-        throw Exception('download failed (${resp.statusCode})');
-      }
-      final sink = file.openWrite();
-      await resp.pipe(sink);
-      return file;
-    } finally {
-      client.close();
-    }
+    final failure = await ClipActions.share(widget.matchId);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _error = failure;
+    });
   }
 
   @override
@@ -302,7 +259,11 @@ class _GetClipSheetState extends State<GetClipSheet> {
     final text = Theme.of(context).textTheme;
     return Padding(
       padding: EdgeInsets.fromLTRB(
-          20, 0, 20, MediaQuery.of(context).viewInsets.bottom + 24),
+        20,
+        0,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
       child: _loading
           ? const Padding(
               padding: EdgeInsets.all(32),
@@ -322,14 +283,29 @@ class _GetClipSheetState extends State<GetClipSheet> {
                 const SizedBox(height: 20),
                 if (_done != null) ...[
                   _Notice(icon: Icons.check_circle_outline, text: _done!),
+                ] else if (_alreadyOwned && !_captioned) ...[
+                  // Claimed, captions still being made: say what is
+                  // happening, how long, and exactly where to find it.
+                  const _MakingClipCard(),
                 ] else if (_alreadyOwned) ...[
-                  const _Notice(
-                    icon: Icons.check_circle_outline,
-                    text: 'This clip is already yours.',
+                  _Notice(
+                    icon: _justFinished
+                        ? Icons.celebration_outlined
+                        : Icons.check_circle_outline,
+                    text: _justFinished
+                        ? 'Your clip is ready!'
+                        : 'This clip is yours.',
                   ),
                   const SizedBox(height: 16),
                   if (_error != null) ...[
                     _Notice(icon: Icons.error_outline, text: _error!),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_savedNotice != null) ...[
+                    _Notice(
+                      icon: Icons.check_circle_outline,
+                      text: _savedNotice!,
+                    ),
                     const SizedBox(height: 12),
                   ],
                   // Watch-first: this is the finished captioned edit, so let
@@ -349,7 +325,7 @@ class _GetClipSheetState extends State<GetClipSheet> {
                   OutlinedButton.icon(
                     onPressed: _busy ? null : _download,
                     icon: const Icon(Icons.download_outlined),
-                    label: const Text('Save to device'),
+                    label: Text(ClipActions.saveLabel),
                   ),
                   if (_busy) ...[
                     const SizedBox(height: 12),
@@ -435,6 +411,55 @@ class _GetClipSheetState extends State<GetClipSheet> {
   }
 }
 
+/// The waiting state after a clip is claimed. Captioning runs on the
+/// server's render sweep (every 5 minutes), so the honest promise is "under
+/// 10 minutes", not "a minute or two". The sheet flips to Watch/Share/Save by
+/// itself when it lands; if they leave, a push brings them straight back.
+class _MakingClipCard extends StatelessWidget {
+  const _MakingClipCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 12),
+              Text('Making your clip...', style: text.titleMedium),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Adding captions - usually under 10 minutes. Keep this open and '
+            "your Watch, Share and Save buttons appear right here.",
+            style: text.bodyMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Or close it: we'll send you a notification when it's ready, and "
+            "it lives on this battle in My Battles - tap Watch clip there.",
+            style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Notice extends StatelessWidget {
   const _Notice({required this.icon, required this.text});
 
@@ -448,32 +473,265 @@ class _Notice extends StatelessWidget {
       children: [
         Icon(icon, size: 18),
         const SizedBox(width: 8),
-        Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
+        Expanded(
+          child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
+        ),
       ],
     );
   }
 }
 
-/// Full-screen in-app playback of the finished captioned clip. Reuses the
-/// same looping [MatchClipPlayer] the judge feed uses, so there is one
-/// player to maintain.
-class _ClipPreviewScreen extends StatelessWidget {
-  const _ClipPreviewScreen({required this.url});
+/// Whether a battle's postable clip is finished: the caption pass has run.
+/// Mirrors captionPassDone in functions/clipGrants.js - a battle with no
+/// clear speech gets no captions (`captioned` stays false) but its finished
+/// cut still exists, and must count as ready or it would wait forever.
+bool clipReady(Map<String, dynamic>? match) {
+  final h = match?['highlight'] as Map<String, dynamic>?;
+  return h?['captioned'] == true || h?['captionedRenderedAt'] != null;
+}
+
+/// The outcome of a save: whether it worked and what to tell the player.
+class ClipSaveResult {
+  const ClipSaveResult(this.saved, this.text);
+  final bool saved;
+  final String text;
+}
+
+/// Save / share for a battle clip, shared by the clip sheet and the watch
+/// screen so both behave identically.
+class ClipActions {
+  ClipActions._();
+
+  /// "Photos" is what iPhone owners call it; Android calls it the gallery.
+  static String get saveLabel => defaultTargetPlatform == TargetPlatform.iOS
+      ? 'Save to Photos'
+      : 'Save to gallery';
+
+  static const _album = 'The Bully League';
+
+  static const shareText =
+      'Think you can roast me better? Come get cooked on The Bully '
+      'League 🎤🔥 the-bully-league.vercel.app\n'
+      '#TheBullyLeague #roastbattle #comedy';
+
+  /// The postable file's signed URL. Vertical first: it's the cut people
+  /// post; landscape is a letterboxed strip on a phone. Throws the server's
+  /// FirebaseFunctionsException (still rendering, objection, taken down)
+  /// so its message reaches the player.
+  static Future<String> _fileUrl(String matchId) async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('getClipDownload')
+        .call<Map<String, dynamic>>({'matchId': matchId});
+    final urls = (result.data['urls'] as Map?)?.cast<String, dynamic>();
+    final url = urls?['vertical'] ?? urls?['landscape'];
+    if (url == null) throw Exception('no url');
+    return url as String;
+  }
+
+  /// Fetches the clip to a temp file (one name per match, so repeats
+  /// overwrite rather than pile up). dart:io, no HTTP dependency.
+  static Future<File> _downloadToTemp(String matchId) async {
+    final url = await _fileUrl(matchId);
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/bully_league_$matchId.mp4');
+    final client = HttpClient();
+    try {
+      final req = await client.getUrl(Uri.parse(url));
+      final resp = await req.close();
+      if (resp.statusCode != 200) {
+        throw Exception('download failed (${resp.statusCode})');
+      }
+      await resp.pipe(file.openWrite());
+      return file;
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Opens the OS share sheet with the video FILE attached - a file (not a
+  /// link) is what lands the clip in the TikTok / Instagram composer, and the
+  /// watermark is burned in so every share carries attribution. Returns an
+  /// error message, or null on success (the share sheet is the feedback).
+  static Future<String?> share(String matchId) async {
+    try {
+      final file = await _downloadToTemp(matchId);
+      await Share.shareXFiles([
+        XFile(file.path, mimeType: 'video/mp4'),
+      ], text: shareText);
+      return null;
+    } on FirebaseFunctionsException catch (e) {
+      return e.message ?? 'Your clip is not ready yet.';
+    } catch (_) {
+      return "Couldn't prepare the clip to share.";
+    }
+  }
+
+  /// Saves the clip into the photo library, in a "The Bully League" album.
+  static Future<ClipSaveResult> saveToPhotos(String matchId) async {
+    try {
+      if (!await Gal.hasAccess(toAlbum: true) &&
+          !await Gal.requestAccess(toAlbum: true)) {
+        return const ClipSaveResult(
+          false,
+          'Allow photo access in Settings to save clips to your phone.',
+        );
+      }
+      final file = await _downloadToTemp(matchId);
+      await Gal.putVideo(file.path, album: _album);
+      return ClipSaveResult(
+        true,
+        defaultTargetPlatform == TargetPlatform.iOS
+            ? 'Saved to your Photos.'
+            : 'Saved to your gallery.',
+      );
+    } on FirebaseFunctionsException catch (e) {
+      return ClipSaveResult(false, e.message ?? 'Your clip is not ready yet.');
+    } on GalException catch (e) {
+      return ClipSaveResult(
+        false,
+        e.type == GalExceptionType.accessDenied
+            ? 'Allow photo access in Settings to save clips to your phone.'
+            : e.type == GalExceptionType.notEnoughSpace
+            ? 'Not enough space on your phone to save the clip.'
+            : "Couldn't save the clip.",
+      );
+    } catch (_) {
+      return const ClipSaveResult(false, "Couldn't save the clip.");
+    }
+  }
+}
+
+/// Full-screen in-app playback of the finished captioned clip, with Share
+/// and Save right under it - the moment someone has just watched their clip
+/// is the moment they want to post it, so they never have to back out to do
+/// it (developer's call, 2026-11-08). Reuses the judge feed's looping
+/// [MatchClipPlayer], so there is one player to maintain.
+class _ClipPreviewScreen extends StatefulWidget {
+  const _ClipPreviewScreen({required this.url, required this.matchId});
 
   final String url;
+  final String matchId;
+
+  @override
+  State<_ClipPreviewScreen> createState() => _ClipPreviewScreenState();
+}
+
+class _ClipPreviewScreenState extends State<_ClipPreviewScreen> {
+  bool _busy = false;
+
+  void _say(String text) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _share() async {
+    setState(() => _busy = true);
+    final failure = await ClipActions.share(widget.matchId);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (failure != null) _say(failure);
+  }
+
+  Future<void> _save() async {
+    setState(() => _busy = true);
+    final result = await ClipActions.saveToPhotos(widget.matchId);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _say(result.text);
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Video takes all the space above a slim Share / Save row.
     return Scaffold(
       backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
+        elevation: 0,
         title: const Text('Your clip'),
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          child: MatchClipPlayer(videoUrl: url),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: Center(child: MatchClipPlayer(videoUrl: widget.url)),
+            ),
+            // Share / Save get their OWN row under the video (developer,
+            // 2026-11-09: floating them over the clip covered the player's
+            // scrubber and replay button on tall phones). Compact pills,
+            // centred.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _OverlayButton(
+                    icon: Icons.ios_share,
+                    label: 'Share',
+                    onPressed: _busy ? null : _share,
+                  ),
+                  const SizedBox(width: 10),
+                  _OverlayButton(
+                    icon: Icons.download_outlined,
+                    label: ClipActions.saveLabel,
+                    busy: _busy,
+                    onPressed: _busy ? null : _save,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A translucent pill button that floats over video and stays readable on
+/// any frame (dark glass + white text).
+class _OverlayButton extends StatelessWidget {
+  const _OverlayButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.busy = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: onPressed,
+      icon: busy
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : Icon(icon, size: 16),
+      label: Text(label, style: const TextStyle(fontSize: 13)),
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(0, 36),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        backgroundColor: Colors.black.withValues(alpha: 0.45),
+        disabledBackgroundColor: Colors.black.withValues(alpha: 0.35),
+        foregroundColor: Colors.white,
+        disabledForegroundColor: Colors.white70,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.35)),
         ),
       ),
     );

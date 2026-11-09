@@ -57,6 +57,7 @@ dependencies:
   path_provider: ^2.1.5
   package_info_plus: ^8.0.0
   age_range_signals: ^0.10.1
+  gal: ^2.3.3
 dev_dependencies:
   flutter_test:
     sdk: flutter

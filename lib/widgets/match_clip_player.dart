@@ -5,6 +5,7 @@ import 'package:video_player/video_player.dart';
 
 import '../core/route_observer.dart';
 import '../core/services/clip_cache.dart';
+import 'clip_scrubber.dart';
 
 /// Which player's half of the stacked clip is picked as the winner. The clip
 /// composites player 1 on TOP and player 2 on the BOTTOM.
@@ -161,10 +162,11 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
     final duration = controller.value.duration;
     // Capped at the clip's length: a 12-second clip cannot be watched for
     // 15, and requiring the impossible would lock voting on short clips.
-    final required = Duration(
-      seconds: widget.watchSecondsRequired,
-    ) > duration && duration > Duration.zero ?
-      duration : Duration(seconds: widget.watchSecondsRequired);
+    final required =
+        Duration(seconds: widget.watchSecondsRequired) > duration &&
+            duration > Duration.zero
+        ? duration
+        : Duration(seconds: widget.watchSecondsRequired);
     if (_furthestReached >= required) _satisfy();
   }
 
@@ -236,7 +238,9 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
       return;
     }
     if (!mounted) return;
-    if (await _setUpController(VideoPlayerController.networkUrl(Uri.parse(url)))) {
+    if (await _setUpController(
+      VideoPlayerController.networkUrl(Uri.parse(url)),
+    )) {
       return;
     }
     if (!mounted) return;
@@ -304,7 +308,12 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
       );
     }
     if (_error != null) {
-      return _placeholder(context, Icons.error_outline, 'Clip unavailable', _error!);
+      return _placeholder(
+        context,
+        Icons.error_outline,
+        'Clip unavailable',
+        _error!,
+      );
     }
     final controller = _controller;
     if (_initialising || controller == null) {
@@ -326,17 +335,21 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
           // In "pick a winner" mode, the two halves of the stacked clip are
           // the tap targets - tap a player's box to select them, tap the
           // other to switch. Otherwise, tap anywhere to play/pause.
-          if (_selectionMode) _selectionLayer() else _playPauseLayer(controller),
-          // Playback controls: a restart button plus a clearly visible,
-          // draggable scrubber lifted off the bottom edge. Scrubbing was
-          // always enabled, but a hairline bar flush to the edge read as
-          // "no rewind" - and judges need to go back and re-hear a line.
+          if (_selectionMode)
+            _selectionLayer()
+          else
+            _playPauseLayer(controller),
+          // Playback control: ONE thumb-sized scrubber (developer,
+          // 2026-11-09: the hairline bar was too small to hit, and a restart
+          // button is redundant when you can drag anywhere). The bar is thin
+          // to look at but its touch area is ~44px tall, and it thickens
+          // while you drag. Times show either side.
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(4, 12, 12, 10),
+              padding: const EdgeInsets.fromLTRB(12, 16, 12, 4),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -344,31 +357,15 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
                   colors: [Colors.transparent, Colors.black54],
                 ),
               ),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.replay, color: Colors.white),
-                    tooltip: 'Restart',
-                    onPressed: () {
-                      controller.seekTo(_segStart);
-                      _wantPlaying = true;
-                      _syncPlayback();
-                      setState(() {});
-                    },
-                  ),
-                  Expanded(
-                    child: VideoProgressIndicator(
-                      controller,
-                      allowScrubbing: true,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      colors: const VideoProgressColors(
-                        playedColor: Colors.white,
-                        bufferedColor: Colors.white38,
-                        backgroundColor: Colors.white24,
-                      ),
-                    ),
-                  ),
-                ],
+              child: ClipScrubber(
+                controller: controller,
+                start: _segStart,
+                end: _segEnd,
+                onSeekEnd: () {
+                  _wantPlaying = true;
+                  _syncPlayback();
+                  setState(() {});
+                },
               ),
             ),
           ),
@@ -437,7 +434,11 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
   }
 
   Widget _placeholder(
-      BuildContext context, IconData icon, String title, String body) {
+    BuildContext context,
+    IconData icon,
+    String title,
+    String body,
+  ) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -450,9 +451,11 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
           const SizedBox(height: 10),
           Text(title, style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 6),
-          Text(body,
-              style: Theme.of(context).textTheme.bodySmall,
-              textAlign: TextAlign.center),
+          Text(
+            body,
+            style: Theme.of(context).textTheme.bodySmall,
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );

@@ -233,6 +233,9 @@ function canBeCaptioned(match) {
   if (!match.highlight?.renditions) return false;
   // Paying for transcription twice on the same audio is pure waste.
   if (match.highlight.captioned === true) return false;
+  // The caption pass already ran (it found no speech): re-running it would
+  // just burn a transcription to get zero captions again.
+  if (match.highlight.captionedRenderedAt != null) return false;
   if ((match.autoRender?.captionAttempts ?? 0) >= MAX_ATTEMPTS) return false;
   return true;
 }
@@ -253,6 +256,52 @@ function captionsForced(match) {
  * Failures are recorded on the match and swallowed, never thrown - one
  * unrenderable match must not stop every other match in the batch.
  */
+/**
+ * Who to tell "your clip is ready": everyone who claimed this match's
+ * captioned clip (clipGrants), once the captioned cut actually exists, and
+ * only once (clipReadyNotified). PURE so the rule is testable.
+ *
+ * Why: claiming a clip used to end on "check back and tap Watch" with no
+ * Watch button in sight and no way to know when to come back (developer's
+ * report, 2026-11-08). Captioning runs on this 5-minute sweep, so the wait is
+ * real - the push is what turns it from "remember to check" into "we'll tell
+ * you", and tapping it opens the clip (PushTapRouter: clip_ready).
+ */
+function clipReadyRecipients(match) {
+  const {captionPassDone} = require("./clipGrants");
+  if (!match || !captionPassDone(match)) return [];
+  if (match.highlight?.clipReadyNotified === true) return [];
+  return Object.keys(match.clipGrants || {});
+}
+
+/** Best-effort: a failed push must never fail the render sweep. */
+async function notifyClipReady(db, matchId) {
+  try {
+    const ref = db.collection("matches").doc(matchId);
+    const match = (await ref.get()).data();
+    const recipients = clipReadyRecipients(match);
+    if (recipients.length === 0) return;
+    // Claim BEFORE sending, like every scheduled push here: a missed
+    // notification costs a moment, a duplicate costs trust.
+    await ref.set({highlight: {clipReadyNotified: true}}, {merge: true});
+    // In-app pop-up for anyone already IN the app (a push is easy to miss
+    // while you're using it). The client shows it once, then clears it.
+    await Promise.all(recipients.map((uid) =>
+      db.collection("users").doc(uid).set({
+        clipReadyPopup: {matchId, atMs: Date.now()},
+      }, {merge: true})));
+    const {sendToUsers} = require("./notifications");
+    await sendToUsers(recipients, {
+      category: "clip_reminder",
+      title: "Your clip is ready",
+      body: "Captioned and ready to watch, save, or post. Tap to see it.",
+      data: {kind: "clip_ready", matchId},
+    });
+  } catch (e) {
+    console.error(`clip-ready push failed for ${matchId}:`, e.message);
+  }
+}
+
 async function sweepRenders({limit = RENDERS_PER_RUN} = {}) {
   const db = getFirestore();
   const {renderMatchHighlight} = require("./highlightRender");
@@ -315,6 +364,7 @@ async function sweepRenders({limit = RENDERS_PER_RUN} = {}) {
       }, {merge: true});
       await renderMatchHighlight(matchId, {captions: true});
       results.captioned.push(matchId);
+      await notifyClipReady(db, matchId);
     } catch (e) {
       results.failed.push({matchId, stage: "caption", error: e.message});
       console.error(`auto-caption failed for ${matchId}:`, e.message);
@@ -329,6 +379,7 @@ async function sweepRenders({limit = RENDERS_PER_RUN} = {}) {
 }
 
 module.exports = {
+  clipReadyRecipients,
   sweepRenders,
   needsFirstRender,
   canBeCaptioned,

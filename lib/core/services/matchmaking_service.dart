@@ -385,8 +385,13 @@ class MatchmakingService {
   /// Marks the local player ready during the pre-match bio reveal. Both
   /// clients watch the match document, so this is how each learns the
   /// other has finished reading.
-  Future<void> setReady(String matchId) async {
-    await _call('setMatchReady', {'matchId': matchId});
+  ///
+  /// Returns the server's view of the match ({status, ready, lastSeenAt}) so
+  /// the caller is not relying ONLY on the live document listener - if that
+  /// listener is blocked (seen on a device, 2026-11-08) this answer is the
+  /// fallback that still gets both players into the battle.
+  Future<Map<String, dynamic>> setReady(String matchId) {
+    return _call('setMatchReady', {'matchId': matchId});
   }
 
   /// Tells the backend this player is still on the bio reveal screen,
@@ -398,11 +403,15 @@ class MatchmakingService {
   /// bio" and "walked away" cannot be told from readiness alone. Failures
   /// are swallowed: a missed heartbeat is not worth interrupting someone
   /// preparing for a battle, and the threshold tolerates several.
-  Future<void> sendPresence(String matchId) async {
+  ///
+  /// Returns the server's view of the match (same shape as [setReady]), or
+  /// null if the call failed.
+  Future<Map<String, dynamic>?> sendPresence(String matchId) async {
     try {
-      await _call('setMatchReady', {'matchId': matchId, 'ready': false});
+      return await _call('setMatchReady', {'matchId': matchId, 'ready': false});
     } catch (_) {
       // Best-effort by design.
+      return null;
     }
   }
 

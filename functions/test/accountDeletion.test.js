@@ -118,4 +118,27 @@ test("a deleting player's own footage removal is independent of publication", ()
   assert.strictEqual(plan.deleteOwnRecordingForUid, "1");
 });
 
-console.log(`accountDeletion: ${passed} checks passed`);
+// followRefsMadeBy: finds the follows an account MADE, never its own list.
+(async () => {
+  const {followRefsMadeBy} = require("../accountDeletion");
+  const doc = (target, follower) => ({
+    id: follower,
+    ref: {path: `follows/${target}/followers/${follower}`,
+      parent: {parent: {id: target}}},
+  });
+  const docs = [
+    doc("founder", "gone"), doc("bob", "gone"), // made by "gone"
+    doc("gone", "carol"), // someone following "gone" - not "made"
+    doc("founder", "carol"), // unrelated
+  ];
+  const db = {collectionGroup: (name) => {
+    assert.strictEqual(name, "followers");
+    return {select: () => ({get: async () => ({docs})})};
+  }};
+  const refs = await followRefsMadeBy(db, "gone");
+  assert.deepStrictEqual(refs.map((r) => r.path).sort(),
+      ["follows/bob/followers/gone", "follows/founder/followers/gone"]);
+  passed++;
+  console.log(`accountDeletion: ${passed} checks passed`);
+})().catch((e) => { console.error(e); process.exit(1); });
+

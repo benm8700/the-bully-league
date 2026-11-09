@@ -11,10 +11,12 @@ import 'core/services/app_presence_service.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/cloud_vision_moderation_service.dart';
 import 'core/services/push_notification_service.dart';
+import 'core/services/push_tap_router.dart';
 import 'core/services/visual_moderation_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/window_skin_controller.dart';
 import 'screens/auth/signup_screen.dart';
+import 'screens/battles/get_clip_sheet.dart';
 import 'screens/home/main_shell.dart';
 import 'screens/moderation/banned_screen.dart';
 import 'screens/onboarding/content_policy_screen.dart';
@@ -105,6 +107,8 @@ class BullyLeagueApp extends StatelessWidget {
             // Lets the looping video players pause when covered by another
             // screen, not just when the app is backgrounded (route_observer.dart).
             navigatorObservers: [appRouteObserver],
+            // Lets a tapped push notification open a screen (PushTapRouter).
+            navigatorKey: appNavigatorKey,
             // One theme, whichever direction the picker has selected.
             // Each direction sets its own brightness, so themeMode is
             // forced to match rather than following the device.
@@ -209,6 +213,60 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(context.read<PushNotificationService>().register());
+      // Only now is MainShell up, so a tapped notification has a home to
+      // open its screen on top of (and to come back to).
+      unawaited(PushTapRouter.instance.start());
+    });
+  }
+
+  // The clip-ready pop-up (server sets users/{uid}.clipReadyPopup when a
+  // claimed clip finishes captioning). Shown once per clip, then cleared.
+  // The push covers people outside the app; this covers people IN it, who
+  // would otherwise never notice a notification banner mid-scroll
+  // (developer's call, 2026-11-08).
+  String? _clipPopupShownFor;
+
+  void _maybeShowClipReady(Map<String, dynamic> data) {
+    final popup = data['clipReadyPopup'] as Map<String, dynamic>?;
+    final matchId = popup?['matchId'] as String?;
+    if (matchId == null || matchId == _clipPopupShownFor) return;
+    _clipPopupShownFor = matchId;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final ctx = appNavigatorKey.currentContext;
+      if (!mounted || ctx == null) return;
+      // Clear first: dismissing, watching, or the app dying mid-dialog
+      // must never make it pop up again.
+      unawaited(FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.uid)
+          .update({'clipReadyPopup': FieldValue.delete()})
+          .catchError((_) {}));
+      final watch = await showDialog<bool>(
+        context: ctx,
+        builder: (dCtx) => AlertDialog(
+          icon: const Icon(Icons.movie_creation_outlined, size: 36),
+          title: const Text('Your clip is ready!'),
+          content: const Text(
+            'Your battle is cut, captioned and ready to watch, save to your '
+            'phone, or post.',
+            textAlign: TextAlign.center,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dCtx).pop(false),
+              child: const Text('Later'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dCtx).pop(true),
+              child: const Text('Watch it'),
+            ),
+          ],
+        ),
+      );
+      final again = appNavigatorKey.currentContext;
+      if (watch == true && again != null && again.mounted) {
+        unawaited(GetClipSheet.show(again, matchId));
+      }
     });
   }
 
@@ -223,6 +281,7 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
   @override
   void dispose() {
     AppPresenceService.instance.stop();
+    PushTapRouter.instance.stop();
     super.dispose();
   }
 
@@ -279,7 +338,10 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
             child: ContentPolicyScreen(uid: widget.uid),
           );
         }
-        if (data != null) _registerPushOnce();
+        if (data != null) {
+          _registerPushOnce();
+          _maybeShowClipReady(data);
+        }
         return const WindowSkinController(child: MainShell());
       },
     );

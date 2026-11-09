@@ -29,11 +29,7 @@ import '../profile/performer_profile_screen.dart';
 /// a CDN later is one implementation class rather than a rewrite of this
 /// screen.
 class LiveViewerScreen extends StatefulWidget {
-  const LiveViewerScreen({
-    super.key,
-    required this.matchId,
-    this.subtitle,
-  });
+  const LiveViewerScreen({super.key, required this.matchId, this.subtitle});
 
   final String matchId;
 
@@ -66,11 +62,11 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _watchersSub;
   int _watchers = 0;
 
-  CollectionReference<Map<String, dynamic>> get _viewers =>
-      FirebaseFirestore.instance
-          .collection('liveWatch')
-          .doc(widget.matchId)
-          .collection('viewers');
+  CollectionReference<Map<String, dynamic>> get _viewers => FirebaseFirestore
+      .instance
+      .collection('liveWatch')
+      .doc(widget.matchId)
+      .collection('viewers');
 
   @override
   void initState() {
@@ -109,9 +105,9 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
   void _beginWatchCount() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    void beat() => _viewers
-        .doc(uid)
-        .set({'lastSeenMs': DateTime.now().millisecondsSinceEpoch});
+    void beat() => _viewers.doc(uid).set({
+      'lastSeenMs': DateTime.now().millisecondsSinceEpoch,
+    });
     beat();
     _heartbeat = Timer.periodic(const Duration(seconds: 15), (_) => beat());
     // Count only fresh heartbeats, so someone who closed the app without a
@@ -186,8 +182,10 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                 children: [
                   const Icon(Icons.remove_red_eye, size: 16),
                   const SizedBox(width: 5),
-                  Text('$_watchers watching',
-                      style: Theme.of(context).textTheme.labelLarge),
+                  Text(
+                    '$_watchers watching',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
                 ],
               ),
             ),
@@ -199,8 +197,10 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                 preferredSize: const Size.fromHeight(20),
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(widget.subtitle!,
-                      style: Theme.of(context).textTheme.bodySmall),
+                  child: Text(
+                    widget.subtitle!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
               ),
       ),
@@ -208,169 +208,181 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(_error!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white70)),
+                child: Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70),
+                ),
               ),
             )
           : _loading
-              ? const Center(child: CircularProgressIndicator())
-              : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('matches')
-                      .doc(widget.matchId)
-                      .snapshots(),
-                  builder: (context, snap) {
-                    final completed =
-                        snap.data?.data()?['status'] == 'completed';
-                    final haveNames =
-                        _player1Id != null && _player2Id != null;
-                    // A Main Stage battle auto-resolves if a performer never
-                    // shows (the force-advance backstop), so the waiting copy
-                    // can promise the crowd they won't be stranded.
-                    final isMainStage =
-                        snap.data?.data()?['mainStage'] != null;
-                    // The battle is over: leave the Agora channel (this is what
-                    // stops the match audio - the leak the live test hit). The
-                    // winner is the judge panel's call, so there is no ballot -
-                    // but the crowd can still react (emoji + crowd favourite).
-                    if (completed && !_watchStopped) {
-                      _watchStopped = true;
-                      WidgetsBinding.instance.addPostFrameCallback(
-                          (_) => _spectator.stopWatching());
-                    }
-                    if (completed) {
-                      final winnerId =
-                          snap.data?.data()?['judgeWinnerId'] as String?;
-                      // Only a SETTLED result ends the show. A verdict that's
-                      // landed but still in its 30s grace keeps the crowd on the
-                      // judges' table, watching the panel react.
-                      final settled =
-                          snap.data?.data()?['voteFinalized'] == true;
-                      if (settled && winnerId != null) {
-                        // The verdict has landed.
-                        final winnerName = winnerId == _player1Id
-                            ? _player1Name
-                            : winnerId == _player2Id
-                                ? _player2Name
-                                : null;
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Text(
-                              winnerName == null
-                                  ? 'The judges have decided.'
-                                  : '$winnerName takes it.',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(
-                                      color: context.palette.winner,
-                                      fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        );
-                      }
-                      if (!haveNames) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      // The debate: cut to the judges' table (votes landing
-                      // live), with the crowd's own one-per-battle rating below.
-                      return Column(
-                        children: [
-                          Expanded(
-                            child: CrowdJudgesTable(
-                              matchId: widget.matchId,
-                              playerNames: {
-                                _player1Id!: _player1Name,
-                                _player2Id!: _player2Name,
-                              },
-                              playerColors: {
-                                _player1Id!: House.gelRed,
-                                _player2Id!: House.gelBlue,
-                              },
-                            ),
-                          ),
-                          LiveReactionPanel(
-                            matchId: widget.matchId,
-                            player1Id: _player1Id!,
-                            player2Id: _player2Id!,
-                            player1Name: _player1Name,
-                            player2Name: _player2Name,
-                          ),
-                        ],
-                      );
-                    }
-                    // Live: the two video tiles (watch-only).
-                    return Column(
-                      children: [
-                        Expanded(
-                          child: LiveCheerOverlay(
-                            matchId: widget.matchId,
-                            child: ValueListenableBuilder<String?>(
-                            valueListenable: _spectator.failure,
-                            builder: (context, failure, _) {
-                              // A rejected or expired token is otherwise
-                              // indistinguishable from two players who have
-                              // not started - both are a screen that says
-                              // "waiting" forever.
-                              if (failure != null) {
-                                return Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(24),
-                                    child: Text(failure,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                            color: Colors.white70)),
-                                  ),
-                                );
-                              }
-                              return ValueListenableBuilder<Set<int>>(
-                                valueListenable: _spectator.presentUids,
-                                builder: (context, present, _) {
-                                  // Nobody on camera yet: one reassuring
-                                  // "getting ready" state rather than two tiles
-                                  // each reading "waiting" forever.
-                                  if (present.isEmpty) {
-                                    return _BattleWaiting(
-                                        isMainStage: isMainStage);
-                                  }
-                                  return Column(
-                                    children: [
-                                      Expanded(
-                                          child: _tile(1, _player1Id,
-                                              _player1Name)),
-                                      const SizedBox(height: 2),
-                                      Expanded(
-                                          child: _tile(2, _player2Id,
-                                              _player2Name)),
-                                    ],
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                          ),
+          ? const Center(child: CircularProgressIndicator())
+          : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('matches')
+                  .doc(widget.matchId)
+                  .snapshots(),
+              builder: (context, snap) {
+                final completed = snap.data?.data()?['status'] == 'completed';
+                final haveNames = _player1Id != null && _player2Id != null;
+                // A Main Stage battle auto-resolves if a performer never
+                // shows (the force-advance backstop), so the waiting copy
+                // can promise the crowd they won't be stranded.
+                final isMainStage = snap.data?.data()?['mainStage'] != null;
+                // The battle is over: leave the Agora channel (this is what
+                // stops the match audio - the leak the live test hit). The
+                // winner is the judge panel's call, so there is no ballot -
+                // but the crowd can still react (emoji + crowd favourite).
+                if (completed && !_watchStopped) {
+                  _watchStopped = true;
+                  WidgetsBinding.instance.addPostFrameCallback(
+                    (_) => _spectator.stopWatching(),
+                  );
+                }
+                if (completed) {
+                  final winnerId =
+                      snap.data?.data()?['judgeWinnerId'] as String?;
+                  // Only a SETTLED result ends the show. A verdict that's
+                  // landed but still in its 30s grace keeps the crowd on the
+                  // judges' table, watching the panel react.
+                  final settled = snap.data?.data()?['voteFinalized'] == true;
+                  if (settled && winnerId != null) {
+                    // The verdict has landed.
+                    final winnerName = winnerId == _player1Id
+                        ? _player1Name
+                        : winnerId == _player2Id
+                        ? _player2Name
+                        : null;
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          winnerName == null
+                              ? 'The judges have decided.'
+                              : '$winnerName takes it.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: context.palette.winner,
+                                fontWeight: FontWeight.bold,
+                              ),
                         ),
-                        if (haveNames)
-                          LiveReactionPanel(
-                            matchId: widget.matchId,
-                            player1Id: _player1Id!,
-                            player2Id: _player2Id!,
-                            player1Name: _player1Name,
-                            player2Name: _player2Name,
-                            collapsible: true,
-                          ),
-                      ],
+                      ),
                     );
-                  },
-                ),
+                  }
+                  // An everyday battle has no judges' table or panel
+                  // verdict - the crowd decides it later in the Vote tab,
+                  // once its clip is rendered. Showing the Main Stage
+                  // table here failed with "Could not join the judges'
+                  // table" the moment the battle ended (seen on a device,
+                  // 2026-11-08).
+                  if (!isMainStage) {
+                    return const _EverydayBattleOver();
+                  }
+                  if (!haveNames) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  // The debate: cut to the judges' table (votes landing
+                  // live), with the crowd's own one-per-battle rating below.
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: CrowdJudgesTable(
+                          matchId: widget.matchId,
+                          playerNames: {
+                            _player1Id!: _player1Name,
+                            _player2Id!: _player2Name,
+                          },
+                          playerColors: {
+                            _player1Id!: House.gelRed,
+                            _player2Id!: House.gelBlue,
+                          },
+                        ),
+                      ),
+                      LiveReactionPanel(
+                        matchId: widget.matchId,
+                        player1Id: _player1Id!,
+                        player2Id: _player2Id!,
+                        player1Name: _player1Name,
+                        player2Name: _player2Name,
+                      ),
+                    ],
+                  );
+                }
+                // Live: the two video tiles (watch-only).
+                return Column(
+                  children: [
+                    Expanded(
+                      child: LiveCheerOverlay(
+                        matchId: widget.matchId,
+                        child: ValueListenableBuilder<String?>(
+                          valueListenable: _spectator.failure,
+                          builder: (context, failure, _) {
+                            // A rejected or expired token is otherwise
+                            // indistinguishable from two players who have
+                            // not started - both are a screen that says
+                            // "waiting" forever.
+                            if (failure != null) {
+                              return Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Text(
+                                    failure,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                            return ValueListenableBuilder<Set<int>>(
+                              valueListenable: _spectator.presentUids,
+                              builder: (context, present, _) {
+                                // Nobody on camera yet: one reassuring
+                                // "getting ready" state rather than two tiles
+                                // each reading "waiting" forever.
+                                if (present.isEmpty) {
+                                  return _BattleWaiting(
+                                    isMainStage: isMainStage,
+                                  );
+                                }
+                                return Column(
+                                  children: [
+                                    Expanded(
+                                      child: _tile(1, _player1Id, _player1Name),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Expanded(
+                                      child: _tile(2, _player2Id, _player2Name),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    if (haveNames)
+                      LiveReactionPanel(
+                        matchId: widget.matchId,
+                        player1Id: _player1Id!,
+                        player2Id: _player2Id!,
+                        player1Name: _player1Name,
+                        player2Name: _player2Name,
+                        collapsible: true,
+                      ),
+                  ],
+                );
+              },
+            ),
     );
   }
 
   Widget _tile(int playerUid, String? playerId, String playerName) {
-    final view = _spectator.playerVideo(playerUid) ??
+    final view =
+        _spectator.playerVideo(playerUid) ??
         ColoredBox(
           color: const Color(0xFF111111),
           child: Center(
@@ -423,16 +435,20 @@ class _PerformerTag extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             onTap: uid == null
                 ? null
-                : () => PerformerProfileScreen.open(context, uid!,
-                    username: name),
+                : () => PerformerProfileScreen.open(
+                    context,
+                    uid!,
+                    username: name,
+                  ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               child: Text(
                 name,
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
               ),
             ),
           ),
@@ -481,16 +497,17 @@ class _BattleWaitingState extends State<_BattleWaiting> {
 
   @override
   Widget build(BuildContext context) {
-    final longWait =
-        DateTime.now().millisecondsSinceEpoch - _since > 40000;
+    final longWait = DateTime.now().millisecondsSinceEpoch - _since > 40000;
     final gold = context.palette.reward;
-    final title = longWait ? 'Hang tight — almost there' : 'Getting the battle ready';
+    final title = longWait
+        ? 'Hang tight — almost there'
+        : 'Getting the battle ready';
     final sub = longWait
         ? (widget.isMainStage
-            ? "The performers are connecting. If someone doesn't show, the "
-                "show moves on automatically — you won't be left waiting."
-            : "The performers are connecting. It'll start the moment both are "
-                'on camera.')
+              ? "The performers are connecting. If someone doesn't show, the "
+                    "show moves on automatically — you won't be left waiting."
+              : "The performers are connecting. It'll start the moment both are "
+                    'on camera.')
         : 'The performers are getting set up — this only takes a moment.';
     return Center(
       child: Padding(
@@ -507,14 +524,20 @@ class _BattleWaitingState extends State<_BattleWaiting> {
               child: Icon(Icons.mic, color: gold, size: 34),
             ),
             const SizedBox(height: 20),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 10),
-            Text(sub,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white60, height: 1.4)),
+            Text(
+              sub,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white60, height: 1.4),
+            ),
             const SizedBox(height: 22),
             SizedBox(
               width: 160,
@@ -526,6 +549,48 @@ class _BattleWaitingState extends State<_BattleWaiting> {
                   valueColor: AlwaysStoppedAnimation(gold),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown to live watchers when an everyday (ranked) battle ends. Its result
+/// is the crowd's call, made in the Vote tab once the clip is rendered (a few
+/// minutes later) - so point there instead of a judges' table that only the
+/// Main Stage has.
+class _EverydayBattleOver extends StatelessWidget {
+  const _EverydayBattleOver();
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "That's time!",
+              style: text.headlineSmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'This one goes to the crowd. It lands in the Vote tab in a few '
+              'minutes, once the clip is ready - come back and pick a winner.',
+              textAlign: TextAlign.center,
+              style: text.bodyLarge?.copyWith(color: Colors.white70),
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Done'),
             ),
           ],
         ),

@@ -338,7 +338,7 @@ async function respondToChallenge(auth, data) {
     await sendToUsers([challenge.fromUid], {
       category: "match_found",
       title: `${me.data()?.username ?? "They"} accepted`,
-      body: "Your battle is ready. Open the app.",
+      body: "Your battle is ready. Tap to battle.",
       data: {kind: "challenge_accepted", matchId},
     });
   } catch (e) {

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import '../../widgets/clip_scrubber.dart';
 
 import '../../core/emoji_ratings.dart';
 import '../../core/services/clip_cache.dart';
@@ -46,7 +47,10 @@ class FeedPage extends StatefulWidget {
   /// required per-player emoji ratings {playerId: emojiKey}. False result means
   /// it failed; the page keeps the picks so it can be retried.
   final Future<bool> Function(
-      Map<int, String> picks, Map<String, String> emojiRatings) onVote;
+    Map<int, String> picks,
+    Map<String, String> emojiRatings,
+  )
+  onVote;
 
   /// Records a call on a SETTLED battle - a private guess against a result
   /// already decided. Never a ballot, and it never touches anyone's rating.
@@ -59,6 +63,12 @@ class FeedPage extends StatefulWidget {
 /// Fraction of the clip that must play before Submit unlocks. With the
 /// default three rounds this lands inside the final one.
 const _revealAfter = 0.65;
+
+/// Height of the bottom scrubber strip; bottom overlays sit above it.
+const _scrubH = 48.0;
+
+/// Invisible tap-absorbing margin around each emoji bar.
+const _emojiSafe = 14.0;
 
 /// The green pre-selection ring / confirm accent.
 const _pickGreen = Color(0xFF3DDC84);
@@ -109,10 +119,19 @@ class _FeedPageState extends State<FeedPage> {
       widget.match.canVote || widget.match.verdict?.outcome == 'decided';
 
   /// Submit / the result box appear only once most of the clip has played.
-  bool get _revealed => _progress >= _revealAfter || _ended || _failed;
+  bool get _revealed => _watchedFraction >= _revealAfter || _failed;
 
-  bool get _resultShown =>
-      _chosenPlayerId != null || (!_canAct && _revealed);
+  /// Milliseconds of the clip actually PLAYED (forward playback only), so
+  /// dragging the scrubber to the end cannot unlock Submit without watching.
+  int _watchedMs = 0;
+  int? _lastPosMs;
+
+  double get _watchedFraction {
+    final total = _controller?.value.duration.inMilliseconds ?? 0;
+    return total <= 0 ? 0 : _watchedMs / total;
+  }
+
+  bool get _resultShown => _chosenPlayerId != null || (!_canAct && _revealed);
 
   @override
   void initState() {
@@ -160,19 +179,6 @@ class _FeedPageState extends State<FeedPage> {
     });
   }
 
-  /// Jumps back ten seconds so a judge can re-hear a line without hunting.
-  /// Resumes playing if the clip had already ended.
-  void _rewind() {
-    final c = _controller;
-    if (c == null || !c.value.isInitialized) return;
-    final target = c.value.position - const Duration(seconds: 10);
-    c.seekTo(target < Duration.zero ? Duration.zero : target);
-    if (_ended || !c.value.isPlaying) {
-      c.play();
-      setState(() => _ended = false);
-    }
-  }
-
   Future<void> _load() async {
     final url = widget.match.videoUrl;
     if (url == null || url.isEmpty) {
@@ -198,7 +204,9 @@ class _FeedPageState extends State<FeedPage> {
       return;
     }
     if (!mounted) return;
-    if (await _tryController(VideoPlayerController.networkUrl(Uri.parse(url)))) {
+    if (await _tryController(
+      VideoPlayerController.networkUrl(Uri.parse(url)),
+    )) {
       return;
     }
     if (mounted) setState(() => _failed = true);
@@ -231,6 +239,14 @@ class _FeedPageState extends State<FeedPage> {
     final total = c.value.duration.inMilliseconds;
     if (total <= 0) return;
     final pos = c.value.position.inMilliseconds;
+    final last = _lastPosMs;
+    if (c.value.isPlaying && last != null) {
+      final d = pos - last;
+      // Normal playback advances a few hundred ms per tick; anything bigger
+      // (or backwards) is a seek and earns no watch time.
+      if (d > 0 && d < 1500) _watchedMs += d;
+    }
+    _lastPosMs = pos;
     final next = pos / total;
     final ended = !c.value.isPlaying && pos >= total - 60;
     // Rebuild only when it matters - this fires many times a second.
@@ -256,8 +272,9 @@ class _FeedPageState extends State<FeedPage> {
     // Tapping the already-picked roaster again UNSELECTS, collapsing the emoji
     // bars + submit bar back to the clean watching state. Tapping the other
     // roaster switches the pick.
-    setState(() =>
-        _selectedWinner = _selectedWinner == playerId ? null : playerId);
+    setState(
+      () => _selectedWinner = _selectedWinner == playerId ? null : playerId,
+    );
   }
 
   /// Face-Off winner pick: select (switchable), never toggle-off - the pick
@@ -286,7 +303,7 @@ class _FeedPageState extends State<FeedPage> {
       return Positioned(
         left: 0,
         right: 0,
-        bottom: insetBottom + 16,
+        bottom: insetBottom + _scrubH + 8,
         child: IgnorePointer(
           child: Center(
             child: Container(
@@ -295,8 +312,10 @@ class _FeedPageState extends State<FeedPage> {
                 color: Colors.black.withValues(alpha: 0.45),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text('Watch both sets, then vote',
-                  style: TextStyle(color: Colors.white, fontSize: 13)),
+              child: const Text(
+                'Watch both sets, then vote',
+                style: TextStyle(color: Colors.white, fontSize: 13),
+              ),
             ),
           ),
         ),
@@ -306,9 +325,9 @@ class _FeedPageState extends State<FeedPage> {
     return Positioned(
       left: 0,
       right: 0,
-      bottom: 0,
+      bottom: insetBottom + _scrubH,
       child: Container(
-        padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + insetBottom),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -320,32 +339,51 @@ class _FeedPageState extends State<FeedPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Who was funnier?',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800)),
+            const Text(
+              'Who was funnier?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
-                    child: _improvWinnerButton(
-                        m.player1Id, m.player1Username, House.gelRed)),
+                  child: _improvWinnerButton(
+                    m.player1Id,
+                    m.player1Username,
+                    House.gelRed,
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                    child: _improvWinnerButton(
-                        m.player2Id, m.player2Username, House.gelBlue)),
+                  child: _improvWinnerButton(
+                    m.player2Id,
+                    m.player2Username,
+                    House.gelBlue,
+                  ),
+                ),
               ],
             ),
             // Open ballot: once a winner is chosen, rate both, then submit.
             if (m.canVote && winner != null) ...[
               const SizedBox(height: 14),
-              _improvEmojiRow(m.player1Username, _emojiP1,
-                  (k) => setState(() => _emojiP1 = k), House.gelRed),
+              _improvEmojiRow(
+                m.player1Username,
+                _emojiP1,
+                (k) => setState(() => _emojiP1 = k),
+                House.gelRed,
+              ),
               const SizedBox(height: 8),
-              _improvEmojiRow(m.player2Username, _emojiP2,
-                  (k) => setState(() => _emojiP2 = k), House.gelBlue),
+              _improvEmojiRow(
+                m.player2Username,
+                _emojiP2,
+                (k) => setState(() => _emojiP2 = k),
+                House.gelBlue,
+              ),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
@@ -353,11 +391,15 @@ class _FeedPageState extends State<FeedPage> {
                   style: FilledButton.styleFrom(
                     backgroundColor: _pickGreen.withValues(alpha: 0.9),
                     foregroundColor: Colors.black,
-                    disabledBackgroundColor: Colors.white.withValues(alpha: 0.14),
+                    disabledBackgroundColor: Colors.white.withValues(
+                      alpha: 0.14,
+                    ),
                     disabledForegroundColor: Colors.white70,
                     padding: const EdgeInsets.symmetric(vertical: 13),
-                    textStyle:
-                        const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    textStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                   onPressed: (_submitting || !_bothRated) ? null : _submit,
                   child: _submitting
@@ -365,8 +407,13 @@ class _FeedPageState extends State<FeedPage> {
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.black))
-                      : Text(_bothRated ? 'Submit vote' : 'Rate both to submit'),
+                            strokeWidth: 2,
+                            color: Colors.black,
+                          ),
+                        )
+                      : Text(
+                          _bothRated ? 'Submit vote' : 'Rate both to submit',
+                        ),
                 ),
               ),
             ],
@@ -380,12 +427,16 @@ class _FeedPageState extends State<FeedPage> {
                     backgroundColor: _pickGreen.withValues(alpha: 0.48),
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    textStyle:
-                        const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    textStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                   onPressed: _submitting ? null : _submit,
-                  child: Text('Call it: '
-                      '${winner == m.player1Id ? m.player1Username : m.player2Username}'),
+                  child: Text(
+                    'Call it: '
+                    '${winner == m.player1Id ? m.player1Username : m.player2Username}',
+                  ),
                 ),
               ),
             ],
@@ -425,9 +476,10 @@ class _FeedPageState extends State<FeedPage> {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700),
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -439,8 +491,12 @@ class _FeedPageState extends State<FeedPage> {
   /// A compact "Rating for {name}" + four emoji row, for the Face-Off panel.
   /// Same choices as the stacked-clip emoji bar, laid out inline rather than
   /// pinned to a half of the video.
-  Widget _improvEmojiRow(String name, String? selected,
-      ValueChanged<String> onSelect, Color accent) {
+  Widget _improvEmojiRow(
+    String name,
+    String? selected,
+    ValueChanged<String> onSelect,
+    Color accent,
+  ) {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
       decoration: BoxDecoration(
@@ -451,19 +507,23 @@ class _FeedPageState extends State<FeedPage> {
       child: Row(
         children: [
           Expanded(
-            child: Text('Rating for $name',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: accent, fontSize: 13, fontWeight: FontWeight.w800)),
+            child: Text(
+              'Rating for $name',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: accent,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
           for (final r in kEmojiRatings)
             GestureDetector(
               onTap: () => onSelect(r.key),
               child: Container(
                 margin: const EdgeInsets.only(left: 6),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
                   color: selected == r.key
                       ? accent.withValues(alpha: 0.9)
@@ -534,8 +594,10 @@ class _FeedPageState extends State<FeedPage> {
           else
             Center(
               child: _failed
-                  ? const Text('This clip could not be loaded.',
-                      style: TextStyle(color: Colors.white70))
+                  ? const Text(
+                      'This clip could not be loaded.',
+                      style: TextStyle(color: Colors.white70),
+                    )
                   : const CircularProgressIndicator(),
             ),
           // A subtle top scrim: the feed runs full-bleed under the system
@@ -582,7 +644,33 @@ class _FeedPageState extends State<FeedPage> {
           // corner play/pause control. The corner buttons and tap-to-pick are
           // the interactions now.)
           if (controller != null) _playPauseButton(context, paused),
-          if (controller != null) _rewindButton(context),
+          // The app-wide scrubber (replaces the old rewind-10 button):
+          // drag back to re-hear a line, anywhere in the clip.
+          if (controller != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: MediaQuery.of(context).padding.bottom,
+              child: Container(
+                height: _scrubH,
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 2),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x00000000), Color(0x99000000)],
+                  ),
+                ),
+                alignment: Alignment.bottomCenter,
+                child: ClipScrubber(
+                  controller: controller,
+                  onSeekEnd: () {
+                    if (!controller.value.isPlaying) controller.play();
+                    if (_ended) setState(() => _ended = false);
+                  },
+                ),
+              ),
+            ),
           _followButton(context),
           // The compact winner-confirm + Submit pill, once a half is picked.
           // Face-Off uses its own bottom panel (sequential clip, explicit
@@ -623,9 +711,12 @@ class _FeedPageState extends State<FeedPage> {
     final selected = _selectedWinner == playerId;
     // The picked player's own stage gel (top = player 1 = red, bottom =
     // player 2 = blue), so the pick carries the same colour used on the emoji
-    // bars, tally and judges' table. JUST the outline - no fill, no glow, no
-    // badge (developer's call): it must not cover the faces.
+    // bars, tally and judges' table. The outline plus a small WINNER pill at
+    // the top-centre of the picked half (developer, 2026-11-09: while rating
+    // emojis a judge must be able to SEE the pick is still the right person).
+    // No fill - it must not cover the faces.
     final color = top ? House.gelRed : House.gelBlue;
+    final topInset = top ? MediaQuery.of(context).padding.top : 0.0;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _pickWinner(playerId),
@@ -635,6 +726,45 @@ class _FeedPageState extends State<FeedPage> {
           border: Border.all(
             color: selected ? color : Colors.transparent,
             width: 5,
+          ),
+        ),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: AnimatedOpacity(
+            opacity: selected ? 1 : 0,
+            duration: const Duration(milliseconds: 120),
+            child: Padding(
+              padding: EdgeInsets.only(top: topInset + 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black54, blurRadius: 6),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_rounded, color: Colors.white, size: 16),
+                    SizedBox(width: 4),
+                    Text(
+                      'WINNER',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -661,7 +791,7 @@ class _FeedPageState extends State<FeedPage> {
       return Positioned(
         left: 0,
         right: 0,
-        bottom: insetBottom + 16,
+        bottom: insetBottom + _scrubH + 8,
         child: IgnorePointer(
           child: Center(
             child: Container(
@@ -670,8 +800,10 @@ class _FeedPageState extends State<FeedPage> {
                 color: Colors.black.withValues(alpha: 0.45),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text('Tap the winner',
-                  style: TextStyle(color: Colors.white, fontSize: 13)),
+              child: const Text(
+                'Tap the winner',
+                style: TextStyle(color: Colors.white, fontSize: 13),
+              ),
             ),
           ),
         ),
@@ -680,19 +812,23 @@ class _FeedPageState extends State<FeedPage> {
 
     // Settled battle: a private "call" on a decided result, no emoji rating.
     if (!m.canVote) {
-      final name = winner == m.player1Id ? m.player1Username : m.player2Username;
+      final name = winner == m.player1Id
+          ? m.player1Username
+          : m.player2Username;
       return Positioned(
         left: 0,
         right: 0,
-        bottom: insetBottom + 12,
+        bottom: insetBottom + _scrubH + 8,
         child: Center(
           child: FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: _pickGreen.withValues(alpha: 0.48),
               foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-              textStyle:
-                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              textStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
             onPressed: _submitting ? null : _submit,
             child: Text('Call it: $name'),
@@ -707,9 +843,9 @@ class _FeedPageState extends State<FeedPage> {
     return Positioned(
       left: 0,
       right: 0,
-      bottom: 0,
+      bottom: insetBottom + _scrubH,
       child: Container(
-        padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + insetBottom),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -726,8 +862,10 @@ class _FeedPageState extends State<FeedPage> {
               disabledBackgroundColor: Colors.white.withValues(alpha: 0.14),
               disabledForegroundColor: Colors.white70,
               padding: const EdgeInsets.symmetric(vertical: 13),
-              textStyle:
-                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              textStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
             onPressed: (_submitting || !_bothRated) ? null : _submit,
             child: _submitting
@@ -735,7 +873,9 @@ class _FeedPageState extends State<FeedPage> {
                     height: 20,
                     width: 20,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.black),
+                      strokeWidth: 2,
+                      color: Colors.black,
+                    ),
                   )
                 : Text(_bothRated ? 'Submit vote' : 'Rate both to submit'),
           ),
@@ -760,18 +900,26 @@ class _FeedPageState extends State<FeedPage> {
             children: [
               // Player 1 (TOP half): bottom-LEFT of the top feed, above the seam.
               Positioned(
-                left: 10,
-                bottom: seam + 12,
-                child: _emojiBar(m.player1Username, _emojiP1,
-                    (k) => setState(() => _emojiP1 = k), House.gelRed),
+                left: 10 - _emojiSafe,
+                bottom: seam + 12 - _emojiSafe,
+                child: _emojiBar(
+                  m.player1Username,
+                  _emojiP1,
+                  (k) => setState(() => _emojiP1 = k),
+                  House.gelRed,
+                ),
               ),
               // Player 2 (BOTTOM half): bottom-LEFT of the bottom feed, lifted
               // to sit just above the docked submit bar.
               Positioned(
-                left: 10,
-                bottom: 72,
-                child: _emojiBar(m.player2Username, _emojiP2,
-                    (k) => setState(() => _emojiP2 = k), House.gelBlue),
+                left: 10 - _emojiSafe,
+                bottom: 72 + _scrubH - _emojiSafe,
+                child: _emojiBar(
+                  m.player2Username,
+                  _emojiP2,
+                  (k) => setState(() => _emojiP2 = k),
+                  House.gelBlue,
+                ),
               ),
             ],
           );
@@ -786,65 +934,85 @@ class _FeedPageState extends State<FeedPage> {
   /// gel (red = player 1, blue = player 2); the picked emoji lights in the same
   /// gel; emojis are finger-sized. Wrapped so a tap never falls through to the
   /// winner-select layer beneath.
-  Widget _emojiBar(String name, String? selected, ValueChanged<String> onSelect,
-      Color accent) {
+  Widget _emojiBar(
+    String name,
+    String? selected,
+    ValueChanged<String> onSelect,
+    Color accent,
+  ) {
+    // The opaque GestureDetector swallows taps on the bar AND on an invisible
+    // margin around it (_emojiSafe), so a slightly-missed emoji tap does
+    // nothing instead of falling through to the half and flipping the winner
+    // pick (developer, 2026-11-09).
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {},
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: accent.withValues(alpha: 0.9), width: 1.5),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 210),
-              child: Padding(
-                padding: const EdgeInsets.only(left: 3, bottom: 5),
-                child: Text(
-                  'Rating for $name',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+      child: Padding(
+        padding: const EdgeInsets.all(_emojiSafe),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: accent.withValues(alpha: 0.9),
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 210),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 3, bottom: 5),
+                  child: Text(
+                    'Rating for $name',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
                       color: accent,
                       fontSize: 13,
-                      fontWeight: FontWeight.w800),
-                ),
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final r in kEmojiRatings)
-                  GestureDetector(
-                    onTap: () => onSelect(r.key),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: selected == r.key
-                            ? accent.withValues(alpha: 0.9)
-                            : Colors.white.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: Text(r.emoji, style: const TextStyle(fontSize: 20)),
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-              ],
-            ),
-          ],
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final r in kEmojiRatings)
+                    GestureDetector(
+                      onTap: () => onSelect(r.key),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selected == r.key
+                              ? accent.withValues(alpha: 0.9)
+                              : Colors.white.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Text(
+                          r.emoji,
+                          style: const TextStyle(fontSize: 20),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// A small circular play/pause/replay control, tucked top-right under the
+  /// A small circular play/pause control, tucked top-right under the
   /// report button so it never covers a face or the reactions.
   Widget _playPauseButton(BuildContext context, bool paused) {
     return Positioned(
@@ -857,11 +1025,7 @@ class _FeedPageState extends State<FeedPage> {
         ),
         child: IconButton(
           icon: Icon(
-            _ended
-                ? Icons.replay_rounded
-                : paused
-                    ? Icons.play_arrow_rounded
-                    : Icons.pause_rounded,
+            paused || _ended ? Icons.play_arrow_rounded : Icons.pause_rounded,
             color: Colors.white,
             size: 22,
           ),
@@ -872,36 +1036,15 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
-  /// A small rewind-10s control, directly under the play/pause button so the
-  /// corner stays a single tidy column - a way to go back without a scrubber
-  /// cluttering the clip. Sits BELOW play/pause (top+60) and ABOVE the Follow
-  /// button (moved to top+164) so the three corner controls never overlap.
-  Widget _rewindButton(BuildContext context) {
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + 112,
-      right: 8,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.5),
-          shape: BoxShape.circle,
-        ),
-        child: IconButton(
-          icon: const Icon(Icons.replay_10_rounded, color: Colors.white, size: 22),
-          tooltip: 'Rewind 10 seconds',
-          onPressed: _rewind,
-        ),
-      ),
-    );
-  }
-
-
   /// After submitting (or, for a battle you cannot act on, once revealed): the
   /// confirmation, and where allowed the live tally / verdict.
   Widget _resultBox(BuildContext context) {
     final v = widget.match.verdict;
     String line;
     if (widget.match.canVote) {
-      line = _submitting ? 'Casting your vote...' : 'Judged. Swipe for the next one.';
+      line = _submitting
+          ? 'Casting your vote...'
+          : 'Judged. Swipe for the next one.';
     } else if (v == null && widget.match.windowOpen) {
       line = widget.match.isParticipant
           ? 'Your battle is still with the crowd.'
@@ -915,43 +1058,45 @@ class _FeedPageState extends State<FeedPage> {
       final winner = v.winnerId == widget.match.player1Id
           ? widget.match.player1Username
           : widget.match.player2Username;
-      final share = (v.winnerId == widget.match.player1Id
+      final share =
+          (v.winnerId == widget.match.player1Id
               ? v.player1Share
               : 1 - v.player1Share) *
           100;
-      line = '${agreed ? "You agreed with the crowd." : "The crowd disagreed."}\n'
+      line =
+          '${agreed ? "You agreed with the crowd." : "The crowd disagreed."}\n'
           '$winner took it with ${share.round()}%.';
     }
 
     return Align(
-        alignment: Alignment.center,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 32),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.75),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                line,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-              ),
-              if (widget.match.windowOpen &&
-                  (widget.match.alreadyVoted || widget.match.isParticipant)) ...[
-                const SizedBox(height: 12),
-                LiveTally(
-                  matchId: widget.match.matchId,
-                  player1Name: widget.match.player1Username,
-                  player2Name: widget.match.player2Username,
-                ),
-              ],
-            ],
-          ),
+      alignment: Alignment.center,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 32),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.75),
+          borderRadius: BorderRadius.circular(16),
         ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              line,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
+            if (widget.match.windowOpen &&
+                (widget.match.alreadyVoted || widget.match.isParticipant)) ...[
+              const SizedBox(height: 12),
+              LiveTally(
+                matchId: widget.match.matchId,
+                player1Name: widget.match.player1Username,
+                player2Name: widget.match.player2Username,
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -981,10 +1126,7 @@ class _FeedPageState extends State<FeedPage> {
             if (v == 'report') _openReport(context);
           },
           itemBuilder: (_) => const [
-            PopupMenuItem(
-              value: 'report',
-              child: Text('Report this clip'),
-            ),
+            PopupMenuItem(value: 'report', child: Text('Report this clip')),
           ],
         ),
       ),
@@ -996,9 +1138,9 @@ class _FeedPageState extends State<FeedPage> {
   /// A small circular button on the right rail, tucked under play/pause.
   Widget _followButton(BuildContext context) {
     return Positioned(
-      // Moved down (was top+112) to make room for the rewind button, so the
-      // corner column is report / play-pause / rewind / follow with no overlap.
-      top: MediaQuery.of(context).padding.top + 164,
+      // Corner column: report / play-pause / follow (the rewind button that
+      // sat between them is gone - the bottom scrubber replaces it).
+      top: MediaQuery.of(context).padding.top + 112,
       right: 8,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -1006,8 +1148,11 @@ class _FeedPageState extends State<FeedPage> {
           shape: BoxShape.circle,
         ),
         child: IconButton(
-          icon: const Icon(Icons.person_add_alt_1,
-              color: Colors.white, size: 20),
+          icon: const Icon(
+            Icons.person_add_alt_1,
+            color: Colors.white,
+            size: 20,
+          ),
           tooltip: 'Follow',
           onPressed: () => _openFollow(context),
         ),
@@ -1059,8 +1204,7 @@ class _FeedPageState extends State<FeedPage> {
     // jarring and distracting - reporting is a serious action, not a moment to
     // keep the show running. Restored on return if it had been playing.
     final c = _controller;
-    final wasPlaying =
-        c != null && c.value.isInitialized && c.value.isPlaying;
+    final wasPlaying = c != null && c.value.isInitialized && c.value.isPlaying;
     if (wasPlaying) {
       await c.pause();
       if (mounted) setState(() {}); // repaint the corner icon to "play"
@@ -1107,10 +1251,8 @@ class _FeedPageState extends State<FeedPage> {
     }
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ReportScreen(
-          reportedUserId: choice,
-          matchId: m.matchId,
-        ),
+        builder: (_) =>
+            ReportScreen(reportedUserId: choice, matchId: m.matchId),
       ),
     );
     // Back from the report screen - restore playback to how they left it.
@@ -1136,12 +1278,15 @@ class _FeedPageState extends State<FeedPage> {
         ),
         child: const Padding(
           padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          child: Text('FACE-OFF',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.0)),
+          child: Text(
+            'FACE-OFF',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.0,
+            ),
+          ),
         ),
       ),
     );
@@ -1165,8 +1310,10 @@ class _FeedPageState extends State<FeedPage> {
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Text(label,
-              style: const TextStyle(color: Colors.white, fontSize: 12)),
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
         ),
       ),
     );

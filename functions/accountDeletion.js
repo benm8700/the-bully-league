@@ -98,6 +98,15 @@ function planMatchDeletion(match, userId) {
  * runs: queue entries and the auth account go early, so a half-finished
  * deletion can never leave someone pairable or able to sign back in.
  */
+/** Refs of every follow `uid` made (follows/{target}/followers/{uid}),
+ * excluding any under the account's own follows/{uid} doc. */
+async function followRefsMadeBy(db, uid) {
+  const snap = await db.collectionGroup("followers").select().get();
+  return snap.docs
+      .filter((d) => d.id === uid && d.ref.parent.parent?.id !== uid)
+      .map((d) => d.ref);
+}
+
 async function deleteAccount(auth) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
   const userId = auth.uid;
@@ -179,6 +188,25 @@ async function deleteAccount(auth) {
     }
   }
 
+  // 4b. Follows. Two directions, both must go:
+  //  - follows this account MADE (follows/{target}/followers/{userId}).
+  //    Deleting each fires onFollowDeleted, which decrements the target's
+  //    followerCount. Leaving them inflated every followed player's count
+  //    with a ghost follower forever (found 2026-11-08: the founder's count
+  //    sat above the real number after test accounts were deleted).
+  //  - this account's own follower list (follows/{userId}/...), which
+  //    names everyone who followed them and must not outlive the erasure.
+  // The follow doc carries no follower field, so the made-follows are found
+  // by document id across the collection group (ids only, via select()).
+  try {
+    const made = await followRefsMadeBy(db, userId);
+    for (const ref of made) await ref.delete().catch(() => {});
+    summary.followsRemoved = made.length;
+    await db.recursiveDelete(db.collection("follows").doc(userId));
+  } catch (e) {
+    console.error(`follow cleanup for ${userId} failed:`, e.message);
+  }
+
   // 5. The user document AND everything beneath it.
   //
   // recursiveDelete, NOT delete(). Deleting a Firestore document does not
@@ -224,6 +252,7 @@ async function deleteAccount(auth) {
 
 module.exports = {
   deleteAccount,
+  followRefsMadeBy,
   planMatchDeletion,
   playerUidInMatch,
   fileBelongsToPlayer,

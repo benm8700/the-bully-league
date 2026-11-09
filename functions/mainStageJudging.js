@@ -69,4 +69,16 @@ function tallyJudgeVotes(votes, panel, {headJudge = null} = {}) {
   return {counts, cast, remaining, winner: decided ? winner : null, tie, decided};
 }
 
-module.exports = {tallyJudgeVotes};
+/**
+ * Who breaks a panel tie: the first of the founder's hand-picks who is
+ * actually SEATED. Anyone in the field is never seated (selectPanel blocks
+ * finalists), so if the founder qualifies to battle they lose the tiebreak
+ * along with their seat and it passes to their next seated pick - nobody
+ * judges, or breaks a tie on, a show they are playing in. PURE.
+ */
+function headJudgeFor(handPicked, panel) {
+  const seated = Array.isArray(panel) ? panel : [];
+  return (handPicked || []).find((u) => seated.includes(u)) || null;
+}
+
+module.exports = {tallyJudgeVotes, headJudgeFor};

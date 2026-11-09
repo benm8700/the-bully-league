@@ -1,4 +1,5 @@
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'agora_render.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -59,36 +60,41 @@ class PanelVideoService {
     await engine.startPreview();
     // Report who's talking every ~0.5s, so the spotlight can follow the speaker.
     await engine.enableAudioVolumeIndication(
-        interval: 500, smooth: 3, reportVad: false);
-    engine.registerEventHandler(RtcEngineEventHandler(
-      onJoinChannelSuccess: (connection, elapsed) {
-        _joined.value = true;
-        _failure.value = null;
-      },
-      onAudioVolumeIndication: (connection, speakers, speakerNumber, total) {
-        _updateActiveSpeaker(speakers);
-      },
-      onError: (err, msg) {
-        if (err == ErrorCodeType.errInvalidToken ||
-            err == ErrorCodeType.errTokenExpired) {
-          _failure.value = 'The table connection expired. Reopen it.';
-        } else if (!_joined.value) {
-          _failure.value = 'Could not join the judges\' table.';
-        }
-      },
-      onRequestToken: (connection) =>
-          _failure.value = 'The table connection expired. Reopen it.',
-      onUserJoined: (connection, remoteUid, elapsed) {
-        _present.value = {..._present.value, remoteUid};
-      },
-      onUserOffline: (connection, remoteUid, reason) {
-        _present.value = {..._present.value}..remove(remoteUid);
-      },
-      onLeaveChannel: (connection, stats) {
-        _joined.value = false;
-        _present.value = {};
-      },
-    ));
+      interval: 500,
+      smooth: 3,
+      reportVad: false,
+    );
+    engine.registerEventHandler(
+      RtcEngineEventHandler(
+        onJoinChannelSuccess: (connection, elapsed) {
+          _joined.value = true;
+          _failure.value = null;
+        },
+        onAudioVolumeIndication: (connection, speakers, speakerNumber, total) {
+          _updateActiveSpeaker(speakers);
+        },
+        onError: (err, msg) {
+          if (err == ErrorCodeType.errInvalidToken ||
+              err == ErrorCodeType.errTokenExpired) {
+            _failure.value = 'The table connection expired. Reopen it.';
+          } else if (!_joined.value) {
+            _failure.value = 'Could not join the judges\' table.';
+          }
+        },
+        onRequestToken: (connection) =>
+            _failure.value = 'The table connection expired. Reopen it.',
+        onUserJoined: (connection, remoteUid, elapsed) {
+          _present.value = {..._present.value, remoteUid};
+        },
+        onUserOffline: (connection, remoteUid, reason) {
+          _present.value = {..._present.value}..remove(remoteUid);
+        },
+        onLeaveChannel: (connection, stats) {
+          _joined.value = false;
+          _present.value = {};
+        },
+      ),
+    );
     _engine = engine;
   }
 
@@ -150,6 +156,7 @@ class PanelVideoService {
     if (engine == null) return null;
     return AgoraVideoView(
       controller: VideoViewController(
+        useFlutterTexture: agoraUseFlutterTexture,
         rtcEngine: engine,
         canvas: const VideoCanvas(uid: 0),
       ),
@@ -164,6 +171,7 @@ class PanelVideoService {
     if (!_present.value.contains(uid)) return null;
     return AgoraVideoView(
       controller: VideoViewController.remote(
+        useFlutterTexture: agoraUseFlutterTexture,
         rtcEngine: engine,
         canvas: VideoCanvas(uid: uid),
         connection: RtcConnection(channelId: channelName),

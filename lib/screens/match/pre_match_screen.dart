@@ -143,13 +143,15 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     // permissions pre-granted via `adb shell pm grant`) would silently fail
     // or crash instead of showing the OS permission prompt.
     final statuses = await [Permission.camera, Permission.microphone].request();
-    final granted = (statuses[Permission.camera]?.isGranted ?? false) &&
+    final granted =
+        (statuses[Permission.camera]?.isGranted ?? false) &&
         (statuses[Permission.microphone]?.isGranted ?? false);
     if (!granted) {
       if (!mounted) return;
       setState(() {
         _permissionDenied = true;
-        _error = 'Camera and microphone access are required to check in for a match.';
+        _error =
+            'Camera and microphone access are required to check in for a match.';
       });
       return;
     }
@@ -158,7 +160,9 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
       final myUid = FirebaseAuth.instance.currentUser?.uid;
       if (myUid == null) {
         if (!mounted) return;
-        setState(() => _error = 'You need to be signed in to check in for a match.');
+        setState(
+          () => _error = 'You need to be signed in to check in for a match.',
+        );
         return;
       }
       final channelName = 'precheck_$myUid';
@@ -178,9 +182,13 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     _videoCallService.localAudioLevel.addListener(_onAudioLevel);
     // Sensor + frame errors must never break the check - a failed sensor
     // just leaves its indicator neutral, which is harmless.
-    _accelSub = accelerometerEventStream(samplingPeriod: SensorInterval.uiInterval)
-        .listen(_onAccel, onError: (_) {});
-    _frameSub = _videoCallService.localFrameSamples.listen(_onFrame, onError: (_) {});
+    _accelSub = accelerometerEventStream(
+      samplingPeriod: SensorInterval.uiInterval,
+    ).listen(_onAccel, onError: (_) {});
+    _frameSub = _videoCallService.localFrameSamples.listen(
+      _onFrame,
+      onError: (_) {},
+    );
   }
 
   void _onAudioLevel() {
@@ -203,8 +211,12 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
 
   void _onFrame(RawVideoFrame f) {
     if (!mounted || _navigating) return;
-    final luma =
-        meanLuma(f.yBuffer, width: f.width, height: f.height, yStride: f.yStride);
+    final luma = meanLuma(
+      f.yBuffer,
+      width: f.width,
+      height: f.height,
+      yStride: f.yStride,
+    );
     final dark = luma < _dimLumaThreshold;
     _darkRun = dark ? _darkRun + 1 : 0;
     // Two sustained dark samples (~a few seconds, given the internal throttle)
@@ -303,6 +315,18 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
             .httpsCallable('getChallengeMatch')
             .call<Map<String, dynamic>>({'matchId': challengeMatchId});
         if (!mounted) return;
+        // Reachable from a tapped "accepted" notification that sat unread,
+        // so the battle may already be over or timed out. Say so plainly
+        // instead of walking into a dead match.
+        final status = result.data['status'];
+        if (status == 'abandoned' || status == 'completed') {
+          setState(
+            () => _error =
+                'That battle timed out before you got here. Challenge them '
+                'again from Roast a friend.',
+          );
+          return;
+        }
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => BioRevealScreen(
@@ -315,15 +339,18 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
         );
       } catch (e) {
         if (!mounted) return;
-        setState(() => _error = 'Could not join that battle: $e');
+        setState(
+          () => _error =
+              'Could not join that battle. Check your '
+              'connection and try again.',
+        );
+        debugPrint('getChallengeMatch failed: $e');
       }
       return;
     }
 
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => MatchmakingScreen(mode: widget.mode),
-      ),
+      MaterialPageRoute(builder: (_) => MatchmakingScreen(mode: widget.mode)),
     );
   }
 
@@ -334,8 +361,8 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
       body: _error != null
           ? _buildErrorUi()
           : !_initialized
-              ? const Center(child: CircularProgressIndicator())
-              : _buildCheckUi(),
+          ? const Center(child: CircularProgressIndicator())
+          : _buildCheckUi(),
     );
   }
 
@@ -385,7 +412,11 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
             // Ready / skip-mic buttons clear the home-gesture bar (found on a
             // real S22, 2026-09-01).
             padding: EdgeInsets.fromLTRB(
-                16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
+              16,
+              16,
+              16,
+              16 + MediaQuery.of(context).padding.bottom,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -409,11 +440,13 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Text(_micVerified
-                          ? _readyLabel
-                          : _micPeak > 2
+                      : Text(
+                          _micVerified
+                              ? _readyLabel
+                              : _micPeak > 2
                               ? 'Almost - a little louder'
-                              : 'Say something to test your mic...'),
+                              : 'Say something to test your mic...',
+                        ),
                 ),
                 if (kDebugMode && !_micVerified)
                   TextButton(
@@ -440,8 +473,8 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     final state = !_gotLightReading
         ? _ChipState.pending
         : _tooDark
-            ? _ChipState.warn
-            : _ChipState.good;
+        ? _ChipState.warn
+        : _ChipState.good;
     return _StatusChip(
       icon: Icons.wb_sunny_outlined,
       label: _tooDark ? 'Too dark' : 'Good light',
@@ -462,8 +495,8 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
         final fillColor = _micVerified
             ? context.palette.accent
             : _micPeak > 2
-                ? context.palette.accent.withValues(alpha: 0.6)
-                : scheme.outline;
+            ? context.palette.accent.withValues(alpha: 0.6)
+            : scheme.outline;
         return Row(
           children: [
             Icon(
@@ -527,7 +560,11 @@ class _SetupReminder extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.tips_and_updates_outlined, size: 20, color: scheme.onSurfaceVariant),
+          Icon(
+            Icons.tips_and_updates_outlined,
+            size: 20,
+            color: scheme.onSurfaceVariant,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -546,7 +583,11 @@ class _SetupReminder extends StatelessWidget {
 enum _ChipState { good, pending, warn }
 
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.icon, required this.label, required this.state});
+  const _StatusChip({
+    required this.icon,
+    required this.label,
+    required this.state,
+  });
 
   final IconData icon;
   final String label;

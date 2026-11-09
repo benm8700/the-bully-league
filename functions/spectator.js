@@ -168,8 +168,8 @@ async function watchJudgesTable(auth, data, appCertificate) {
       AGORA_APP_ID, appCertificate, channelName, uid,
       RtcRole.SUBSCRIBER, 3600, 3600);
   const panel = Array.isArray(tournament.judges) ? tournament.judges : [];
-  const headJudge =
-    (tournament.handPickedJudges || []).find((u) => panel.includes(u)) || null;
+  const {headJudgeFor} = require("./mainStageJudging");
+  const headJudge = headJudgeFor(tournament.handPickedJudges, panel);
   return {channelName, token, agoraUid: uid, judges: panel, headJudge,
     seatUidBase: JUDGE_SEAT_UID_BASE, matchId};
 }

@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {loadBracket} = require("./mainStageLifecycle");
-const {tallyJudgeVotes} = require("./mainStageJudging");
+const {tallyJudgeVotes, headJudgeFor} = require("./mainStageJudging");
 const {DEFAULTS: BATTLE_DEFAULTS, resolveGraceMs} = require("./mainStageBattle");
 
 /**
@@ -190,7 +190,7 @@ async function castMainStageJudgeVote(auth, data) {
       throw httpsError("permission-denied", "Only seated judges vote here.");
     }
     // The head judge (founder) breaks a tie: the first seated hand-pick.
-    const headJudge = (t.handPickedJudges || []).find((u) => panel.includes(u)) || null;
+    const headJudge = headJudgeFor(t.handPickedJudges, panel);
 
     const existing = await tx.get(votesCol);
     const votes = {};
