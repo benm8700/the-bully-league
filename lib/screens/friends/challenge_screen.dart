@@ -392,26 +392,6 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   style: text.bodySmall,
                 ),
                 const SizedBox(height: 12),
-                // Recent opponents - tap to re-challenge without retyping.
-                if (_recent.isNotEmpty) ...[
-                  Text('Recent', style: text.labelMedium),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: _recent
-                        .map((p) => ActionChip(
-                              avatar: const Icon(Icons.replay, size: 16),
-                              label: Text(p['username'] as String? ?? 'Player'),
-                              onPressed: _busy
-                                  ? null
-                                  : () => _sendToUid(p['uid'] as String,
-                                      p['username'] as String? ?? 'them'),
-                            ))
-                        .toList(),
-                  ),
-                  const SizedBox(height: 12),
-                ],
                 TextField(
                   controller: _controller,
                   decoration: const InputDecoration(
@@ -437,6 +417,29 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   Text(_error!,
                       style: text.bodySmall
                           ?.copyWith(color: Theme.of(context).colorScheme.error)),
+                ],
+                // Recent opponents - tap to re-challenge without retyping.
+                // BELOW the input on purpose: the list loads asynchronously,
+                // and above the field it pushed the box down mid-typing so the
+                // first letters landed nowhere (found live, 2026-11-08).
+                if (_recent.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text('Recent', style: text.labelMedium),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: _recent
+                        .map((p) => ActionChip(
+                              avatar: const Icon(Icons.replay, size: 16),
+                              label: Text(p['username'] as String? ?? 'Player'),
+                              onPressed: _busy
+                                  ? null
+                                  : () => _sendToUid(p['uid'] as String,
+                                      p['username'] as String? ?? 'them'),
+                            ))
+                        .toList(),
+                  ),
                 ],
                 if (_sent != null) ...[
                   const SizedBox(height: 12),

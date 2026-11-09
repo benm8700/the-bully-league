@@ -1648,6 +1648,13 @@ exports.onVoteCast = onVoteCast;
  */
 exports.onTournamentCompleted = require("./belt").onTournamentCompleted;
 
+/**
+ * Keeps each device push token on ONE account (whoever signed in last), so a
+ * phone used for several accounts stops getting duplicate / wrong-account
+ * pushes. See functions/notifications.js claimPushToken.
+ */
+exports.claimPushToken = require("./notifications").claimPushToken;
+
 // Wipes a gauntlet's lobby chat the moment it ends (completed or cancelled),
 // so a night's chat never outlives the night. See functions/lobby.js.
 exports.onGauntletEnded = require("./lobby").onGauntletEnded;

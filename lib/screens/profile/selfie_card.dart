@@ -13,6 +13,13 @@ import '../../core/services/visual_moderation_service.dart';
 /// The outcome of a selfie capture attempt.
 typedef SelfieResult = ({bool ok, bool cancelled, String? reason});
 
+/// Shown when the camera can't be opened - almost always because the user
+/// tapped "Don't allow" on the permission prompt, after which the OS won't
+/// ask again and only Settings can turn it back on.
+const kCameraOffMessage =
+    'Camera access is off. Turn it on in your phone\'s Settings '
+    '(Apps > The Bully League > Permissions), then try again.';
+
 /// The MANDATORY profile selfie (face photo). Required before battling - it
 /// shows in the pre-match bio reveal + the player directory so an opponent sees
 /// who they're facing. Captured in-app from the FRONT camera (a real selfie,
@@ -30,13 +37,21 @@ class SelfieCard extends StatefulWidget {
     // while the camera is open.
     final moderation = context.read<VisualModerationService>();
     final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.front,
-      maxWidth: 1080,
-      maxHeight: 1080,
-      imageQuality: 88,
-    );
+    final XFile? picked;
+    try {
+      picked = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 88,
+      );
+    } catch (_) {
+      // Camera permission denied (or no camera). pickImage THROWS rather than
+      // returning null here, and uncaught it left the card stuck on
+      // "Checking your selfie..." with the button disabled for good.
+      return (ok: false, cancelled: false, reason: kCameraOffMessage);
+    }
     if (picked == null) return (ok: false, cancelled: true, reason: null);
 
     final uid = FirebaseAuth.instance.currentUser!.uid;
@@ -126,7 +141,13 @@ class _SelfieCardState extends State<SelfieCard> {
       _busy = true;
       _status = null;
     });
-    final result = await SelfieCard.capture(context);
+    SelfieResult result;
+    try {
+      result = await SelfieCard.capture(context);
+    } catch (e) {
+      // Belt and braces: whatever goes wrong, never leave the button disabled.
+      result = (ok: false, cancelled: false, reason: 'Could not take selfie: $e');
+    }
     if (!mounted) return;
     setState(() {
       _busy = false;

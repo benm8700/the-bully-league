@@ -122,5 +122,11 @@ class AuthService {
     return credential.user;
   }
 
+  /// Emails a password-reset link. Firebase does not reveal whether the email
+  /// has an account (email-enumeration protection), so callers should show
+  /// the same neutral message either way.
+  Future<void> sendPasswordReset(String email) =>
+      _auth.sendPasswordResetEmail(email: email);
+
   Future<void> signOut() => _auth.signOut();
 }

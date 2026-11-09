@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../core/services/auth_service.dart';
+import '../../core/services/push_notification_service.dart';
 import '../info/rules_screen.dart';
 
 /// A one-time content-policy + age acknowledgement, shown the first time an
@@ -62,6 +65,18 @@ class _ContentPolicyScreenState extends State<ContentPolicyScreen> {
     // without accepting, but the account is untouched and they can accept
     // whenever they like.
     setState(() => _declined = true);
+  }
+
+  /// Same best-effort order as ProfileScreen's sign-out: drop this device's
+  /// push token first, then sign out - AuthGate swaps the tree away.
+  Future<void> _signOut() async {
+    setState(() => _submitting = true);
+    final push = context.read<PushNotificationService>();
+    final auth = context.read<AuthService>();
+    try {
+      await push.unregister();
+    } catch (_) {}
+    await auth.signOut();
   }
 
   @override
@@ -162,6 +177,17 @@ class _ContentPolicyScreenState extends State<ContentPolicyScreen> {
               TextButton(
                 onPressed: _submitting ? null : _decline,
                 child: const Text('Not for me'),
+              ),
+              // An exit that does NOT require agreeing. Without it, someone
+              // who declines - or who is simply signed into the wrong
+              // account - could only leave by accepting terms they don't
+              // agree to (found live, 2026-11-08).
+              TextButton(
+                onPressed: _submitting ? null : _signOut,
+                child: Text(
+                  'Sign out',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
               ),
             ],
           ),

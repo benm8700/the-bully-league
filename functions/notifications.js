@@ -1,5 +1,6 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
+const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 
 /**
  * Shared push plumbing: per-category mute preferences and fan-out with
@@ -73,16 +74,88 @@ async function resolveUserDocs(userDocsOrIds) {
   return out;
 }
 
+/**
+ * Flattens recipients into one {token, uid} per DEVICE.
+ *
+ * A token identifies a phone, not an account. Before this, one iPhone that
+ * had been signed into three accounts carried the same token on all three
+ * user docs, so every broadcast (the Happy Hour push, vote reminders) hit
+ * that phone three times. Found live, 2026-11-08. The first account to
+ * claim a token keeps it for dead-token pruning; the duplicates are dropped.
+ * claimPushToken (below) stops the duplicates being stored in the first
+ * place; this is the backstop for any that already exist.
+ *
+ * @param {Array<{uid: string, tokens: string[]}>} recipients
+ * @return {Array<{token: string, uid: string}>}
+ */
+function dedupeTargets(recipients) {
+  const seen = new Set();
+  const out = [];
+  for (const {uid, tokens} of recipients) {
+    for (const token of tokens ?? []) {
+      if (typeof token !== "string" || token.length === 0) continue;
+      if (seen.has(token)) continue;
+      seen.add(token);
+      out.push({token, uid});
+    }
+  }
+  return out;
+}
+
+/**
+ * Which tokens were newly added to a user doc by this write.
+ *
+ * @param {string[]|undefined} before
+ * @param {string[]|undefined} after
+ * @return {string[]}
+ */
+function addedTokens(before, after) {
+  const prev = new Set(before ?? []);
+  return [...new Set(after ?? [])].filter(
+      (t) => typeof t === "string" && t.length > 0 && !prev.has(t));
+}
+
+/**
+ * A device's push token belongs to whoever is signed in on it NOW.
+ *
+ * When a token lands on users/{uid}, remove it from every OTHER account.
+ * Signing out already drops the token, but plenty of paths skip sign-out
+ * (signing up a second account on the same phone, an uninstall, a crash),
+ * and each one left the phone receiving another account's pushes - a
+ * challenge to an account you are not even logged into still buzzed the
+ * phone, and opening the app showed nothing. Done server-side because a
+ * client may not write other people's user docs.
+ */
+const claimPushToken = onDocumentWritten("users/{uid}", async (event) => {
+  const before = event.data?.before?.data()?.fcmTokens;
+  const after = event.data?.after?.data()?.fcmTokens;
+  const added = addedTokens(before, after);
+  if (added.length === 0) return;
+  const db = getFirestore();
+  const uid = event.params.uid;
+  for (const token of added) {
+    try {
+      const others = await db.collection("users")
+          .where("fcmTokens", "array-contains", token).get();
+      await Promise.all(others.docs
+          .filter((d) => d.id !== uid)
+          .map((d) => d.ref.update({
+            fcmTokens: FieldValue.arrayRemove(token),
+          })));
+    } catch (e) {
+      console.error("claimPushToken failed:", e.message);
+    }
+  }
+});
+
 async function sendToUsers(userDocsOrIds, {title, body, category, data = {}}) {
   const db = getFirestore();
   const userDocs = await resolveUserDocs(userDocsOrIds);
-  const targets = [];
-  for (const doc of userDocs) {
-    const user = doc.data();
-    if (!wantsCategory(user, category)) continue;
-    const tokens = user?.fcmTokens ?? [];
-    for (const token of tokens) targets.push({token, uid: doc.id});
-  }
+  const targets = dedupeTargets(userDocs.map((doc) => ({
+    uid: doc.id,
+    tokens: wantsCategory(doc.data(), category) ?
+      (doc.data()?.fcmTokens ?? []) : [],
+  })));
   if (targets.length === 0) return {sent: 0, failed: 0, recipients: 0};
 
   let sent = 0;
@@ -123,4 +196,4 @@ async function sendToUsers(userDocsOrIds, {title, body, category, data = {}}) {
 }
 
 module.exports = {CATEGORIES, wantsCategory, sendToUsers, resolveUserDocs,
-  MULTICAST_LIMIT};
+  MULTICAST_LIMIT, dedupeTargets, addedTokens, claimPushToken};

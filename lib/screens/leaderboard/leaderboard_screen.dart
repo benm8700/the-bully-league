@@ -223,6 +223,20 @@ class LeaderboardScreen extends StatelessWidget {
         // is nothing honest to append.
         final appendSelf = !fame && !onBoard && me != null;
 
+        // Standard competition ranking ("1, 2, 2, 4"): tied players share a
+        // position, matching _YourPosition and the Home card's GLOBAL RANK
+        // (both "players strictly ahead of me, +1"). Plain index + 1 made a
+        // fresh 1200 account read #7 on Home but #13 here.
+        num? sortKey(Map<String, dynamic> d) =>
+            fame ? (d['followerCount'] as num? ?? 0) : d['rating'] as num?;
+        final positions = List<int>.filled(docs.length, 0);
+        for (var i = 0; i < docs.length; i++) {
+          positions[i] = (i > 0 &&
+                  sortKey(docs[i].data()) == sortKey(docs[i - 1].data()))
+              ? positions[i - 1]
+              : i + 1;
+        }
+
         return ListView.separated(
           // Clears the tab bar above the list (and the toolbar when pushed).
           padding: EdgeInsets.fromLTRB(0, topPad, 0, 16),
@@ -239,7 +253,7 @@ class LeaderboardScreen extends StatelessWidget {
             final data = docs[index].data();
             return _Row(
               uid: docs[index].id,
-              position: index + 1,
+              position: positions[index],
               username: data['username'] as String? ?? 'Roaster',
               wins: data['wins'] as num? ?? 0,
               losses: data['losses'] as num? ?? 0,

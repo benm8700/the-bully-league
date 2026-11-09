@@ -193,14 +193,28 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
   // Reset naturally on account switch, since this gate is keyed by uid.
   bool _appliedSkin = false;
 
+  // Push registration is deferred until the account has accepted the
+  // content policy (see build). Registering in initState popped the OS
+  // "Allow notifications?" prompt ON TOP of the 18+ acknowledgement, asking
+  // a brand-new user for a permission before they had even agreed to use
+  // the app (found live, 2026-11-08). Once per account, like _appliedSkin.
+  bool _pushRegistered = false;
+
+  void _registerPushOnce() {
+    if (_pushRegistered) return;
+    _pushRegistered = true;
+    // Fire-and-forget on purpose: it's entirely best-effort (see
+    // PushNotificationService), and nothing should wait on a notification
+    // permission prompt resolving.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(context.read<PushNotificationService>().register());
+    });
+  }
+
   @override
   void initState() {
     super.initState();
-    // Registers this device for match-found pushes. Fire-and-forget on
-    // purpose: it's entirely best-effort (see PushNotificationService), and
-    // nothing about signing in should wait on a notification permission
-    // prompt resolving.
-    unawaited(context.read<PushNotificationService>().register());
     // "App open" presence for the admin dashboard - foreground-only heartbeat,
     // no background work, negligible cost. See AppPresenceService.
     AppPresenceService.instance.start(widget.uid);
@@ -265,6 +279,7 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
             child: ContentPolicyScreen(uid: widget.uid),
           );
         }
+        if (data != null) _registerPushOnce();
         return const WindowSkinController(child: MainShell());
       },
     );

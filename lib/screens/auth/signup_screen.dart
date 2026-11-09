@@ -571,6 +571,11 @@ class _SignupScreenState extends State<SignupScreen> {
             maxLength: 20,
             textInputAction: TextInputAction.next,
             onFieldSubmitted: (_) => _usernameNext(),
+            // A "That username is taken." about the PREVIOUS name must not
+            // sit there while they type a new one.
+            onChanged: (_) {
+              if (_errorMessage != null) setState(() => _errorMessage = null);
+            },
             validator: (value) => (value == null || value.trim().isEmpty)
                 ? 'Username is required'
                 : null,

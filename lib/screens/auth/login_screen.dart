@@ -54,10 +54,72 @@ class _LoginScreenState extends State<LoginScreen> {
       // app relaunch picked the session back up through AuthGate fresh).
       Navigator.of(context).popUntil((route) => route.isFirst);
     } on FirebaseAuthException catch (e) {
-      setState(() => _errorMessage = e.message ?? 'Sign in failed.');
+      setState(() => _errorMessage = _friendlyError(e));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  /// Firebase's own messages are developer-facing ("The supplied auth
+  /// credential is incorrect, malformed or has expired."). Wrong email and
+  /// wrong password deliberately read the same - saying which one was wrong
+  /// tells an attacker which emails have accounts.
+  static String _friendlyError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'invalid-credential':
+      case 'wrong-password':
+      case 'user-not-found':
+      case 'invalid-email':
+        return 'Wrong email or password.';
+      case 'too-many-requests':
+        return 'Too many attempts. Wait a few minutes and try again, '
+            'or reset your password.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'network-request-failed':
+        return 'No connection. Check your internet and try again.';
+      default:
+        return 'Could not log in. Try again.';
+    }
+  }
+
+  /// "Forgot password?" - emails a reset link to whatever is in the Email
+  /// field. Before this existed, a forgotten password meant the account was
+  /// gone for good (there was no recovery path anywhere in the app).
+  Future<void> _forgotPassword() async {
+    final email = _emailController.text.trim();
+    if (!email.contains('@')) {
+      setState(() => _errorMessage =
+          'Type your email above first, then tap "Forgot password?".');
+      return;
+    }
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+    try {
+      await context.read<AuthService>().sendPasswordReset(email);
+    } on FirebaseAuthException catch (e) {
+      // Only surface problems the user can act on; anything else gets the
+      // same neutral confirmation, so this can't be used to probe which
+      // emails have accounts.
+      if (e.code == 'invalid-email' || e.code == 'network-request-failed') {
+        if (mounted) setState(() => _errorMessage = _friendlyError(e));
+        if (mounted) setState(() => _isSubmitting = false);
+        return;
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'If $email has an account, a reset link is on its way. '
+          'Check your inbox (and spam).',
+        ),
+      ),
+    );
   }
 
   @override
@@ -86,7 +148,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 validator: (value) =>
                     (value == null || value.isEmpty) ? 'Password is required' : null,
               ),
-              const SizedBox(height: 24),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _isSubmitting ? null : _forgotPassword,
+                  child: const Text('Forgot password?'),
+                ),
+              ),
+              const SizedBox(height: 8),
               if (_errorMessage != null) ...[
                 Text(_errorMessage!, style: const TextStyle(color: Color(0xFFE05252))),
                 const SizedBox(height: 16),

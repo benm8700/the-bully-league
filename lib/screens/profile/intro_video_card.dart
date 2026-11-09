@@ -79,15 +79,23 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
     // while the camera is open.
     final moderation = context.read<VisualModerationService>();
     final picker = ImagePicker();
-    final picked = await picker.pickVideo(
-      source: ImageSource.camera,
-      // Open the front (selfie) camera by default - the intro is you talking
-      // to camera, same as a battle. Without this the OS opens the rear
-      // camera and everyone starts by flipping it round. A best-effort hint:
-      // some OEM camera apps ignore it, but it costs nothing where honoured.
-      preferredCameraDevice: CameraDevice.front,
-      maxDuration: const Duration(seconds: 60),
-    );
+    final XFile? picked;
+    try {
+      picked = await picker.pickVideo(
+        source: ImageSource.camera,
+        // Open the front (selfie) camera by default - the intro is you talking
+        // to camera, same as a battle. Without this the OS opens the rear
+        // camera and everyone starts by flipping it round. A best-effort hint:
+        // some OEM camera apps ignore it, but it costs nothing where honoured.
+        preferredCameraDevice: CameraDevice.front,
+        maxDuration: const Duration(seconds: 60),
+      );
+    } catch (_) {
+      // Camera permission denied: pickVideo throws instead of returning null,
+      // so without this the button silently did nothing.
+      if (mounted) setState(() => _status = kCameraOffMessage);
+      return;
+    }
     if (picked == null || !mounted) return;
 
     setState(() {

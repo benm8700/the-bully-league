@@ -54,13 +54,31 @@ class PushNotificationService {
         return;
       }
 
+      // Listen FIRST, so a token that only arrives later (see below) or
+      // rotates (reinstall, restore, FCM's own rotation) is still saved.
+      _tokenRefreshSub ??= _messaging.onTokenRefresh.listen(_saveToken);
+
+      // iOS: getToken() THROWS "apns-token-not-set" if Apple hasn't handed
+      // the app its APNs token yet, which is common right after launch.
+      // Before, that one throw skipped everything below it, so the phone
+      // got no pushes for the whole session (seen live on an iPhone,
+      // 2026-11-08). Wait for the APNs token with a short backoff first.
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        String? apns;
+        for (var attempt = 0; attempt < 6 && apns == null; attempt++) {
+          apns = await _messaging.getAPNSToken();
+          if (apns == null) {
+            await Future.delayed(Duration(milliseconds: 500 * (1 << attempt)));
+          }
+        }
+        if (apns == null) {
+          debugPrint('APNs token never arrived; will save on token refresh.');
+          return;
+        }
+      }
+
       final token = await _messaging.getToken();
       if (token != null) await _saveToken(token);
-
-      // Tokens rotate (app reinstall, restore to a new device, FCM's own
-      // rotation). Without this the stored token silently goes stale and
-      // the player stops getting alerts with no visible symptom.
-      _tokenRefreshSub ??= _messaging.onTokenRefresh.listen(_saveToken);
     } catch (e) {
       debugPrint('Push notification registration failed: $e');
     }
