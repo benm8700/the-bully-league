@@ -489,7 +489,11 @@ class _BattleCard extends StatelessWidget {
     // Friend battles are PRIVATE: never recorded, judged or clipped. Treating
     // them like ranked showed "JUDGING" forever plus a "Get clip" for a video
     // that does not exist (found on a device, 2026-11-08).
-    final isFriend = mode == 'friend';
+    // From 2026-11-09 friend battles are recorded and crowd-judged again
+    // (still no rank), so a RECORDED friend battle reads like ranked: judging,
+    // then a verdict, and a clip for subscribers. Only the old unrecorded
+    // ones keep the "friendly" card.
+    final isFriend = mode == 'friend' && match['recording'] == null;
     final hasClip = mode != 'exhibition' && !isFriend;
     // Once you've claimed this battle's clip, the button says where it is
     // in its life - so "where is my clip?" always has an answer on the card.
@@ -1083,7 +1087,7 @@ class _BattleCard extends StatelessWidget {
                 },
               ),
             if (mode != 'exhibition' &&
-                mode != 'friend' &&
+                (mode != 'friend' || match['recording'] != null) &&
                 status == 'completed')
               ListTile(
                 leading: const Icon(Icons.movie_outlined),

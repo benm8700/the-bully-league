@@ -258,4 +258,24 @@ check("a repeat tap on an already-granted clip stays idempotent", () => {
   assert.strictEqual(v.cost, 0);
 });
 
+check("FRIEND: a free player can't keep a friend-battle clip, by any route", () => {
+  for (const source of ["subscription", "points", "purchase"]) {
+    const v = grant({match: matchOf({mode: "friend"}), source,
+      user: {pointsBalance: 99999, freeClipUsed: false}});
+    assert.strictEqual(v.allowed, false, source);
+    assert.strictEqual(v.reason, DENY.subscriptionRequired);
+  }
+});
+check("FRIEND: subscribers and trial users keep it, without burning the free clip", () => {
+  for (const state of ["subscriber", "trial"]) {
+    const v = grant({match: matchOf({mode: "friend"}), entitlement: {state},
+      user: {freeClipUsed: false}});
+    assert.deepStrictEqual([v.allowed, v.source, v.cost], [true, "subscription", 0]);
+  }
+});
+check("FRIEND: open to everyone while payments are switched off (beta)", () => {
+  const v = grant({match: matchOf({mode: "friend"}), enforced: false});
+  assert.strictEqual(v.allowed, true);
+});
+
 console.log(`\n${passed} checks passed.`);

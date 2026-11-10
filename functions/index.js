@@ -210,13 +210,6 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     );
   }
 
-  // Friend battles are private scrimmages now - never judged (a staged clip
-  // would be a bad look), so no ballots on them even via a direct call.
-  if (match.mode === "friend") {
-    throw new HttpsError(
-        "failed-precondition", "Friend battles aren't judged by the crowd.");
-  }
-
   if (voterId === match.player1Id || voterId === match.player2Id) {
     throw new HttpsError("permission-denied", "Match participants can't vote on their own match.");
   }
@@ -316,10 +309,14 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
     },
     timestamp: FieldValue.serverTimestamp(),
   });
-  batch.set(db.collection("users").doc(match.player1Id),
-      {emojiCounts: {[ratingP1]: FieldValue.increment(1)}}, {merge: true});
-  batch.set(db.collection("users").doc(match.player2Id),
-      {emojiCounts: {[ratingP2]: FieldValue.increment(1)}}, {merge: true});
+  // A FRIEND battle's emojis stay on the ballot only: two buddies could stage
+  // one, so it must never feed anyone's public emoji fame (2026-11-09).
+  if (match.mode !== "friend") {
+    batch.set(db.collection("users").doc(match.player1Id),
+        {emojiCounts: {[ratingP1]: FieldValue.increment(1)}}, {merge: true});
+    batch.set(db.collection("users").doc(match.player2Id),
+        {emojiCounts: {[ratingP2]: FieldValue.increment(1)}}, {merge: true});
+  }
   await batch.commit();
 
   // Paying for judgement is the point of the whole currency: votes are the

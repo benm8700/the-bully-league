@@ -163,6 +163,9 @@ function selectForCaptioning(candidates, {
   if (budget === 0) return [];
 
   const recent = candidates.filter((c) =>
+    // Friend battles are judged but never public, so never worth paying to
+    // caption (their subscriber clip is the plain cut).
+    c.mode !== "friend" &&
     c.voteFinalized === true &&
     Number.isFinite(c.finalizedAtMs) &&
     now - c.finalizedAtMs <= WEEK_MS);

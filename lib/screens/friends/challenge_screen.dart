@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../directory/player_search_screen.dart';
 import '../match/pre_match_screen.dart';
+import '../match/recording_consent_screen.dart';
 
 /// Where an SMS invite points. Placeholder until a real store listing exists
 /// (same as the website's download CTA); swap when the app ships.
@@ -458,10 +459,9 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                 Text('Or challenge by username', style: text.titleMedium),
                 const SizedBox(height: 4),
                 Text(
-                  // Friend battles are a PRIVATE scrimmage: it does not count,
-                  // and it is NOT recorded, judged, or clipped - just you two.
-                  'Private, just for fun: it does not affect your rank and is '
-                  'never recorded or judged.',
+                  // Judged by the crowd since 2026-11-09, still no rank.
+                  'Strangers judge it and tell you who won. It never touches '
+                  'your rank.',
                   style: text.bodySmall,
                 ),
                 const SizedBox(height: 12),
@@ -582,6 +582,14 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
 /// judged or clipped - see RECORDED_MODES), so there is nothing to consent to,
 /// and dropping it also removes the extra screen people were backing out of.
 Future<void> startChallengeMatch(BuildContext context, String matchId) async {
+  // Recording consent is BACK for friend battles (2026-11-09): they are
+  // recorded again so strangers can judge them, so the same distinct
+  // affirmative step every recorded battle has. No live-watch opt-in -
+  // friend battles aren't spectatable.
+  final consented = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(builder: (_) => const RecordingConsentScreen()),
+  );
+  if (consented != true || !context.mounted) return;
   await Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => PreMatchScreen(mode: 'friend', challengeMatchId: matchId),

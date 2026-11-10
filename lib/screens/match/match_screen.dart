@@ -2065,7 +2065,8 @@ class _MatchScreenState extends State<MatchScreen>
                 _opponentLeft
                     ? 'They bailed on the battle. No harm - want to run it '
                           'back?'
-                    : 'Good battle. Run it back?',
+                    : 'Good battle. The crowd judges it now, and we will tell '
+                          'you both who won. Run it back?',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),

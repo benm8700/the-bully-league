@@ -61,7 +61,10 @@ Interrupt, Instant Interrupt, Tomato, Fart (opponent's phone only, not recorded)
 - **FUTURE IDEA (2026-11-07, developer, not a priority): Face-Off prompts written by the judges, or even a live audience**, instead of only the stock `config/improvPrompts` list. Face-Off only, not regular roast battles. Came out of a "Judges' Lounge" brainstorm (a daily one-liner prompt game for when the Vote tab is empty), where the best audience-written prompts could feed Face-Off. Not designed. Things to solve when it's picked up: prompts are user-written text, so they need moderation, a report path and Apple's 24h report SLA; prompts must target situations or made-up people, never real users; and someone (founder or a vote) has to pick which prompts go into a battle.
 
 ### Roast a friend (mode `friend`)
-Same chess-clock format against a specific person, challenged by username. **Private**: not recorded, not voted on, no rating, no points. Rematch button at the end. Challenges expire after 1 hour; max 3 outstanding.
+Same chess-clock format against a specific person, challenged by phone number (text invite) or username. **Since 2026-11-09: recorded and crowd-judged** (recording consent shown first; in the Judge feed; both get a verdict push), but **no rating, no points, no emoji fame, never captioned, never in Post Studio**. Clip: **subscribers/trial only** (open to all while monetization is off). Rematch button at the end. Challenges expire after 1 hour; max 3 outstanding.
+
+### Home (2026-11-09)
+Three big doors: **ROAST A FRIEND** · **RANKED** (opens Roast battle / Face-Off only while `config/faceOff.enabled`) · **JUDGE**, then a slim **MAIN STAGE** row. The intro/selfie nudge sits below and only talks about ranked. `FirstWinOfferBanner` ($5 first ranked win) shows near the top only while `config/firstWinReward.enabled`.
 
 ### Practice
 Solo practice only (local camera, no channel, no recording), reached from "Warm up while you wait" in the queue and the entitlement-blocked sheet. No practice-vs-stranger entry point on Home.

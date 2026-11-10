@@ -25,7 +25,12 @@ const {stopRecording, writeRecordingState} = require("./cloudRecording");
 // judged, not clippable - a casual structured scrimmage. That also removes the
 // recording-consent step (nothing is recorded) and simplifies the flow. If a
 // crowd verdict or a clip is wanted, that is what ranked is for.
-const RECORDED_MODES = ["ranked", "tournament", "improv"];
+// FRIEND IS BACK (2026-11-09, developer's call): friend battles are recorded
+// again so the crowd can judge them - a neutral verdict settles the argument
+// between two friends. They still never move rating, pay no points, earn no
+// emoji fame and never enter Post Studio/captions/discovery; the clip goes
+// only to a SUBSCRIBER who played in it (clipGrants.js).
+const RECORDED_MODES = ["ranked", "tournament", "improv", "friend"];
 
 /**
  * Real matchmaking (Build Order step 4's missing half). Replaces the

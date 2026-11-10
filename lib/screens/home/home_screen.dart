@@ -1374,8 +1374,8 @@ class _PlayWatchDoors extends StatelessWidget {
                   'username. If they are not on the app yet, your challenge is '
                   'waiting when they join. No intro video or selfie needed.',
               highlight:
-                  'Just for fun: it never touches your rank. Want it to count? '
-                  'Play ranked.',
+                  'Strangers judge it and settle who won. It never touches '
+                  'your rank - want it to count? Play ranked.',
               accent: _kFriendGreen,
             ),
           ),

@@ -24,7 +24,8 @@ const {sendToUsers} = require("./notifications");
 
 // Recorded, postable modes - mirrors the Post Studio's RECORDED_MODES.
 const RECORDED_MODES = new Set([
-  "ranked", "tournament", "friend", "elite", "improv", "mainstage",
+  // No "friend": judged, but never posted publicly (2026-11-09).
+  "ranked", "tournament", "elite", "improv", "mainstage",
 ]);
 
 // At or after this Pacific hour, once a day. Not load-bearing - just "morning".

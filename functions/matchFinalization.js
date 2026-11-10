@@ -117,6 +117,47 @@ function objectionWindowEndMs(match) {
  * trigger only (see index.js) - production finalization always waits for
  * the real window via the scheduled trigger.
  */
+/**
+ * Tells both friends who the crowd picked. The one push a friend battle sends
+ * after it ends - the verdict is the reason they played. Best-effort.
+ */
+async function notifyFriendVerdict(db, matchId, match, winnerId) {
+  try {
+    const [a, b] = await Promise.all([
+      db.collection("users").doc(match.player1Id).get(),
+      db.collection("users").doc(match.player2Id).get(),
+    ]);
+    const name = (snap) => snap.data()?.username ?? "your friend";
+    const {sendToUsers} = require("./notifications");
+    const send = (uid, title, body) => sendToUsers([uid], {
+      title, body, category: "match_found",
+      data: {kind: "friend_verdict", matchId},
+    });
+    if (!winnerId) {
+      await Promise.all([
+        send(match.player1Id, "The crowd called it a tie",
+            `You and ${name(b)} split the judges. Rematch?`),
+        send(match.player2Id, "The crowd called it a tie",
+            `You and ${name(a)} split the judges. Rematch?`),
+      ]);
+      return;
+    }
+    const p1Won = winnerId === match.player1Id;
+    await Promise.all([
+      send(match.player1Id,
+          p1Won ? "🏆 The crowd picked you" : "The crowd picked " + name(b),
+          p1Won ? `You beat ${name(b)}. Go remind them.` :
+            `${name(b)} won this one. Rematch?`),
+      send(match.player2Id,
+          !p1Won ? "🏆 The crowd picked you" : "The crowd picked " + name(a),
+          !p1Won ? `You beat ${name(a)}. Go remind them.` :
+            `${name(a)} won this one. Rematch?`),
+    ]);
+  } catch (e) {
+    console.error(`friend verdict push for ${matchId} failed:`, e.message);
+  }
+}
+
 async function finalizeMatch(matchId, {force = false} = {}) {
   const db = getFirestore();
   const matchRef = db.collection("matches").doc(matchId);
@@ -141,12 +182,9 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     return {skipped: "not-completed"};
   }
 
-  if (match.mode === "exhibition" || match.mode === "friend") {
-    // Neither mode is judged: exhibition is a stakes-free warm-up, and a
-    // FRIEND battle is now a PRIVATE scrimmage (reversed 2026-10-14 - not
-    // recorded, not judged, not clippable, because a staged friend clip is a
-    // bad look; see RECORDED_MODES). Mark finalized so the sweep stops
-    // reconsidering it; there is nothing to tally and no rating/points move.
+  if (match.mode === "exhibition") {
+    // Exhibition is never judged: a stakes-free warm-up. Mark finalized so the
+    // sweep stops reconsidering it; there is nothing to tally.
     await matchRef.update({voteFinalized: true, winnerId: null});
     return {skipped: match.mode};
   }
@@ -215,9 +253,21 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     judgeWeight = totalWeight;
   }
 
-  // (Friend battles short-circuit at the top alongside exhibition now - they
-  // are private scrimmages, not judged. The old "friend gets a real verdict"
-  // branch was removed when friend battles were made private, 2026-10-14.)
+  // FRIEND BATTLES GET A VERDICT AND NOTHING ELSE (2026-11-09). The crowd
+  // settles who was funnier; that is the whole payoff. No rating, no win
+  // points, no quest, no first-win money, no GOAT/rank sync - you pick your
+  // own opponent, so anything of value would be farmable.
+  if (match.mode === "friend") {
+    await matchRef.update({
+      voteFinalized: true,
+      winnerId: winnerId ?? null,
+      roundsWon: roundsWon ?? null,
+      player1FinalWeight: player1Weight,
+      player2FinalWeight: player2Weight,
+    });
+    await notifyFriendVerdict(db, matchId, match, winnerId);
+    return {winnerId, player1Weight, player2Weight, friend: true};
+  }
 
   const player1Ref = db.collection("users").doc(match.player1Id);
   const player2Ref = db.collection("users").doc(match.player2Id);

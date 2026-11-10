@@ -386,6 +386,8 @@ async function postStudioClips(): Promise<{
     return (
       x.status === "completed" &&
       RECORDED_MODES.has(String(x.mode)) &&
+      // Friend battles are judged but never posted publicly (2026-11-09).
+      x.mode !== "friend" &&
       x.voteFinalized === true &&
       Object.keys(rends).length > 0 &&
       ps.status !== "posted" &&

@@ -113,7 +113,8 @@ function hasUsedFreeClip(user) {
  * PURE, so the whole policy is testable without Firestore, ffmpeg, or
  * spending a penny on transcription.
  */
-function resolveClipGrant({user, match, uid, source, price, entitlement}) {
+function resolveClipGrant({user, match, uid, source, price, entitlement,
+  enforced = true}) {
   if (!SOURCES.includes(source)) {
     return {allowed: false, reason: DENY.unknownSource,
       message: "Unknown purchase method."};
@@ -142,6 +143,21 @@ function resolveClipGrant({user, match, uid, source, price, entitlement}) {
     // twice, and "you already have this" is the honest answer.
     return {allowed: false, reason: DENY.alreadyGranted, cost: 0,
       message: "This clip is already yours."};
+  }
+
+  // FRIEND BATTLES: SUBSCRIBERS ONLY (developer's call, 2026-11-09). No free
+  // clip, no points, no purchase - keeping your friend-battle clip is a
+  // reason to subscribe. Trial counts. While payments are switched off
+  // (monetization not enforced, e.g. the beta) it is open to everyone, the
+  // same as every other paid perk. Granted as "subscription" so it never
+  // burns the one free ranked clip.
+  if (match.mode === "friend") {
+    const included = enforced === false ||
+      entitlement?.state === "subscriber" || entitlement?.state === "trial";
+    return included ?
+      {allowed: true, cost: 0, source: "subscription"} :
+      {allowed: false, reason: DENY.subscriptionRequired,
+        message: "Keeping friend-battle clips comes with a subscription."};
   }
 
   if (source === "subscription") {
@@ -316,6 +332,7 @@ async function requestMatchClip(auth, data) {
 
   let verdict = resolveClipGrant({
     user, match, uid, source: source ?? "subscription", price, entitlement,
+    enforced: monetization.enabled === true,
   });
 
   // Claimed in a transaction rather than trusted from the read above,

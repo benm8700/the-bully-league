@@ -278,12 +278,40 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
   /// Friend battles have no queue, so an opponent who vanished just means the
   /// battle is off - go Home rather than to a queue that does not exist.
   void _leaveToHome() {
-    if (_navigated || _endedReason != null) return;
+    if (_endedReason != null) return;
+    // A previous leave that never actually left (see _stillShowing) must not
+    // lock the screen: only bail if we are genuinely gone.
+    if (_navigated && !_stillShowing) return;
     _navigated = true;
     _ticker?.cancel();
     _matchSub?.cancel();
-    Navigator.of(context).popUntil((r) => r.isFirst);
+    final nav = Navigator.of(context);
+    try {
+      nav.popUntil((r) => r.isFirst);
+    } catch (e) {
+      debugPrint('bio reveal leave failed: $e');
+    }
+    // SAFETY NET (Moto, 2026-11-10): after Leave the match was cancelled on
+    // the server but this screen stayed up, frozen, with the X and Back dead -
+    // every exit path returned early on `_navigated`. If we are somehow still
+    // the top screen a frame later, pop just this route.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_stillShowing) return;
+      try {
+        nav.pop();
+      } catch (e) {
+        debugPrint('bio reveal fallback pop failed: $e');
+        setState(() {
+          _navigated = false;
+          _endedReason = 'This match ended before it started.';
+        });
+      }
+    });
   }
+
+  /// Whether this screen is still the one the player is looking at.
+  bool get _stillShowing =>
+      mounted && (ModalRoute.of(context)?.isCurrent ?? false);
 
   void _startTicker() {
     _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -362,7 +390,11 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
   }
 
   void _endMatch(String reason) {
-    if (_navigated || _endedReason != null) return;
+    if (_endedReason != null) return;
+    // Normally a navigation already happened; but if it never took effect and
+    // we are still on screen, show the ended state so Back/X work.
+    if (_navigated && !_stillShowing) return;
+    _navigated = false;
     _ticker?.cancel();
     setState(() => _endedReason = reason);
   }
@@ -430,7 +462,12 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
   /// Safe in any state here - the battle hasn't started, so no penalty - and
   /// it ends the match for BOTH players so the opponent isn't left waiting.
   Future<void> _confirmCancel() async {
-    if (_navigated || _endedReason != null) return;
+    if (_endedReason != null) return;
+    if (_navigated) {
+      // Already left once but still showing - just leave, no second question.
+      if (_stillShowing) _leaveToHome();
+      return;
+    }
     final leave = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
