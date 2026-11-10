@@ -72,6 +72,16 @@ class _MyBattlesScreenState extends State<MyBattlesScreen> {
     }
   }
 
+  /// Re-fetch the list in place, e.g. right after the clip sheet closes so
+  /// "Get clip" turns into "Clip coming..." without switching tabs
+  /// (developer, 2026-11-09). Block body on purpose - see didUpdateWidget.
+  void _refresh() {
+    if (_uid == null || !mounted) return;
+    setState(() {
+      _matchesFuture = _myMatches(_uid!);
+    });
+  }
+
   /// Win / loss / tie / still-judging, from the current user's perspective.
   bool _isWin(Map<String, dynamic> m) =>
       m['voteFinalized'] == true && m['winnerId'] == _uid;
@@ -153,7 +163,9 @@ class _MyBattlesScreenState extends State<MyBattlesScreen> {
     return FutureBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
       future: _matchesFuture,
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
+        // Spinner only on the FIRST load; a refresh keeps showing the old
+        // list until the new one lands, so it never flickers to a spinner.
+        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snap.hasError) {
@@ -201,6 +213,7 @@ class _MyBattlesScreenState extends State<MyBattlesScreen> {
             uid: uid,
             matchId: docs[index].id,
             match: docs[index].data(),
+            onChanged: _refresh,
           ),
         );
       },
@@ -454,11 +467,15 @@ class _BattleCard extends StatelessWidget {
     required this.uid,
     required this.matchId,
     required this.match,
+    required this.onChanged,
   });
 
   final String uid;
   final String matchId;
   final Map<String, dynamic> match;
+
+  /// Called after the clip sheet closes, so the list refreshes in place.
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -954,7 +971,8 @@ class _BattleCard extends StatelessWidget {
         const Spacer(),
         if (showClip)
           FilledButton.tonalIcon(
-            onPressed: () => GetClipSheet.show(context, matchId),
+            onPressed: () =>
+                GetClipSheet.show(context, matchId).then((_) => onChanged()),
             icon: const Icon(Icons.ios_share, size: 15),
             label: Text(clipLabel ?? (won ? 'Share win' : 'Get clip')),
             style: FilledButton.styleFrom(
@@ -1072,7 +1090,7 @@ class _BattleCard extends StatelessWidget {
                 title: const Text('Get your clip'),
                 onTap: () {
                   Navigator.pop(sheetCtx);
-                  GetClipSheet.show(context, matchId);
+                  GetClipSheet.show(context, matchId).then((_) => onChanged());
                 },
               ),
             if (mode != 'exhibition' &&

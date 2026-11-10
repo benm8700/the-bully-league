@@ -346,6 +346,14 @@ async function sweepRenders({limit = RENDERS_PER_RUN} = {}) {
       }, {merge: true});
       await renderMatchHighlight(matchId, {captions: false});
       results.rendered.push(matchId);
+      // A player already asked for this clip (paid/free grant): caption it in
+      // THIS run instead of waiting for the next 5-minute sweep (developer,
+      // 2026-11-09 - "clip coming" sat ~10 min). Goes to the front of the
+      // caption queue.
+      const fresh = (await db.collection("matches").doc(matchId).get()).data();
+      if (fresh && captionsForced(fresh) && !caption.includes(matchId)) {
+        caption.unshift(matchId);
+      }
     } catch (e) {
       results.failed.push({matchId, stage: "render", error: e.message});
       console.error(`auto-render failed for ${matchId}:`, e.message);
@@ -355,7 +363,11 @@ async function sweepRenders({limit = RENDERS_PER_RUN} = {}) {
   // Captioning only gets whatever budget the first stage didn't use, so a
   // backlog of unwatchable matches always takes priority over polishing
   // ones that are already watchable.
-  const captionBudget = Math.max(0, limit - results.rendered.length);
+  // A clip a player just asked for (promoted above) always gets at least
+  // one slot, so a busy render run never pushes it to the next sweep.
+  const promoted = caption.length > forced.length;
+  const captionBudget = Math.max(promoted ? 1 : 0,
+      limit - results.rendered.length);
   for (const matchId of caption.slice(0, captionBudget)) {
     try {
       await db.collection("matches").doc(matchId).set({

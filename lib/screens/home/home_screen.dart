@@ -92,12 +92,29 @@ class HomeScreen extends StatelessWidget {
             // restoring the tagline is a one-line asset-path change. Sized by
             // height only (BoxFit.contain preserves the aspect ratio - never
             // stretched, cropped or recoloured), kept compact.
-            toolbarHeight: 72,
+            //
+            // The pink neon CROWN (cut from the app icon) now sits centred
+            // above the words, matching the clip watermark (developer,
+            // 2026-11-09: "1C"). The bar grew 72 -> 92 and the words shrank
+            // 44 -> 40 to make room; nothing else on Home moved besides
+            // sliding down 20pt.
+            toolbarHeight: 92,
             centerTitle: true,
-            title: Image.asset(
-              'assets/branding/bully_league_wordmark.png',
-              height: 44,
-              fit: BoxFit.contain,
+            title: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/branding/bully_league_crown.png',
+                  height: 44,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 2),
+                Image.asset(
+                  'assets/branding/bully_league_wordmark.png',
+                  height: 40,
+                  fit: BoxFit.contain,
+                ),
+              ],
             ),
             actions: [
               // The bell shows notification settings (no badge count).

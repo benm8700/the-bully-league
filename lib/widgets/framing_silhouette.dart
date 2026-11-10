@@ -19,12 +19,43 @@ class FramingSilhouette extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const CustomPaint(
-      painter: _FramingPainter(),
-      child: SizedBox.expand(),
+    // NEON CROWN FACE (developer, 2026-11-09): the brand's pink neon crown
+    // floats where the top of your head goes, and the X-eyed grin is drawn in
+    // the same neon - "put your head under the crown" is the framing cue.
+    // Geometry mirrors _FramingPainter's invisible head circle.
+    return LayoutBuilder(
+      builder: (context, box) {
+        final w = box.maxWidth;
+        final h = box.maxHeight;
+        final r = w * _headR;
+        final crownW = r * 1.1;
+        final headTop = h * _headCy - r;
+        return Stack(
+          children: [
+            const Positioned.fill(
+              child: CustomPaint(painter: _FramingPainter()),
+            ),
+            Positioned(
+              left: w * 0.5 - crownW / 2,
+              width: crownW,
+              // Crown's bottom band sits just above the head top.
+              bottom: h - headTop + r * 0.08,
+              child: Image.asset(
+                'assets/branding/bully_league_crown.png',
+                fit: BoxFit.contain,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
+
+/// Invisible head circle: centre (0.5w, _headCy*h), radius _headR*w.
+const _headCy = 0.40;
+const _headR = 0.24;
+const _neonPink = Color(0xFFFF2BD6);
 
 class _FramingPainter extends CustomPainter {
   const _FramingPainter();
@@ -35,16 +66,25 @@ class _FramingPainter extends CustomPainter {
     final h = size.height;
     Offset o(double fx, double fy) => Offset(w * fx, h * fy);
 
+    // Neon tube look, matching the crown: a wide blurred pink glow, a pink
+    // tube, and a thin white-hot core. Legible on bright and dark feeds.
     final under = Paint()
-      ..color = Colors.black.withValues(alpha: 0.35)
+      ..color = _neonPink.withValues(alpha: 0.8)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 5
+      ..strokeWidth = 9
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    final tube = Paint()
+      ..color = _neonPink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.5
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     final line = Paint()
-      ..color = Colors.white.withValues(alpha: 0.85)
+      ..color = Colors.white.withValues(alpha: 0.95)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
+      ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
@@ -53,8 +93,8 @@ class _FramingPainter extends CustomPainter {
     // screen, even though the ring itself is no longer drawn. The smaller
     // radius still nudges people to sit BACK (head-and-shoulders) rather than
     // jamming their face into the lens.
-    final c = o(0.50, 0.30);
-    final r = w * 0.24;
+    final c = o(0.50, _headCy);
+    final r = w * _headR;
 
     // X eyes: two short crossing strokes each, up and out from the centre.
     final eyeDx = r * 0.42;
@@ -82,6 +122,7 @@ class _FramingPainter extends CustomPainter {
     // The X eyes and the grin as strokes, dark halo under white line. No ring.
     for (final p in [eyes, mouth]) {
       canvas.drawPath(p, under);
+      canvas.drawPath(p, tube);
       canvas.drawPath(p, line);
     }
   }

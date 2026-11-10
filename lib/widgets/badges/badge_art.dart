@@ -31,30 +31,41 @@ class BadgeArt extends StatelessWidget {
   ]);
 
   IconData get _icon => switch (def.metric) {
-        BadgeMetric.wins => Icons.local_fire_department,
-        BadgeMetric.battlesPlayed => Icons.sports_mma,
-        BadgeMetric.voteStreakDays => Icons.gavel,
-        // Everyday Basement voting uses a ballot icon, so the voting family
-        // (Voter/Juror/...) stays visually distinct from the prestigious Main
-        // Stage Judge badge, which keeps the ⚖️ scales of the real panel.
-        BadgeMetric.votesCast => Icons.how_to_vote,
-        // Never reached for glyph-medallion badges (emoji awards + the 🏆
-        // champion / 🥈 runner-up render their glyph), but the switch must be
-        // exhaustive.
-        BadgeMetric.tournamentWins ||
-        BadgeMetric.tournamentRunnerUps ||
-        BadgeMetric.editorsChoicePicks ||
-        BadgeMetric.topFire ||
-        BadgeMetric.topClever ||
-        BadgeMetric.topBoring ||
-        BadgeMetric.topTrash ||
-        BadgeMetric.topRedFlag ||
-        BadgeMetric.mainStagePanelsServed =>
-          Icons.emoji_events,
-      };
+    BadgeMetric.wins => Icons.local_fire_department,
+    BadgeMetric.battlesPlayed => Icons.sports_mma,
+    BadgeMetric.voteStreakDays => Icons.gavel,
+    // Everyday Basement voting uses a ballot icon, so the voting family
+    // (Voter/Juror/...) stays visually distinct from the prestigious Main
+    // Stage Judge badge, which keeps the ⚖️ scales of the real panel.
+    BadgeMetric.votesCast => Icons.how_to_vote,
+    // Never reached for glyph-medallion badges (emoji awards + the 🏆
+    // champion / 🥈 runner-up render their glyph), but the switch must be
+    // exhaustive.
+    BadgeMetric.tournamentWins ||
+    BadgeMetric.tournamentRunnerUps ||
+    BadgeMetric.editorsChoicePicks ||
+    BadgeMetric.topFire ||
+    BadgeMetric.topClever ||
+    BadgeMetric.topBoring ||
+    BadgeMetric.topTrash ||
+    BadgeMetric.topRedFlag ||
+    BadgeMetric.mainStagePanelsServed => Icons.emoji_events,
+  };
 
   @override
   Widget build(BuildContext context) {
+    // Always a [size] square, whatever the parent hands down. The badge popup
+    // puts this in AlertDialog's icon slot, which stretches its child to the
+    // dialog's full width; the painted medals sized themselves off that width
+    // and spilled out of the dialog (seen 2026-11-09 on the Voter badge).
+    return Align(
+      widthFactor: 1,
+      heightFactor: 1,
+      child: SizedBox.square(dimension: size, child: _art()),
+    );
+  }
+
+  Widget _art() {
     // Emoji superlative awards have no PNG - they render the glyph in a
     // medallion (gold for the chase emojis, tarnished grey for the negatives).
     if (def.emoji != null) {
@@ -65,7 +76,11 @@ class BadgeArt extends StatelessWidget {
           style: TextStyle(
             fontSize: size * 0.4,
             shadows: const [
-              Shadow(color: Color(0x99000000), blurRadius: 3, offset: Offset(0, 1)),
+              Shadow(
+                color: Color(0x99000000),
+                blurRadius: 3,
+                offset: Offset(0, 1),
+              ),
             ],
           ),
         ),
@@ -94,7 +109,8 @@ class BadgeArt extends StatelessWidget {
   }
 
   _MedalFinish _finishForEmoji(String emoji) {
-    final gold = emoji == '🔥' ||
+    final gold =
+        emoji == '🔥' ||
         emoji == '🧠' ||
         emoji == '🏆' ||
         emoji == '⭐' ||
@@ -103,8 +119,8 @@ class BadgeArt extends StatelessWidget {
     return gold
         ? _MedalFinish.gold
         : silver
-            ? _MedalFinish.silver
-            : _MedalFinish.tarnished;
+        ? _MedalFinish.silver
+        : _MedalFinish.tarnished;
   }
 
   Widget _fallbackMedallion() {
@@ -116,7 +132,11 @@ class BadgeArt extends StatelessWidget {
         color: const Color(0xFFFFE9A8),
         size: size * 0.4,
         shadows: const [
-          Shadow(color: Color(0x80000000), blurRadius: 4, offset: Offset(0, 1.5)),
+          Shadow(
+            color: Color(0x80000000),
+            blurRadius: 4,
+            offset: Offset(0, 1.5),
+          ),
         ],
       ),
       _MedalFinish.gold,
@@ -168,24 +188,24 @@ class _MedalPainter extends CustomPainter {
 
   // [dark, bright, mid] for the swept rim; [light, dark] for the recess.
   ({List<Color> rim, List<Color> recess}) get _palette => switch (finish) {
-        _MedalFinish.gold => (
-            rim: const [Color(0xFF6B4E10), Color(0xFFFFEFB8), Color(0xFFEBB82E)],
-            recess: const [Color(0xFF4A3A16), Color(0xFF140E03)],
-          ),
-        _MedalFinish.silver => (
-            rim: const [Color(0xFF596169), Color(0xFFF4F8FC), Color(0xFFC9D2DC)],
-            recess: const [Color(0xFF333941), Color(0xFF0F1216)],
-          ),
-        _MedalFinish.tarnished => (
-            rim: const [Color(0xFF3A3D42), Color(0xFFC2C8D0), Color(0xFF9198A3)],
-            recess: const [Color(0xFF2B2D31), Color(0xFF101113)],
-          ),
-      };
+    _MedalFinish.gold => (
+      rim: const [Color(0xFF6B4E10), Color(0xFFFFEFB8), Color(0xFFEBB82E)],
+      recess: const [Color(0xFF4A3A16), Color(0xFF140E03)],
+    ),
+    _MedalFinish.silver => (
+      rim: const [Color(0xFF596169), Color(0xFFF4F8FC), Color(0xFFC9D2DC)],
+      recess: const [Color(0xFF333941), Color(0xFF0F1216)],
+    ),
+    _MedalFinish.tarnished => (
+      rim: const [Color(0xFF3A3D42), Color(0xFFC2C8D0), Color(0xFF9198A3)],
+      recess: const [Color(0xFF2B2D31), Color(0xFF101113)],
+    ),
+  };
 
   @override
   void paint(Canvas canvas, Size size) {
     final c = Offset(size.width / 2, size.height / 2);
-    final r = size.width / 2;
+    final r = size.shortestSide / 2;
     final rect = Rect.fromCircle(center: c, radius: r);
     final p = _palette;
     final dark = p.rim[0], bright = p.rim[1], mid = p.rim[2];

@@ -114,58 +114,68 @@ class _MainShellState extends State<MainShell> {
       const LeaderboardScreen(embedded: true),
       ProfileScreen(embedded: true, isActiveTab: _index == _profileTabIndex),
     ];
-    return Scaffold(
-      // Above the tabs rather than on Home, deliberately: an outage
-      // affects every screen, and someone stuck on the Judge tab watching
-      // nothing load is exactly who needs to be told it is us and not
-      // them. It renders nothing at all when there is no notice, so it
-      // costs a zero-height widget the rest of the time.
-      body: Column(
-        children: [
-          const ServiceStatusBanner(),
-          // Pulls key Main Stage people (a finalist whose battle is up, a judge
-          // while a battle is on stage) in from any tab - the in-app half of
-          // the Main Stage pushes. Renders nothing for everyone else.
-          const MainStageAlertBar(),
-          // The Sixes and Sevens live cue (WindowLiveBar) is REMOVED for now
-          // (developer's call, 2026-09-14) - the red top bar during the window
-          // was getting in the way of Home design review. The widget still
-          // exists; re-add `const WindowLiveBar(),` here to restore it.
-          Expanded(
-            child: IndexedStack(index: _index, children: screens),
-          ),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.thumb_up_outlined),
-            selectedIcon: Icon(Icons.thumb_up),
-            label: 'Vote',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.emoji_events_outlined),
-            selectedIcon: Icon(Icons.emoji_events),
-            label: 'My Battles',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.leaderboard_outlined),
-            selectedIcon: Icon(Icons.leaderboard),
-            label: 'Ranks',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+    // ANDROID BACK (developer, 2026-11-09): with no handler, Back on any tab
+    // closed the whole app - it looked like a crash right after closing the
+    // clip sheet on My Battles. Now Back on another tab returns to Home, and
+    // only Back on Home leaves the app. (iPhone has no Back button.)
+    return PopScope(
+      canPop: _index == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _index != 0) setState(() => _index = 0);
+      },
+      child: Scaffold(
+        // Above the tabs rather than on Home, deliberately: an outage
+        // affects every screen, and someone stuck on the Judge tab watching
+        // nothing load is exactly who needs to be told it is us and not
+        // them. It renders nothing at all when there is no notice, so it
+        // costs a zero-height widget the rest of the time.
+        body: Column(
+          children: [
+            const ServiceStatusBanner(),
+            // Pulls key Main Stage people (a finalist whose battle is up, a judge
+            // while a battle is on stage) in from any tab - the in-app half of
+            // the Main Stage pushes. Renders nothing for everyone else.
+            const MainStageAlertBar(),
+            // The Sixes and Sevens live cue (WindowLiveBar) is REMOVED for now
+            // (developer's call, 2026-09-14) - the red top bar during the window
+            // was getting in the way of Home design review. The widget still
+            // exists; re-add `const WindowLiveBar(),` here to restore it.
+            Expanded(
+              child: IndexedStack(index: _index, children: screens),
+            ),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (i) => setState(() => _index = i),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.thumb_up_outlined),
+              selectedIcon: Icon(Icons.thumb_up),
+              label: 'Vote',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.emoji_events_outlined),
+              selectedIcon: Icon(Icons.emoji_events),
+              label: 'My Battles',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.leaderboard_outlined),
+              selectedIcon: Icon(Icons.leaderboard),
+              label: 'Ranks',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -93,7 +93,13 @@ const OUTPUT_FPS = 30;
  * T" report). So the X inset clears that crop band, while the Y inset stays
  * small so it hugs the bottom rather than riding up into frame.
  */
-const WATERMARK_LOGO_PATH = path.join(__dirname, "assets", "watermark.png");
+// The pink neon CROWN (cut from the app icon) stacked above the wordmark
+// (developer's pick "1C", 2026-11-09: "slams the branding right there in your
+// face"). The PNG is the wordmark's own width, so WIDTH_RATIO keeps the words
+// the same size and the crown adds height above them. The plain wordmark is
+// still at assets/watermark.png if this is ever reverted.
+const WATERMARK_LOGO_PATH =
+  path.join(__dirname, "assets", "watermark_crown.png");
 // 0.17 -> 0.25 (developer, 2026-11-08: watching a finished clip they said it
 // "is not watermarked" - it was, but too small to register). Every shared
 // clip is free advertising, so the mark has to be noticed.
@@ -112,8 +118,23 @@ const WATERMARK_LOGO_MARGIN_Y_RATIO = 0.02;
 // exactly where clips get watched. The top inset is a fraction of canvas
 // HEIGHT, deep enough to clear the platforms' top bar (For You / Following,
 // Reels header) on a 9:16 post.
-const WATERMARK_LOGO_TOP_RATIO = 0.07;
+// 0.07 -> 0.03 with the crown (developer, 2026-11-09: "a little bit
+// higher"). The inset now measures to the TOP OF THE CROWN, so the words sit
+// lower than this. Watch posted clips: TikTok's top bar (For You / search)
+// can overlap a mark this high.
+const WATERMARK_LOGO_TOP_RATIO = 0.03;
 const WATERMARK_LOGO_ALPHA = 0.9;
+
+/**
+ * AUDIO LEVELLING (developer, 2026-11-09: "the audio is extremely faint" -
+ * the iPhone's own mic track came in ~12 dB quieter one battle than the
+ * last, and the renderer passed it through untouched). dynaudnorm evens out
+ * speech frame by frame, so a player far from their phone and one close to
+ * it end up at similar loudness, and a quiet battle comes up to a normal
+ * phone-video level. The gain is capped (m=12, about +21 dB) so dead air is
+ * not pumped into hiss, and alimiter stops any boosted shout from clipping.
+ */
+const AUDIO_LEVELLER = "dynaudnorm=f=200:g=11:p=0.9:m=12,alimiter=limit=0.95";
 // Resolved once at load. If the asset ever fails to deploy, this is null and
 // renders proceed WITHOUT a watermark rather than failing outright - a missing
 // ffmpeg `-i` input would otherwise break every single render.
@@ -500,10 +521,11 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
     // desynchronises the clip, which is a worse outcome than not
     // trimming at all - a silent mismatch nobody would spot until
     // watching the finished file.
-    const mixOut = trim ? "[amixed]" : "[aout]";
     filters.push(`${audioLabels.join("")}amix=inputs=${audioLabels.length}:` +
-      `normalize=0:dropout_transition=0${mixOut}`);
-    if (trim) filters.push(`[amixed]${trim.audio}[aout]`);
+      `normalize=0:dropout_transition=0[amixed]`);
+    const preLevel = trim ? "[atrimmed]" : "[amixed]";
+    if (trim) filters.push(`[amixed]${trim.audio}[atrimmed]`);
+    filters.push(`${preLevel}${AUDIO_LEVELLER}[aout]`);
   }
 
   const args = [
@@ -769,10 +791,11 @@ function buildImprovFfmpegArgs(performers, localDir, outputPath, options = {}) {
     // Only one performer published anything - rename the single pair rather
     // than concat=n=1, which some ffmpeg builds reject.
     filters.push(`${concatParts[0]}null[ivcat]`);
-    filters.push(`${concatParts[1]}anull[aout]`);
+    filters.push(`${concatParts[1]}anull[iacat]`);
   } else {
-    filters.push(`${concatParts.join("")}concat=n=${segCount}:v=1:a=1[ivcat][aout]`);
+    filters.push(`${concatParts.join("")}concat=n=${segCount}:v=1:a=1[ivcat][iacat]`);
   }
+  filters.push(`[iacat]${AUDIO_LEVELLER}[aout]`);
 
   // Burned-in captions (posting-only), BEFORE the watermark so the logo sits
   // above the text. Cues are already placed on the concatenated timeline by
@@ -1457,6 +1480,7 @@ async function renderImprovHighlight(matchId, matchRef, bucket, {captions = fals
 }
 
 module.exports = {
+  AUDIO_LEVELLER,
   sumExtinfSeconds,
   renderMatchHighlight,
   renderImprovHighlight,

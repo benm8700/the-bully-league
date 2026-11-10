@@ -26,6 +26,14 @@ import '../home/main_shell.dart';
 import '../vote/my_battles_screen.dart';
 import 'pre_match_screen.dart';
 
+/// Seconds of the muted warmup that ARE recorded, so a clip opens on a short
+/// "here we go" beat instead of a 15s silent staredown.
+const _kRecordLeadSeconds = 3;
+
+/// After an early skip, how long the host waits for cloud recording to spin
+/// up before opening the engine (so the first roast is captured).
+const _kSkipRecordGraceSeconds = 2;
+
 /// Round/turn/timer state machine (Build Order step 4).
 ///
 /// This now runs on a REAL pairing: the match document, the Agora channel,
@@ -472,7 +480,9 @@ class _MatchScreenState extends State<MatchScreen>
       // declined server-side (CLAUDE.md's recording scope decision). No round
       // boundaries are captured - the chess-clock battle has no rounds, so the
       // highlight renders full-length.
-      unawaited(_matchmakingService.startRecording(widget.pairing.matchId));
+      //
+      // Recording now starts near the END of the muted warmup (inside
+      // _runHostSequence), not here - see _kRecordLeadSeconds.
       unawaited(_runHostSequence());
     }
   }
@@ -680,6 +690,20 @@ class _MatchScreenState extends State<MatchScreen>
   /// channel - a staredown that reveals who goes first, captured and shown to
   /// spectators, with no forced small talk.
   Future<void> _runHostSequence() async {
+    // RECORDING STARTS [_kRecordLeadSeconds] BEFORE THE WARMUP ENDS (developer,
+    // 2026-11-09): recording the whole muted 15s staredown made every clip
+    // open on dead air. Same pattern as Face-Off. If the warmup ends early
+    // (both skip, or the Skip Warm-Up ability), recording starts on the skip
+    // and the engine opens a beat later so the first line isn't lost while
+    // cloud recording spins up.
+    var recordingStarted = false;
+    void startRecordingOnce() {
+      if (recordingStarted) return;
+      recordingStarted = true;
+      unawaited(_matchmakingService.startRecording(widget.pairing.matchId));
+    }
+
+    var skippedEarly = false;
     if (_warmupSeconds > 0 && !_violationEnded) {
       await _videoCallService.sendMatchMessage({
         'type': 'warmup',
@@ -690,12 +714,26 @@ class _MatchScreenState extends State<MatchScreen>
       // (whichever comes first). The early end completes _warmupSkip from
       // _maybeEndWarmupEarly - so the engine still opens through THIS one path.
       _warmupSkip = Completer<void>();
+      final leadIn = _warmupSeconds - _kRecordLeadSeconds;
+      final recordTimer = Timer(
+        Duration(seconds: leadIn > 0 ? leadIn : 0),
+        startRecordingOnce,
+      );
       await Future.any<void>([
         Future<void>.delayed(Duration(seconds: _warmupSeconds)),
-        _warmupSkip!.future,
+        _warmupSkip!.future.then((_) => skippedEarly = true),
       ]);
+      recordTimer.cancel();
     }
     if (_violationEnded || !mounted) return;
+    final hadStarted = recordingStarted;
+    startRecordingOnce();
+    if (skippedEarly && !hadStarted) {
+      await Future<void>.delayed(
+        const Duration(seconds: _kSkipRecordGraceSeconds),
+      );
+      if (_violationEnded || !mounted) return;
+    }
     await _openEngine();
   }
 
