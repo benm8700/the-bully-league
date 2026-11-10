@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 void main() {
-  testWidgets('Signup opens on step 1 of 4: just the username',
+  testWidgets('Signup opens on the 18+ screen, then step 1 is the username',
       (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -16,12 +16,18 @@ void main() {
       ),
     );
 
+    // First: our own 18+ screen, before any form or native age prompt.
+    expect(find.text('You must be 18+'), findsOneWidget);
+    expect(find.text('Step 1 of 4'), findsNothing);
+    expect(find.widgetWithText(TextFormField, 'Username'), findsNothing);
+
+    await tester.tap(find.widgetWithText(FilledButton, "I'm 18 or older"));
+    await tester.pumpAndSettle();
+
     expect(find.text('Step 1 of 4'), findsOneWidget);
     expect(find.text('Pick your username'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Username'), findsOneWidget);
-    // Later steps are not on screen yet.
     expect(find.widgetWithText(TextFormField, 'Email'), findsNothing);
-    expect(find.widgetWithText(TextFormField, 'Password'), findsNothing);
     expect(find.widgetWithText(FilledButton, 'Next'), findsOneWidget);
   });
 }

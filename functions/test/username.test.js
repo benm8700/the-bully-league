@@ -231,4 +231,28 @@ test("extra blocked terms from config are honoured and normalised too", () => {
       "a config term must be matched through confusables like any other");
 });
 
+
+// --- Profile text + evasions (beta tester, 2026-11-09) ---------------------
+{
+  const {profileTextProblem, usernameProblem: up} = require("../username");
+  test("the single-g evasion is refused, the country is not", () => {
+    assert.ok(up("g4yn1g3r696") !== null);
+    assert.ok(profileTextProblem("Gay Nigger"));
+    for (const ok of ["Nigeria", "NigerianPrince", "Niger", "Proud of Niger"]) {
+      assert.ok(!profileTextProblem(ok), ok);
+    }
+  });
+  test("sexualising children is refused in profile text", () => {
+    assert.ok(profileTextProblem("I fuck little boys in the ass"));
+    assert.ok(profileTextProblem("12yo nudes"));
+    assert.ok(profileTextProblem("pedo bear"));
+  });
+  test("ordinary roast-app profile text still passes", () => {
+    for (const ok of ["fuck you", "your mom is a slut", "I roast kids for fun",
+      "Line cook from San Diego", "Despicable", "Raccoon"]) {
+      assert.ok(!profileTextProblem(ok), ok);
+    }
+  });
+}
+
 console.log(`username: ${passed} checks passed`);

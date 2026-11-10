@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../directory/player_search_screen.dart';
 import '../match/pre_match_screen.dart';
 
 /// Where an SMS invite points. Placeholder until a real store listing exists
@@ -38,6 +39,7 @@ class ChallengeScreen extends StatefulWidget {
 
 class _ChallengeScreenState extends State<ChallengeScreen> {
   final _controller = TextEditingController();
+  final _phoneController = TextEditingController();
   List<Map<String, dynamic>> _incoming = const [];
   List<Map<String, dynamic>> _outgoing = const [];
   List<Map<String, dynamic>> _accepted = const [];
@@ -68,6 +70,7 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
   void dispose() {
     _poll?.cancel();
     _controller.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -105,11 +108,14 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
       _cachedRecentTargets = recent; // instant on the next open
       if (!mounted) return;
       setState(() => _recent = recent);
-    } catch (_) {/* no recents, no chips */}
+    } catch (_) {
+      /* no recents, no chips */
+    }
   }
 
-  Future<void> _send() async {
-    final input = _controller.text.trim();
+  Future<void> _send([TextEditingController? from]) async {
+    final field = from ?? _controller;
+    final input = field.text.trim();
     if (input.isEmpty) return;
     // Phone vs username: a value that's (almost) all phone characters with
     // enough digits is treated as a number; anything else is a username.
@@ -125,24 +131,27 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
       final r = await FirebaseFunctions.instance
           .httpsCallable('challengeFriend')
           .call<Map<String, dynamic>>(
-              looksPhone ? {'phone': input} : {'username': input});
+            looksPhone ? {'phone': input} : {'username': input},
+          );
       if (!mounted) return;
       // No account on that number yet - fire an SMS invite; the challenge is
       // stashed and auto-delivered when they sign up with that number.
       if (r.data['needsInvite'] == true) {
         await _inviteBySms(
-            r.data['phone'] as String? ?? input,
-            r.data['fromUsername'] as String?);
+          r.data['phone'] as String? ?? input,
+          r.data['fromUsername'] as String?,
+        );
         if (!mounted) return;
-        _controller.clear();
+        field.clear();
         setState(() {
           _busy = false;
-          _sent = "No account on that number yet - we opened a text invite. "
+          _sent =
+              "No account on that number yet - we opened a text invite. "
               "When they join, your challenge is waiting.";
         });
         return;
       }
-      _controller.clear();
+      field.clear();
       setState(() {
         _busy = false;
         _sent = 'Challenge sent. They have an hour to answer.';
@@ -168,21 +177,28 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
     final scheme = Theme.of(context).colorScheme;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(
-        backgroundColor: scheme.primary,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-                child: Text(message,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold))),
-          ],
+      ..showSnackBar(
+        SnackBar(
+          backgroundColor: scheme.primary,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-      ));
+      );
   }
 
   /// Re-challenge a recent opponent by uid - one tap, no typing.
@@ -217,7 +233,8 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
     final who = (fromUsername != null && fromUsername.isNotEmpty)
         ? fromUsername
         : 'A friend';
-    final body = '$who challenged you to a roast battle on The Bully League! '
+    final body =
+        '$who challenged you to a roast battle on The Bully League! '
         'Download and your challenge will be waiting: $_appDownloadUrl';
     // iOS (the real release platform) and Android disagree on how a prefilled
     // body is attached to an sms: link: iOS/iMessage expects it after a `&`
@@ -228,7 +245,8 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
     // iOS build Just Works when it ships.)
     final sep = defaultTargetPlatform == TargetPlatform.iOS ? '&' : '?';
     final uri = Uri.parse(
-        'sms:${Uri.encodeComponent(phone)}${sep}body=${Uri.encodeComponent(body)}');
+      'sms:${Uri.encodeComponent(phone)}${sep}body=${Uri.encodeComponent(body)}',
+    );
     try {
       final ok = await launchUrl(uri);
       if (!ok && mounted) {
@@ -254,9 +272,9 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
       final r = await FirebaseFunctions.instance
           .httpsCallable('respondToChallenge')
           .call<Map<String, dynamic>>({
-        'challengeId': challengeId,
-        'accept': accept,
-      });
+            'challengeId': challengeId,
+            'accept': accept,
+          });
       if (!mounted) return;
       setState(() => _busy = false);
       if (accept && r.data['matchId'] != null) {
@@ -291,7 +309,18 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Roast a friend')),
+      appBar: AppBar(
+        title: const Text('Roast a friend'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Find a player',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PlayerSearchScreen()),
+            ),
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -304,98 +333,144 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                 if (_accepted.isNotEmpty) ...[
                   Text('Ready to battle', style: text.titleMedium),
                   const SizedBox(height: 8),
-                  ..._accepted.map((c) => Card(
-                        color: scheme.surfaceContainerHigh,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.sports_mma,
-                                      size: 18, color: scheme.primary),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                        '${c['toUsername']} accepted your challenge',
-                                        style: text.titleSmall),
+                  ..._accepted.map(
+                    (c) => Card(
+                      color: scheme.surfaceContainerHigh,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.sports_mma,
+                                  size: 18,
+                                  color: scheme.primary,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${c['toUsername']} accepted your challenge',
+                                    style: text.titleSmall,
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              // The hottest action on the screen - your friend
-                              // is ready NOW - so it is the one solid-pink CTA.
-                              FilledButton(
-                                onPressed: _busy
-                                    ? null
-                                    : () => _startAccepted(
-                                        c['matchId'] as String),
-                                child: const Text('Battle now'),
-                              ),
-                            ],
-                          ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            // The hottest action on the screen - your friend
+                            // is ready NOW - so it is the one solid-pink CTA.
+                            FilledButton(
+                              onPressed: _busy
+                                  ? null
+                                  : () =>
+                                        _startAccepted(c['matchId'] as String),
+                              child: const Text('Battle now'),
+                            ),
+                          ],
                         ),
-                      )),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 24),
                 ],
                 if (_incoming.isNotEmpty) ...[
                   Text('Waiting for you', style: text.titleMedium),
                   const SizedBox(height: 8),
-                  ..._incoming.map((c) => Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text('${c['fromUsername']} challenged you',
-                                  style: text.titleSmall),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    // Pink (the brand primary) - the green read
-                                    // as out of place here (developer's call).
-                                    child: FilledButton(
-                                      onPressed: _busy
-                                          ? null
-                                          : () => _respond(
-                                              c['challengeId'] as String, true),
-                                      child: const Text('Accept'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  TextButton(
+                  ..._incoming.map(
+                    (c) => Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              '${c['fromUsername']} challenged you',
+                              style: text.titleSmall,
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  // Pink (the brand primary) - the green read
+                                  // as out of place here (developer's call).
+                                  child: FilledButton(
                                     onPressed: _busy
                                         ? null
                                         : () => _respond(
-                                            c['challengeId'] as String, false),
-                                    child: const Text('No thanks'),
+                                            c['challengeId'] as String,
+                                            true,
+                                          ),
+                                    child: const Text('Accept'),
                                   ),
-                                ],
-                              ),
-                            ],
-                          ),
+                                ),
+                                const SizedBox(width: 8),
+                                TextButton(
+                                  onPressed: _busy
+                                      ? null
+                                      : () => _respond(
+                                          c['challengeId'] as String,
+                                          false,
+                                        ),
+                                  child: const Text('No thanks'),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      )),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 24),
                 ],
-                Text('Challenge someone', style: text.titleMedium),
+                // TEXT A FRIEND FIRST (2026-11-09): a text is how a new person
+                // joins - the number is stashed and the challenge is waiting
+                // when they sign up with it (phoneChallenges). If they already
+                // have an account on that number, it is just sent in-app.
+                Text('Text a friend', style: text.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  'Enter their number. If they are not on The Bully League yet, '
+                  'we open a text invite and your challenge is waiting when '
+                  'they join. If they are, they get it right away.',
+                  style: text.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.send,
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                  decoration: const InputDecoration(
+                    labelText: 'Phone number',
+                    prefixIcon: Icon(Icons.sms_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _send(_phoneController),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _busy ? null : () => _send(_phoneController),
+                  icon: const Icon(Icons.send),
+                  label: const Text('Text them a challenge'),
+                ),
+                const SizedBox(height: 28),
+                Text('Or challenge by username', style: text.titleMedium),
                 const SizedBox(height: 4),
                 Text(
                   // Friend battles are a PRIVATE scrimmage: it does not count,
                   // and it is NOT recorded, judged, or clipped - just you two.
-                  'Enter their username or phone number. A number that has no '
-                  'account yet gets a text invite - and your challenge is '
-                  'waiting when they join. Private, just for fun: it does not '
-                  'affect your rank and is never recorded or judged.',
+                  'Private, just for fun: it does not affect your rank and is '
+                  'never recorded or judged.',
                   style: text.bodySmall,
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _controller,
+                  textInputAction: TextInputAction.send,
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
                   decoration: const InputDecoration(
-                    labelText: 'Username or phone number',
+                    labelText: 'Username',
                     border: OutlineInputBorder(),
                   ),
                   onSubmitted: (_) => _send(),
@@ -414,9 +489,12 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
-                  Text(_error!,
-                      style: text.bodySmall
-                          ?.copyWith(color: Theme.of(context).colorScheme.error)),
+                  Text(
+                    _error!,
+                    style: text.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 ],
                 // Recent opponents - tap to re-challenge without retyping.
                 // BELOW the input on purpose: the list loads asynchronously,
@@ -430,14 +508,18 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                     spacing: 8,
                     runSpacing: 4,
                     children: _recent
-                        .map((p) => ActionChip(
-                              avatar: const Icon(Icons.replay, size: 16),
-                              label: Text(p['username'] as String? ?? 'Player'),
-                              onPressed: _busy
-                                  ? null
-                                  : () => _sendToUid(p['uid'] as String,
-                                      p['username'] as String? ?? 'them'),
-                            ))
+                        .map(
+                          (p) => ActionChip(
+                            avatar: const Icon(Icons.replay, size: 16),
+                            label: Text(p['username'] as String? ?? 'Player'),
+                            onPressed: _busy
+                                ? null
+                                : () => _sendToUid(
+                                    p['uid'] as String,
+                                    p['username'] as String? ?? 'them',
+                                  ),
+                          ),
+                        )
                         .toList(),
                   ),
                 ],
@@ -445,21 +527,32 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: scheme.primary.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(10),
-                      border:
-                          Border.all(color: scheme.primary.withValues(alpha: 0.5)),
+                      border: Border.all(
+                        color: scheme.primary.withValues(alpha: 0.5),
+                      ),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.check_circle, color: scheme.primary, size: 18),
+                        Icon(
+                          Icons.check_circle,
+                          color: scheme.primary,
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
-                            child: Text(_sent!,
-                                style: text.bodyMedium
-                                    ?.copyWith(color: scheme.primary))),
+                          child: Text(
+                            _sent!,
+                            style: text.bodyMedium?.copyWith(
+                              color: scheme.primary,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -468,12 +561,14 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   const SizedBox(height: 24),
                   Text('Sent', style: text.titleMedium),
                   const SizedBox(height: 8),
-                  ..._outgoing.map((c) => ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.hourglass_empty, size: 18),
-                        title: Text('Waiting on ${c['toUsername']}'),
-                      )),
+                  ..._outgoing.map(
+                    (c) => ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.hourglass_empty, size: 18),
+                      title: Text('Waiting on ${c['toUsername']}'),
+                    ),
+                  ),
                 ],
               ],
             ),

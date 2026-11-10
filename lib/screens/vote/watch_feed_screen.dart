@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/friendly_error.dart';
@@ -79,6 +81,57 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
     _livePoll = Timer.periodic(const Duration(seconds: 20), (_) {
       if (widget.isActiveTab) _loadLiveNow();
     });
+    if (widget.isActiveTab) _maybeShowIntro();
+  }
+
+  bool _introChecked = false;
+
+  /// One-time "how judging works" card the first time someone opens this
+  /// tab (beta tester, 2026-11-09: it looked like ONE video, and nothing
+  /// said what to do). Remembered on the user doc so it shows once per
+  /// account, not once per install.
+  Future<void> _maybeShowIntro() async {
+    if (_introChecked) return;
+    _introChecked = true;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final ref = FirebaseFirestore.instance.collection('users').doc(uid);
+    try {
+      final snap = await ref.get();
+      if (snap.data()?['judgeIntroSeenAt'] != null) return;
+    } catch (_) {
+      return;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('How judging works'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _IntroLine('🎬', 'Each clip is one battle. The TOP half is one '
+                'roaster, the BOTTOM half is the other.'),
+            _IntroLine('👀', 'Watch it - the vote unlocks once you have '
+                'seen most of the battle.'),
+            _IntroLine('👆', 'Tap the half of whoever won.'),
+            _IntroLine('🔥', 'Rate both roasters with an emoji, then Submit. '
+                'Swipe up for the next battle.'),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+    ref.set(
+      {'judgeIntroSeenAt': FieldValue.serverTimestamp()},
+      SetOptions(merge: true),
+    ).catchError((_) {});
   }
 
   Future<void> _loadLiveNow() async {
@@ -112,6 +165,7 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
     // spinner.
     if (widget.isActiveTab && !old.isActiveTab) {
       _load(quiet: true);
+      _maybeShowIntro();
     }
   }
 
@@ -595,4 +649,26 @@ class _LiveMatch {
   final String matchId;
   final String p1;
   final String p2;
+}
+
+/// One line of the first-visit judging explainer.
+class _IntroLine extends StatelessWidget {
+  const _IntroLine(this.emoji, this.text);
+  final String emoji;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text)),
+        ],
+      ),
+    );
+  }
 }

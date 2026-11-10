@@ -90,7 +90,7 @@ type PrizeItem = {
   winnerUsername: string | null;
   status: string;
   wonAtMs: number | null;
-  shipping: { name?: string; address?: string; phone?: string } | null;
+  shipping: { name?: string; address?: string; phone?: string; email?: string } | null;
 };
 
 type QueueItem = {
@@ -1023,6 +1023,7 @@ function Prizes({ metrics, act }: { metrics: Metrics; act: (p: Record<string, un
                   <span className="font-semibold text-white">{p.prize ?? "(prize)"}</span>
                   <span className="text-xs text-zinc-500">→ {p.winnerUsername ?? p.winnerUid}</span>
                   <span className={`rounded px-1.5 py-0.5 text-xs ${p.status === "claimed" ? "bg-green-500/15 text-green-300" : "bg-zinc-700/40 text-zinc-400"}`}>{p.status}</span>
+                  {p.prizeType === "gift_card" && <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs text-emerald-300">GIFT CARD — email it</span>}
                   {p.prizeType === "cash" && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">CASH — handle manually</span>}
                 </div>
                 <div className={`mt-1 text-xs ${stale ? "text-amber-300" : "text-zinc-500"}`}>{prizeAge(p.wonAtMs)}</div>
@@ -1032,6 +1033,7 @@ function Prizes({ metrics, act }: { metrics: Metrics; act: (p: Record<string, un
                     <div>{p.shipping.name}</div>
                     <div className="whitespace-pre-wrap">{p.shipping.address}</div>
                     {p.shipping.phone && <div>{p.shipping.phone}</div>}
+                    {p.shipping.email && <div>{p.shipping.email}</div>}
                   </div>
                 ) : (
                   <div className="mt-1 text-xs text-zinc-600">Waiting on the winner to submit shipping details…</div>

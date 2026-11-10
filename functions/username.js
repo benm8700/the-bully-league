@@ -250,6 +250,91 @@ function chatContentProblem(text) {
   return false;
 }
 
+
+/**
+ * "niger" with one g. Not in HATE_SUBSTRINGS because the country (Niger)
+ * and Nigeria/Nigerian/Nigerien contain it - but used inside a compound
+ * name it is the slur's best-known evasion: "g4yn1g3r696" normalised to
+ * "gayniger696" and got through (a beta tester proved it, 2026-11-09).
+ * Allowed only as the whole word "niger" or when followed by "ia"/"ie"
+ * (Nigeria, Nigerian, Nigerien).
+ */
+function hasNigerEvasion(text) {
+  const normalized = normalizeForMatch(text);
+  if (!normalized.includes("niger")) return false;
+  const tokens = new Set(tokensOf(text));
+  let from = 0;
+  for (;;) {
+    const i = normalized.indexOf("niger", from);
+    if (i < 0) return false;
+    const after = normalized.slice(i + 5);
+    const legit = after.startsWith("ia") || after.startsWith("ie") ||
+      (tokens.has("niger") && after === "");
+    if (!legit && !(tokens.has("niger") && normalized === "niger")) {
+      // The bare country name as its own word anywhere in a sentence.
+      const wordOnly = /(^|[^a-z])niger([^a-z]|$)/i.test(String(text)) &&
+        !/niger[0-9]/i.test(String(text).replace(/[^a-z0-9]/gi, ""));
+      if (!wordOnly) return true;
+    }
+    from = i + 5;
+  }
+}
+
+/** Words that refer to children. Checked per word after confusable mapping. */
+const MINOR_WORDS = new Set([
+  "kid", "kids", "kiddie", "kiddies", "child", "children", "childs",
+  "minor", "minors", "toddler", "toddlers", "preteen", "preteens",
+  "underage", "boy", "boys", "girl", "girls", "baby", "babies", "infant",
+  "schoolgirl", "schoolgirls", "schoolboy", "schoolboys", "loli", "lolis",
+  "shota", "teen", "teens", "tween", "tweens",
+]);
+/** Sexual words. Combined with a MINOR word, the text is refused. */
+const SEXUAL_WORDS = new Set([
+  "fuck", "fucks", "fucked", "fucking", "fucker", "rape", "rapes", "raped",
+  "raping", "molest", "molests", "molested", "molesting", "sex", "sexual",
+  "sexy", "ass", "asses", "anal", "dick", "dicks", "cock", "cocks", "pussy",
+  "cum", "cums", "suck", "sucks", "sucking", "blow", "naked", "nude", "nudes",
+  "horny", "porn", "touch", "touches", "touching", "finger", "fingering",
+  "bang", "banging", "screw", "screwing", "hump", "humping", "grope",
+  "groping", "penetrate", "orgasm", "jerk", "jerking",
+]);
+/** Terms refused on their own, wherever they appear. */
+const CHILD_SEXUAL_SUBSTRINGS = [
+  "childporn", "childrape", "pedophile", "pedophil", "paedophil", "pedo",
+  "paedo", "kiddieporn", "kiddiefiddler", "kidfiddler", "molestkid",
+  "molestchild", "underagesex", "jailbait", "lolicon", "shotacon",
+];
+
+/** True if the text sexualises children. "little boys" + "fuck" in one
+ * short bio is refused; a roast that only mentions kids is not. */
+function childSexualProblem(text) {
+  const normalized = normalizeForMatch(text);
+  for (const t of CHILD_SEXUAL_SUBSTRINGS) {
+    if (normalized.includes(t)) return true;
+  }
+  const words = String(text ?? "").toLowerCase().split(/[^a-z0-9@$!|+]+/)
+      .map((w) => normalizeForMatch(w)).filter(Boolean);
+  // Plain ages under 18 ("12yo", "12 year old") count as a minor word.
+  const hasAge = /(?<![0-9])(1[0-7]|[1-9])[\s_.-]*(yo|y\/o|yrs?|years?[\s_.-]*old)(?![a-z])/i.test(String(text ?? ""));
+  const hasMinor = hasAge || words.some((w) => MINOR_WORDS.has(w));
+  if (!hasMinor) return false;
+  return words.some((w) => SEXUAL_WORDS.has(w));
+}
+
+/**
+ * PROFILE TEXT (display name, bio / "ammo" line, profession, education,
+ * hometown, interests - anything an opponent reads on the bio reveal).
+ * Same free-speech stance as chat - swearing and insults are fine - but
+ * hate, the "niger" evasion and anything sexualising children are refused.
+ * These fields were written straight from the client with NO check until
+ * 2026-11-09, which is how a slur and a child-sex "joke" reached a profile.
+ */
+function profileTextProblem(text) {
+  if (typeof text !== "string" || !text.trim()) return false;
+  return chatContentProblem(text) || hasNigerEvasion(text) ||
+    childSexualProblem(text);
+}
+
 /**
  * The message deliberately does NOT say which rule was hit or quote the
  * matched term back. Naming the term teaches an evader exactly what to
@@ -257,7 +342,12 @@ function chatContentProblem(text) {
  * to them either way.
  */
 function usernameProblem(name, extra = []) {
-  return shapeProblem(name) ?? contentProblem(name, extra);
+  const shape = shapeProblem(name);
+  if (shape) return shape;
+  if (hasNigerEvasion(name) || childSexualProblem(name)) {
+    return "That username isn't available. Try another.";
+  }
+  return contentProblem(name, extra);
 }
 
 /** The uniqueness key. Case-insensitive, so "TheGoat" and "thegoat"
@@ -461,6 +551,9 @@ module.exports = {
   shapeProblem,
   contentProblem,
   chatContentProblem,
+  profileTextProblem,
+  hasNigerEvasion,
+  childSexualProblem,
   usernameProblem,
   usernameKey,
   cooldownUntilMs,

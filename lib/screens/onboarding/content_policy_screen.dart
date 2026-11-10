@@ -38,7 +38,6 @@ class ContentPolicyScreen extends StatefulWidget {
 
 class _ContentPolicyScreenState extends State<ContentPolicyScreen> {
   bool _submitting = false;
-  bool _declined = false;
 
   Future<void> _accept() async {
     setState(() => _submitting = true);
@@ -58,13 +57,6 @@ class _ContentPolicyScreenState extends State<ContentPolicyScreen> {
       // Let them try again rather than trapping them on a spinner.
       if (mounted) setState(() => _submitting = false);
     }
-  }
-
-  void _decline() {
-    // No sign-out, no lockout - just hold them here. They can't proceed
-    // without accepting, but the account is untouched and they can accept
-    // whenever they like.
-    setState(() => _declined = true);
   }
 
   /// Same best-effort order as ProfileScreen's sign-out: drop this device's
@@ -147,18 +139,6 @@ class _ContentPolicyScreenState extends State<ContentPolicyScreen> {
                   ),
                 ),
               ),
-              // Shown only after a decline: explains why they're still here,
-              // without shaming them for declining.
-              if (_declined) ...[
-                const SizedBox(height: 4),
-                Text(
-                  'You need to accept this to use The Bully League — it is the '
-                  'whole format. Tap "I\'m in" when you\'re ready.',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: scheme.primary),
-                ),
-              ],
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: _submitting ? null : _accept,
@@ -174,20 +154,12 @@ class _ContentPolicyScreenState extends State<ContentPolicyScreen> {
                     : const Text("I'm in"),
               ),
               const SizedBox(height: 10),
-              TextButton(
-                onPressed: _submitting ? null : _decline,
-                child: const Text('Not for me'),
-              ),
-              // An exit that does NOT require agreeing. Without it, someone
-              // who declines - or who is simply signed into the wrong
-              // account - could only leave by accepting terms they don't
-              // agree to (found live, 2026-11-08).
+              // "Not for me" simply signs out - one exit that doesn't require
+              // agreeing, instead of a separate decline + Sign out pair (beta
+              // tester, 2026-11-09).
               TextButton(
                 onPressed: _submitting ? null : _signOut,
-                child: Text(
-                  'Sign out',
-                  style: TextStyle(color: scheme.onSurfaceVariant),
-                ),
+                child: const Text('Not for me'),
               ),
             ],
           ),

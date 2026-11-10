@@ -628,6 +628,21 @@ class _FeedPageState extends State<FeedPage> {
           // red/blue winner buttons in the panel below instead.
           if (!_isImprov && _canAct && _chosenPlayerId == null)
             _winnerSelectLayer(context),
+          // A dead zone behind the right-hand button rail (report, play/pause,
+          // follow): a tap that just misses one of those small circles used to
+          // fall through to the half underneath and PICK A WINNER (beta tester,
+          // 2026-11-09: "I try to click add friend and it chooses the winner").
+          // Same idea as _emojiSafe around the emoji bars.
+          Positioned(
+            top: MediaQuery.of(context).padding.top,
+            right: 0,
+            width: 72,
+            height: 112 + 48 + 16,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {},
+            ),
+          ),
           // Per-player emoji bars, revealed only AFTER a winner is picked, so
           // the watching screen stays clean. Each sits on that roaster's half
           // of the stacked clip (top = P1 red, bottom = P2 blue) and is

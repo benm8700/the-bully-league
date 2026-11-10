@@ -70,7 +70,7 @@ type PrizeItem = {
   winnerUsername: string | null;
   status: string;
   wonAtMs: number | null;
-  shipping: { name?: string; address?: string; phone?: string } | null;
+  shipping: { name?: string; address?: string; phone?: string; email?: string } | null;
 };
 
 // Outstanding non-cash prizes (owed or claimed-but-not-shipped), oldest first

@@ -142,7 +142,28 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     // without this, a real device (unlike the dev emulators, which have
     // permissions pre-granted via `adb shell pm grant`) would silently fail
     // or crash instead of showing the OS permission prompt.
-    final statuses = await [Permission.camera, Permission.microphone].request();
+    debugPrint('PRECHECK: requesting camera/mic permission');
+    // Bounded and caught: on build 5 (iPhone, 2026-11-09) the screen spun
+    // forever and the video engine was never started, i.e. this request
+    // never came back (or threw - e.g. permission_handler's "a request is
+    // already running"), and nothing caught it.
+    final Map<Permission, PermissionStatus> statuses;
+    try {
+      statuses = await [
+        Permission.camera,
+        Permission.microphone,
+      ].request().timeout(const Duration(seconds: 30));
+    } catch (e) {
+      debugPrint('PRECHECK: permission request failed: $e');
+      if (!mounted) return;
+      setState(
+        () => _error =
+            "Couldn't check camera and microphone access. Close the app "
+            'fully, reopen it and try again.',
+      );
+      return;
+    }
+    debugPrint('PRECHECK: permission result $statuses');
     final granted =
         (statuses[Permission.camera]?.isGranted ?? false) &&
         (statuses[Permission.microphone]?.isGranted ?? false);
@@ -156,7 +177,9 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
       return;
     }
     try {
+      debugPrint('PRECHECK: initializing video engine');
       await _videoCallService.initialize();
+      debugPrint('PRECHECK: video engine ready');
       final myUid = FirebaseAuth.instance.currentUser?.uid;
       if (myUid == null) {
         if (!mounted) return;
@@ -166,18 +189,33 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
         return;
       }
       final channelName = 'precheck_$myUid';
-      final token = await fetchAgoraToken(channelName);
-      await _videoCallService.joinChannel(
-        channelName: channelName,
-        uid: 0,
-        token: token,
+      // Bounded: joinChannel waits for Agora's join-success event, which
+      // never arrives on a bad connection - the screen then spun forever
+      // with no way out (developer's iPhone, build 5, 2026-11-09).
+      await () async {
+        final token = await fetchAgoraToken(channelName);
+        debugPrint('PRECHECK: got token, joining channel');
+        await _videoCallService.joinChannel(
+          channelName: channelName,
+          uid: 0,
+          token: token,
+        );
+      }().timeout(const Duration(seconds: 20));
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(
+        () => _error =
+            "Couldn't start the camera check - your connection may be slow. "
+            'Go back and tap PLAY to try again.',
       );
+      return;
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'Camera/mic setup failed: $e');
       return;
     }
     if (!mounted) return;
+    debugPrint('PRECHECK: joined, camera check ready');
     setState(() => _initialized = true);
     _videoCallService.localAudioLevel.addListener(_onAudioLevel);
     // Sensor + frame errors must never break the check - a failed sensor

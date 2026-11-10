@@ -582,7 +582,7 @@ class _EverydayBattleOver extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'This one goes to the crowd. It lands in the Vote tab in a few '
+              'This one goes to the crowd. It lands in the Judge tab in a few '
               'minutes, once the clip is ready - come back and pick a winner.',
               textAlign: TextAlign.center,
               style: text.bodyLarge?.copyWith(color: Colors.white70),

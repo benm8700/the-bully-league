@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/prize_service.dart';
@@ -21,6 +22,10 @@ class _PrizeClaimScreenState extends State<PrizeClaimScreen> {
   final _name = TextEditingController();
   final _address = TextEditingController();
   final _phone = TextEditingController();
+  late final _email = TextEditingController(
+    text: FirebaseAuth.instance.currentUser?.email ?? '',
+  );
+  bool get _giftCard => widget.prize.isGiftCard;
   bool _submitting = false;
   bool _done = false;
   String? _error;
@@ -30,13 +35,21 @@ class _PrizeClaimScreenState extends State<PrizeClaimScreen> {
     _name.dispose();
     _address.dispose();
     _phone.dispose();
+    _email.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     final name = _name.text.trim();
     final address = _address.text.trim();
-    if (name.isEmpty || address.isEmpty) {
+    final email = _email.text.trim();
+    if (_giftCard) {
+      if (name.isEmpty ||
+          !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+        setState(() => _error = 'Your name and a valid email are required.');
+        return;
+      }
+    } else if (name.isEmpty || address.isEmpty) {
       setState(() => _error = 'Name and address are required.');
       return;
     }
@@ -50,6 +63,7 @@ class _PrizeClaimScreenState extends State<PrizeClaimScreen> {
         name: name,
         address: address,
         phone: _phone.text.trim(),
+        email: email,
       );
       if (mounted) setState(() => _done = true);
     } catch (e) {
@@ -75,14 +89,22 @@ class _PrizeClaimScreenState extends State<PrizeClaimScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.local_shipping_outlined,
-                        size: 56, color: scheme.primary),
+                    Icon(
+                      _giftCard
+                          ? Icons.mark_email_read_outlined
+                          : Icons.local_shipping_outlined,
+                      size: 56,
+                      color: scheme.primary,
+                    ),
                     const SizedBox(height: 16),
                     Text('You’re all set', style: text.headlineSmall),
                     const SizedBox(height: 8),
                     Text(
-                      'We’ve got your details and will send ${widget.prize.prize}. '
-                      'Keep an eye on your email/phone.',
+                      _giftCard
+                          ? 'We’ll email ${widget.prize.prize} to ${_email.text.trim()}. '
+                                'Keep an eye on your inbox (and spam folder).'
+                          : 'We’ve got your details and will send ${widget.prize.prize}. '
+                                'Keep an eye on your email/phone.',
                       textAlign: TextAlign.center,
                       style: text.bodyMedium,
                     ),
@@ -98,14 +120,21 @@ class _PrizeClaimScreenState extends State<PrizeClaimScreen> {
           : ListView(
               padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
               children: [
-                Text('🎉 You won ${widget.prize.prize}!',
-                    style: text.titleLarge),
+                Text(
+                  '🎉 You won ${widget.prize.prize}!',
+                  style: text.titleLarge,
+                ),
                 const SizedBox(height: 6),
                 Text(
-                  'Tell us where to send it. We only use this to ship your '
-                  'prize, and only you and the organizer can see it.',
-                  style: text.bodyMedium
-                      ?.copyWith(color: scheme.onSurfaceVariant),
+                  _giftCard
+                      ? 'Tell us where to email your gift card. We only use '
+                            'this to send it, and only you and the organizer '
+                            'can see it.'
+                      : 'Tell us where to send it. We only use this to ship '
+                            'your prize, and only you and the organizer can see it.',
+                  style: text.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 TextField(
@@ -116,25 +145,39 @@ class _PrizeClaimScreenState extends State<PrizeClaimScreen> {
                     border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: _address,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Shipping address',
-                    border: OutlineInputBorder(),
+                if (_giftCard) ...[
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    decoration: const InputDecoration(
+                      labelText: 'Email for your gift card',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: _phone,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone (for delivery)',
-                    border: OutlineInputBorder(),
+                ],
+                if (!_giftCard) ...[
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _address,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Shipping address',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _phone,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone (for delivery)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
                 if (_error != null) ...[
                   const SizedBox(height: 14),
                   Text(_error!, style: TextStyle(color: scheme.error)),
@@ -146,8 +189,9 @@ class _PrizeClaimScreenState extends State<PrizeClaimScreen> {
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Send my prize'),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(_giftCard ? 'Send my gift card' : 'Send my prize'),
                 ),
               ],
             ),

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -184,10 +185,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // onto a single "Save" button. Firestore rules only pin rating/
       // rankTitle/rankedMatchesPlayed/wins/losses/accountStatus, so this
       // update is otherwise unrestricted for the owning user.
+      final fields = {
+        'name': _nameController.text.trim(),
+        'hometown': _hometownController.text.trim(),
+        'ammoText': _ammoTextController.text.trim(),
+      };
+      // Asked first so the player gets a clear message; the server also
+      // wipes anything that fails after the fact (profileModeration.js).
+      final check = await FirebaseFunctions.instance
+          .httpsCallable('checkProfileText')
+          .call<Map<String, dynamic>>({'fields': fields});
+      final blocked = ((check.data['blocked'] as List?) ?? const [])
+          .cast<String>();
+      if (blocked.isNotEmpty) {
+        const labels = {
+          'name': 'Name',
+          'hometown': 'Hometown',
+          'ammoText': 'Your line',
+        };
+        if (mounted) {
+          setState(
+            () => _statusMessage =
+                '${blocked.map((f) => labels[f] ?? f).join(', ')}: '
+                "that isn't allowed. Roasts are fine, but no hate speech "
+                'and nothing sexual involving kids.',
+          );
+        }
+        return;
+      }
       await _userRef.update({
-        'profile.name': _nameController.text.trim(),
-        'profile.hometown': _hometownController.text.trim(),
-        'profile.ammoText': _ammoTextController.text.trim(),
+        for (final e in fields.entries) 'profile.${e.key}': e.value,
       });
       if (mounted) {
         setState(() {
@@ -308,6 +335,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ? const Center(child: CircularProgressIndicator())
               : SafeArea(
                   child: SingleChildScrollView(
+                    // Dragging the page closes the keyboard - iPhones have no
+                    // Back key, so an open keyboard used to trap people here
+                    // (beta tester, 2026-11-09).
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     // Content starts higher up (developer's call, 2026-09-29):
                     // the old kToolbarHeight+8 top pad pushed the identity/stats
                     // about 1/6 down the screen. The app bar is transparent and
@@ -520,6 +552,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           TextFormField(
                             controller: _nameController,
                             textCapitalization: TextCapitalization.words,
+                            textInputAction: TextInputAction.done,
+                            onTapOutside: (_) =>
+                                FocusManager.instance.primaryFocus?.unfocus(),
                             decoration: const InputDecoration(
                               hintText: 'What should we call you? e.g. Mike',
                             ),
@@ -532,6 +567,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _hometownController,
+                            textInputAction: TextInputAction.done,
+                            onTapOutside: (_) =>
+                                FocusManager.instance.primaryFocus?.unfocus(),
                             decoration: const InputDecoration(
                               hintText: 'e.g. San Diego, CA',
                             ),
@@ -545,6 +583,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           TextFormField(
                             controller: _ammoTextController,
                             maxLines: 4,
+                            // Multi-line, so Return makes a new line; a tap
+                            // anywhere else or a drag closes the keyboard.
+                            onTapOutside: (_) =>
+                                FocusManager.instance.primaryFocus?.unfocus(),
                             decoration: const InputDecoration(
                               hintText:
                                   'Who you are, what you do, something '

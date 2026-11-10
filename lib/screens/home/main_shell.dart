@@ -155,9 +155,11 @@ class _MainShellState extends State<MainShell> {
               label: 'Home',
             ),
             NavigationDestination(
-              icon: Icon(Icons.thumb_up_outlined),
-              selectedIcon: Icon(Icons.thumb_up),
-              label: 'Vote',
+              // "Judge", matching the Home door that leads here (beta tester,
+              // 2026-11-09: one page should have one name). Gavel = judging.
+              icon: Icon(Icons.gavel_outlined),
+              selectedIcon: Icon(Icons.gavel),
+              label: 'Judge',
             ),
             NavigationDestination(
               icon: Icon(Icons.emoji_events_outlined),

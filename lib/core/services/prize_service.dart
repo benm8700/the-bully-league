@@ -11,20 +11,26 @@ class OwedPrize {
     required this.prize,
     this.tournamentName,
     this.wonAtMs,
+    this.prizeType,
   });
 
   final String id;
   final String prize;
   final String? tournamentName;
   final int? wonAtMs;
+
+  /// "gift_card" (the $5 first ranked win) is emailed, so its claim asks for
+  /// an email instead of a shipping address.
+  final String? prizeType;
+  bool get isGiftCard => prizeType == 'gift_card';
 }
 
 /// Reads the player's owed prizes and submits their shipping details.
 /// Mirrors functions/prizes.js; the server owns the records.
 class PrizeService {
   PrizeService({FirebaseFirestore? firestore, FirebaseFunctions? functions})
-      : _db = firestore ?? FirebaseFirestore.instance,
-        _functions = functions ?? FirebaseFunctions.instance;
+    : _db = firestore ?? FirebaseFirestore.instance,
+      _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFirestore _db;
   final FirebaseFunctions _functions;
@@ -41,18 +47,16 @@ class PrizeService {
           .collection('prizeFulfillments')
           .where('winnerUid', isEqualTo: uid)
           .get();
-      return snap.docs
-          .where((d) => d.data()['status'] == 'owed')
-          .map((d) {
-            final x = d.data();
-            return OwedPrize(
-              id: d.id,
-              prize: (x['prize'] as String?) ?? 'a prize',
-              tournamentName: x['tournamentName'] as String?,
-              wonAtMs: (x['wonAtMs'] as num?)?.toInt(),
-            );
-          })
-          .toList();
+      return snap.docs.where((d) => d.data()['status'] == 'owed').map((d) {
+        final x = d.data();
+        return OwedPrize(
+          id: d.id,
+          prize: (x['prize'] as String?) ?? 'a prize',
+          tournamentName: x['tournamentName'] as String?,
+          wonAtMs: (x['wonAtMs'] as num?)?.toInt(),
+          prizeType: x['prizeType'] as String?,
+        );
+      }).toList();
     } catch (_) {
       return const [];
     }
@@ -65,12 +69,16 @@ class PrizeService {
     required String name,
     required String address,
     required String phone,
+    String email = '',
   }) async {
-    await _functions.httpsCallable('submitPrizeClaim').call<Map<String, dynamic>>({
-      'fulfillmentId': fulfillmentId,
-      'name': name,
-      'address': address,
-      'phone': phone,
-    });
+    await _functions
+        .httpsCallable('submitPrizeClaim')
+        .call<Map<String, dynamic>>({
+          'fulfillmentId': fulfillmentId,
+          'name': name,
+          'address': address,
+          'phone': phone,
+          'email': email,
+        });
   }
 }

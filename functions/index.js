@@ -1465,6 +1465,13 @@ exports.getMatchesNeedingVotes = onCall((request) => {
  * finish setting up. It reveals only whether a name is free, which every
  * signup form in the world reveals.
  */
+/** Profile text moderation - see functions/profileModeration.js. */
+exports.checkProfileText = onCall((request) => {
+  const {checkProfileText} = require("./profileModeration");
+  return checkProfileText(request.data, request.auth);
+});
+exports.onUserProfileWritten = require("./profileModeration").onUserProfileWritten;
+
 exports.checkUsername = onCall((request) => {
   const {checkUsername} = require("./username");
   return checkUsername(request.data, request.auth);

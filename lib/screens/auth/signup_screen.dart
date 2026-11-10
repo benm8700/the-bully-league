@@ -22,7 +22,7 @@ import 'login_screen.dart';
 /// SignupScreen mounted while signupInProgress is true, so the steps, the
 /// typed values and any error all survive that moment. Separate routes would
 /// be torn down by AuthGate instead.
-enum _SignupStep { username, account, phone, verify }
+enum _SignupStep { age, username, account, phone, verify }
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -46,7 +46,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   bool _obscurePassword = true;
 
-  _SignupStep _step = _SignupStep.username;
+  _SignupStep _step = _SignupStep.age;
   bool _isSubmitting = false; // checking the name / sending or verifying a code
   bool _finalizing = false; // creating the account after the code is confirmed
   String? _errorMessage;
@@ -93,13 +93,15 @@ class _SignupScreenState extends State<SignupScreen> {
     switch (_step) {
       case _SignupStep.account:
         _goTo(_SignupStep.username);
+      case _SignupStep.age:
+        break;
       case _SignupStep.phone:
         _goTo(_SignupStep.account);
       case _SignupStep.verify:
         _codeController.clear();
         _goTo(_SignupStep.phone);
       case _SignupStep.username:
-        break;
+        _goTo(_SignupStep.age);
     }
   }
 
@@ -140,20 +142,16 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  // --- Step 2: email + password (checked on the device) -------------------
-  void _accountNext() {
-    if (!_accountKey.currentState!.validate()) return;
-    _goTo(_SignupStep.phone);
-  }
-
-  // --- Step 3: phone - age check, then text the code ----------------------
-  Future<void> _phoneNext() async {
-    if (!_phoneKey.currentState!.validate()) return;
+  // --- Step 0: 18+ - our own screen first, THEN the store's native prompt --
+  // (beta tester, 2026-11-09: the native age prompt used to pop up in the
+  // middle of phone verification and made the whole step feel slow. Now it
+  // is the first thing, prefaced by a screen saying why, and accepting here
+  // also covers the old separate "Before you roast" page.)
+  Future<void> _ageNext() async {
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
     });
-
     final ageService = context.read<AgeVerificationService>();
     final age = await ageService.check();
     if (!mounted) return;
@@ -185,6 +183,24 @@ class _SignupScreenState extends State<SignupScreen> {
       );
       return;
     }
+
+    setState(() => _isSubmitting = false);
+    _goTo(_SignupStep.username);
+  }
+
+  // --- Step 2: email + password (checked on the device) -------------------
+  void _accountNext() {
+    if (!_accountKey.currentState!.validate()) return;
+    _goTo(_SignupStep.phone);
+  }
+
+  // --- Step 3: phone - age check, then text the code ----------------------
+  Future<void> _phoneNext() async {
+    if (!_phoneKey.currentState!.validate()) return;
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
 
     await _sendCode();
   }
@@ -290,6 +306,9 @@ class _SignupScreenState extends State<SignupScreen> {
           'accountStatus': 'active',
           'isAdmin': false,
           'ageAssurance': _ageAssurance,
+          // Accepted on the 18+ screen that now opens sign-up, so the
+          // separate "Before you roast" page is skipped for new accounts.
+          'contentPolicyAcceptedAt': FieldValue.serverTimestamp(),
           'createdAt': FieldValue.serverTimestamp(),
         });
 
@@ -415,18 +434,18 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final stepNumber = _step.index + 1;
+    final stepNumber = _step.index; // the 18+ screen is not a numbered step
     return PopScope(
       // The system back gesture steps back through signup instead of leaving
       // it; only on the first step does it leave (or pop back to Log in).
-      canPop: _step == _SignupStep.username && !_finalizing,
+      canPop: _step == _SignupStep.age && !_finalizing,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && !_finalizing) _back();
       },
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Join The Bully League'),
-          leading: _step != _SignupStep.username && !_finalizing
+          leading: _step != _SignupStep.age && !_finalizing
               ? IconButton(
                   icon: const Icon(Icons.arrow_back),
                   tooltip: 'Back',
@@ -441,9 +460,12 @@ class _SignupScreenState extends State<SignupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _progress(context, stepNumber),
-                    const SizedBox(height: 28),
+                    if (_step != _SignupStep.age) ...[
+                      _progress(context, stepNumber),
+                      const SizedBox(height: 28),
+                    ],
                     switch (_step) {
+                      _SignupStep.age => _buildAge(context),
                       _SignupStep.username => _buildUsername(context),
                       _SignupStep.account => _buildAccount(context),
                       _SignupStep.phone => _buildPhone(context),
@@ -543,13 +565,60 @@ class _SignupScreenState extends State<SignupScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             SizedBox(height: 8),
-            Text(
-              'This can take up to a minute. Keep the app open.',
-              textAlign: TextAlign.center,
-            ),
+            Text('Just a few seconds.', textAlign: TextAlign.center),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAge(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    Widget line(String emoji, String body) => Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 20)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(body, style: text.bodyLarge)),
+        ],
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 8),
+        Text('You must be 18+', style: text.headlineMedium),
+        const SizedBox(height: 8),
+        Text(
+          'The Bully League is live roast battles with strangers.',
+          style: text.bodyLarge?.copyWith(color: muted),
+        ),
+        const SizedBox(height: 24),
+        line(
+          '🎤',
+          'Expect strong language and offensive comedy - that is the '
+              'point.',
+        ),
+        line(
+          '🚫',
+          'No hate speech, nudity, threats or anything involving '
+              'kids. Those get you banned.',
+        ),
+        line('📱', 'Next, your phone may ask to confirm your age.'),
+        const SizedBox(height: 16),
+        _error(),
+        _nextButton(_ageNext, label: "I'm 18 or older"),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _isSubmitting
+              ? null
+              : () => Navigator.of(context).maybePop(),
+          child: const Text('Not for me'),
+        ),
+      ],
     );
   }
 

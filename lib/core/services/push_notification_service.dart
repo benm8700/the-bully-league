@@ -44,6 +44,20 @@ class PushNotificationService {
   /// Play Services, or a network blip must not stop someone playing a
   /// match - they just don't get pushes, and the in-app poll still finds
   /// their match while the app is open.
+  /// True while the OS has never asked this person about notifications -
+  /// i.e. the next requestPermission() would show the native prompt. Used to
+  /// show our own "here's why" screen first (beta tester, 2026-11-09): a
+  /// denied OS prompt can only be undone in Settings, so it's worth one
+  /// sentence of context before it appears.
+  Future<bool> wouldPrompt() async {
+    try {
+      final s = await _messaging.getNotificationSettings();
+      return s.authorizationStatus == AuthorizationStatus.notDetermined;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> register() async {
     try {
       // On Android 13+ this drives the real POST_NOTIFICATIONS prompt;

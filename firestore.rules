@@ -52,7 +52,7 @@ service cloud.firestore {
           'dailyReward', 'followerCount', 'lastSeenFameMilestone',
           'emojiCounts', 'votesCast', 'emojiTopAwards', 'emojiScrub',
           'tournamentWins', 'tournamentRunnerUps', 'pendingTournamentFinale',
-          'editorsChoicePicks', 'mainStagePanelsServed',
+          'editorsChoicePicks', 'mainStagePanelsServed', 'firstWinReward',
           // Written only by finalizePhoneSignup from the verified token claim,
           // never the client - a modified app must not assert a number it did
           // not verify (it's the invite-loop attribution key).
@@ -193,6 +193,10 @@ service cloud.firestore {
         // others, but it is a public identity number, so it stays server-only.
         request.resource.data.get('votesCast', null) ==
           resource.data.get('votesCast', null) &&
+        // The $5 first ranked win marker (firstWinReward.js, Admin SDK only).
+        // A client able to clear it could try to be paid twice.
+        request.resource.data.get('firstWinReward', null) ==
+          resource.data.get('firstWinReward', null) &&
         // Lifetime tournaments won, incremented only by the onTournamentCompleted
         // trigger (Admin SDK) when a tournament crowns this player. It drives a
         // permanent "Tournament Champion" award badge, so a client able to write

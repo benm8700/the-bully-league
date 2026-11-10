@@ -423,6 +423,15 @@ async function finalizeMatch(matchId, {force = false} = {}) {
     } catch (e) {
       console.error(`quest win event for ${matchId} failed:`, e.message);
     }
+    // $5 first ranked win (functions/firstWinReward.js). Runs HERE, after the
+    // crowd's verdict is final, by decision - the money is only awarded once
+    // voting ends. Ships off; best-effort, never fails a finalization.
+    try {
+      const {maybeAwardFirstWin} = require("./firstWinReward");
+      await maybeAwardFirstWin(matchId, match, winnerId, {db});
+    } catch (e) {
+      console.error(`first-win reward for ${matchId} failed:`, e.message);
+    }
   }
 
   // A tournament match's result belongs to its structure, not just to the two

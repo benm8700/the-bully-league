@@ -18,6 +18,7 @@ import '../../widgets/home/goat_throne_banner.dart';
 import '../../widgets/home/main_stage_banner.dart';
 import '../../widgets/home/tournament_ticket_banner.dart';
 import '../../widgets/home/prize_claim_banner.dart';
+import '../../widgets/home/first_win_offer_banner.dart';
 import '../../widgets/home/home_action_card.dart';
 import '../../widgets/home/player_status_card.dart';
 import '../../widgets/home/home_quick_actions.dart';
@@ -32,6 +33,7 @@ import '../match/matchmaking_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import '../profile/profile_screen.dart';
+import '../directory/player_search_screen.dart';
 import '../friends/challenge_screen.dart';
 import '../practice/solo_practice_screen.dart';
 import '../settings/account_screen.dart';
@@ -100,6 +102,17 @@ class HomeScreen extends StatelessWidget {
             // sliding down 20pt.
             toolbarHeight: 92,
             centerTitle: true,
+            // Find a player by name (beta tester, 2026-11-09: "I want to be
+            // able to search people, but there's no way" - the search screen
+            // existed but nothing opened it). Left side, so the crown stays
+            // visually centred between it and the bell/avatar.
+            leading: IconButton(
+              icon: const Icon(Icons.search),
+              tooltip: 'Find a player',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PlayerSearchScreen()),
+              ),
+            ),
             title: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -196,6 +209,13 @@ class HomeScreen extends StatelessWidget {
                         // waiting, or somebody challenging you.
                         const _ActiveMatchBanner(),
                         const _IncomingChallengeBanner(),
+                        // The $5 first ranked win offer (firstWinReward.js) -
+                        // only while the switch is on and the 7 days aren't up.
+                        if (uid != null)
+                          FirstWinOfferBanner(
+                            uid: uid,
+                            onPlayRanked: () => _startMatch(context, 'ranked'),
+                          ),
                         // When you're in this week's finals (finalist/alternate/
                         // judge), the front door to the Main Stage - confirm your
                         // spot, make your callout. Nothing otherwise.
@@ -230,13 +250,18 @@ class HomeScreen extends StatelessWidget {
                         // card - it is the EVENT/destination, not an everyday mode,
                         // so it earns a spot below the doors rather than hiding
                         // under "more ways to play". Taps to the hub.
-                        const MainStageCard(),
-                        const SizedBox(height: 20),
-                        // The other two ways to play, demoted to a compact secondary
-                        // row so they are reachable without crowding the two doors:
-                        // Face-Off (improv) and Challenge a Friend.
-                        const _MoreWaysToPlay(),
+                        // Slim row now (2026-11-09): three big doors above, and a
+                        // full card for something still "coming soon" was a lot of
+                        // prime space. Face-Off moved inside Ranked.
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: MainStageCard(slim: true),
+                        ),
                         const SizedBox(height: 18),
+                        // Ranked-only setup nudge, BELOW the play doors
+                        // (2026-11-09): friend battles need no intro or selfie,
+                        // so it must not read as a gate on the whole app.
+                        if (uid != null) _BattleReadyBanner(uid: uid),
                         // Quick Actions row (Home overhaul): Daily Challenges /
                         // Free Rewards / Current Streak. The Daily Challenges card
                         // opens the full quests in a sheet, so the tall inline
@@ -570,10 +595,10 @@ Future<bool> _ensureBattleReady(BuildContext context, String mode) async {
   final go = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('One step first'),
+      title: const Text('Before your first battle'),
       content: const Text(
-        'The Bully League requires an intro video and selfie before '
-        'participating in a public battle.',
+        'Record a 60-second intro (your opponent watches it for roast '
+        'material) and take a selfie. It takes about two minutes, once.',
       ),
       actions: [
         TextButton(
@@ -582,7 +607,7 @@ Future<bool> _ensureBattleReady(BuildContext context, String mode) async {
         ),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('Set it up'),
+          child: const Text('Do it now'),
         ),
       ],
     ),
@@ -1328,18 +1353,47 @@ class _PlayWatchDoors extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
         children: [
+          // ROAST A FRIEND IS THE FRONT DOOR (2026-11-09, developer's call -
+          // CLAUDE.md "Friend Challenges as the Growth Engine"): every friend
+          // battle recruits someone, and it never hits an empty lobby. Ranked
+          // sits under it as the "play for real" step.
           HomeActionCard(
-            label: 'PLAY',
+            label: 'ROAST A FRIEND',
+            icon: HomeActionCard.neonIcon(Icons.group, _kFriendGreen),
+            accent: _kFriendGreen,
+            accentEnd: _kNeonBlue,
+            subtitle: 'Challenge someone you know',
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const ChallengeScreen())),
+            onInfo: () => showModeInfo(
+              context,
+              title: 'Roast a friend',
+              body:
+                  'Pick someone you know and challenge them by text or '
+                  'username. If they are not on the app yet, your challenge is '
+                  'waiting when they join. No intro video or selfie needed.',
+              highlight:
+                  'Just for fun: it never touches your rank. Want it to count? '
+                  'Play ranked.',
+              accent: _kFriendGreen,
+            ),
+          ),
+          const SizedBox(height: 18),
+          HomeActionCard(
+            label: 'RANKED',
             icon: HomeActionCard.neonIcon(Icons.mic, _kPlayPink),
             accent: _kPlayPink,
             accentEnd: _kNeonBlue,
             subtitle: 'Roast a stranger',
             // The 2x "power hour" line, condensed, lives inside Play.
             footer: const DailyWindowStrip(compact: true),
-            onTap: () => _startMatch(context, 'ranked'),
+            // Face-Off lives INSIDE Ranked (2026-11-09): while it's switched on
+            // this asks which; while it's off it goes straight to a roast.
+            onTap: () => _chooseRanked(context),
             onInfo: () => showModeInfo(
               context,
-              title: 'Play',
+              title: 'Ranked',
               body:
                   "You're matched with a random stranger for a live 1-on-1 roast "
                   'battle. Take turns, land your best jokes, and the crowd votes '
@@ -1392,235 +1446,193 @@ class _PlayWatchDoors extends StatelessWidget {
 /// The neon pill colours for the Home doors: PLAY pink -> blue, WATCH purple ->
 /// blue (Main Stage uses gold, set in main_stage_card.dart).
 const Color _kPlayPink = Color(0xFFFF2E7E);
+const Color _kFriendGreen = Color(0xFF2EE59D);
 const Color _kWatchPurple = Color(0xFFB64DFF);
 const Color _kNeonBlue = Color(0xFF3D7BFF);
 
-/// The two other ways to play, demoted to a quiet secondary row under the
-/// doors: Face-Off (improv) and Challenge a Friend. Compact outlined pills so
-/// they stay reachable without competing with PLAY/WATCH.
-///
-/// Face-Off ships LOCKED (greyed, a padlock): it is a whole second mode that
-/// shouldn't compete for a newcomer's attention, so it is held back as an
-/// unlock. The exact gate (a subscription, or reaching the top ranks) is still
-/// being decided, so tapping just explains it - nothing is wired to the real
-/// entitlement/rank yet.
-class _MoreWaysToPlay extends StatelessWidget {
-  const _MoreWaysToPlay();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: _MiniPlay(
-              icon: Icons.group,
-              label: 'Roast a friend',
-              iconColor: scheme.secondary,
-              // Friend battles are the main way the app spreads (you bring
-              // someone in to roast them), so this pill sits on the LEFT (read
-              // first) with a glowing border and a periodic shine sweep.
-              highlight: true,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ChallengeScreen()),
-              ),
+/// RANKED -> roast battle or Face-Off (2026-11-09). Both are crowd-judged
+/// battles against strangers that count toward your title, so they share one
+/// door. The choice only appears while `config/faceOff.enabled` is true; while
+/// it's off (or unreadable) Ranked goes straight into a roast battle with no
+/// extra step. Face-Off is kept off for the beta except for planned tests,
+/// because every extra mode splits a thin pool into two waiting lines.
+Future<void> _chooseRanked(BuildContext context) async {
+  var faceOffOpen = false;
+  try {
+    final snap = await FirebaseFirestore.instance
+        .collection('config')
+        .doc('faceOff')
+        .get();
+    faceOffOpen = snap.data()?['enabled'] == true;
+  } catch (_) {
+    /* treat as off */
+  }
+  if (!context.mounted) return;
+  if (!faceOffOpen) {
+    await _startMatch(context, 'ranked');
+    return;
+  }
+  final mode = await showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Ranked', style: Theme.of(ctx).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            _MiniPlay(
+              icon: Icons.mic,
+              label: 'Roast battle',
+              subtitle: 'Take turns roasting each other',
+              iconColor: _kPlayPink,
+              onTap: () => Navigator.pop(ctx, 'ranked'),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _MiniPlay(
+            const SizedBox(height: 10),
+            _MiniPlay(
               icon: Icons.flash_on,
               label: 'Face-Off',
+              subtitle: 'Both riff on the same prompt',
               iconColor: const Color(0xFF19B3A6),
-              locked: true,
-              onTap: () => _showFaceOffLocked(context),
+              onTap: () => Navigator.pop(ctx, 'improv'),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showFaceOffLocked(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Face-Off'),
-        content: Text(
-          'In Face-Off, each opponent is given three subjects to riff off of, '
-          'and the crowd votes the winner. Coming soon.',
-          style: Theme.of(context).textTheme.bodyMedium,
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Got it'),
-          ),
-        ],
       ),
-    );
-  }
+    ),
+  );
+  if (mode != null && context.mounted) await _startMatch(context, mode);
 }
 
-/// A compact secondary play pill - icon + label in an outlined surface card.
-/// [locked] greys it out and shows a padlock; the tap then explains how to
-/// unlock rather than launching.
+/// A compact play option - icon, label and an optional one-line subtitle in
+/// an outlined surface card. Used by the Ranked chooser (roast vs Face-Off).
 class _MiniPlay extends StatelessWidget {
   const _MiniPlay({
     required this.icon,
     required this.label,
     required this.iconColor,
     required this.onTap,
-    this.locked = false,
-    this.highlight = false,
+    this.subtitle,
   });
 
   final IconData icon;
   final String label;
+  final String? subtitle;
   final Color iconColor;
   final VoidCallback onTap;
-  final bool locked;
-
-  /// A glowing border in [iconColor], for the one secondary pill we want
-  /// people to notice (Roast a friend).
-  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final labelColor = locked ? scheme.onSurfaceVariant : scheme.onSurface;
-    final glow = highlight && !locked;
-    return Opacity(
-      opacity: locked ? 0.55 : 1,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: glow
-              ? [
-                  BoxShadow(
-                    color: iconColor.withValues(alpha: 0.45),
-                    blurRadius: 14,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : null,
-        ),
-        child: _withShine(
-          glow,
-          Material(
-            color: scheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(14),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: onTap,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  border: glow
-                      ? Border.all(color: iconColor, width: 2)
-                      : Border.all(color: scheme.outlineVariant),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 14,
-                ),
-                child: Row(
+    return Material(
+      color: scheme.surfaceContainer,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: iconColor.withValues(alpha: 0.7)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(icon, color: iconColor, size: 26),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      icon,
-                      color: locked ? scheme.onSurfaceVariant : iconColor,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: labelColor,
-                        ),
+                    Text(
+                      label,
+                      style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    if (locked)
-                      Icon(
-                        Icons.lock_outline,
-                        size: 16,
-                        color: scheme.onSurfaceVariant,
+                    if (subtitle != null)
+                      Text(
+                        subtitle!,
+                        style: text.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
                   ],
                 ),
               ),
-            ),
+              const Icon(Icons.chevron_right),
+            ],
           ),
         ),
       ),
     );
   }
-
-  /// Lays the shine sweep over the pill (clipped to its rounded corners)
-  /// when [on]; otherwise returns the pill unchanged.
-  static Widget _withShine(bool on, Widget child) {
-    if (!on) return child;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: Stack(
-        children: [
-          child,
-          const Positioned.fill(child: IgnorePointer(child: _ShineSweep())),
-        ],
-      ),
-    );
-  }
 }
 
-/// A soft diagonal highlight that glides across its parent every few
-/// seconds - the "shine" on the Roast a friend pill. Purely decorative and
-/// ignores taps.
-class _ShineSweep extends StatefulWidget {
-  const _ShineSweep();
-
-  @override
-  State<_ShineSweep> createState() => _ShineSweepState();
-}
-
-class _ShineSweepState extends State<_ShineSweep>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 3200),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
+/// "Finish setting up to battle" - shown on Home until the account has the
+/// intro video AND selfie every public battle needs (beta tester,
+/// 2026-11-09: the required intro felt buried, only surfacing as a dialog
+/// after tapping PLAY). Not part of sign-up on purpose - a two-minute video
+/// there would lose people before they ever saw the app. Renders nothing
+/// once both exist.
+class _BattleReadyBanner extends StatelessWidget {
+  const _BattleReadyBanner({required this.uid});
+  final String uid;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (context, _) {
-        // The sweep crosses in the first ~35% of each cycle, then rests, so
-        // it reads as an occasional glint rather than a constant flicker.
-        final t = (_c.value / 0.35).clamp(0.0, 1.0);
-        final x = -1.6 + 3.2 * t;
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment(x - 0.6, -1),
-              end: Alignment(x + 0.6, 1),
-              colors: [
-                Colors.white.withValues(alpha: 0),
-                Colors.white.withValues(alpha: t < 1 ? 0.22 : 0),
-                Colors.white.withValues(alpha: 0),
-              ],
-              stops: const [0.35, 0.5, 0.65],
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots(),
+      builder: (context, snap) {
+        final profile = snap.data?.data()?['profile'] as Map<String, dynamic>?;
+        if (snap.data == null) return const SizedBox.shrink();
+        final hasIntro =
+            (profile?['introVideoUrl'] as String?)?.isNotEmpty ?? false;
+        final hasSelfie =
+            (profile?['facePhotoUrl'] as String?)?.isNotEmpty ?? false;
+        if (hasIntro && hasSelfie) return const SizedBox.shrink();
+        final missing = [
+          if (!hasIntro) 'your 60-second intro',
+          if (!hasSelfie) 'a selfie',
+        ].join(' and ');
+        final scheme = Theme.of(context).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Material(
+            color: scheme.primary.withValues(alpha: 0.16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: scheme.primary.withValues(alpha: 0.6)),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const ProfileScreen(promptIntro: true),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Icon(Icons.videocam, color: scheme.primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Want to play ranked? Add $missing.',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+              ),
             ),
           ),
         );

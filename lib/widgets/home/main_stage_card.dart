@@ -16,13 +16,18 @@ import 'home_action_card.dart';
 /// daily "power hour" has its own slim strip (DailyWindowStrip). Always shown -
 /// the hub handles its own empty states before the tournament is switched on.
 class MainStageCard extends StatelessWidget {
-  const MainStageCard({super.key});
+  const MainStageCard({super.key, this.slim = false});
+
+  /// A slim one-line row instead of the big capsule (Home, 2026-11-09: three
+  /// big doors - Roast a friend, Ranked, Judge - then this underneath). The
+  /// finalists' own front door is MainStageBanner at the top of Home.
+  final bool slim;
 
   @override
   Widget build(BuildContext context) {
-    void openHub() => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const TournamentHubScreen()),
-        );
+    void openHub() => Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const TournamentHubScreen()));
 
     // Watches the tournament flag so a "COMING SOON" badge shows while it is
     // switched off (which it is now). Everything underneath - the card, the
@@ -34,36 +39,85 @@ class MainStageCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('config')
-          .doc('tournament')
-          .snapshots(),
-      builder: (context, snap) {
-        final enabled = snap.data?.data()?['enabled'] == true;
-        // Same shared neon card as Play/Watch, so all three are identical in
-        // size. A COMING SOON badge rides under the label while the tournament
-        // is switched off; it clears the moment config/tournament.enabled flips.
-        return HomeActionCard(
-          label: 'MAIN\nSTAGE',
-          icon: HomeActionCard.neonIcon(Icons.emoji_events, _kGold), // trophy
-          accent: _kGold,
-          accentEnd: _kGoldDeep,
-          onTap: openHub,
-          badge: enabled ? null : _comingSoonBadge(),
-          // While it's COMING SOON (tournament switched off), the card can't be
-          // tapped - nobody enters the Main Stage until it goes live.
-          enabled: enabled,
-          onInfo: () => showModeInfo(
-            context,
-            title: 'Main Stage',
-            body:
-                'The tournament. The top roasters earn their spot and battle '
-                'live for the title and the belt, every Thursday night. Win '
-                'money, prizes, and fame. Coming soon.',
+        stream: FirebaseFirestore.instance
+            .collection('config')
+            .doc('tournament')
+            .snapshots(),
+        builder: (context, snap) {
+          final enabled = snap.data?.data()?['enabled'] == true;
+          if (slim) return _slimRow(context, enabled, openHub);
+          // Same shared neon card as Play/Watch, so all three are identical in
+          // size. A COMING SOON badge rides under the label while the tournament
+          // is switched off; it clears the moment config/tournament.enabled flips.
+          return HomeActionCard(
+            label: 'MAIN\nSTAGE',
+            icon: HomeActionCard.neonIcon(Icons.emoji_events, _kGold), // trophy
             accent: _kGold,
+            accentEnd: _kGoldDeep,
+            onTap: openHub,
+            badge: enabled ? null : _comingSoonBadge(),
+            // While it's COMING SOON (tournament switched off), the card can't be
+            // tapped - nobody enters the Main Stage until it goes live.
+            enabled: enabled,
+            onInfo: () => showModeInfo(
+              context,
+              title: 'Main Stage',
+              body:
+                  'The tournament. The top roasters earn their spot and battle '
+                  'live for the title and the belt, every Thursday night. Win '
+                  'money, prizes, and fame. Coming soon.',
+              accent: _kGold,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _slimRow(BuildContext context, bool enabled, VoidCallback openHub) {
+    final text = Theme.of(context).textTheme;
+    return Opacity(
+      opacity: enabled ? 1 : 0.7,
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.35),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: _kGold.withValues(alpha: 0.7)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: enabled
+              ? openHub
+              : () => showModeInfo(
+                  context,
+                  title: 'Main Stage',
+                  body:
+                      'The tournament. The top roasters earn their spot and '
+                      'battle live for the title and the belt, every Thursday '
+                      'night. Win money, prizes, and fame. Coming soon.',
+                  accent: _kGold,
+                ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                const Icon(Icons.emoji_events, color: _kGold, size: 22),
+                const SizedBox(width: 10),
+                Text(
+                  'MAIN STAGE',
+                  style: text.titleSmall?.copyWith(
+                    color: _kGold,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const Spacer(),
+                if (!enabled) _comingSoonBadge(),
+                if (enabled) const Icon(Icons.chevron_right, color: _kGold),
+              ],
+            ),
           ),
-        );
-      },
+        ),
       ),
     );
   }
@@ -96,7 +150,6 @@ class MainStageCard extends StatelessWidget {
       ),
     );
   }
-
 }
 
 /// The neon gold for the Main Stage pill (gold -> deep gold gradient border).

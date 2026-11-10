@@ -323,6 +323,8 @@ A viral day of 5,000 recorded matches costs roughly **$175** — the free
 tier is small but the paid rate is cheap. That is a very different risk
 profile from what the original planning assumed.
 
+**If the friend-challenge loop takes off** (CLAUDE.md, "Friend Challenges as the Growth Engine"): watch Agora call minutes (friend battles are calls only, not recorded), phone-verification SMS spend, and the report queue. Any cash incentive must have a hard budget cap that switches itself off.
+
 ---
 
 ## 8. First-week questions worth asking deliberately

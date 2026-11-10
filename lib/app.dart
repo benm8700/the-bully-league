@@ -210,9 +210,44 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
     // Fire-and-forget on purpose: it's entirely best-effort (see
     // PushNotificationService), and nothing should wait on a notification
     // permission prompt resolving.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      unawaited(context.read<PushNotificationService>().register());
+      final push = context.read<PushNotificationService>();
+      // Explain first, then let the OS ask (beta tester, 2026-11-09). Only
+      // when the OS WOULD prompt - an answered prompt never shows again, so
+      // for everyone else this is a straight register.
+      if (await push.wouldPrompt() && mounted) {
+        final yes = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.notifications_active_outlined, size: 36),
+            title: const Text('Turn on notifications?'),
+            content: const Text(
+              "We'll only tell you things worth opening the app for:\n\n"
+              '- An opponent is ready to battle\n'
+              '- A friend challenged you\n'
+              '- Your clip is ready to post\n'
+              '- The busiest hour of the day is starting',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Not now'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Turn on'),
+              ),
+            ],
+          ),
+        );
+        // "Not now" leaves the OS prompt unused, so it can be offered again
+        // next launch instead of being burned on a no.
+        if (yes == true) unawaited(push.register());
+      } else {
+        unawaited(push.register());
+      }
+      if (!mounted) return;
       // Only now is MainShell up, so a tapped notification has a home to
       // open its screen on top of (and to come back to).
       unawaited(PushTapRouter.instance.start());

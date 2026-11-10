@@ -148,10 +148,8 @@ async function submitPrizeClaim(auth, data) {
   const name = String(data?.name || "").trim().slice(0, MAX_FIELD);
   const address = String(data?.address || "").trim().slice(0, MAX_FIELD);
   const phone = String(data?.phone || "").trim().slice(0, MAX_FIELD);
+  const email = String(data?.email || "").trim().slice(0, MAX_FIELD);
   if (!id) throw new HttpsError("invalid-argument", "Missing prize.");
-  if (!name || !address) {
-    throw new HttpsError("invalid-argument", "Name and address are required.");
-  }
   const db = getFirestore();
   const ref = db.collection("prizeFulfillments").doc(id);
   const snap = await ref.get();
@@ -159,8 +157,18 @@ async function submitPrizeClaim(auth, data) {
   if (snap.data().winnerUid !== auth.uid) {
     throw new HttpsError("permission-denied", "That isn't your prize.");
   }
+  // A gift card (the $5 first ranked win, firstWinReward.js) is emailed, so
+  // it needs a name and an email, not a shipping address.
+  const giftCard = snap.data().prizeType === "gift_card";
+  if (giftCard) {
+    if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpsError("invalid-argument", "Name and a valid email are required.");
+    }
+  } else if (!name || !address) {
+    throw new HttpsError("invalid-argument", "Name and address are required.");
+  }
   await ref.set({
-    shipping: {name, address, phone},
+    shipping: giftCard ? {name, email} : {name, address, phone},
     status: "claimed",
     claimedAtMs: Date.now(),
   }, {merge: true});
