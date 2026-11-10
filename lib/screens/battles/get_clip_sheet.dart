@@ -183,12 +183,15 @@ class _GetClipSheetState extends State<GetClipSheet> {
   /// the file in the Files app - not where anyone posts from (developer's
   /// report, 2026-11-08). The camera roll is where TikTok / Instagram pick
   /// videos from, so that is where it goes.
-  Future<void> _download() async {
+  Future<void> _download({bool plain = false}) async {
     setState(() {
       _busy = true;
       _error = null;
     });
-    final message = await ClipActions.saveToPhotos(widget.matchId);
+    final message = await ClipActions.saveToPhotos(
+      widget.matchId,
+      plain: plain,
+    );
     if (!mounted) return;
     setState(() {
       _busy = false;
@@ -326,6 +329,11 @@ class _GetClipSheetState extends State<GetClipSheet> {
                     onPressed: _busy ? null : _download,
                     icon: const Icon(Icons.download_outlined),
                     label: Text(ClipActions.saveLabel),
+                  ),
+                  TextButton.icon(
+                    onPressed: _busy ? null : () => _download(plain: true),
+                    icon: const Icon(Icons.closed_caption_disabled_outlined),
+                    label: const Text(ClipActions.savePlainLabel),
                   ),
                   if (_busy) ...[
                     const SizedBox(height: 12),
@@ -518,11 +526,18 @@ class ClipActions {
   /// post; landscape is a letterboxed strip on a phone. Throws the server's
   /// FirebaseFunctionsException (still rendering, objection, taken down)
   /// so its message reaches the player.
-  static Future<String> _fileUrl(String matchId) async {
+  static Future<String> _fileUrl(String matchId, {bool plain = false}) async {
     final result = await FirebaseFunctions.instance
         .httpsCallable('getClipDownload')
         .call<Map<String, dynamic>>({'matchId': matchId});
-    final urls = (result.data['urls'] as Map?)?.cast<String, dynamic>();
+    final captioned = (result.data['urls'] as Map?)?.cast<String, dynamic>();
+    final plainUrls = (result.data['plainUrls'] as Map?)
+        ?.cast<String, dynamic>();
+    // No separate plain copy means the clip never got captions, so the
+    // normal file already IS the caption-free one.
+    final urls = plain && (plainUrls?.isNotEmpty ?? false)
+        ? plainUrls
+        : captioned;
     final url = urls?['vertical'] ?? urls?['landscape'];
     if (url == null) throw Exception('no url');
     return url as String;
@@ -530,10 +545,15 @@ class ClipActions {
 
   /// Fetches the clip to a temp file (one name per match, so repeats
   /// overwrite rather than pile up). dart:io, no HTTP dependency.
-  static Future<File> _downloadToTemp(String matchId) async {
-    final url = await _fileUrl(matchId);
+  static Future<File> _downloadToTemp(
+    String matchId, {
+    bool plain = false,
+  }) async {
+    final url = await _fileUrl(matchId, plain: plain);
     final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/bully_league_$matchId.mp4');
+    final file = File(
+      '${dir.path}/bully_league_$matchId${plain ? '_nocaptions' : ''}.mp4',
+    );
     final client = HttpClient();
     try {
       final req = await client.getUrl(Uri.parse(url));
@@ -566,8 +586,16 @@ class ClipActions {
     }
   }
 
+  /// Label for saving the same cut without burned-in captions (still
+  /// watermarked) - for people who'd rather add their own on TikTok/IG.
+  static const savePlainLabel = 'Save without captions';
+
   /// Saves the clip into the photo library, in a "The Bully League" album.
-  static Future<ClipSaveResult> saveToPhotos(String matchId) async {
+  /// [plain] saves the caption-free copy instead.
+  static Future<ClipSaveResult> saveToPhotos(
+    String matchId, {
+    bool plain = false,
+  }) async {
     try {
       if (!await Gal.hasAccess(toAlbum: true) &&
           !await Gal.requestAccess(toAlbum: true)) {
@@ -576,7 +604,7 @@ class ClipActions {
           'Allow photo access in Settings to save clips to your phone.',
         );
       }
-      final file = await _downloadToTemp(matchId);
+      final file = await _downloadToTemp(matchId, plain: plain);
       await Gal.putVideo(file.path, album: _album);
       return ClipSaveResult(
         true,
@@ -633,9 +661,9 @@ class _ClipPreviewScreenState extends State<_ClipPreviewScreen> {
     if (failure != null) _say(failure);
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool plain = false}) async {
     setState(() => _busy = true);
-    final result = await ClipActions.saveToPhotos(widget.matchId);
+    final result = await ClipActions.saveToPhotos(widget.matchId, plain: plain);
     if (!mounted) return;
     setState(() => _busy = false);
     _say(result.text);
@@ -683,6 +711,19 @@ class _ClipPreviewScreenState extends State<_ClipPreviewScreen> {
                 ],
               ),
             ),
+            TextButton.icon(
+              onPressed: _busy ? null : () => _save(plain: true),
+              icon: const Icon(
+                Icons.closed_caption_disabled_outlined,
+                size: 16,
+              ),
+              label: const Text(
+                ClipActions.savePlainLabel,
+                style: TextStyle(fontSize: 13),
+              ),
+              style: TextButton.styleFrom(foregroundColor: Colors.white70),
+            ),
+            const SizedBox(height: 4),
           ],
         ),
       ),

@@ -532,6 +532,10 @@ async function getClipDownload(auth, data) {
   const bucket = getStorage().bucket();
   const expires = Date.now() + DOWNLOAD_URL_TTL_MS;
   const urls = {};
+  // The same cut WITHOUT burned-in captions (still watermarked), for
+  // "Save without captions". Only when a separate captioned file exists -
+  // otherwise the plain file IS the normal download.
+  const plainUrls = {};
   let previewUrl = null;
   for (const [name, rendition] of Object.entries(match.highlight?.renditions ?? {})) {
     // The CAPTIONED file is what people post, and delivery is gated on
@@ -558,6 +562,15 @@ async function getClipDownload(auth, data) {
         });
         previewUrl = stream;
       }
+      const plainPath = rendition?.path;
+      if (rendition?.captionedPath && plainPath &&
+          plainPath !== rendition.captionedPath) {
+        const [plain] = await bucket.file(plainPath).getSignedUrl({
+          action: "read", expires,
+          promptSaveAs: `bully-league-${matchId}-${name}-no-captions.mp4`,
+        });
+        plainUrls[name] = plain;
+      }
     } catch (e) {
       // One unavailable shape must not deny the other. Vertical is the
       // one people actually post.
@@ -572,7 +585,7 @@ async function getClipDownload(auth, data) {
   // to sign, so "watch here" is never dead when a download is available.
   if (!previewUrl) previewUrl = urls.vertical ?? urls.landscape ?? null;
   return {
-    urls, previewUrl, expiresAtMs: expires,
+    urls, plainUrls, previewUrl, expiresAtMs: expires,
     captioned: match.highlight?.captioned === true,
   };
 }
