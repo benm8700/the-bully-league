@@ -21,10 +21,12 @@ import '../../core/services/visual_moderation_service.dart';
 import '../../core/services/yuv_to_jpeg.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/match/ability_deploy_bar.dart';
+import '../../widgets/match/pass_mic_bar.dart';
 import '../../widgets/match/tomato_splat.dart';
 import '../home/main_shell.dart';
 import '../vote/my_battles_screen.dart';
 import 'pre_match_screen.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// Seconds of the muted warmup that ARE recorded, so a clip opens on a short
 /// "here we go" beat instead of a 15s silent staredown.
@@ -83,7 +85,17 @@ class _MatchScreenState extends State<MatchScreen>
     interrupts: _settings.interrupts,
     shotClockMs: _settings.shotClockSeconds * 1000,
     graceMs: _settings.graceMs,
+    minHoldMs: _kMinHoldMs,
   );
+
+  /// Anti ping-pong: after you take the floor, Yield stays locked this long
+  /// (the host's engine refuses an early yield too). Every pass now costs the
+  /// passer real clock time, so back-to-back yielding drains both clocks and
+  /// ends the battle instead of stalling it.
+  static const int _kMinHoldMs = 3000;
+  int? _holdKey; // floorTakenMs of the hold we're timing
+  int _holdStartLocalMs = 0;
+  int? _yieldLockSeconds; // non-null while Yield is still locked
 
   late final VideoCallService _videoCallService;
   late final VisualModerationService _moderationService;
@@ -188,9 +200,24 @@ class _MatchScreenState extends State<MatchScreen>
   bool _silenceSpoke = false;
   bool _silenceYieldSent = false;
   int? _passInSeconds; // shown in the UI during the warning
+  // YIELD DURING THE WARNING (2026-11-10, developer's report). The silence
+  // warning starts ~2s into a hold but Yield stays locked for the 3s minimum
+  // hold, so the red "Bombing already?" button couldn't be tapped. During the
+  // warning it is now always tappable; inside the lock the tap is queued and
+  // the pass goes through the moment the minimum hold ends.
+  bool _yieldQueued = false;
   // The last [_kPassWarningMs] of the silence window show a countdown.
   static const int _kPassWarningMs = 3000;
   static const int _kVoiceLevel = 10; // same bar as the pre-match mic check
+  // MUFFLED-MIC GUARD (2026-11-10). Between the idle noise floor (~2-3) and
+  // clear speech (10+) is what a COVERED mic sounds like - a phone propped on
+  // its bottom edge, where most phones keep the mic. That is someone talking,
+  // not dead air, so it must not count toward the silence auto-pass (which
+  // would otherwise skip a real roaster's turn). Instead the player is told
+  // their mic is covered. True silence (below this) still passes as before.
+  static const int _kFaintLevel = 5;
+  int _faintSinceMs = 0; // when the current run of faint-only sound began
+  bool _barelyHear = false;
   bool _engineStarted = false;
 
   // Interrupt grace cue: the floor-holder's clock flashes red + buzzes while a
@@ -1113,11 +1140,36 @@ class _MatchScreenState extends State<MatchScreen>
       clearWarning();
       return;
     }
+    // Yield lock, timed from when THIS phone saw the floor arrive (the host's
+    // floorTakenMs is on the host's clock, which may be skewed from ours).
+    int? lock;
+    if (b.floor == _myFirebaseUid) {
+      if (_holdKey != b.floorTakenMs) {
+        _holdKey = b.floorTakenMs;
+        _holdStartLocalMs = _nowMs;
+        _yieldQueued = false;
+      }
+      final left = _kMinHoldMs - (_nowMs - _holdStartLocalMs);
+      if (left > 0) lock = (left / 1000).ceil();
+    } else {
+      _holdKey = null;
+      _yieldQueued = false;
+    }
+    if (lock != _yieldLockSeconds && mounted) {
+      setState(() => _yieldLockSeconds = lock);
+    }
+    // A pass tapped during the silence warning while the minimum hold was
+    // still running fires the moment the hold ends.
+    if (lock == null && _yieldQueued && b.floor == _myFirebaseUid) {
+      _yieldQueued = false;
+      _intent(MsEvent.yield);
+    }
     // Only the floor-holder's own phone acts, and not while an interrupt is
     // winding up (the floor is already about to change hands).
     if (b.floor != _myFirebaseUid || b.pendingBy != null) {
       _silenceFloorTakenMs = null;
       clearWarning();
+      if (_barelyHear && mounted) setState(() => _barelyHear = false);
       return;
     }
     final now = _nowMs;
@@ -1128,16 +1180,31 @@ class _MatchScreenState extends State<MatchScreen>
       _silenceSpoke = false;
       _silenceYieldSent = false;
     }
-    if (_videoCallService.localAudioLevel.value >= _kVoiceLevel) {
+    final level = _videoCallService.localAudioLevel.value;
+    bool barely = false;
+    if (level >= _kVoiceLevel) {
       _silenceSpoke = true;
       _silenceQuietSinceMs = now;
+      _faintSinceMs = 0;
+    } else if (level >= _kFaintLevel) {
+      // Muffled talking: keeps the turn alive, and after a moment of nothing
+      // but faint sound, tells the player their mic sounds covered.
+      _silenceQuietSinceMs = now;
+      if (_faintSinceMs == 0) _faintSinceMs = now;
+      barely = now - _faintSinceMs >= 1500;
+    } else {
+      _faintSinceMs = 0;
+    }
+    if (barely != _barelyHear && mounted) {
+      setState(() => _barelyHear = barely);
     }
     final limitSec = _silenceSpoke
         ? _settings.silenceYieldSeconds
         : _settings.firstWordsSeconds;
-    // Passing is pointless if the opponent has no time left to take it.
+    // On the last turn (opponent out of time) the countdown ends the battle
+    // instead of passing - see the trigger below.
     final oppHasTime = (b.remaining[_oppFirebaseUid] ?? 0) > 0;
-    if (limitSec <= 0 || !oppHasTime || _silenceYieldSent) {
+    if (limitSec <= 0 || _silenceYieldSent) {
       clearWarning();
       return;
     }
@@ -1145,7 +1212,9 @@ class _MatchScreenState extends State<MatchScreen>
     if (leftMs <= 0) {
       _silenceYieldSent = true;
       clearWarning();
-      _intent(MsEvent.yield);
+      // Last turn (opponent out of time): silence puts the mic down and ends
+      // the battle, instead of draining the clock in dead air.
+      _intent(oppHasTime ? MsEvent.yield : MsEvent.endEarly);
       return;
     }
     final passIn = leftMs <= _kPassWarningMs ? (leftMs / 1000).ceil() : null;
@@ -1230,7 +1299,7 @@ class _MatchScreenState extends State<MatchScreen>
   Future<bool> _confirmLeave() async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => NeonDialog(
         title: const Text('Leave the match?'),
         content: Text(
           // "your opponent keeps going without you" was confusing - a 1v1
@@ -1370,6 +1439,22 @@ class _MatchScreenState extends State<MatchScreen>
               holdsFloor: inBattle && _battle?.floor == _myFirebaseUid,
             ),
           ),
+        // Mic cut off (e.g. a Bluetooth headset took the audio). The service
+        // keeps retrying on its own; this tells the player they're silent.
+        ValueListenableBuilder<bool>(
+          valueListenable: _videoCallService.micFailed,
+          builder: (context, failed, _) {
+            if (!failed && !_barelyHear) return const SizedBox.shrink();
+            return Positioned(
+              left: 12,
+              right: 12,
+              top: MediaQuery.of(context).padding.top + 210,
+              child: failed
+                  ? _buildMicFailedBanner()
+                  : _buildBarelyHearBanner(),
+            );
+          },
+        ),
         if (_tomatoSplat)
           Positioned.fill(
             child: TomatoSplat(
@@ -1384,6 +1469,60 @@ class _MatchScreenState extends State<MatchScreen>
         if (_opponentDisconnecting)
           Positioned.fill(child: _buildDisconnectOverlay()),
       ],
+    );
+  }
+
+  Widget _buildMicFailedBanner() {
+    return Material(
+      color: const Color(0xFFD32F2F),
+      borderRadius: BorderRadius.circular(10),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            Icon(Icons.mic_off, color: Colors.white),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Your mic got cut off - nobody can hear you. Check your '
+                'Bluetooth or headphones. Reconnecting...',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBarelyHearBanner() {
+    return Material(
+      color: const Color(0xFFE0A030),
+      borderRadius: BorderRadius.circular(10),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            Icon(Icons.mic_external_off, color: Colors.black),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                "We can barely hear you - don't cover the bottom of your "
+                "phone, that's your mic.",
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1777,6 +1916,15 @@ class _MatchScreenState extends State<MatchScreen>
     );
   }
 
+  /// Prompts the floor-holder acts on sit at the top, under the self-view,
+  /// so their eyes stay up near the lens.
+  Widget _topBar(Widget child) => Positioned(
+    left: 12,
+    right: 12,
+    top: MediaQuery.of(context).padding.top + 148,
+    child: child,
+  );
+
   Widget _controls(MainStageBattleState b) {
     final iHoldFloor = b.floor == _myFirebaseUid;
     final oppHoldsFloor = b.floor == _oppFirebaseUid;
@@ -1792,32 +1940,20 @@ class _MatchScreenState extends State<MatchScreen>
     // to say. End it rather than draining a banked clock in silence - nothing
     // is forfeited, the battle would end when your clock ran out anyway.
     if (iHoldFloor && oppOutOfTime) {
-      return Positioned(
-        left: 16,
-        right: 16,
-        bottom: 24 + MediaQuery.of(context).padding.bottom,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              "They're out of time - the floor is yours. Land one more, or end it.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white60, fontSize: 13),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => _intent(MsEvent.endEarly),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 54),
-                  backgroundColor: context.palette.reward,
-                  foregroundColor: Colors.black,
-                ),
-                child: const Text("I'm done - end the battle"),
-              ),
-            ),
-          ],
+      // LAST TURN: the opponent is out of time, so handing over would end the
+      // battle. Same bar as "Pass the mic", worded for the finish. Always
+      // tappable; going quiet runs the same drain and ends it for you.
+      return _topBar(
+        PassMicBar(
+          key: ValueKey('micdown-${_passInSeconds != null}'),
+          title: 'Put the mic down',
+          passingTitle: 'Ending the battle...',
+          pillText: 'TAP TO END',
+          prompt: _passInSeconds != null
+              ? 'Out of material?'
+              : "They're out of time",
+          drainMs: _passInSeconds != null ? _kPassWarningMs : null,
+          onTap: () => _intent(MsEvent.endEarly),
         ),
       );
     }
@@ -1825,77 +1961,91 @@ class _MatchScreenState extends State<MatchScreen>
     // the amateur base is yield-only, so most battles show Yield alone.
     final showInterrupt =
         (b.steals[_myFirebaseUid] ?? 0) > 0 || iAmInterrupting;
+    final silenceOff =
+        _settings.silenceYieldSeconds <= 0 || _settings.firstWordsSeconds <= 0;
+    final showPass =
+        iHoldFloor && (_passInSeconds != null || _yieldQueued || silenceOff);
     final instantN = b.instantSteals[_myFirebaseUid] ?? 0;
     final canInstant =
         oppHoldsFloor &&
         instantN > 0 &&
         (b.remaining[_myFirebaseUid] ?? 0) > 0 &&
         b.pendingBy == null;
-    return Positioned(
-      left: 16,
-      right: 16,
-      bottom: 24 + MediaQuery.of(context).padding.bottom,
-      child: Row(
+    // PASS THE MIC sits at the TOP, just under the self-view (2026-11-10,
+    // developer's call): the lens is at the top of the phone, so a prompt down
+    // here made people look down, away from the camera.
+    return Positioned.fill(
+      child: Stack(
         children: [
-          Expanded(
-            child: FilledButton(
-              onPressed: iHoldFloor ? () => _intent(MsEvent.yield) : null,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(0, 54),
-                backgroundColor: iHoldFloor && _passInSeconds != null
-                    ? context.palette.live
-                    : Colors.white24,
+          if (showPass)
+            _topBar(
+              PassMicBar(
+                // Re-mount (and restart the drain) each time a new countdown
+                // starts; talking again removes the bar entirely.
+                key: ValueKey(
+                  'pass-$_silenceFloorTakenMs-${_passInSeconds != null}',
+                ),
+                prompt: _passInSeconds == null
+                    ? ''
+                    : _silenceSpoke
+                    ? 'Out of material?'
+                    : 'Drawing a blank?',
+                drainMs: _passInSeconds != null ? _kPassWarningMs : null,
+                passing: _yieldQueued,
+                enabled: _passInSeconds != null || _yieldLockSeconds == null,
+                onTap: () {
+                  if (_yieldLockSeconds != null) {
+                    setState(() => _yieldQueued = true);
+                  } else {
+                    _intent(MsEvent.yield);
+                  }
+                },
               ),
-              // During the silence warning the button itself says what is
-              // about to happen; talking again cancels it.
-              child: Text(
-                iHoldFloor && _passInSeconds != null
-                    ? (_silenceSpoke
-                          ? 'Out of material? Passing mic in $_passInSeconds...'
-                          : 'Bombing already? Passing mic in '
-                                '$_passInSeconds...')
-                    : 'Yield',
-                textAlign: TextAlign.center,
-                maxLines: 2,
-              ),
+            ),
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 24 + MediaQuery.of(context).padding.bottom,
+            child: Row(
+              children: [
+                if (showInterrupt) ...[
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: canInterrupt
+                          ? () => _intent(MsEvent.interrupt)
+                          : null,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 54),
+                        backgroundColor: iAmInterrupting
+                            ? context.palette.reward
+                            : context.palette.live,
+                        foregroundColor: iAmInterrupting ? Colors.black : null,
+                      ),
+                      child: Text(
+                        iAmInterrupting
+                            ? 'Cutting in...'
+                            : 'Interrupt (${b.steals[_myFirebaseUid] ?? 0})',
+                      ),
+                    ),
+                  ),
+                ],
+                if (instantN > 0) ...[
+                  if (showInterrupt) const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: canInstant ? _deployInstant : null,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 54),
+                        backgroundColor: context.palette.reward,
+                        foregroundColor: Colors.black,
+                      ),
+                      child: Text('Instant ($instantN)'),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          if (showInterrupt) ...[
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton(
-                onPressed: canInterrupt
-                    ? () => _intent(MsEvent.interrupt)
-                    : null,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 54),
-                  backgroundColor: iAmInterrupting
-                      ? context.palette.reward
-                      : context.palette.live,
-                  foregroundColor: iAmInterrupting ? Colors.black : null,
-                ),
-                child: Text(
-                  iAmInterrupting
-                      ? 'Cutting in...'
-                      : 'Interrupt (${b.steals[_myFirebaseUid] ?? 0})',
-                ),
-              ),
-            ),
-          ],
-          if (instantN > 0) ...[
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton(
-                onPressed: canInstant ? _deployInstant : null,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 54),
-                  backgroundColor: context.palette.reward,
-                  foregroundColor: Colors.black,
-                ),
-                child: Text('Instant ($instantN)'),
-              ),
-            ),
-          ],
         ],
       ),
     );

@@ -61,38 +61,38 @@ class FeedMatch {
   /// pick controls. Used right after a successful vote so scrolling away and
   /// back doesn't re-offer voting on a match the server will now reject.
   FeedMatch markVoted() => FeedMatch(
-        matchId: matchId,
-        player1Id: player1Id,
-        player2Id: player2Id,
-        player1Username: player1Username,
-        player2Username: player2Username,
-        voteCount: voteCount,
-        canVote: false,
-        isParticipant: isParticipant,
-        alreadyVoted: true,
-        windowOpen: windowOpen,
-        videoUrl: videoUrl,
-        verdict: verdict,
-        roundCount: roundCount,
-        mode: mode,
-      );
+    matchId: matchId,
+    player1Id: player1Id,
+    player2Id: player2Id,
+    player1Username: player1Username,
+    player2Username: player2Username,
+    voteCount: voteCount,
+    canVote: false,
+    isParticipant: isParticipant,
+    alreadyVoted: true,
+    windowOpen: windowOpen,
+    videoUrl: videoUrl,
+    verdict: verdict,
+    roundCount: roundCount,
+    mode: mode,
+  );
 
   static FeedMatch fromMap(Map<String, dynamic> m) => FeedMatch(
-        matchId: m['matchId'] as String,
-        player1Id: m['player1Id'] as String? ?? '',
-        player2Id: m['player2Id'] as String? ?? '',
-        player1Username: m['player1Username'] as String? ?? 'Player 1',
-        player2Username: m['player2Username'] as String? ?? 'Player 2',
-        voteCount: (m['voteCount'] as num?)?.toInt() ?? 0,
-        canVote: m['canVote'] == true,
-        isParticipant: m['isParticipant'] == true,
-        alreadyVoted: m['alreadyVoted'] == true,
-        windowOpen: m['windowOpen'] == true,
-        videoUrl: m['videoUrl'] as String?,
-        verdict: FeedVerdict.fromMap(m['verdict']),
-        roundCount: (m['roundCount'] as num?)?.toInt() ?? 3,
-        mode: m['mode'] as String? ?? 'ranked',
-      );
+    matchId: m['matchId'] as String,
+    player1Id: m['player1Id'] as String? ?? '',
+    player2Id: m['player2Id'] as String? ?? '',
+    player1Username: m['player1Username'] as String? ?? 'Player 1',
+    player2Username: m['player2Username'] as String? ?? 'Player 2',
+    voteCount: (m['voteCount'] as num?)?.toInt() ?? 0,
+    canVote: m['canVote'] == true,
+    isParticipant: m['isParticipant'] == true,
+    alreadyVoted: m['alreadyVoted'] == true,
+    windowOpen: m['windowOpen'] == true,
+    videoUrl: m['videoUrl'] as String?,
+    verdict: FeedVerdict.fromMap(m['verdict']),
+    roundCount: (m['roundCount'] as num?)?.toInt() ?? 3,
+    mode: m['mode'] as String? ?? 'ranked',
+  );
 }
 
 class FeedVerdict {
@@ -148,10 +148,10 @@ class WatchFeedService {
     final result = await FirebaseFunctions.instance
         .httpsCallable('getWatchFeed')
         .call<Map<String, dynamic>>({
-      'limit': limit,
-      // ignore: use_null_aware_elements
-      if (cursorMs != null) 'cursorMs': cursorMs,
-    });
+          'limit': limit,
+          // ignore: use_null_aware_elements
+          if (cursorMs != null) 'cursorMs': cursorMs,
+        });
     final raw = (result.data['matches'] as List?) ?? const [];
     return WatchFeedPage(
       matches: raw
@@ -209,15 +209,15 @@ class WatchFeedService {
     final result = await FirebaseFunctions.instance
         .httpsCallable('castVote')
         .call<Map<String, dynamic>>({
-      'matchId': matchId,
-      // Per-round winners keyed by round index (as strings for the wire).
-      'picks': picks.map((k, v) => MapEntry(k.toString(), v)),
-      // Required: {playerId: emojiKey} for BOTH players - the server rejects
-      // a ballot missing either.
-      'emojiRatings': emojiRatings,
-      // ignore: use_null_aware_elements
-      if (turnstileToken != null) 'turnstileToken': turnstileToken,
-    });
+          'matchId': matchId,
+          // Per-round winners keyed by round index (as strings for the wire).
+          'picks': picks.map((k, v) => MapEntry(k.toString(), v)),
+          // Required: {playerId: emojiKey} for BOTH players - the server rejects
+          // a ballot missing either.
+          'emojiRatings': emojiRatings,
+          // ignore: use_null_aware_elements
+          if (turnstileToken != null) 'turnstileToken': turnstileToken,
+        });
     final streak = (result.data['streak'] as Map?)?.cast<String, dynamic>();
     final judge = (result.data['judge'] as Map?)?.cast<String, dynamic>();
     return VoteReward(

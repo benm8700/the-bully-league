@@ -56,10 +56,14 @@ class EmojiRateRow extends StatelessWidget {
                 GestureDetector(
                   onTap: () => onSelect(r.key),
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
-                      color: selected == r.key ? a.withValues(alpha: 0.85) : idle,
+                      color: selected == r.key
+                          ? a.withValues(alpha: 0.85)
+                          : idle,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(r.emoji, style: const TextStyle(fontSize: 22)),

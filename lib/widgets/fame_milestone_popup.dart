@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'neon_dialog.dart';
 
 /// Celebrates crossing a fame milestone (10 / 50 / 100 / 500 / 1,000
 /// followers) the next time the app is opened - the same "make it a moment"
@@ -26,7 +27,7 @@ class FameMilestonePopup {
 
       await showDialog<void>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
+        builder: (dialogContext) => NeonDialog(
           icon: const Icon(Icons.favorite, color: _pink, size: 34),
           title: Text('$milestone followers'),
           content: Text(

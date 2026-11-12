@@ -22,8 +22,8 @@ class JudgeChatMessage {
 /// seated-judge gate, moderates and rate-limits.
 class JudgeChatService {
   JudgeChatService({FirebaseFirestore? firestore, FirebaseFunctions? functions})
-      : _db = firestore ?? FirebaseFirestore.instance,
-        _functions = functions ?? FirebaseFunctions.instance;
+    : _db = firestore ?? FirebaseFirestore.instance,
+      _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFirestore _db;
   final FirebaseFunctions _functions;
@@ -37,15 +37,17 @@ class JudgeChatService {
         .orderBy('createdAt')
         .limitToLast(100)
         .snapshots()
-        .map((snap) => snap.docs.map((d) {
-              final m = d.data();
-              return JudgeChatMessage(
-                id: d.id,
-                uid: (m['uid'] as String?) ?? '',
-                username: (m['username'] as String?) ?? 'Judge',
-                text: (m['text'] as String?) ?? '',
-              );
-            }).toList());
+        .map(
+          (snap) => snap.docs.map((d) {
+            final m = d.data();
+            return JudgeChatMessage(
+              id: d.id,
+              uid: (m['uid'] as String?) ?? '',
+              username: (m['username'] as String?) ?? 'Judge',
+              text: (m['text'] as String?) ?? '',
+            );
+          }).toList(),
+        );
   }
 
   /// Post a message. Throws [FirebaseFunctionsException] with the server's
@@ -55,8 +57,8 @@ class JudgeChatService {
     await _functions
         .httpsCallable('postJudgeChatMessage')
         .call<Map<String, dynamic>>({
-      'tournamentId': tournamentId,
-      'text': text,
-    });
+          'tournamentId': tournamentId,
+          'text': text,
+        });
   }
 }

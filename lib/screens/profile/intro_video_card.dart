@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../widgets/looping_video.dart';
 import 'selfie_card.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// The MANDATORY 60-second "tell me about yourself" intro video (User
 /// Profile System). This is the opponent's ammo, studied on a loop during
@@ -172,7 +173,7 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
 
     final go = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => NeonDialog(
         title: const Text('One more quick thing'),
         content: const Text(
           'Intro saved. Now a quick selfie so your opponent can see who '

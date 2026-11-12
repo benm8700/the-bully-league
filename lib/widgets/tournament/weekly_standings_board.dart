@@ -78,7 +78,9 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
             .where('status', isEqualTo: 'live')
             .get();
         live = q.docs.any((d) => d.data()['format'] == 'mainstage');
-      } catch (_) {/* header falls back to the default copy */}
+      } catch (_) {
+        /* header falls back to the default copy */
+      }
 
       if (!mounted) return;
       setState(() {
@@ -147,18 +149,22 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
         children: [
           Row(
             children: [
-              Icon(_mainStageLive ? Icons.sensors : Icons.emoji_events_outlined,
-                  size: 20,
-                  color: _mainStageLive ? context.palette.live : gold),
+              Icon(
+                _mainStageLive ? Icons.sensors : Icons.emoji_events_outlined,
+                size: 20,
+                color: _mainStageLive ? context.palette.live : gold,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                    _mainStageLive
-                        ? 'The Main Stage is LIVE now'
-                        : 'The Main Stage opens Thursday night',
-                    style: text.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: _mainStageLive ? context.palette.live : gold)),
+                  _mainStageLive
+                      ? 'The Main Stage is LIVE now'
+                      : 'The Main Stage opens Thursday night',
+                  style: text.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: _mainStageLive ? context.palette.live : gold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -167,8 +173,10 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
             'Every ranked battle this week moves you up this board. The top 4 '
             'make the weekly Main Stage — the top 3 on skill, the 4th a '
             'wild-card draw.${left.isEmpty ? '' : ' $left'}',
-            style: text.bodySmall
-                ?.copyWith(color: scheme.onSurfaceVariant, height: 1.3),
+            style: text.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              height: 1.3,
+            ),
           ),
         ],
       ),
@@ -189,23 +197,26 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
   }
 
   Widget _cutoffDivider(Color gold) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: [
-            Expanded(child: Divider(color: gold.withValues(alpha: 0.5))),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Text('SEAT 4 · WILD-CARD DRAW',
-                  style: TextStyle(
-                      color: gold,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 11,
-                      letterSpacing: 1)),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    child: Row(
+      children: [
+        Expanded(child: Divider(color: gold.withValues(alpha: 0.5))),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(
+            'SEAT 4 · WILD-CARD DRAW',
+            style: TextStyle(
+              color: gold,
+              fontWeight: FontWeight.w900,
+              fontSize: 11,
+              letterSpacing: 1,
             ),
-            Expanded(child: Divider(color: gold.withValues(alpha: 0.5))),
-          ],
+          ),
         ),
-      );
+        Expanded(child: Divider(color: gold.withValues(alpha: 0.5))),
+      ],
+    ),
+  );
 
   Widget _row(int i, Map<String, dynamic> e, String? selfUid, Color gold) {
     final uid = e['uid'] as String;
@@ -220,9 +231,7 @@ class _WeeklyStandingsBoardState extends State<WeeklyStandingsBoard> {
         dense: true,
         visualDensity: const VisualDensity(vertical: -3),
         onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => PerformerProfileScreen(uid: uid),
-          ),
+          MaterialPageRoute(builder: (_) => PerformerProfileScreen(uid: uid)),
         ),
         leading: Text(
           '${i + 1}',

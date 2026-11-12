@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-
 /// In-app report button (Build Order step 9). Reports feed a review queue
 /// that's just Firestore documents browsed via the Firebase console (same
 /// "admin uses the console" pattern as profile approval and tournament
@@ -28,13 +27,31 @@ class ReportScreen extends StatefulWidget {
 }
 
 enum _ReportReason {
-  harassment('harassment', 'Harassment', 'Targeted, sustained bullying that goes beyond the roast itself'),
-  hateSpeech('hate_speech', 'Hate speech',
-      'Slurs or attacks meant to demean someone\'s race, religion, gender, etc. - not comedic wordplay'),
-  technicalQuality('technical_quality', 'Technical/quality issue', 'Audio, video, or connection problems'),
+  harassment(
+    'harassment',
+    'Harassment',
+    'Targeted, sustained bullying that goes beyond the roast itself',
+  ),
+  hateSpeech(
+    'hate_speech',
+    'Hate speech',
+    'Slurs or attacks meant to demean someone\'s race, religion, gender, etc. - not comedic wordplay',
+  ),
+  technicalQuality(
+    'technical_quality',
+    'Technical/quality issue',
+    'Audio, video, or connection problems',
+  ),
   inappropriateContent(
-      'inappropriate_content', 'Inappropriate content', 'Nudity or explicit visuals, not offensive language'),
-  impersonation('impersonation', 'Impersonation', 'Pretending to be someone else');
+    'inappropriate_content',
+    'Inappropriate content',
+    'Nudity or explicit visuals, not offensive language',
+  ),
+  impersonation(
+    'impersonation',
+    'Impersonation',
+    'Pretending to be someone else',
+  );
 
   const _ReportReason(this.value, this.label, this.description);
 
@@ -71,9 +88,16 @@ class _ReportScreenState extends State<ReportScreen> {
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
       });
-      if (mounted) setState(() => _resultMessage = 'Report submitted. Thanks for helping keep things fair.');
+      if (mounted) {
+        setState(
+          () => _resultMessage =
+              'Report submitted. Thanks for helping keep things fair.',
+        );
+      }
     } catch (e) {
-      if (mounted) setState(() => _resultMessage = 'Failed to submit report: $e');
+      if (mounted) {
+        setState(() => _resultMessage = 'Failed to submit report: $e');
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -81,14 +105,20 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final submitted = _resultMessage != null && _resultMessage!.startsWith('Report submitted');
+    final submitted =
+        _resultMessage != null &&
+        _resultMessage!.startsWith('Report submitted');
     return Scaffold(
       appBar: AppBar(title: const Text('Report')),
       body: Padding(
         // Bottom inset clears the gesture bar so the submit button isn't
         // under it when scrolled to the end (S22 gesture-nav, 2026-09-01).
         padding: EdgeInsets.fromLTRB(
-            24, 24, 24, 24 + MediaQuery.of(context).padding.bottom),
+          24,
+          24,
+          24,
+          24 + MediaQuery.of(context).padding.bottom,
+        ),
         child: submitted
             ? Center(child: Text(_resultMessage!, textAlign: TextAlign.center))
             : SingleChildScrollView(
@@ -105,7 +135,8 @@ class _ReportScreenState extends State<ReportScreen> {
                     const SizedBox(height: 24),
                     RadioGroup<_ReportReason>(
                       groupValue: _selectedReason,
-                      onChanged: (value) => setState(() => _selectedReason = value),
+                      onChanged: (value) =>
+                          setState(() => _selectedReason = value),
                       child: Column(
                         children: _ReportReason.values
                             .map(
@@ -122,15 +153,22 @@ class _ReportScreenState extends State<ReportScreen> {
                     TextField(
                       controller: _detailsController,
                       maxLines: 3,
-                      decoration: const InputDecoration(labelText: 'Additional details (optional)'),
+                      decoration: const InputDecoration(
+                        labelText: 'Additional details (optional)',
+                      ),
                     ),
                     const SizedBox(height: 24),
                     if (_resultMessage != null) ...[
-                      Text(_resultMessage!, style: const TextStyle(color: Color(0xFFE05252))),
+                      Text(
+                        _resultMessage!,
+                        style: const TextStyle(color: Color(0xFFE05252)),
+                      ),
                       const SizedBox(height: 16),
                     ],
                     FilledButton(
-                      onPressed: (_selectedReason != null && !_submitting) ? _submit : null,
+                      onPressed: (_selectedReason != null && !_submitting)
+                          ? _submit
+                          : null,
                       child: _submitting
                           ? const SizedBox(
                               height: 20,

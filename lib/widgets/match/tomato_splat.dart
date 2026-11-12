@@ -64,12 +64,15 @@ class _TomatoSplatState extends State<TomatoSplat>
         _makeDrops(r),
       );
     });
-    _c = AnimationController(
-        vsync: this, duration: Duration(milliseconds: totalMs))
-      ..addStatusListener((s) {
-        if (s == AnimationStatus.completed) widget.onDone?.call();
-      })
-      ..forward();
+    _c =
+        AnimationController(
+            vsync: this,
+            duration: Duration(milliseconds: totalMs),
+          )
+          ..addStatusListener((s) {
+            if (s == AnimationStatus.completed) widget.onDone?.call();
+          })
+          ..forward();
   }
 
   @override
@@ -140,7 +143,9 @@ class _BarragePainter extends CustomPainter {
     final flash = (1 - (firstLocal / 0.3).clamp(0.0, 1.0)) * 0.22;
     if (flash > 0) {
       canvas.drawRect(
-          Offset.zero & size, Paint()..color = _red.withValues(alpha: flash));
+        Offset.zero & size,
+        Paint()..color = _red.withValues(alpha: flash),
+      );
     }
 
     for (final s in splats) {
@@ -150,8 +155,9 @@ class _BarragePainter extends CustomPainter {
       final lt = local.clamp(0.0, 1.0);
 
       final impact = Curves.easeOutBack.transform((lt / 0.22).clamp(0.0, 1.0));
-      final spread =
-          Curves.easeOutCubic.transform(((lt - 0.16) / 0.5).clamp(0.0, 1.0));
+      final spread = Curves.easeOutCubic.transform(
+        ((lt - 0.16) / 0.5).clamp(0.0, 1.0),
+      );
       final fade =
           1 - Curves.easeIn.transform(((lt - 0.6) / 0.4).clamp(0.0, 1.0));
       final alpha = fade.clamp(0.0, 1.0);
@@ -185,22 +191,30 @@ class _BarragePainter extends CustomPainter {
         for (var i = 0; i < 7; i++) {
           final a = i / 7 * 2 * pi;
           canvas.drawCircle(
-              center + Offset(cos(a), sin(a)) * coreR * 0.85, coreR * 0.46, red);
+            center + Offset(cos(a), sin(a)) * coreR * 0.85,
+            coreR * 0.46,
+            red,
+          );
         }
         for (var i = 0; i < 4; i++) {
           final a = i / 4 * 2 * pi + 0.6;
-          canvas.drawCircle(center + Offset(cos(a), sin(a)) * coreR * 0.4,
-              coreR * 0.07, seedPaint);
+          canvas.drawCircle(
+            center + Offset(cos(a), sin(a)) * coreR * 0.4,
+            coreR * 0.07,
+            seedPaint,
+          );
         }
       }
 
       if (impact > 0 && lt < 0.5) {
         final tp = TextPainter(
           text: TextSpan(
-              text: '🍅',
-              style: TextStyle(
-                  fontSize: 64 * s.scale * (0.5 + 0.5 * impact),
-                  color: Colors.white.withValues(alpha: alpha))),
+            text: '🍅',
+            style: TextStyle(
+              fontSize: 64 * s.scale * (0.5 + 0.5 * impact),
+              color: Colors.white.withValues(alpha: alpha),
+            ),
+          ),
           textDirection: TextDirection.ltr,
         )..layout();
         tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
@@ -211,8 +225,8 @@ class _BarragePainter extends CustomPainter {
   /// A single tomato's lifetime as a fraction of the whole barrage timeline.
   double _localSpan() {
     final n = splats.length;
-    final totalMs = (n - 1) * _TomatoSplatState._staggerMs +
-        _TomatoSplatState._splatMs;
+    final totalMs =
+        (n - 1) * _TomatoSplatState._staggerMs + _TomatoSplatState._splatMs;
     return _TomatoSplatState._splatMs / totalMs;
   }
 

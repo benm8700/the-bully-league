@@ -228,7 +228,19 @@ async function getWatchFeed(auth, data) {
     });
   }
 
+  // NOTHING TO JUDGE keeps the judging streak (voteStreak.js). Only when
+  // this was the FIRST page and the scan saw the whole open window
+  // (snap.size < SCAN_LIMIT), so "empty" is the truth, not a cut-off.
+  const firstPage = !(Number.isFinite(cursorMs) && cursorMs > 0);
+  let streakKept = null;
+  if (firstPage && candidates.length === 0 && snap.size < SCAN_LIMIT) {
+    const {keepStreakOnEmptyQueue} = require("./voteStreak");
+    streakKept = await keepStreakOnEmptyQueue(auth.uid, {nowMs});
+  }
+
   return {
+    // Set when an empty queue just kept the judging streak alive.
+    streakKept,
     matches: orderFeed(results, nowMs),
     // Every surviving candidate is a battle waiting on this viewer, so the
     // Judge badge is just the count.

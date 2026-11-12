@@ -540,6 +540,11 @@ class MatchmakingService {
       'outcome': outcome,
       'quality': ?quality,
       'roundBoundaries': ?roundBoundaries,
+      // For the clip renderer's lip-sync correction (functions/clipSync.js):
+      // an iPhone's recorded audio lands ~200ms behind its video.
+      'platform': defaultTargetPlatform == TargetPlatform.iOS
+          ? 'ios'
+          : 'android',
       if (violation) 'violation': true,
     });
   }

@@ -1,5 +1,6 @@
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
+const {getAuth} = require("firebase-admin/auth");
 const {normalizeE164} = require("./phoneSignup");
 
 /**
@@ -166,7 +167,9 @@ async function challengeFriend(auth, data) {
   const username = typeof data?.username === "string" ? data.username.trim() : "";
   const toUidInput = typeof data?.toUid === "string" ? data.toUid.trim() : "";
   const phoneInput = typeof data?.phone === "string" ? data.phone.trim() : "";
-  if (!username && !toUidInput && !phoneInput) {
+  const emailInput = typeof data?.email === "string" ?
+    data.email.trim().toLowerCase() : "";
+  if (!username && !toUidInput && !phoneInput && !emailInput) {
     throw new HttpsError("invalid-argument", "Who do you want to challenge?");
   }
 
@@ -185,6 +188,23 @@ async function challengeFriend(auth, data) {
         .where("usernameLower", "==", username.toLowerCase())
         .limit(1).get();
     target = found.empty ? null : found.docs[0];
+  } else if (emailInput) {
+    // The sign-in email on the Auth account. We can't text or email an
+    // invite to an address, so no account here is a plain "not found" with a
+    // nudge toward the phone number (which CAN carry an invite).
+    let authUser = null;
+    try {
+      authUser = await getAuth().getUserByEmail(emailInput);
+    } catch (_) {
+      authUser = null;
+    }
+    if (!authUser) {
+      throw new HttpsError("not-found",
+          "No account uses that email. Try their phone number instead - " +
+          "we'll text them an invite.");
+    }
+    const snap = await db.collection("users").doc(authUser.uid).get();
+    target = snap.exists ? snap : null;
   } else {
     const phone = normalizeE164(phoneInput);
     if (!phone) {
@@ -373,14 +393,25 @@ async function getMyChallenges(auth) {
   // it needs no new index. Bounded by isExpired to the last hour, so it does
   // not read every friend battle the user has ever started - fine at beta
   // scale; revisit if a user accumulates many in an hour.
-  const [incoming, outgoing, accepted] = await Promise.all([
+  const [incoming, outgoing, accepted, invited] = await Promise.all([
     db.collection("challenges")
         .where("toUid", "==", uid).where("status", "==", "pending").get(),
     db.collection("challenges")
         .where("fromUid", "==", uid).where("status", "==", "pending").get(),
     db.collection("challenges")
         .where("fromUid", "==", uid).where("status", "==", "accepted").get(),
+    // Text invites to numbers with no account yet. They have no expiry (the
+    // challenge is minted when that person signs up), so show the last week's.
+    db.collection("phoneChallenges")
+        .where("fromUid", "==", uid).where("status", "==", "pending").get(),
   ]);
+  const INVITE_SHOW_MS = 7 * 24 * 60 * 60 * 1000;
+  const invites = invited.docs
+      .map((d) => d.data())
+      .filter((c) => nowMs - (Number(c.createdAtMs) || 0) < INVITE_SHOW_MS)
+      .sort((a, b) => (Number(b.createdAtMs) || 0) - (Number(a.createdAtMs) || 0))
+      .slice(0, 5)
+      .map((c) => ({phone: c.phone, createdAtMs: c.createdAtMs}));
 
   const live = (snap) => snap.docs
       .filter((d) => !isExpired(d.data(), nowMs))
@@ -466,6 +497,7 @@ async function getMyChallenges(auth) {
       toUsername: names.get(c.toUid) ?? "Unknown",
       matchId: c.matchId ?? friendMatchId(c.id),
     })),
+    invites,
   };
 }
 

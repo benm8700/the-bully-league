@@ -92,7 +92,10 @@ class _JudgePanelViewState extends State<JudgePanelView> {
   Future<void> _join() async {
     try {
       final db = FirebaseFirestore.instance;
-      final t = await db.collection('tournaments').doc(widget.tournamentId).get();
+      final t = await db
+          .collection('tournaments')
+          .doc(widget.tournamentId)
+          .get();
       _judges = (t.data()?['judges'] as List? ?? const [])
           .whereType<String>()
           .toList();
@@ -121,10 +124,12 @@ class _JudgePanelViewState extends State<JudgePanelView> {
       // Start the debate recording (best-effort). The server claims it
       // race-safely, so only one of the judges' calls actually records, and the
       // watchdog stops it when the verdict lands - so this is fire-and-forget.
-      unawaited(FirebaseFunctions.instance
-          .httpsCallable('startDebateRecording')
-          .call<Map<String, dynamic>>({'matchId': widget.matchId})
-          .then((_) {}, onError: (_) {}));
+      unawaited(
+        FirebaseFunctions.instance
+            .httpsCallable('startDebateRecording')
+            .call<Map<String, dynamic>>({'matchId': widget.matchId})
+            .then((_) {}, onError: (_) {}),
+      );
 
       final names = <String, String>{};
       for (final id in _judges) {
@@ -209,9 +214,11 @@ class _JudgePanelViewState extends State<JudgePanelView> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(_error!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70)),
+          child: Text(
+            _error!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70),
+          ),
         ),
       );
     }
@@ -291,12 +298,15 @@ class _JudgePanelViewState extends State<JudgePanelView> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('$name takes it',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: context.palette.reward,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16)),
+            Text(
+              '$name takes it',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: context.palette.reward,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
+            ),
             const SizedBox(height: 2),
             Text(
               left > 0 ? 'Wrapping up in ${left}s' : 'Wrapping up…',
@@ -319,28 +329,46 @@ class _JudgePanelViewState extends State<JudgePanelView> {
           if (_voteError != null)
             Container(
               margin: const EdgeInsets.only(bottom: 6),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: context.palette.live.withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                    color: context.palette.live.withValues(alpha: 0.6)),
+                  color: context.palette.live.withValues(alpha: 0.6),
+                ),
               ),
-              child: Text(_voteError!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: context.palette.live,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700)),
+              child: Text(
+                _voteError!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: context.palette.live,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
-          Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Expanded(child: _voteButton(
-                widget.player1Id, widget.player1Name, House.gelRed, mine)),
-            const SizedBox(width: 10),
-            Expanded(child: _voteButton(
-                widget.player2Id, widget.player2Name, House.gelBlue, mine)),
-          ]),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _voteButton(
+                  widget.player1Id,
+                  widget.player1Name,
+                  House.gelRed,
+                  mine,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _voteButton(
+                  widget.player2Id,
+                  widget.player2Name,
+                  House.gelBlue,
+                  mine,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -355,19 +383,22 @@ class _JudgePanelViewState extends State<JudgePanelView> {
     final isWinner = mine == id;
     final isLoser = hasPick && !isWinner;
 
-    final emoji =
-        isWinner ? '\u{1F44D}' : (isLoser ? '\u{1F595}' : null); // 👍 / 🖕
+    final emoji = isWinner
+        ? '\u{1F44D}'
+        : (isLoser ? '\u{1F595}' : null); // 👍 / 🖕
     final bg = isWinner
         ? color.withValues(alpha: 0.9)
         : isLoser
-            ? const Color(0xFF161616)
-            : color.withValues(alpha: 0.14);
+        ? const Color(0xFF161616)
+        : color.withValues(alpha: 0.14);
     final border = isWinner
         ? Colors.white
         : isLoser
-            ? Colors.white12
-            : color;
-    final fg = isWinner ? Colors.white : (isLoser ? Colors.white38 : Colors.white);
+        ? Colors.white12
+        : color;
+    final fg = isWinner
+        ? Colors.white
+        : (isLoser ? Colors.white38 : Colors.white);
 
     return GestureDetector(
       onTap: _submitting ? null : () => _vote(id),
@@ -380,7 +411,12 @@ class _JudgePanelViewState extends State<JudgePanelView> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: border, width: isWinner ? 2 : 1),
           boxShadow: isWinner
-              ? [BoxShadow(color: color.withValues(alpha: 0.55), blurRadius: 14)]
+              ? [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.55),
+                    blurRadius: 14,
+                  ),
+                ]
               : null,
         ),
         child: Row(
@@ -393,16 +429,20 @@ class _JudgePanelViewState extends State<JudgePanelView> {
                   duration: const Duration(milliseconds: 220),
                   transitionBuilder: (child, anim) =>
                       ScaleTransition(scale: anim, child: child),
-                  child: Text(emoji,
-                      key: ValueKey(emoji),
-                      style: const TextStyle(fontSize: 18)),
+                  child: Text(
+                    emoji,
+                    key: ValueKey(emoji),
+                    style: const TextStyle(fontSize: 18),
+                  ),
                 ),
               ),
             Flexible(
-              child: Text(name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: fg, fontWeight: FontWeight.w800)),
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: fg, fontWeight: FontWeight.w800),
+              ),
             ),
           ],
         ),
@@ -410,4 +450,3 @@ class _JudgePanelViewState extends State<JudgePanelView> {
     );
   }
 }
-

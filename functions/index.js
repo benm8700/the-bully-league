@@ -1503,6 +1503,13 @@ exports.respondToChallenge = onCall((request) => {
   return respondToChallenge(request.auth, request.data);
 });
 
+// Phone-number login: checks the password server-side, then hands back the
+// account's email so the client signs in normally. See phoneLogin.js.
+exports.resolvePhoneLogin = onCall((request) => {
+  const {resolvePhoneLogin} = require("./phoneLogin");
+  return resolvePhoneLogin(request.data);
+});
+
 exports.getMyChallenges = onCall((request) => {
   const {getMyChallenges} = require("./friendBattle");
   return getMyChallenges(request.auth);

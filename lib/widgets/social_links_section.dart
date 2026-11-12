@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/social_links.dart';
+import 'neon_dialog.dart';
 
 const Color _kFollowPink = Color(0xFFFF3B6B);
 
@@ -10,7 +11,11 @@ const Color _kFollowPink = Color(0xFFFF3B6B);
 /// the link in the browser - required discipline for an 18+ app pointing out to
 /// external sites. Renders nothing when the performer has set no links.
 class SocialLinksSection extends StatelessWidget {
-  const SocialLinksSection({super.key, required this.links, this.centered = true});
+  const SocialLinksSection({
+    super.key,
+    required this.links,
+    this.centered = true,
+  });
 
   final Map<String, String> links;
   final bool centered;
@@ -26,8 +31,9 @@ class SocialLinksSection extends StatelessWidget {
     }
     if (chips.isEmpty) return const SizedBox.shrink();
     return Column(
-      crossAxisAlignment:
-          centered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      crossAxisAlignment: centered
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         Text(
           'FIND ME ON',
@@ -94,16 +100,20 @@ class _LinkChip extends StatelessWidget {
 /// Confirm, then open the external link. Shared so the editor's preview and the
 /// public page open links the same, safe way.
 Future<void> _openWithConfirm(
-    BuildContext context, SocialPlatform platform, String value) async {
+  BuildContext context,
+  SocialPlatform platform,
+  String value,
+) async {
   final url = socialUrl(platform.key, value);
   if (url == null) return;
   final ok = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
+    builder: (dialogContext) => NeonDialog(
       title: const Text('Leaving The Bully League'),
       content: Text(
-          'This opens ${platform.label} in your browser. We can\'t vouch for '
-          'anything outside the app.'),
+        'This opens ${platform.label} in your browser. We can\'t vouch for '
+        'anything outside the app.',
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -123,9 +133,9 @@ Future<void> _openWithConfirm(
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   } catch (_) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Couldn't open that link.")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Couldn't open that link.")));
     }
   }
 }

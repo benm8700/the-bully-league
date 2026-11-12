@@ -10,14 +10,19 @@ import 'package:provider/provider.dart';
 import '../../core/badges/badges.dart';
 import '../../core/emoji_ratings.dart';
 import '../../core/social_links.dart';
+import '../../core/streaks.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../widgets/badges/badge_case.dart';
 import '../../widgets/belt_flair.dart';
 import '../../widgets/emoji_stats_card.dart';
+import '../../widgets/home/player_status_card.dart';
 import '../../widgets/home/rank_badges.dart';
 import '../../widgets/social_links_editor.dart';
 import '../account/delete_account_screen.dart';
+import '../leaderboard/leaderboard_screen.dart';
+import '../settings/account_screen.dart';
+import '../vote/my_battles_screen.dart';
 import 'emoji_scrub_sheet.dart';
 import 'form_card.dart';
 import 'intro_video_card.dart';
@@ -284,6 +289,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+  /// "215 pts · 🔥 1" for the detailed rank card.
+  String _cardExtra() {
+    final balance = (_userData?['pointsBalance'] as num? ?? 0).toInt();
+    final days = liveJudgeStreakDays(_userData?['voteStreak']);
+    return '$balance pts${days > 0 ? '  ·  🔥 $days' : ''}';
+  }
+
   @override
   Widget build(BuildContext context) {
     // Cinematic backstage background (developer's art, 2026-09-14), same
@@ -300,6 +312,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         elevation: 0,
         title: const Text('Your Profile'),
         automaticallyImplyLeading: !widget.embedded,
+        // Account & settings (email, notifications, blocked players, sign
+        // out) - moved here from Home's top-right avatar (2026-11-11).
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Account & settings',
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const AccountScreen())),
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -435,7 +458,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       : null);
                               return _IdentityHeader(
                                 username: _username,
-                                rankTitle: _rankTitle,
+                                // The detailed rank card right below shows the
+                                // title, so the header only repeats it during
+                                // onboarding (where the card is hidden).
+                                rankTitle: widget.promptIntro
+                                    ? _rankTitle
+                                    : null,
                                 photoUrl: photo,
                                 onPhotoTap: _retakeSelfie,
                                 photoBusy: _retakingSelfie,
@@ -457,8 +485,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           // nowhere else (Home shows XP + rank, not W-L). Hidden for a
                           // brand-new player with no history so a fresh profile stays
                           // clean.
+                          // THE DETAILED RANK CARD (2026-11-11, option B): Home
+                          // shows the compact card; the full one - crest, tier
+                          // numeral, exact XP, points and streak - lives here.
+                          if (!widget.promptIntro &&
+                              FirebaseAuth.instance.currentUser != null) ...[
+                            const SizedBox(height: 16),
+                            PlayerStatusCard(
+                              uid: FirebaseAuth.instance.currentUser!.uid,
+                              fallbackTitle: _rankTitle,
+                              horizontalMargin: 0,
+                              extra: _cardExtra(),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const LeaderboardScreen(),
+                                ),
+                              ),
+                            ),
+                          ],
                           if (!widget.promptIntro)
                             _CareerStats(user: _userData),
+                          if (!widget.promptIntro) _Streaks(user: _userData),
+                          // MY BATTLES moved inside Profile (2026-11-11 swipe
+                          // layout): the last 3, then "See all".
+                          if (!widget.promptIntro &&
+                              FirebaseAuth.instance.currentUser != null) ...[
+                            const SizedBox(height: 20),
+                            RecentBattlesSection(
+                              uid: FirebaseAuth.instance.currentUser!.uid,
+                            ),
+                          ],
                           const SizedBox(height: 24),
                           // Badges and the (normal-position) intro card only when NOT
                           // onboarding - in promptIntro mode the intro card is hoisted
@@ -934,6 +990,112 @@ class _CareerStats extends StatelessWidget {
             style: text.labelSmall?.copyWith(
               color: scheme.onSurfaceVariant,
               letterSpacing: 0.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The two streaks side by side (2026-11-11): JUDGING (daily - one vote a
+/// day, and a day with nothing to judge still counts) and RANKED (weekly -
+/// one ranked battle a week). Both always shown, so a 0 is a nudge to start.
+class _Streaks extends StatelessWidget {
+  const _Streaks({required this.user});
+
+  final Map<String, dynamic>? user;
+
+  @override
+  Widget build(BuildContext context) {
+    final judge = liveJudgeStreakDays(user?['voteStreak']);
+    final ranked = liveRankedStreakWeeks(user?['rankedStreak']);
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: _StreakChip(
+              emoji: '🔥',
+              value: judge,
+              unit: judge == 1 ? 'day' : 'days',
+              label: 'Judging streak',
+              accent: const Color(0xFF2FE0A8),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StreakChip(
+              emoji: '🎤',
+              value: ranked,
+              unit: ranked == 1 ? 'week' : 'weeks',
+              label: 'Ranked streak',
+              accent: const Color(0xFFB45CFF),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StreakChip extends StatelessWidget {
+  const _StreakChip({
+    required this.emoji,
+    required this.value,
+    required this.unit,
+    required this.label,
+    required this.accent,
+  });
+
+  final String emoji;
+  final int value;
+  final String unit;
+  final String label;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final live = value > 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xCC0C0A14),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: accent.withValues(alpha: live ? 0.7 : 0.25),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Opacity(
+            opacity: live ? 1 : 0.4,
+            child: Text(emoji, style: const TextStyle(fontSize: 24)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$value $unit',
+                  style: text.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: live ? Colors.white : Colors.white54,
+                  ),
+                ),
+                Text(
+                  label.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelSmall?.copyWith(
+                    color: accent,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

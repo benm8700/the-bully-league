@@ -54,8 +54,15 @@ String? rankTierNumeral(String? title) =>
 /// The ladder in order, for deriving a tier's position (bronze/silver/gold
 /// banding of the numeral). GOAT is deliberately absent - it has no numeral.
 const List<String> _tierOrder = [
-  'Average Joe', 'Open Micer', 'Class Clown', 'The Funny Friend', 'Door Guy',
-  'Regular', 'Headliner', 'Legend', 'Featured Talent',
+  'Average Joe',
+  'Open Micer',
+  'Class Clown',
+  'The Funny Friend',
+  'Door Guy',
+  'Regular',
+  'Headliner',
+  'Legend',
+  'Featured Talent',
 ];
 
 /// Metal colour for the rung numeral, so the climb reads at a glance: BRONZE
@@ -142,8 +149,7 @@ class _ShieldFallback extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.only(bottom: 6),
-          child:
-              Icon(Icons.military_tech, size: 20, color: Color(0xFF3A2A00)),
+          child: Icon(Icons.military_tech, size: 20, color: Color(0xFF3A2A00)),
         ),
       ],
     );

@@ -1,3 +1,4 @@
+import '../../widgets/big_back_button.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/services/age_verification_service.dart';
 import '../../core/services/auth_service.dart';
 import 'login_screen.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// Signup is a short sequence of screens - username, then email + password,
 /// then phone, then the texted code - with a "Step N of 4" bar and a back
@@ -167,7 +169,7 @@ class _SignupScreenState extends State<SignupScreen> {
       setState(() => _isSubmitting = false);
       await showDialog<void>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (context) => NeonDialog(
           title: const Text('Age requirement not met'),
           content: const Text(
             'The Bully League is only available to users 18 and older. '
@@ -400,7 +402,7 @@ class _SignupScreenState extends State<SignupScreen> {
   Future<void> _showVerifyInPlayStore() {
     return showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => NeonDialog(
         title: const Text('Verify your age in Google Play'),
         content: const Text(
           'Google Play needs to confirm your age before you can join. Open '
@@ -446,11 +448,7 @@ class _SignupScreenState extends State<SignupScreen> {
         appBar: AppBar(
           title: const Text('Join The Bully League'),
           leading: _step != _SignupStep.age && !_finalizing
-              ? IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  tooltip: 'Back',
-                  onPressed: _isSubmitting ? null : _back,
-                )
+              ? BigBackButton(onPressed: _isSubmitting ? null : _back)
               : null,
         ),
         body: _finalizing
@@ -593,7 +591,7 @@ class _SignupScreenState extends State<SignupScreen> {
         Text('You must be 18+', style: text.headlineMedium),
         const SizedBox(height: 8),
         Text(
-          'The Bully League is live roast battles with strangers.',
+          'The Bully League is a live one-on-one roast battle with strangers.',
           style: text.bodyLarge?.copyWith(color: muted),
         ),
         const SizedBox(height: 24),
@@ -602,12 +600,7 @@ class _SignupScreenState extends State<SignupScreen> {
           'Expect strong language and offensive comedy - that is the '
               'point.',
         ),
-        line(
-          '🚫',
-          'No hate speech, nudity, threats or anything involving '
-              'kids. Those get you banned.',
-        ),
-        line('📱', 'Next, your phone may ask to confirm your age.'),
+        line('🚫', 'Hate speech, nudity, and threats will get you banned.'),
         const SizedBox(height: 16),
         _error(),
         _nextButton(_ageNext, label: "I'm 18 or older"),

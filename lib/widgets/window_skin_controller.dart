@@ -45,14 +45,14 @@ class _WindowSkinControllerState extends State<WindowSkinController> {
         .doc('eventWindow')
         .snapshots()
         .listen(
-      (snap) {
-        _config = EventWindowConfig.fromMap(snap.data());
-        _recompute();
-      },
-      // A config read failure must never strand the theme: keep the
-      // default hours and carry on.
-      onError: (_) => _recompute(),
-    );
+          (snap) {
+            _config = EventWindowConfig.fromMap(snap.data());
+            _recompute();
+          },
+          // A config read failure must never strand the theme: keep the
+          // default hours and carry on.
+          onError: (_) => _recompute(),
+        );
     // 30s granularity means the swap lands within half a minute of the
     // hour boundary, which is imperceptible for a theme and far cheaper
     // than a per-second tick.
@@ -77,8 +77,8 @@ class _WindowSkinControllerState extends State<WindowSkinController> {
     final now = DateTime.now();
     // A disabled window is never live, so no LIVE cue shows - a broken or
     // retired promo must not light the app up.
-    final live = _config.enabled &&
-        currentOrNextWindow(now, _config).contains(now);
+    final live =
+        _config.enabled && currentOrNextWindow(now, _config).contains(now);
     if (kWindowLive.value != live) kWindowLive.value = live;
     // Keep the cue's label in step with the (console-tunable) name.
     if (kWindowName.value != _config.name) kWindowName.value = _config.name;

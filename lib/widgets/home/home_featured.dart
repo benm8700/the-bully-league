@@ -35,19 +35,21 @@ class HomeFeatured extends StatelessWidget {
           final clipUrl = (d['clipUrl'] as String?)?.trim();
           final hasClip = clipUrl != null && clipUrl.isNotEmpty;
           final title = '$p1 vs $p2';
-          items.add(FeaturedItem(
-            title: title,
-            subtitle: '⭐ Editor\'s Choice',
-            playable: hasClip,
-            onTap: hasClip
-                ? () => Navigator.of(context).push(
+          items.add(
+            FeaturedItem(
+              title: title,
+              subtitle: '⭐ Editor\'s Choice',
+              playable: hasClip,
+              onTap: hasClip
+                  ? () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) =>
                             _FeaturedClipScreen(title: title, url: clipUrl),
                       ),
                     )
-                : null,
-          ));
+                  : null,
+            ),
+          );
         }
         return FeaturedSection(items: items);
       },

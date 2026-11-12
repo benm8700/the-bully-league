@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/services/daily_reward_service.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// The Free Rewards claim sheet: a daily login reward on an escalating
 /// 7-day cycle, claimed once per Pacific day (see functions/dailyReward.js).
@@ -14,8 +15,12 @@ class DailyRewardSheet extends StatefulWidget {
 
   /// Opens the sheet. Returns true if a reward was claimed while it was open,
   /// so the caller can refresh any "claim ready" indicator.
-  static Future<bool> show(BuildContext context, {DailyRewardService? service}) async {
-    final claimed = await showModalBottomSheet<bool>(
+  static Future<bool> show(
+    BuildContext context, {
+    DailyRewardService? service,
+  }) async {
+    final claimed = await showNeonSheet<bool>(
+      gold: true,
       context: context,
       showDragHandle: true,
       backgroundColor: const Color(0xFF121016),
@@ -33,7 +38,8 @@ class _DailyRewardSheetState extends State<DailyRewardSheet> {
   static const _gold = Color(0xFFFFC107);
   static const _goldDeep = Color(0xFFD9A21E);
 
-  late final DailyRewardService _service = widget.service ?? DailyRewardService();
+  late final DailyRewardService _service =
+      widget.service ?? DailyRewardService();
 
   DailyRewardState? _state;
   bool _loading = true;
@@ -90,7 +96,11 @@ class _DailyRewardSheetState extends State<DailyRewardSheet> {
       top: false,
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          20, 4, 20, 20 + MediaQuery.of(context).padding.bottom),
+          20,
+          4,
+          20,
+          20 + MediaQuery.of(context).padding.bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -102,18 +112,18 @@ class _DailyRewardSheetState extends State<DailyRewardSheet> {
                 Text(
                   'Free Rewards',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 4),
             Text(
               'Come back every day. Miss a day and the streak resets.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFFA0A0A0),
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: const Color(0xFFA0A0A0)),
             ),
             const SizedBox(height: 18),
             _body(context),
@@ -177,7 +187,9 @@ class _DailyRewardSheetState extends State<DailyRewardSheet> {
                 height: 20,
                 width: 20,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: Color(0xFF3A2A00)),
+                  strokeWidth: 2.5,
+                  color: Color(0xFF3A2A00),
+                ),
               )
             : Text('Claim ${state.todaysReward} points'),
       );
@@ -204,7 +216,10 @@ class _DailyRewardSheetState extends State<DailyRewardSheet> {
             SizedBox(width: 8),
             Text(
               'Claimed today — come back tomorrow',
-              style: TextStyle(color: Color(0xFFCFCFCF), fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: Color(0xFFCFCFCF),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
@@ -239,8 +254,8 @@ class _CycleRow extends StatelessWidget {
               points: schedule[i],
               // A day is "done" if it's before today's cycle day, or it's
               // today and already claimed.
-              claimed: (i + 1) < cycleDay ||
-                  ((i + 1) == cycleDay && claimedToday),
+              claimed:
+                  (i + 1) < cycleDay || ((i + 1) == cycleDay && claimedToday),
               isToday: (i + 1) == cycleDay,
               isFinal: i == schedule.length - 1,
             ),
@@ -274,8 +289,8 @@ class _DayTile extends StatelessWidget {
     final Color border = active
         ? _gold
         : claimed
-            ? _gold.withValues(alpha: 0.55)
-            : Colors.white.withValues(alpha: 0.10);
+        ? _gold.withValues(alpha: 0.55)
+        : Colors.white.withValues(alpha: 0.10);
     final Color bg = active
         ? _gold.withValues(alpha: 0.14)
         : const Color(0xFF1A1620);
@@ -285,7 +300,13 @@ class _DayTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: border, width: active ? 1.6 : 1),
         boxShadow: active
-            ? [BoxShadow(color: _gold.withValues(alpha: 0.25), blurRadius: 12, spreadRadius: -3)]
+            ? [
+                BoxShadow(
+                  color: _gold.withValues(alpha: 0.25),
+                  blurRadius: 12,
+                  spreadRadius: -3,
+                ),
+              ]
             : null,
       ),
       child: Padding(
@@ -301,9 +322,7 @@ class _DayTile extends StatelessWidget {
                   fontSize: 8.5,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.3,
-                  color: isFinal
-                      ? _gold
-                      : const Color(0xFF8A8A8A),
+                  color: isFinal ? _gold : const Color(0xFF8A8A8A),
                 ),
               ),
             ),
@@ -311,12 +330,18 @@ class _DayTile extends StatelessWidget {
             SizedBox(
               height: 20,
               child: claimed
-                  ? Icon(Icons.check_circle, color: _gold.withValues(alpha: 0.9), size: 18)
+                  ? Icon(
+                      Icons.check_circle,
+                      color: _gold.withValues(alpha: 0.9),
+                      size: 18,
+                    )
                   : Icon(
                       isFinal ? Icons.emoji_events : Icons.stars,
                       color: active
                           ? _gold
-                          : (isFinal ? _gold.withValues(alpha: 0.8) : const Color(0xFF6E6A66)),
+                          : (isFinal
+                                ? _gold.withValues(alpha: 0.8)
+                                : const Color(0xFF6E6A66)),
                       size: isFinal ? 18 : 15,
                     ),
             ),
@@ -351,29 +376,66 @@ class _GoldButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onPressed,
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            gradient: const LinearGradient(
-              colors: [Color(0xFFF6D66B), Color(0xFFFFC107), Color(0xFFD9A21E)],
-            ),
-            border: Border.all(color: const Color(0xFF7A5A12)),
-          ),
-          child: Container(
-            height: 52,
-            alignment: Alignment.center,
-            child: DefaultTextStyle.merge(
-              style: const TextStyle(
-                color: Color(0xFF3A2A00),
-                fontWeight: FontWeight.w900,
-                fontSize: 16,
+    // The gold version of the neon pill (2026-11-11): same glow and gloss
+    // as the pink NeonActionButton, in reward gold.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: onPressed == null
+            ? null
+            : const [
+                BoxShadow(
+                  color: Color(0x99FFC107),
+                  blurRadius: 18,
+                  offset: Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: Color(0x44FF9800),
+                  blurRadius: 32,
+                  spreadRadius: 1,
+                ),
+              ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onPressed,
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFFF6D66B),
+                  Color(0xFFFFC107),
+                  Color(0xFFD9A21E),
+                ],
               ),
-              child: child,
+              border: Border.all(color: const Color(0xFFFFE9A6), width: 1),
+            ),
+            child: Container(
+              height: 56,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.35),
+                    Colors.white.withValues(alpha: 0.0),
+                  ],
+                  stops: const [0, 0.55],
+                ),
+              ),
+              child: DefaultTextStyle.merge(
+                style: const TextStyle(
+                  color: Color(0xFF3A2A00),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                ),
+                child: child,
+              ),
             ),
           ),
         ),

@@ -114,9 +114,9 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
   }
 
   Future<void> _startCamera() async {
-    final statuses =
-        await [Permission.camera, Permission.microphone].request();
-    final granted = (statuses[Permission.camera]?.isGranted ?? false) &&
+    final statuses = await [Permission.camera, Permission.microphone].request();
+    final granted =
+        (statuses[Permission.camera]?.isGranted ?? false) &&
         (statuses[Permission.microphone]?.isGranted ?? false);
     if (!granted) {
       if (!mounted) return;
@@ -235,13 +235,16 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
         children: [
           const Icon(Icons.mic_none_outlined, size: 56),
           const SizedBox(height: 16),
-          Text('Rehearse against the real clock',
-              style: text.headlineSmall, textAlign: TextAlign.center),
+          Text(
+            'Rehearse against the real clock',
+            style: text.headlineSmall,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 12),
           Text(
             'No opponent, no votes, nothing recorded or saved. Just you and '
             'your $_turnSeconds-second clock - the same as a real battle. Hold '
-            'the floor and roast; tap Yield when you\'re done.',
+            'the floor and roast; tap Pass the mic when you\'re done.',
             style: text.bodyMedium,
             textAlign: TextAlign.center,
           ),
@@ -279,15 +282,19 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('You\'re up',
-                            style: TextStyle(
-                                color: Colors.white, fontSize: 20)),
+                        const Text(
+                          'You\'re up',
+                          style: TextStyle(color: Colors.white, fontSize: 20),
+                        ),
                         const SizedBox(height: 12),
-                        Text('$_secondsRemaining',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 64,
-                                fontWeight: FontWeight.bold)),
+                        Text(
+                          '$_secondsRemaining',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 64,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -298,15 +305,16 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
                   left: 12,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.black54,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       '${_secondsRemaining}s on the clock',
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 14),
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
                     ),
                   ),
                 ),
@@ -322,14 +330,17 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
                 isCountdown
                     ? 'Get ready...'
                     : isYourTurn
-                        ? 'Go.'
-                        : 'Their turn. Think of your next one.',
+                    ? 'Go.'
+                    : 'Their turn. Think of your next one.',
                 style: Theme.of(context).textTheme.titleMedium,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
               if (isYourTurn)
-                FilledButton(onPressed: _endTurn, child: const Text('Yield'))
+                FilledButton(
+                  onPressed: _endTurn,
+                  child: const Text('Pass the mic'),
+                )
               else
                 const SizedBox(height: 48),
             ],
@@ -350,8 +361,11 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
         children: [
           const Icon(Icons.check_circle_outline, size: 56),
           const SizedBox(height: 16),
-          Text('That was the format', style: text.headlineSmall,
-              textAlign: TextAlign.center),
+          Text(
+            'That was the format',
+            style: text.headlineSmall,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 16),
           for (var i = 0; i < _secondsUsed.length; i++)
             Padding(
@@ -360,8 +374,10 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('On the clock', style: text.bodyMedium),
-                  Text('${_secondsUsed[i]}s of $_turnSeconds',
-                      style: text.bodyMedium),
+                  Text(
+                    '${_secondsUsed[i]}s of $_turnSeconds',
+                    style: text.bodyMedium,
+                  ),
                 ],
               ),
             ),
@@ -371,10 +387,10 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
             // happens to be the useful one for this format.
             ranOut == _secondsUsed.length
                 ? 'You ran your whole clock down. In a real battle that just '
-                    'hands the floor to your opponent, so land the joke '
-                    'earlier than feels natural.'
-                : 'You yielded with time to spare - the right instinct. Short '
-                    'and landed beats long and lost.',
+                      'hands the floor to your opponent, so land the joke '
+                      'earlier than feels natural.'
+                : 'You passed the mic with time to spare - the right instinct. Short '
+                      'and landed beats long and lost.',
             style: text.bodySmall,
             textAlign: TextAlign.center,
           ),

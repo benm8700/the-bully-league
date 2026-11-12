@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../widgets/match_clip_player.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// Getting the shareable version of one of your own battles.
 ///
@@ -32,7 +33,7 @@ class GetClipSheet extends StatefulWidget {
   final String matchId;
 
   static Future<void> show(BuildContext context, String matchId) {
-    return showModalBottomSheet<void>(
+    return showNeonSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,

@@ -32,6 +32,9 @@ const DEFAULTS = {
   // resolveGraceMs); it is kept out of the engine default so the steal mechanic
   // can still be tested in isolation.
   graceMs: 0,
+  // Regular/friend battles: Yield refused for this long after taking the
+  // floor (anti ping-pong). 0 = off (Main Stage). Mirrors main_stage_battle.dart.
+  minHoldMs: 0,
 };
 
 // Product default + bounds for the interrupt grace. Lives here (pure, testable)
@@ -201,6 +204,8 @@ function reduce(state, ev) {
 
     case "yield": {
       if (s.floor !== ev.by) return s; // only the holder can yield
+      if (s.config.minHoldMs > 0 && s.floorTakenMs != null &&
+          ev.atMs - s.floorTakenMs < s.config.minHoldMs) return s;
       const opp = other(s, ev.by);
       if (s.remaining[opp] > 0) takeFloor(s, opp, ev.atMs);
       else {

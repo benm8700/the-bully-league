@@ -27,7 +27,9 @@ class MainStageRulesScreen extends StatelessWidget {
           Text(
             'The finals are a different beast.',
             style: text.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800, color: gold),
+              fontWeight: FontWeight.w800,
+              color: gold,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -39,7 +41,8 @@ class MainStageRulesScreen extends StatelessWidget {
           const _MsRule(
             icon: Icons.timer_outlined,
             title: 'Your clock',
-            body: 'You each get a fixed talk budget - about a minute. It only '
+            body:
+                'You each get a fixed talk budget - about a minute. It only '
                 'ticks while YOU hold the mic. Talk as long or as little as you '
                 'want; whatever you don\'t use banks for later. When both '
                 'clocks hit zero, the battle is over.',
@@ -47,14 +50,16 @@ class MainStageRulesScreen extends StatelessWidget {
           const _MsRule(
             icon: Icons.swap_horiz,
             title: 'Pass the mic',
-            body: 'Done with your bit? Yield. The mic passes to your opponent, '
+            body:
+                'Done with your bit? Tap Pass the mic. It goes to your opponent, '
                 'free - it costs you nothing. Land your lines, hand it over, '
                 'and think up your next ones while they sweat.',
           ),
           const _MsRule(
             icon: Icons.bolt,
             title: 'Interrupts - your 2 steals',
-            body: 'You get two interrupts a battle. Cut in while your opponent '
+            body:
+                'You get two interrupts a battle. Cut in while your opponent '
                 'has the mic and you steal the floor - but it costs you: one of '
                 'your two steals, and it starts your own clock. Save them for '
                 'the perfect comeback, not for spam.',
@@ -62,7 +67,8 @@ class MainStageRulesScreen extends StatelessWidget {
           const _MsRule(
             icon: Icons.record_voice_over_outlined,
             title: 'They get to finish',
-            body: 'An interrupt can\'t gag anyone mid-punchline. When you cut '
+            body:
+                'An interrupt can\'t gag anyone mid-punchline. When you cut '
                 'in, your opponent gets a quick beat to land their line before '
                 'the mic flips to you - their clock flashes red and they feel a '
                 'buzz: "someone\'s coming, say it NOW." You can steal the '
@@ -71,21 +77,24 @@ class MainStageRulesScreen extends StatelessWidget {
           const _MsRule(
             icon: Icons.hourglass_bottom,
             title: 'No stalling',
-            body: 'Take the mic and you have a few seconds to start talking, or '
+            body:
+                'Take the mic and you have a few seconds to start talking, or '
                 'it bounces back to your opponent. There\'s no hiding in a '
                 '"you go first" standoff.',
           ),
           const _MsRule(
             icon: Icons.flag_outlined,
             title: 'Out of time',
-            body: 'If your opponent has burned their whole clock and the stage '
+            body:
+                'If your opponent has burned their whole clock and the stage '
                 'is yours, land one more - or just end it. Nothing is lost by '
                 'ending early; your clock would run out anyway.',
           ),
           const _MsRule(
             icon: Icons.gavel_outlined,
             title: 'Who wins',
-            body: 'Same as any battle: the judges decide who was funnier. The '
+            body:
+                'Same as any battle: the judges decide who was funnier. The '
                 'clock is just how you get your reps in - what you DO with your '
                 'time is what they score.',
           ),
@@ -116,9 +125,12 @@ class _MsRule extends StatelessWidget {
               Icon(icon, size: 22, color: scheme.primary),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(title,
-                    style: text.headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.bold)),
+                child: Text(
+                  title,
+                  style: text.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),

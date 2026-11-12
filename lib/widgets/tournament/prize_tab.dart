@@ -52,31 +52,40 @@ class PrizeTab extends StatelessWidget {
                 children: [
                   const Text('🏆', style: TextStyle(fontSize: 40)),
                   const SizedBox(height: 6),
-                  Text('THE BELT',
-                      style: text.labelLarge?.copyWith(
-                          color: gold,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 2)),
+                  Text(
+                    'THE BELT',
+                    style: text.labelLarge?.copyWith(
+                      color: gold,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   if (hasHolder)
                     GestureDetector(
                       onTap: belt.holderUid == null
                           ? null
                           : () => PerformerProfileScreen.open(
-                              context, belt.holderUid!,
-                              username: belt.holderName),
+                              context,
+                              belt.holderUid!,
+                              username: belt.holderName,
+                            ),
                       child: Column(
                         children: [
-                          Text(belt.holderName ?? 'Champion',
-                              style: text.headlineSmall?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900)),
+                          Text(
+                            belt.holderName ?? 'Champion',
+                            style: text.headlineSmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                           Text(
                             belt.defenseCount > 0
                                 ? 'Reigning champion · defended ×${belt.defenseCount}'
                                 : 'Reigning champion',
                             style: text.bodySmall?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.7)),
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
                           ),
                         ],
                       ),
@@ -85,8 +94,9 @@ class PrizeTab extends StatelessWidget {
                     Text(
                       'No champion yet — win a Main Stage and take the crown.',
                       textAlign: TextAlign.center,
-                      style: text.bodyMedium
-                          ?.copyWith(color: Colors.white.withValues(alpha: 0.8)),
+                      style: text.bodyMedium?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.8),
+                      ),
                     ),
                 ],
               ),
@@ -95,9 +105,13 @@ class PrizeTab extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         // What you're playing for.
-        Text('What you win',
-            style: text.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800, color: gold)),
+        Text(
+          'What you win',
+          style: text.titleMedium?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: gold,
+          ),
+        ),
         const SizedBox(height: 6),
         Text(
           'Win the Main Stage and you take The Belt — the one title you can lose '
@@ -105,8 +119,10 @@ class PrizeTab extends StatelessWidget {
           'Champion badge for their profile. Bigger, real prizes come later; for '
           'now the prize is the prestige, and the whole room watching you take '
           'it.',
-          style: text.bodyMedium
-              ?.copyWith(color: scheme.onSurfaceVariant, height: 1.4),
+          style: text.bodyMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 18),
         // The all-time champions wall.
@@ -114,9 +130,13 @@ class PrizeTab extends StatelessWidget {
           children: [
             Icon(Icons.military_tech, color: gold, size: 20),
             const SizedBox(width: 8),
-            Text('Hall of champions',
-                style: text.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800, color: gold)),
+            Text(
+              'Hall of champions',
+              style: text.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: gold,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -148,28 +168,40 @@ class PrizeTab extends StatelessWidget {
                 final name = d.data()['username'] as String? ?? 'Roaster';
                 final isSelf = d.id == me;
                 return Material(
-                  color: isSelf ? gold.withValues(alpha: 0.14) : Colors.transparent,
+                  color: isSelf
+                      ? gold.withValues(alpha: 0.14)
+                      : Colors.transparent,
                   child: ListTile(
                     dense: true,
                     visualDensity: const VisualDensity(vertical: -3),
-                    onTap: () => PerformerProfileScreen.open(context, d.id,
-                        username: name),
-                    leading: Text('${i + 1}',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                            color: i == 0
-                                ? gold
-                                : scheme.onSurfaceVariant)),
-                    title: Text(isSelf ? '$name  (you)' : name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontWeight:
-                                isSelf ? FontWeight.w800 : FontWeight.w600)),
-                    trailing: Text('🏆 $wins',
-                        style: TextStyle(
-                            color: gold, fontWeight: FontWeight.w800)),
+                    onTap: () => PerformerProfileScreen.open(
+                      context,
+                      d.id,
+                      username: name,
+                    ),
+                    leading: Text(
+                      '${i + 1}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        color: i == 0 ? gold : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    title: Text(
+                      isSelf ? '$name  (you)' : name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: isSelf ? FontWeight.w800 : FontWeight.w600,
+                      ),
+                    ),
+                    trailing: Text(
+                      '🏆 $wins',
+                      style: TextStyle(
+                        color: gold,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 );
               }).toList(),

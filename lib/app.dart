@@ -20,6 +20,7 @@ import 'screens/battles/get_clip_sheet.dart';
 import 'screens/home/main_shell.dart';
 import 'screens/moderation/banned_screen.dart';
 import 'screens/onboarding/content_policy_screen.dart';
+import 'widgets/neon_dialog.dart';
 
 /// The everyday base skin everyone gets. Comedy Night is the brand default;
 /// Card/Aurora and the other explorations are kept in app_theme.dart for
@@ -219,7 +220,7 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
       if (await push.wouldPrompt() && mounted) {
         final yes = await showDialog<bool>(
           context: context,
-          builder: (ctx) => AlertDialog(
+          builder: (ctx) => NeonDialog(
             icon: const Icon(Icons.notifications_active_outlined, size: 36),
             title: const Text('Turn on notifications?'),
             content: const Text(
@@ -271,14 +272,16 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
       if (!mounted || ctx == null) return;
       // Clear first: dismissing, watching, or the app dying mid-dialog
       // must never make it pop up again.
-      unawaited(FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.uid)
-          .update({'clipReadyPopup': FieldValue.delete()})
-          .catchError((_) {}));
+      unawaited(
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.uid)
+            .update({'clipReadyPopup': FieldValue.delete()})
+            .catchError((_) {}),
+      );
       final watch = await showDialog<bool>(
         context: ctx,
-        builder: (dCtx) => AlertDialog(
+        builder: (dCtx) => NeonDialog(
           icon: const Icon(Icons.movie_creation_outlined, size: 36),
           title: const Text('Your clip is ready!'),
           content: const Text(

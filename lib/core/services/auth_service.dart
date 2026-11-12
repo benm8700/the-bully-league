@@ -24,7 +24,10 @@ class AuthService {
   /// sign-up), not just on sign-in/sign-out.
   Stream<User?> authStateChanges() => _auth.userChanges();
 
-  Future<User?> signUp({required String email, required String password}) async {
+  Future<User?> signUp({
+    required String email,
+    required String password,
+  }) async {
     final credential = await _auth.createUserWithEmailAndPassword(
       email: email,
       password: password,
@@ -87,14 +90,19 @@ class AuthService {
     required String password,
     String? smsCode,
   }) async {
-    final phoneCred = _autoPhoneCred ??
+    final phoneCred =
+        _autoPhoneCred ??
         (_phoneVerificationId != null && smsCode != null
             ? PhoneAuthProvider.credential(
-                verificationId: _phoneVerificationId!, smsCode: smsCode)
+                verificationId: _phoneVerificationId!,
+                smsCode: smsCode,
+              )
             : null);
     if (phoneCred == null) {
       throw FirebaseAuthException(
-          code: 'missing-code', message: 'Enter the code we texted you.');
+        code: 'missing-code',
+        message: 'Enter the code we texted you.',
+      );
     }
     final result = await _auth.createUserWithEmailAndPassword(
       email: email,
@@ -114,7 +122,10 @@ class AuthService {
     return user;
   }
 
-  Future<User?> signIn({required String email, required String password}) async {
+  Future<User?> signIn({
+    required String email,
+    required String password,
+  }) async {
     final credential = await _auth.signInWithEmailAndPassword(
       email: email,
       password: password,

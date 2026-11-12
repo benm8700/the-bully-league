@@ -73,14 +73,17 @@ class _TournamentHubScreenState extends State<TournamentHubScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
-          title: const Text('The Main Stage',
-              style: TextStyle(fontWeight: FontWeight.w900)),
+          title: const Text(
+            'The Main Stage',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.help_outline),
               tooltip: 'How the Main Stage works',
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => const MainStageRulesScreen())),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const MainStageRulesScreen()),
+              ),
             ),
           ],
         ),
@@ -100,7 +103,11 @@ class _TournamentHubScreenState extends State<TournamentHubScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0x66000000), Color(0x11000000), Color(0x88000000)],
+                  colors: [
+                    Color(0x66000000),
+                    Color(0x11000000),
+                    Color(0x88000000),
+                  ],
                 ),
               ),
             ),
@@ -116,9 +123,10 @@ class _TournamentHubScreenState extends State<TournamentHubScreen> {
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white.withValues(alpha: 0.55),
                     labelStyle: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.5,
-                        fontSize: 13),
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                      fontSize: 13,
+                    ),
                     tabs: const [
                       Tab(text: 'LOBBY'),
                       Tab(text: 'THE CUT'),
@@ -132,8 +140,8 @@ class _TournamentHubScreenState extends State<TournamentHubScreen> {
                         _roomLoading
                             ? const Center(child: CircularProgressIndicator())
                             : (_weekKey == null
-                                ? _lobbyUnavailable()
-                                : HubChat(weekKey: _weekKey!)),
+                                  ? _lobbyUnavailable()
+                                  : HubChat(weekKey: _weekKey!)),
                         const WeeklyStandingsBoard(),
                         JudgesTab(weekKey: _weekKey),
                         const PrizeTab(),
@@ -150,15 +158,15 @@ class _TournamentHubScreenState extends State<TournamentHubScreen> {
   }
 
   Widget _lobbyUnavailable() => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            "Couldn't open the lobby. Pull back and try again.",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
-          ),
-        ),
-      );
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Text(
+        "Couldn't open the lobby. Pull back and try again.",
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+      ),
+    ),
+  );
 }
 
 /// The loud "take your spot" bar at the top of the hub while a Main Stage show
@@ -195,8 +203,10 @@ class _JoinBarState extends State<_JoinBar> {
                 foregroundColor: Colors.white,
               ),
               icon: Icon(icon),
-              label: Text(label,
-                  style: const TextStyle(fontWeight: FontWeight.w900)),
+              label: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const MainStageScreen()),
               ),
@@ -346,15 +356,20 @@ class _HubHeaderState extends State<_HubHeader> {
                   Text(
                     _loaded ? _countdown() : 'Loading…',
                     style: text.titleSmall?.copyWith(
-                        color: gold, fontWeight: FontWeight.w900),
+                      color: gold,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   if (posLine != null) ...[
                     const SizedBox(height: 1),
-                    Text(posLine,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.bodySmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.8))),
+                    Text(
+                      posLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.8),
+                      ),
+                    ),
                   ],
                 ],
               ),

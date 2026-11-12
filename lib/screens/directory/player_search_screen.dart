@@ -138,8 +138,9 @@ class _PlayerSearchScreenState extends State<PlayerSearchScreen> {
       // and it phrases a block identically to a missing player ON
       // PURPOSE - saying otherwise here would leak exactly what blocking
       // is silent in order to hide.
-      setState(() =>
-          _challengeState[username] = e.message ?? 'Could not send that.');
+      setState(
+        () => _challengeState[username] = e.message ?? 'Could not send that.',
+      );
     }
   }
 
@@ -170,8 +171,10 @@ class _PlayerSearchScreenState extends State<PlayerSearchScreen> {
           if (_message != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: Text(_message!,
-                  style: Theme.of(context).textTheme.bodySmall),
+              child: Text(
+                _message!,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ),
           Expanded(
             child: ListView.builder(
@@ -183,8 +186,7 @@ class _PlayerSearchScreenState extends State<PlayerSearchScreen> {
                 final state = _challengeState[username];
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundImage:
-                        photo != null ? NetworkImage(photo) : null,
+                    backgroundImage: photo != null ? NetworkImage(photo) : null,
                     child: photo == null ? const Icon(Icons.person) : null,
                   ),
                   title: Text(username),
@@ -195,12 +197,11 @@ class _PlayerSearchScreenState extends State<PlayerSearchScreen> {
                     state == null || state == 'sending'
                         ? (r['rankTitle'] as String? ?? '')
                         : state == 'sent'
-                            ? 'Challenged. They have an hour to answer.'
-                            : state,
-                    style: state != null && state != 'sending' &&
-                            state != 'sent'
-                        ? TextStyle(
-                            color: Theme.of(context).colorScheme.error)
+                        ? 'Challenged. They have an hour to answer.'
+                        : state,
+                    style:
+                        state != null && state != 'sending' && state != 'sent'
+                        ? TextStyle(color: Theme.of(context).colorScheme.error)
                         : null,
                   ),
                   trailing: _ChallengeButton(

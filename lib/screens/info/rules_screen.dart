@@ -32,18 +32,21 @@ class RulesScreen extends StatelessWidget {
           const _Rule(
             icon: Icons.sports_mma_outlined,
             title: 'The battle',
-            body: "You're randomly paired with a stranger close to your skill "
+            body:
+                "You're randomly paired with a stranger close to your skill "
                 'level for a one-on-one roast battle. You each get 30 seconds '
                 'to roast your opponent, and your clock only runs during your '
-                'turn. You can yield at any point to hand the floor over and '
-                'let them roast you - and they can yield it right back '
-                "whenever they want. While it's their turn, your mic is muted. "
+                'turn. When you run out of material, just stop talking - a '
+                'Pass the mic button counts down and hands the floor to them '
+                "(tap it to pass right away). While it's their turn, your mic "
+                'is muted. '
                 'The battle ends when both clocks hit zero.',
           ),
           const _Rule(
             icon: Icons.how_to_vote_outlined,
             title: 'How you win',
-            body: 'The crowd votes for the winner. App users can watch your '
+            body:
+                'The crowd votes for the winner. App users can watch your '
                 'battle live or afterwards, and vote for who was funnier up to '
                 '24 hours after it ends. Most votes wins, and a tie counts as '
                 'neither a win nor a loss. Players may opt out of live '
@@ -52,7 +55,8 @@ class RulesScreen extends StatelessWidget {
           const _Rule(
             icon: Icons.videocam_outlined,
             title: 'Your intro',
-            body: 'Record a 60-second "tell me about yourself" - it is '
+            body:
+                'Record a 60-second "tell me about yourself" - it is '
                 'required before you can battle, and it matters more than it '
                 'looks. It is how your opponent and the crowd get to know you '
                 'before a single word is thrown, and it sets the tone for the '
@@ -63,7 +67,8 @@ class RulesScreen extends StatelessWidget {
           const _Rule(
             icon: Icons.stairs_outlined,
             title: 'Battle your way to the Main Stage',
-            body: 'Day to day, you roast random strangers any time and climb '
+            body:
+                'Day to day, you roast random strangers any time and climb '
                 'the ranks. The Main Stage is the tournament: the big show, '
                 'where the prizes and the prestige are. It runs every week: '
                 'your ranked wins through Wednesday night decide who makes the '
@@ -74,7 +79,8 @@ class RulesScreen extends StatelessWidget {
           const _Rule(
             icon: Icons.emoji_emotions_outlined,
             title: 'What flies, and what doesn\'t',
-            body: 'This is a comedy platform. Offensive jokes, hard roasts, '
+            body:
+                'This is a comedy platform. Offensive jokes, hard roasts, '
                 'going for the throat - that is the whole point, and it is all '
                 'fair game. What is NOT: hate or targeted harassment that '
                 'is not in service of the joke, and anything explicit on '
@@ -84,7 +90,8 @@ class RulesScreen extends StatelessWidget {
           const _Rule(
             icon: Icons.movie_outlined,
             title: 'Recording & clips',
-            body: 'Your battles are recorded and can become shareable clips '
+            body:
+                'Your battles are recorded and can become shareable clips '
                 '(practice matches are the exception - those are never '
                 'recorded). You consent to that before each match.',
           ),
@@ -101,16 +108,19 @@ class RulesScreen extends StatelessWidget {
               Icon(Icons.play_circle_outline, size: 22, color: scheme.primary),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('See it in action',
-                    style:
-                        text.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                child: Text(
+                  'See it in action',
+                  style: text.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             'Walk through a real battle - holding the floor, the clock, '
-            'yielding - against a simulated opponent. No one else is there and '
+            'passing the mic - against a simulated opponent. No one else is there and '
             'nothing is recorded.',
             style: text.bodyMedium?.copyWith(height: 1.4),
           ),
@@ -131,9 +141,7 @@ class RulesScreen extends StatelessWidget {
           Center(
             child: TextButton(
               onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const SupportScreen(),
-                ),
+                MaterialPageRoute<void>(builder: (_) => const SupportScreen()),
               ),
               child: const Text('Support & feedback'),
             ),
@@ -165,9 +173,12 @@ class _Rule extends StatelessWidget {
               Icon(icon, size: 22, color: scheme.primary),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(title,
-                    style: text.headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.bold)),
+                child: Text(
+                  title,
+                  style: text.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),

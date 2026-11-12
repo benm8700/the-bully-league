@@ -169,9 +169,7 @@ class _DailyQuestsState extends State<DailyQuests> {
         color: scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: done
-              ? green.withValues(alpha: 0.35)
-              : scheme.outlineVariant,
+          color: done ? green.withValues(alpha: 0.35) : scheme.outlineVariant,
         ),
       ),
       child: Row(
@@ -257,9 +255,11 @@ class _DailyQuestsState extends State<DailyQuests> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.monetization_on,
-                    size: 14,
-                    color: gold.withValues(alpha: done ? 0.6 : 1.0)),
+                Icon(
+                  Icons.monetization_on,
+                  size: 14,
+                  color: gold.withValues(alpha: done ? 0.6 : 1.0),
+                ),
                 const SizedBox(width: 3),
                 Text(
                   '+$reward',

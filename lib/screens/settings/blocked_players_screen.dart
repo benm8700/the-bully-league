@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/empty_state.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// The people this player has blocked, and the way to undo it.
 ///
@@ -61,9 +62,9 @@ class _BlockedPlayersScreenState extends State<BlockedPlayersScreen> {
         _players = _players.where((p) => p['uid'] != uid).toList();
         _busy = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unblocked $name.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Unblocked $name.')));
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -92,7 +93,8 @@ class _BlockedPlayersScreenState extends State<BlockedPlayersScreen> {
                       ? const EmptyState(
                           icon: Icons.block_outlined,
                           title: "You haven't blocked anyone",
-                          message: 'Blocking is private - the other person is '
+                          message:
+                              'Blocking is private - the other person is '
                               'never told, and it only means the two of you '
                               'are never paired again.',
                         )
@@ -128,10 +130,13 @@ class _BlockedPlayersScreenState extends State<BlockedPlayersScreen> {
 /// since the fear that stops people blocking is usually that the other
 /// person will find out.
 Future<bool> confirmBlock(
-    BuildContext context, String userId, String username) async {
+  BuildContext context,
+  String userId,
+  String username,
+) async {
   final confirmed = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
+    builder: (dialogContext) => NeonDialog(
       title: Text('Block $username?'),
       content: const Text(
         "You won't be paired with them again, and you won't find each "
@@ -157,9 +162,9 @@ Future<bool> confirmBlock(
         .httpsCallable('setBlocked')
         .call<Map<String, dynamic>>({'userId': userId, 'blocked': true});
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Blocked $username.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Blocked $username.')));
     }
     return true;
   } on FirebaseFunctionsException catch (e) {

@@ -7,7 +7,11 @@ import 'package:cloud_functions/cloud_functions.dart';
 /// the client, same "sensitive external calls go through Cloud Functions"
 /// pattern as castVote's Turnstile check.
 Future<String> fetchAgoraToken(String channelName) async {
-  final callable = FirebaseFunctions.instance.httpsCallable('generateAgoraToken');
-  final result = await callable.call<Map<String, dynamic>>({'channelName': channelName});
+  final callable = FirebaseFunctions.instance.httpsCallable(
+    'generateAgoraToken',
+  );
+  final result = await callable.call<Map<String, dynamic>>({
+    'channelName': channelName,
+  });
   return result.data['token'] as String;
 }

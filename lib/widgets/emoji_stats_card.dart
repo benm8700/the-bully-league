@@ -36,9 +36,7 @@ class _EmojiStatsCardState extends State<EmojiStatsCard> {
     final total = emojiTotalOf(counts);
     final nickname = emojiNicknameOf(counts);
     final percents = emojiPercentsOf(counts);
-    final slots = {
-      for (final s in emojiBadgeSlots(counts)) s.emojiKey: s,
-    };
+    final slots = {for (final s in emojiBadgeSlots(counts)) s.emojiKey: s};
 
     final card = Container(
       width: double.infinity,
@@ -141,8 +139,8 @@ class _EmojiColumn extends StatelessWidget {
             fontWeight: earned ? FontWeight.w700 : FontWeight.w400,
             color: earned
                 ? (accent == EmojiStatsCard.gold
-                    ? EmojiStatsCard.gold
-                    : Colors.white.withValues(alpha: 0.72))
+                      ? EmojiStatsCard.gold
+                      : Colors.white.withValues(alpha: 0.72))
                 : Colors.white.withValues(alpha: 0.28),
           ),
         ),
@@ -174,7 +172,11 @@ String _abbrevCount(int n) {
 /// negatives use grey - so a 💩 never reads as a gold honour. Same visual
 /// language as the achievement badges (badge_art.dart).
 class _Medal extends StatelessWidget {
-  const _Medal({required this.emoji, required this.earned, required this.accent});
+  const _Medal({
+    required this.emoji,
+    required this.earned,
+    required this.accent,
+  });
 
   final String emoji;
   final bool earned;

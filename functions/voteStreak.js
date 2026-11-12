@@ -111,4 +111,52 @@ async function recordVoteForStreak(uid, {multiplier = 1, nowMs = Date.now()} = {
   }
 }
 
-module.exports = {recordVoteForStreak, streakAfterVote, dayKeys};
+/**
+ * AN EMPTY JUDGE QUEUE KEEPS THE STREAK (2026-11-11, developer's call).
+ *
+ * The streak asks for one vote a day, but in a thin beta there are days
+ * with nothing to judge. Losing a streak because nobody else battled is a
+ * punishment for the app's emptiness, not the player's absence - so a day
+ * on which the player OPENED the Judge feed and the SERVER found it empty
+ * counts as kept. Decided server-side inside getWatchFeed, so a client
+ * cannot claim an empty queue it did not have.
+ *
+ * Only CONTINUES a live streak (yesterday counted) - it never starts one
+ * from nothing, and pays NO points (the streak bonus is for judging).
+ * Returns null when nothing changes.
+ */
+function streakAfterEmptyQueue(current, todayKey, yesterdayKey) {
+  const days = Number(current?.days) || 0;
+  if (days <= 0) return null;
+  if (current?.dayKey === todayKey) return null;
+  if (current?.dayKey !== yesterdayKey) return null;
+  return {days: days + 1, dayKey: todayKey};
+}
+
+/** Best-effort: never fails the feed that triggered it. */
+async function keepStreakOnEmptyQueue(uid, {nowMs = Date.now()} = {}) {
+  try {
+    const db = getFirestore();
+    const ref = db.collection("users").doc(uid);
+    const {today, yesterday} = dayKeys(nowMs);
+    return await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const next = streakAfterEmptyQueue(
+          snap.data()?.voteStreak, today, yesterday);
+      if (!next) return null;
+      tx.set(ref, {voteStreak: next}, {merge: true});
+      return next;
+    });
+  } catch (e) {
+    console.error(`empty-queue streak keep for ${uid} failed:`, e.message);
+    return null;
+  }
+}
+
+module.exports = {
+  recordVoteForStreak,
+  streakAfterVote,
+  dayKeys,
+  streakAfterEmptyQueue,
+  keepStreakOnEmptyQueue,
+};

@@ -42,7 +42,15 @@ class TutorialScreen extends StatefulWidget {
   State<TutorialScreen> createState() => _TutorialScreenState();
 }
 
-enum _Step { intro, framing, rules, practiceCountdown, practiceYourTurn, practiceTheirTurn, done }
+enum _Step {
+  intro,
+  framing,
+  rules,
+  practiceCountdown,
+  practiceYourTurn,
+  practiceTheirTurn,
+  done,
+}
 
 class _TutorialScreenState extends State<TutorialScreen> {
   // Deliberately shorter than a real match's defaults. The point is to
@@ -107,7 +115,8 @@ class _TutorialScreenState extends State<TutorialScreen> {
   /// Starts the local camera only - no channel is joined, so this is free.
   Future<void> _startCamera() async {
     final statuses = await [Permission.camera, Permission.microphone].request();
-    final granted = (statuses[Permission.camera]?.isGranted ?? false) &&
+    final granted =
+        (statuses[Permission.camera]?.isGranted ?? false) &&
         (statuses[Permission.microphone]?.isGranted ?? false);
     if (!granted) {
       if (!mounted) return;
@@ -173,10 +182,9 @@ class _TutorialScreenState extends State<TutorialScreen> {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .update({'tutorialCompleted': true});
+        await FirebaseFirestore.instance.collection('users').doc(uid).update({
+          'tutorialCompleted': true,
+        });
       }
     } catch (_) {
       // Not worth blocking on. Worst case they see the tutorial again,
@@ -212,7 +220,10 @@ class _TutorialScreenState extends State<TutorialScreen> {
             Text(_error!, textAlign: TextAlign.center),
             if (_permissionDenied) ...[
               const SizedBox(height: 16),
-              FilledButton(onPressed: openAppSettings, child: const Text('Open App Settings')),
+              FilledButton(
+                onPressed: openAppSettings,
+                child: const Text('Open App Settings'),
+              ),
             ],
           ],
         ),
@@ -275,7 +286,11 @@ class _TutorialScreenState extends State<TutorialScreen> {
         ),
         Padding(
           padding: EdgeInsets.fromLTRB(
-              20, 20, 20, 20 + MediaQuery.of(context).padding.bottom),
+            20,
+            20,
+            20,
+            20 + MediaQuery.of(context).padding.bottom,
+          ),
           child: Column(
             children: [
               Text(
@@ -292,7 +307,9 @@ class _TutorialScreenState extends State<TutorialScreen> {
               ),
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: _cameraReady ? () => setState(() => _step = _Step.rules) : null,
+                onPressed: _cameraReady
+                    ? () => setState(() => _step = _Step.rules)
+                    : null,
                 child: const Text('Got it'),
               ),
             ],
@@ -309,8 +326,8 @@ class _TutorialScreenState extends State<TutorialScreen> {
       body: const [
         'You battle on a clock. You each get about 30 seconds that only ticks '
             'down while YOU are talking — so hold the floor and go.',
-        'Tap Yield to hand the floor over (it also passes when your time runs '
-            'out). While your opponent has the floor, your mic is muted — you '
+        'Done talking? Go quiet and a Pass the mic button counts down and '
+            'hands the floor over (so does running out of time). While your opponent has the floor, your mic is muted — you '
             'cannot talk over them, and they cannot talk over you.',
         'Your battles are recorded, and the best moments may be posted '
             '(practice is the exception - those are never recorded). You '
@@ -342,17 +359,22 @@ class _TutorialScreenState extends State<TutorialScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('You get the floor first',
-                            style: TextStyle(color: Colors.white, fontSize: 22)),
+                        const Text(
+                          'You get the floor first',
+                          style: TextStyle(color: Colors.white, fontSize: 22),
+                        ),
                         const SizedBox(height: 16),
                         // "Get ready" rather than a ticking number, matching the
                         // real match countdown (2026-09-16).
-                        const Text('Get ready',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 40,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1)),
+                        const Text(
+                          'Get ready',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 40,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -362,7 +384,10 @@ class _TutorialScreenState extends State<TutorialScreen> {
                   top: 12,
                   left: 12,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.black54,
                       borderRadius: BorderRadius.circular(12),
@@ -378,7 +403,10 @@ class _TutorialScreenState extends State<TutorialScreen> {
                   top: 12,
                   right: 12,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.red.withValues(alpha: 0.85),
                       borderRadius: BorderRadius.circular(12),
@@ -388,8 +416,10 @@ class _TutorialScreenState extends State<TutorialScreen> {
                       children: [
                         Icon(Icons.mic_off, size: 16, color: Colors.white),
                         SizedBox(width: 4),
-                        Text('Mic muted',
-                            style: TextStyle(color: Colors.white, fontSize: 13)),
+                        Text(
+                          'Mic muted',
+                          style: TextStyle(color: Colors.white, fontSize: 13),
+                        ),
                       ],
                     ),
                   ),
@@ -400,22 +430,29 @@ class _TutorialScreenState extends State<TutorialScreen> {
         Container(
           width: double.infinity,
           padding: EdgeInsets.fromLTRB(
-              20, 20, 20, 20 + MediaQuery.of(context).padding.bottom),
+            20,
+            20,
+            20,
+            20 + MediaQuery.of(context).padding.bottom,
+          ),
           child: Column(
             children: [
               Text(
                 isCountdown
                     ? 'Get ready...'
                     : isYourTurn
-                        ? 'You\'ve got the floor. Say anything — nobody is '
-                            'listening. Tap Yield when you\'re done.'
-                        : 'Now they have the floor. Your mic is muted.',
+                    ? 'You\'ve got the floor. Say anything — nobody is '
+                          'listening. Tap Pass the mic when you\'re done.'
+                    : 'Now they have the floor. Your mic is muted.',
                 style: Theme.of(context).textTheme.titleMedium,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
               if (isYourTurn)
-                FilledButton(onPressed: _endYourTurn, child: const Text('Yield'))
+                FilledButton(
+                  onPressed: _endYourTurn,
+                  child: const Text('Pass the mic'),
+                )
               else
                 const SizedBox(height: 48),
             ],
@@ -430,7 +467,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
       icon: Icons.check_circle_outline,
       title: 'That\'s the whole format',
       body: [
-        'Hold the floor, land your jokes, and yield when you\'re done. The '
+        'Hold the floor, land your jokes, and pass the mic when you\'re done. The '
             'crowd decides the rest.',
         // The two parts of the league, framed as the climb (see the
         // Basement/Main Stage naming decision).
@@ -472,15 +509,21 @@ class _Panel extends StatelessWidget {
       // Bottom inset includes the system gesture bar so the action button
       // never sits under the home gesture (found on a real S22, 2026-09-01).
       padding: EdgeInsets.fromLTRB(
-          24, 24, 24, 24 + MediaQuery.of(context).padding.bottom),
+        24,
+        24,
+        24,
+        24 + MediaQuery.of(context).padding.bottom,
+      ),
       child: Column(
         children: [
           const Spacer(),
           Icon(icon, size: 56),
           const SizedBox(height: 20),
-          Text(title,
-              style: Theme.of(context).textTheme.headlineSmall,
-              textAlign: TextAlign.center),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.headlineSmall,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 20),
           for (final paragraph in body) ...[
             Text(paragraph, textAlign: TextAlign.center),

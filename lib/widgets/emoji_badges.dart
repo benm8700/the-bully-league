@@ -13,11 +13,7 @@ import '../core/emoji_ratings.dart';
 /// "the crowd loved you N times", never "you rank above Y", and never appear on
 /// a board. They live on the profile beside the Crowd read card.
 class EmojiBadges extends StatelessWidget {
-  const EmojiBadges({
-    super.key,
-    required this.counts,
-    this.ownProfile = true,
-  });
+  const EmojiBadges({super.key, required this.counts, this.ownProfile = true});
 
   /// The user document's emojiCounts map (may be null/partial).
   final Map<String, dynamic>? counts;
@@ -61,7 +57,7 @@ class EmojiBadges extends StatelessWidget {
         Text(
           ownProfile
               ? 'Every mark the crowd throws you — chase \u{1F525}\u{1F9E0}, '
-                  'dodge \u{1F971}\u{1F4A9}.'
+                    'dodge \u{1F971}\u{1F4A9}.'
               : 'Marks the crowd has put on them.',
           style: text.bodySmall?.copyWith(color: const Color(0xFF9A96A2)),
         ),
@@ -89,8 +85,7 @@ class _EmojiMedalTile extends StatelessWidget {
     // for comedy, so their earned medallion + "Top tier" line read grey, not
     // gold.
     final positive = emojiIsPositive(slot.emojiKey);
-    final accent =
-        positive ? EmojiBadges._gold : const Color(0xFF9198A3);
+    final accent = positive ? EmojiBadges._gold : const Color(0xFF9198A3);
 
     // Sub-line: earned + more to come = progress to the next tier; earned +
     // maxed = top tier; locked = the count to reach the first tier.
@@ -109,7 +104,11 @@ class _EmojiMedalTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _EmojiMedal(
-              emoji: slot.emoji, earned: slot.earned, accent: accent, size: 62),
+            emoji: slot.emoji,
+            earned: slot.earned,
+            accent: accent,
+            size: 62,
+          ),
           const SizedBox(height: 6),
           Text(
             tier.title,
@@ -132,10 +131,11 @@ class _EmojiMedalTile extends StatelessWidget {
               color: slot.isMaxed && slot.earned
                   ? accent
                   : slot.earned
-                      ? const Color(0xFFB8B4C0)
-                      : const Color(0xFF6E6A78),
-              fontWeight:
-                  slot.isMaxed && slot.earned ? FontWeight.w700 : FontWeight.w400,
+                  ? const Color(0xFFB8B4C0)
+                  : const Color(0xFF6E6A78),
+              fontWeight: slot.isMaxed && slot.earned
+                  ? FontWeight.w700
+                  : FontWeight.w400,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),

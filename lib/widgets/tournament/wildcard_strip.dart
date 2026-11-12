@@ -80,9 +80,13 @@ class _WildcardStripState extends _WildcardEntryState<WildcardStrip> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Wildcard seat',
-                          style: text.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w900, color: gold)),
+                      Text(
+                        'Wildcard seat',
+                        style: text.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: gold,
+                        ),
+                      ),
                       Text(
                         hasBid
                             ? 'Your bid: ${s.yourBid} pts - highest wins'
@@ -90,22 +94,29 @@ class _WildcardStripState extends _WildcardEntryState<WildcardStrip> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: text.bodySmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.75)),
+                          color: Colors.white.withValues(alpha: 0.75),
+                        ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: gold,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(hasBid ? 'Raise' : 'Bid',
-                      style: const TextStyle(
-                          color: Colors.black, fontWeight: FontWeight.w900)),
+                  child: Text(
+                    hasBid ? 'Raise' : 'Bid',
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -153,20 +164,29 @@ class _WildcardSpendTileState extends _WildcardEntryState<WildcardSpendTile> {
                 children: [
                   Row(
                     children: [
-                      Text('Main Stage wildcard',
-                          style: text.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700)),
+                      Text(
+                        'Main Stage wildcard',
+                        style: text.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       const SizedBox(width: 8),
-                      Text(s.hasBid ? 'bid ${s.yourBid}' : 'bid',
-                          style: text.labelMedium?.copyWith(
-                              color: gold, fontWeight: FontWeight.w800)),
+                      Text(
+                        s.hasBid ? 'bid ${s.yourBid}' : 'bid',
+                        style: text.labelMedium?.copyWith(
+                          color: gold,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 3),
                   Text(
                     'One seat on the show, won by bid. Highest bidder takes it.',
-                    style: text.bodySmall
-                        ?.copyWith(color: scheme.onSurfaceVariant, height: 1.2),
+                    style: text.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      height: 1.2,
+                    ),
                   ),
                 ],
               ),
@@ -175,8 +195,10 @@ class _WildcardSpendTileState extends _WildcardEntryState<WildcardSpendTile> {
             FilledButton(
               onPressed: _open,
               style: FilledButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 visualDensity: VisualDensity.compact,
               ),
               child: Text(s.hasBid ? 'Raise' : 'Bid'),

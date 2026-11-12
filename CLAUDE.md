@@ -10,7 +10,7 @@ This file gives Claude Code full context on this project. Read this before start
 
 ### Live on/off switches (Firestore `config/*`, checked 2026-11-06)
 - `config/abilities.enabled` = **false** (power-ups off)
-- `config/tournament.enabled` = **false** (Main Stage off; Home shows "COMING SOON")
+- `config/tournament.enabled` = **false** (Main Stage off; Home shows it as a "CLOSED" room)
 - `config/monetization.enabled` = **false** (no paywall; every battle check passes)
 - `config/eventWindow`: name **"Happy Hour"**, 6-7pm Pacific, enabled
 - `config/improvPrompts.perMatch` = 3
@@ -22,19 +22,35 @@ This file gives Claude Code full context on this project. Read this before start
 
 - **Android on the Mac (set up 2026-11-07)**: Android SDK installed via Homebrew (`/opt/homebrew/share/android-commandlinetools`, JDK 17 at `/opt/homebrew/opt/openjdk@17`). The Mac's Flutter 3.47.9 refuses AGP below 8.11.1 and Kotlin below 2.2.20, so the pins moved **AGP 8.9.1 -> 8.11.1** and **KGP 2.1.0 -> 2.2.20** (still below AGP 9, the real Agora limit). The debug APK builds and runs on a moto g 2026; the Android age-signals plugin now at least builds. Older notes below quoting 8.9.1 / 2.1.0 are superseded.
 
-### Navigation
-Bottom tabs (`lib/screens/home/main_shell.dart`): **Home · Vote · My Battles · Ranks · Profile**. The "Vote" tab is the voting feed (the Home door for it is labelled JUDGE).
+### Navigation (rebuilt 2026-11-11, developer's calls)
+- **No tab bar.** Home is the only root page (`lib/screens/home/main_shell.dart`). Everything else is a pushed screen with a back arrow: Profile (tap the Home rank card), the Leaderboard (the Leaderboard tile or the card's #rank side), Judge (the JUDGE door; `WatchFeedScreen` draws its own back button), My Battles (inside Profile, "See all").
+- A **swipe pager** (Profile <- Home -> Leaderboard) and a **crest bottom bar** were both built and rejected the same day ("too easy to accidentally swipe", "skittish"). The crest bar widget (`lib/widgets/nav/crest_nav_bar.dart`) and `_MyPhotoButton` are kept unmounted. Do not bring back swiping without asking.
+- `MainShell.go(i)` / `MainShell.goPage(p)` still exist so old call sites work: they push the screen.
+- **The app is NOT locked to portrait** (it rotates on the Moto). Open question for the developer (phones vs the tablet-support decision).
 
-### Home, top to bottom (`lib/screens/home/home_screen.dart`)
-1. App bar: centred wordmark, bell (notification settings), avatar (Account screen: email, How it works, Notifications, Appearance, Blocked players).
-2. Player status card (rank crest, XP bar, global rank). Tapping opens Profile.
-3. Active-match / in-queue banner, then self-hiding banners (incoming challenge, Main Stage, try-out ticket, prize claim, GOAT throne, trial status).
-4. **PLAY** door - "Roast a stranger" (ranked). Carries the compact Happy Hour strip ("2X POINTS · in Xh" / "LIVE Nm left").
-5. **JUDGE** door - goes to the Vote tab.
-6. **MAIN STAGE** card - "COMING SOON" and untappable while `config/tournament.enabled` is false.
-7. Secondary row: **Face-Off** (greyed + padlock, "Coming soon" dialog, gate undecided) and **Roast a friend** (renamed from "Challenge a friend" 2026-11-06, glowing border because friend battles are the main growth loop; its screen title is also "Roast a friend").
-8. Quick actions (Daily Challenges, Free Rewards, Current Streak), points wallet bar -> Rewards, Featured (hidden when empty).
-Dead/unmounted widgets still in the tree: `RoastHero`, `HeroModeCard`, `ImprovStationCard`, `FriendBattleCard`, `WindowLiveBar`, the non-compact `DailyWindowStrip`. "How it works" lives under Account, not Home.
+### Home, top to bottom (`lib/screens/home/home_screen.dart`, as of 2026-11-11)
+1. App bar: centred crown + wordmark, bell (notification settings). No avatar (moved into the rank card).
+2. Neon alert strips (slim, `NeonAlertStrip` / `IncomingChallengeStrip` in `lib/widgets/incoming_challenge_card.dart`): battle ready ("BATTLE NOW" pill), in-queue (purple), incoming challenge (ACCEPT pill; tapping the row reopens the challenge pop-up). Then the other self-hiding banners.
+3. Three doors: **ROAST A FRIEND** · **RANKED** (Happy Hour strip on top) · **JUDGE**.
+4. **MAIN STAGE** marquee (`main_stage_marquee.dart`): shows a **CLOSED** stamp (greyed, comedy-club "room is closed") whenever `config/tournament.enabled` is false OR it is the off-week phase; disabled tap says "The room is closed for now."
+5. Shortcut row: Daily Challenges · Free Rewards · **Leaderboard** (replaced the streak tile).
+6. **Compact rank card docked at the bottom** (`PlayerStatusCard(compact: true)`): your selfie (gold ring, initials fallback), TITLE + crest, XP bar, "N XP to <next title> · 🔥 judging streak", GLOBAL #rank. The FULL card (big crest, title · numeral, exact XP, points, streak) sits at the top of Profile. The pre-change Home is recorded in memory as a revert point.
+
+### Streaks (built and deployed 2026-11-11)
+- **Judging streak, daily** (`functions/voteStreak.js`): one vote a Pacific day. NEW: a day on which the player opens Judge and the SERVER finds nothing to judge keeps (continues, never starts) the streak, no points (`getWatchFeed` -> `keepStreakOnEmptyQueue`).
+- **Ranked streak, weekly** (`functions/rankedStreak.js`, hooked in `completeMatch`, ranked only): consecutive Pacific Monday-Sunday weeks with a completed ranked battle. Weekly because a daily ranked streak would break on empty queues. No points.
+- Both shown on Profile (tiles); only the judging streak on Home. `voteStreak` and `rankedStreak` are server-only in `firestore.rules` (voteStreak was client-writable before). Client reads them through `lib/core/streaks.dart` (shows 0 once lapsed).
+
+### Visual system: "neon" (2026-11-11, developer: "make it all uniform")
+- `NeonActionButton` (`lib/widgets/neon_action_button.dart`): the lit pink gradient pill for a screen's ONE main action (Send challenge, Accept). `compact: true` = 52px.
+- `NeonDialog` (`lib/widgets/neon_dialog.dart`): drop-in for `AlertDialog`; EVERY stock pop-up now uses it (neon ring + glow, display-font title, FilledButton -> pink pill). `showNeonSheet` wraps `showModalBottomSheet` the same way (`gold: true` for reward surfaces - Free Rewards is all gold). Use these for anything new.
+- Big neon back button everywhere (`lib/widgets/big_back_button.dart`, via `ActionIconThemeData` in the theme; AppBar toolbarHeight 64 so the glow isn't clipped).
+- Neon switch theme (pink track + check) and neon notification cards (bell screen).
+- Colour language: pink = action/battles, gold = rewards/prizes, green = judging, purple = identity/Main Stage, blue = info.
+
+### Pop-ups (2026-11-11)
+- **Incoming challenge pop-up** (`lib/widgets/challenge_popup.dart`): full neon challenge card, Accept / Not now; once per challenge per session; banner stays as the reminder. Decline lives on the Roast a Friend screen ("No thanks").
+- **One pop-up queue** in `MainShell._runPopups`: challenge -> tournament finale -> rank change -> badges -> fame -> feedback. Runs on launch, every return to Home (`RouteAware.didPopNext`), app resume, and when a new challenge arrives - and ONLY while Home is the top route, re-checked before each one. Matters because those pop-ups mark themselves seen on the server when asked; previously they only ran once at launch and could be lost behind a battle.
 
 ### Sign-up and first battle
 - Sign-up: username, email, password, confirm, mobile number -> SMS code -> email/password account with the phone linked -> `setUsername` + `finalizePhoneSignup` (run in parallel). A "Setting up your account..." screen covers the server tail. One account per phone number; a duplicate number rolls the new account back and shows "That phone number is already on another account." Login is email + password.
@@ -63,7 +79,7 @@ Interrupt, Instant Interrupt, Tomato, Fart (opponent's phone only, not recorded)
 ### Roast a friend (mode `friend`)
 Same chess-clock format against a specific person, challenged by phone number (text invite) or username. **Since 2026-11-09: recorded and crowd-judged** (recording consent shown first; in the Judge feed; both get a verdict push), but **no rating, no points, no emoji fame, never captioned, never in Post Studio**. Clip: **subscribers/trial only** (open to all while monetization is off). Rematch button at the end. Challenges expire after 1 hour; max 3 outstanding.
 
-### Home (2026-11-09)
+### Home (2026-11-09) [SUPERSEDED by "Home, top to bottom (as of 2026-11-11)" above]
 Three big doors: **ROAST A FRIEND** · **RANKED** (opens Roast battle / Face-Off only while `config/faceOff.enabled`) · **JUDGE**, then a slim **MAIN STAGE** row. The intro/selfie nudge sits below and only talks about ranked. `FirstWinOfferBanner` ($5 first ranked win) shows near the top only while `config/firstWinReward.enabled`.
 
 ### Practice
@@ -87,6 +103,11 @@ Anyone except the two players. 24-hour window after the battle ends. Tap the top
 
 ### Content safety
 Live video: only blatant nudity auto-ends a match. Render-time nudity scan can disqualify a match and pull its clip. A slur list only **warns** the founder in the admin dashboard and never blocks anything (founder-editable word list in `config/moderationWords`). Marketing consent per clip: in / blur / out.
+
+### Who can watch a battle (decided 2026-11-11)
+- The two players: their own battle, in My Battles. Judges: in the Judge feed, during the 24h voting window only. Live watchers: only when BOTH players left "watch live" on.
+- **Profiles show only "Featured clips"**: clips the founder published in Post Studio (`highlight.published`), after both players' opt-out window. Nobody can browse another player's battles. Friend battles are never shown.
+- **Featured clips on a profile are a SUBSCRIBER perk**: a non-subscriber's profile shows no clips section to others (the owner sees "Subscribers can show their featured clips here"). The clips stay published on the website/socials either way. While `config/monetization.enabled` is false, everyone qualifies. Gate is in `performer_profile_screen.dart` (`_ClipsSection`), mirroring `isSubscriber` in functions/entitlement.js.
 
 ### Admin (website `/admin`)
 Live stats, tournament + monetization switches, flagged words, feedback, Post Studio (rank and curate clips for socials, Showcase, Archive), Editor's Choice (render reel, Showcase), prizes, moderation queues, player search.
@@ -3322,6 +3343,13 @@ Locked decisions:
 - **CLIENT BUILT (2026-11-04, flag-off), commit df5821d.** The bid UI and its two discoverable entry points, all self-gating on `getWildcardAuctionState.enabled` so every surface renders NOTHING (zero footprint) until both flags flip — the seat is never teased before it can be bid on. `WildcardAuctionService` (wraps the two callables; `state()` fails quiet to hide the surfaces, `placeBid()` throws so the sheet shows the reason); `wildcard_bid_sheet.dart` (the bid screen: explainer, one-time entry fee, balance, your current/raisable bid, the eligibility-gate message when you can't bid yet, a closed state when off); and — **the two surfaces the developer asked for, quiet and found-not-shoved** — `WildcardStrip` (a gold-outlined row in the Main Stage hub, under the countdown header) and `WildcardSpendTile` (a card in the Rewards redeem list). Plus one line in the "How it works" screen's "Battle your way to the Main Stage" rule (three finals spots earned by climbing, the fourth is the wildcard anyone can bid for). Flutter analyze clean; NOT device-verifiable while flag-off. **STILL TO BUILD:** a live check (needs the flag flipped briefly); and verify the two callables' Cloud Run invoker binding on first switch-on (the documented 401 trap).
 
 - **TRY-OUT TICKET — BUILT (2026-11-04, flag-off).** The weekly entry pass (hinge decided above). `functions/tournamentTicket.js`: `secureTournamentTicket` (charges points, or free for a member = subscriber OR trial, via `isSubscriber`/`isInTrial`; idempotent per period on the ledger key + a holder-doc short-circuit) + `getTournamentTicketState` (drives the Home banner, fails to "hidden"). **THE GATE BITES AT THE CUTOFF SNAPSHOT ONLY, never the live board** — the board stays the full Elo race (an empty early-week board reads as a dead tournament, the cold-start trap this project fights), and `weeklyTournament.js` filters the *frozen field* (skill seats + alternates + lottery wildcard) to ticket-holders via `eligibleStandings`. **The wildcard auction BYPASSES it** — the auction resolver still gets the UNFILTERED standings, because the auction's entry fee is that bidder's ticket (no double-charge). **Members CLAIM it free (a tap)** rather than being auto-entered, because the claim is the intent signal — an auto-entered subscriber who isn't trying this week would clog the field; and claiming keeps the snapshot cheap (one holders read, no per-user sub check at the costly stage). **CADENCE-NEUTRAL** (keys off `qualifyingWeek().cutoffDayKey`, the one period definition — one ticket per period whatever the cadence; the DEADLINE is that cutoff, and buying after it rolls to the next period, so a closed week can't be bought into retroactively). Gated on `config/tournament.enabled` AND `tryoutTicketEnabled` (both off → open eligibility, today's behaviour — a graceful ramp: run the tournament with open eligibility first, add the gate later); `tryoutTicketPrice` default **200**, placeholder. `tournamentTickets/{weekKey}/holders/{uid}` is server-write / read-own in `firestore.rules`. Client: `TournamentTicketService` + `TournamentTicketBanner` on Home (self-gating: hides when off, unreachable, or already held; a persistent banner, deliberately not a forced modal). The live board doc now carries `ticketGate` so the board screen can note "a ticket is needed to be picked up". 17 pure tests, analyze clean, deployed flag-off; both callables' Cloud Run invoker binding verified (app-level JSON 401, not a Cloud Run 401). **STILL TO BUILD:** a live check (needs the flag flipped briefly).
+
+**MONEY PLAN — DECIDED (2026-11-11, developer).** Considered "everything free, ad-supported" vs subscription. Rough industry ranges at 100k MAU / ~20k DAU: subscription ~$10-20k/mo (2-4% at $6.99, after store cut) vs ads ~$10-45k/mo IF ads run normally. **Ads have a specific problem here: the content policy allows slurs/offensive language, and AdMob-style networks ban ads next to hate speech, while brands pay less for or avoid unsafe content - expect cheap inventory or a suspended ad account.** So the plan, in order:
+1. **Everything free at launch** (unchanged - `config/monetization.enabled` stays false).
+2. **Opt-in REWARDED ads, later**: "watch a ~30s ad, earn N points". N must be appropriate - a small, capped trickle (daily cap) so it never beats playing or makes the subscription pointless. NOT built; no ad SDK yet. When built, check the ad network's policy against our content first.
+3. **Keep the subscription for people who don't want to grind - and keep the grind REAL.** Points must take genuine dedication to earn, so subscribing is the attractive option for anyone who isn't hardcore. When the advisor sets the numbers (earn rates, day-pass price, etc.), tune them to that goal; today's placeholders (match 10 / win 25 / vote 5 / streak 15; day pass 300) have not been checked against it.
+4. **Sell Main Stage sponsorship** ("Thursday Night Main Stage, presented by ___") without scaring players away - the event is the most brand-friendly part of the app. **BUILT (slot only):** set `config/tournament.sponsorName` and the Home Main Stage card shows "presented by ___" (only while the tournament is enabled); empty = nothing shown.
+- **Trial (reminder, unchanged):** 14 days full access; afterwards ranked is free during Happy Hour (6-7pm PT) every day, and any other time needs a subscription or a 300-point day pass. Watching, judging and friend battles stay free. Developer kept this 2026-11-11 (did not block lapsed players from ranked - they are the matchmaking supply). **Featured clips on your profile are PAYING subscribers only (not trial).**
 
 **STILL OPEN:** the NUMBERS (point rates, spend prices, the try-out/wildcard fees, XP thresholds, subscription price). The try-out-ticket design hinge is now DECIDED (entry pass — above).
 

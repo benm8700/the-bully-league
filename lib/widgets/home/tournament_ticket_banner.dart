@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/tournament_ticket_service.dart';
 import '../../theme/app_theme.dart';
+import '../neon_dialog.dart';
 
 /// Home nudge: "Secure your ticket for the tournament."
 ///
@@ -62,7 +63,8 @@ class _TournamentTicketBannerState extends State<TournamentTicketBanner> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text("Couldn't secure your ticket. Try again.")),
+          content: Text("Couldn't secure your ticket. Try again."),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -72,12 +74,12 @@ class _TournamentTicketBannerState extends State<TournamentTicketBanner> {
   Future<bool?> _confirm(TournamentTicketState s) {
     final body = s.member
         ? 'Your membership covers it — claim your spot in this '
-            "week's tournament. You won't be charged any points."
+              "week's tournament. You won't be charged any points."
         : 'This costs ${s.price} points and is spent whether or not you make '
-            'the finals — it enters you in the race. You have ${s.balance}.';
+              'the finals — it enters you in the race. You have ${s.balance}.';
     return showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => NeonDialog(
         title: const Text('Secure your tournament ticket'),
         content: Text(body),
         actions: [
@@ -137,19 +139,17 @@ class _TournamentTicketBannerState extends State<TournamentTicketBanner> {
                     children: [
                       Text(
                         'Secure your tournament ticket',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(
-                                fontWeight: FontWeight.w800, color: gold),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: gold,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         sub,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: onVariant),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: onVariant),
                       ),
                     ],
                   ),

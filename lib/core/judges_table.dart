@@ -50,14 +50,16 @@ List<JudgeSeat> buildJudgeSeats({
   final seats = <JudgeSeat>[];
   for (var i = 0; i < panel.length; i++) {
     final judgeId = panel[i];
-    seats.add(JudgeSeat(
-      seatIndex: i,
-      seatUid: seatUidBase + i,
-      judgeId: judgeId,
-      isHead: judgeId == headJudge,
-      isMe: myUid != null && judgeId == myUid,
-      votedFor: votes[judgeId],
-    ));
+    seats.add(
+      JudgeSeat(
+        seatIndex: i,
+        seatUid: seatUidBase + i,
+        judgeId: judgeId,
+        isHead: judgeId == headJudge,
+        isMe: myUid != null && judgeId == myUid,
+        votedFor: votes[judgeId],
+      ),
+    );
   }
   return seats;
 }

@@ -8,7 +8,11 @@ import '../core/social_links.dart';
 /// TikTok / YouTube / X, URLs for a website / tickets). Writes the normalised
 /// values to users/{uid}.profile.links. Own-profile only.
 class SocialLinksEditor extends StatefulWidget {
-  const SocialLinksEditor({super.key, required this.initialLinks, this.onSaved});
+  const SocialLinksEditor({
+    super.key,
+    required this.initialLinks,
+    this.onSaved,
+  });
 
   final Map<String, String> initialLinks;
   final VoidCallback? onSaved;
@@ -61,21 +65,22 @@ class _SocialLinksEditorState extends State<SocialLinksEditor> {
         map[p.key] = norm;
       }
     }
-    setState(() => _errors
-      ..clear()
-      ..addAll(errors));
+    setState(
+      () => _errors
+        ..clear()
+        ..addAll(errors),
+    );
     if (errors.isNotEmpty) return;
 
     setState(() => _saving = true);
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .update({'profile.links': map});
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'profile.links': map,
+      });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Links saved')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Links saved')));
         widget.onSaved?.call();
       }
     } catch (_) {
@@ -95,14 +100,17 @@ class _SocialLinksEditorState extends State<SocialLinksEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Your links',
-            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+        Text(
+          'Your links',
+          style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 4),
         Text(
           'Shown on your fame page so fans can find you. Add a handle or a '
           'link - leave the rest blank.',
-          style: text.bodySmall
-              ?.copyWith(color: Colors.white.withValues(alpha: 0.6)),
+          style: text.bodySmall?.copyWith(
+            color: Colors.white.withValues(alpha: 0.6),
+          ),
         ),
         const SizedBox(height: 12),
         for (final p in kSocialPlatforms) ...[

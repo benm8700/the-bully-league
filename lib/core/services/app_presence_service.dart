@@ -71,10 +71,9 @@ class AppPresenceService with WidgetsBindingObserver {
     final uid = _uid;
     if (uid == null) return;
     try {
-      await FirebaseFirestore.instance.collection('presence').doc(uid).set(
-        {'lastSeenMs': DateTime.now().millisecondsSinceEpoch},
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance.collection('presence').doc(uid).set({
+        'lastSeenMs': DateTime.now().millisecondsSinceEpoch,
+      }, SetOptions(merge: true));
     } catch (_) {
       // best-effort
     }

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../neon_dialog.dart';
 
 /// "Win your first ranked battle by the deadline and get \$5."
 ///
@@ -150,7 +151,7 @@ class FirstWinOfferBanner extends StatelessWidget {
   ) {
     return showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => NeonDialog(
         title: Text('\$$amount first-win rules'),
         content: SingleChildScrollView(
           child: Text(

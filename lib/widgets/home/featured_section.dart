@@ -104,9 +104,8 @@ class _FeaturedCard extends StatelessWidget {
                         ? Image.network(
                             item.imageUrl!,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => const ColoredBox(
-                              color: Color(0xFF201A26),
-                            ),
+                            errorBuilder: (_, _, _) =>
+                                const ColoredBox(color: Color(0xFF201A26)),
                           )
                         : const ColoredBox(color: Color(0xFF201A26)),
                     // A ▶ badge marks a card that plays a clip on tap. Clip-less
@@ -120,11 +119,15 @@ class _FeaturedCard extends StatelessWidget {
                             color: Colors.black.withValues(alpha: 0.55),
                             shape: BoxShape.circle,
                             border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.85),
-                                width: 1.5),
+                              color: Colors.white.withValues(alpha: 0.85),
+                              width: 1.5,
+                            ),
                           ),
-                          child: const Icon(Icons.play_arrow_rounded,
-                              color: Colors.white, size: 30),
+                          child: const Icon(
+                            Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 30,
+                          ),
                         ),
                       ),
                   ],

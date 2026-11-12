@@ -41,8 +41,9 @@ class _JudgeChatState extends State<JudgeChat> {
   // Created ONCE, not per build: a fresh stream each build would reset the
   // StreamBuilder to "waiting", rebuild the whole panel and steal focus from
   // the text field the instant the keyboard opens (the flash-then-close bug).
-  late final Stream<List<JudgeChatMessage>> _messages =
-      _service.watch(widget.tournamentId);
+  late final Stream<List<JudgeChatMessage>> _messages = _service.watch(
+    widget.tournamentId,
+  );
 
   @override
   void dispose() {
@@ -66,7 +67,10 @@ class _JudgeChatState extends State<JudgeChat> {
       final msg = e.toString();
       final i = msg.indexOf(']');
       if (mounted) {
-        setState(() => _error = i >= 0 ? msg.substring(i + 1).trim() : 'Could not send.');
+        setState(
+          () =>
+              _error = i >= 0 ? msg.substring(i + 1).trim() : 'Could not send.',
+        );
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -91,23 +95,30 @@ class _JudgeChatState extends State<JudgeChat> {
             children: [
               Icon(Icons.forum, size: 18, color: gold),
               const SizedBox(width: 8),
-              Text("Judges' room",
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: gold, fontWeight: FontWeight.w800)),
+              Text(
+                "Judges' room",
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: gold,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 2),
-          Text('Private to the panel — talk it out before, during and after.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: cs.onSurfaceVariant)),
+          Text(
+            'Private to the panel — talk it out before, during and after.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
           const SizedBox(height: 10),
           _messageArea(cs),
           if (_error != null) ...[
             const SizedBox(height: 6),
-            Text(_error!,
-                style: TextStyle(color: context.palette.live, fontSize: 12)),
+            Text(
+              _error!,
+              style: TextStyle(color: context.palette.live, fontSize: 12),
+            ),
           ],
           const SizedBox(height: 8),
           Row(
@@ -133,7 +144,8 @@ class _JudgeChatState extends State<JudgeChat> {
                     ? const SizedBox(
                         height: 18,
                         width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2))
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Icon(Icons.send),
               ),
             ],
@@ -174,18 +186,18 @@ class _JudgeChatState extends State<JudgeChat> {
 
   /// The default, always-present first line - names the room and sets the tone.
   Widget _roomIntro(ColorScheme cs) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
-        child: Text(
-          "This is the judges' chat room — keep the discussion relevant.",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: cs.onSurfaceVariant,
-            fontSize: 12,
-            fontStyle: FontStyle.italic,
-            height: 1.3,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
+    child: Text(
+      "This is the judges' chat room — keep the discussion relevant.",
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        color: cs.onSurfaceVariant,
+        fontSize: 12,
+        fontStyle: FontStyle.italic,
+        height: 1.3,
+      ),
+    ),
+  );
 
   // One compact "Name: message" line (Twitch-style) - no two-line name-over-
   // bubble, so the panel packs more in.
@@ -194,16 +206,21 @@ class _JudgeChatState extends State<JudgeChat> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Text.rich(
-        TextSpan(children: [
-          TextSpan(
-            text: '${mine ? 'You' : m.username}: ',
-            style: TextStyle(
-              color: mine ? context.palette.reward : cs.onSurfaceVariant,
-              fontWeight: FontWeight.w800,
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '${mine ? 'You' : m.username}: ',
+              style: TextStyle(
+                color: mine ? context.palette.reward : cs.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-          ),
-          TextSpan(text: m.text, style: const TextStyle(color: Colors.white)),
-        ]),
+            TextSpan(
+              text: m.text,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
         style: const TextStyle(fontSize: 13, height: 1.3),
       ),
     );

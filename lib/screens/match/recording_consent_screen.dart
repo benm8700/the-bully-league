@@ -49,8 +49,10 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     try {
-      final snap =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
       final raw = snap.data()?['liveWatchOptIn'];
       if (raw is bool && mounted) setState(() => _liveWatch = raw);
     } catch (_) {
@@ -65,10 +67,9 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .set({'liveWatchOptIn': _liveWatch}, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'liveWatchOptIn': _liveWatch,
+      }, SetOptions(merge: true));
     } catch (_) {
       // Best-effort: never block starting a match on this preference write.
     }
@@ -121,8 +122,10 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        Icon(Icons.live_tv_outlined,
-                            color: Theme.of(context).colorScheme.primary),
+                        Icon(
+                          Icons.live_tv_outlined,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                         const SizedBox(width: 8),
                         Text('Go live (optional)', style: text.titleMedium),
                       ],
@@ -160,7 +163,8 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
                         setState(() => _consentChecked = value ?? false),
                     controlAffinity: ListTileControlAffinity.leading,
                     title: const Text(
-                        'I understand and consent to being recorded.'),
+                      'I understand and consent to being recorded.',
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(

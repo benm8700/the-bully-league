@@ -1,3 +1,4 @@
+import '../widgets/big_back_button.dart';
 import 'package:flutter/material.dart';
 
 /// The swappable visual identity for The Bully League.
@@ -195,10 +196,7 @@ TextStyle displayStyle(
 // The two REAL skins today: Comedy Night is the everyday base everyone
 // gets, Neon is the earned GOAT prestige unlock. (See kBaseSkin in app.dart
 // - the base default is Comedy Night.)
-const List<String> kThemeIds = [
-  'comedyNight',
-  'neon',
-];
+const List<String> kThemeIds = ['comedyNight', 'neon'];
 
 // SAVED brand explorations, kept in code for possible future use (the
 // developer's call - "maybe we will use in the future"). No longer surfaced
@@ -270,18 +268,18 @@ ThemeData _build({
 
   final r = palette.radius;
   TextStyle disp(double s, {double? w, double ls = 0}) => TextStyle(
-        fontFamily: palette.display,
-        fontSize: s,
-        height: 1.0,
-        letterSpacing: ls,
-        fontVariations: [
-          FontVariation('wght', w ?? palette.displayWeight),
-          FontVariation('wdth', palette.displayWidth),
-          // Optical size = point size, for serif faces like Fraunces.
-          // Archivo ignores this axis harmlessly.
-          FontVariation('opsz', s.clamp(9, 144)),
-        ],
-      );
+    fontFamily: palette.display,
+    fontSize: s,
+    height: 1.0,
+    letterSpacing: ls,
+    fontVariations: [
+      FontVariation('wght', w ?? palette.displayWeight),
+      FontVariation('wdth', palette.displayWidth),
+      // Optical size = point size, for serif faces like Fraunces.
+      // Archivo ignores this axis harmlessly.
+      FontVariation('opsz', s.clamp(9, 144)),
+    ],
+  );
 
   return base.copyWith(
     textTheme: base.textTheme.copyWith(
@@ -296,7 +294,60 @@ ThemeData _build({
         fontWeight: FontWeight.w700,
       ),
     ),
+    // Every AppBar back arrow is the big neon BackBadge (big_back_button.dart).
+    // THE NEON SWITCH (2026-11-11): every toggle in the app - hot-pink
+    // lit track with a white thumb when on, a dark track with a faint
+    // outline when off.
+    // THE NEON SHEET (2026-11-11): every bottom sheet is dark glass with a
+    // pink neon top edge and glow, matching NeonDialog.
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: const Color(0xFF130D1B),
+      modalBackgroundColor: const Color(0xFF130D1B),
+      surfaceTintColor: Colors.transparent,
+      elevation: 16,
+      modalElevation: 16,
+      shadowColor: const Color(0xAAFF2E7E),
+      dragHandleColor: const Color(0xFFFF2E7E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        side: BorderSide(color: Color(0xCCFF2E7E), width: 1.5),
+      ),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected)
+            ? Colors.white
+            : const Color(0xFF8A8296),
+      ),
+      trackColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected)
+            ? const Color(0xFFFF2E7E)
+            : const Color(0xFF221C2B),
+      ),
+      trackOutlineColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected)
+            ? const Color(0xFFFF6FAA)
+            : const Color(0xFF4A4255),
+      ),
+      thumbIcon: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected)
+            ? const Icon(
+                Icons.check_rounded,
+                size: 16,
+                color: Color(0xFFFF2E7E),
+              )
+            : null,
+      ),
+    ),
+    actionIconTheme: ActionIconThemeData(
+      backButtonIconBuilder: (_) => const AppBarBackBadge(),
+    ),
     appBarTheme: AppBarTheme(
+      // Room for the big BackBadge without squeezing it.
+      leadingWidth: 72,
+      // A little taller than the 56 default so the big back badge and
+      // its glow sit inside the bar instead of being clipped.
+      toolbarHeight: 64,
       backgroundColor: scaffold ?? scheme.surface,
       surfaceTintColor: Colors.transparent,
       centerTitle: false,
@@ -323,7 +374,10 @@ ThemeData _build({
         minimumSize: const Size(0, 48),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(r)),
         textStyle: TextStyle(
-            fontFamily: bodyFont, fontWeight: FontWeight.w600, fontSize: 15),
+          fontFamily: bodyFont,
+          fontWeight: FontWeight.w600,
+          fontSize: 15,
+        ),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
@@ -343,33 +397,42 @@ ThemeData _build({
       // it reads as part of the premium dark theme instead of a pale strip
       // under the near-black screens. Blending black OVER the existing token
       // keeps it darker than before on every skin, not just the base.
-      backgroundColor:
-          Color.alphaBlend(Colors.black.withValues(alpha: 0.40), scheme.surfaceContainerHigh),
+      backgroundColor: Color.alphaBlend(
+        Colors.black.withValues(alpha: 0.40),
+        scheme.surfaceContainerHigh,
+      ),
       // A clearer pink selection pill, plus a soft pink glow beneath the bar.
       indicatorColor: scheme.primary.withValues(alpha: 0.24),
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       shadowColor: Colors.transparent,
-      labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(
-            fontFamily: bodyFont,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            // Selected label picks up the pink accent; unselected is dimmed
-            // so the current tab clearly reads as active.
-            color: s.contains(WidgetState.selected)
-                ? scheme.primary
-                : scheme.onSurfaceVariant.withValues(alpha: 0.72),
-          )),
-      iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(
+      labelTextStyle: WidgetStateProperty.resolveWith(
+        (s) => TextStyle(
+          fontFamily: bodyFont,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          // Selected label picks up the pink accent; unselected is dimmed
+          // so the current tab clearly reads as active.
+          color: s.contains(WidgetState.selected)
+              ? scheme.primary
+              : scheme.onSurfaceVariant.withValues(alpha: 0.72),
+        ),
+      ),
+      iconTheme: WidgetStateProperty.resolveWith(
+        (s) => IconThemeData(
           size: 26,
           color: s.contains(WidgetState.selected)
               ? scheme.primary
-              : scheme.onSurfaceVariant.withValues(alpha: 0.80))),
+              : scheme.onSurfaceVariant.withValues(alpha: 0.80),
+        ),
+      ),
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: scheme.inverseSurface,
-      contentTextStyle:
-          TextStyle(fontFamily: bodyFont, color: scheme.onInverseSurface),
+      contentTextStyle: TextStyle(
+        fontFamily: bodyFont,
+        color: scheme.onInverseSurface,
+      ),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(r)),
     ),
@@ -386,17 +449,24 @@ ThemeData _tabloid() {
   const paper = Color(0xFFF3EFE7);
   const scream = Color(0xFFE01B24); // one screaming red
   const scheme = ColorScheme.light(
-    primary: scream, onPrimary: paper,
-    secondary: ink, onSecondary: paper,
-    surface: paper, onSurface: ink,
+    primary: scream,
+    onPrimary: paper,
+    secondary: ink,
+    onSecondary: paper,
+    surface: paper,
+    onSurface: ink,
     onSurfaceVariant: Color(0xFF5A554D),
     surfaceContainer: Color(0xFFEAE4D8),
     surfaceContainerHigh: Color(0xFFE3DCCE),
     surfaceContainerHighest: Color(0xFFDBD3C3),
-    outline: Color(0xFF9A9184), outlineVariant: Color(0xFFCEC6B7),
-    error: scream, onError: paper,
-    inverseSurface: ink, onInverseSurface: paper,
-    primaryContainer: Color(0xFFF7D9D9), onPrimaryContainer: ink,
+    outline: Color(0xFF9A9184),
+    outlineVariant: Color(0xFFCEC6B7),
+    error: scream,
+    onError: paper,
+    inverseSurface: ink,
+    onInverseSurface: paper,
+    primaryContainer: Color(0xFFF7D9D9),
+    onPrimaryContainer: ink,
   );
   return _build(
     brightness: Brightness.light,
@@ -405,9 +475,13 @@ ThemeData _tabloid() {
     palette: const AppPalette(
       name: 'Tabloid',
       accent: scream,
-      gaugeFrom: Color(0xFFF0A0A4), gaugeTo: scream,
-      gelA: scream, gelB: Color(0xFF1C6FE0),
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100, // condensed
+      gaugeFrom: Color(0xFFF0A0A4),
+      gaugeTo: scream,
+      gelA: scream,
+      gelB: Color(0xFF1C6FE0),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100, // condensed
       radius: 0,
     ),
   );
@@ -419,17 +493,24 @@ ThemeData _arcade() {
   const magenta = Color(0xFFFF2E88);
   const cyan = Color(0xFF22E0D6);
   const scheme = ColorScheme.dark(
-    primary: magenta, onPrimary: black,
-    secondary: cyan, onSecondary: black,
-    surface: black, onSurface: Color(0xFFF2F0FF),
+    primary: magenta,
+    onPrimary: black,
+    secondary: cyan,
+    onSecondary: black,
+    surface: black,
+    onSurface: Color(0xFFF2F0FF),
     onSurfaceVariant: Color(0xFF8A88B8),
     surfaceContainer: Color(0xFF141227),
     surfaceContainerHigh: Color(0xFF1B1833),
     surfaceContainerHighest: Color(0xFF241F42),
-    outline: Color(0xFF3A3660), outlineVariant: Color(0xFF2A2749),
-    error: Color(0xFFFF5A5A), onError: black,
-    inverseSurface: Color(0xFFF2F0FF), onInverseSurface: black,
-    primaryContainer: Color(0xFF3A0E28), onPrimaryContainer: magenta,
+    outline: Color(0xFF3A3660),
+    outlineVariant: Color(0xFF2A2749),
+    error: Color(0xFFFF5A5A),
+    onError: black,
+    inverseSurface: Color(0xFFF2F0FF),
+    onInverseSurface: black,
+    primaryContainer: Color(0xFF3A0E28),
+    onPrimaryContainer: magenta,
   );
   return _build(
     brightness: Brightness.dark,
@@ -438,9 +519,13 @@ ThemeData _arcade() {
     palette: const AppPalette(
       name: 'Arcade',
       accent: magenta,
-      gaugeFrom: cyan, gaugeTo: magenta,
-      gelA: magenta, gelB: cyan,
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      gaugeFrom: cyan,
+      gaugeTo: magenta,
+      gelA: magenta,
+      gelB: cyan,
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
       radius: 2,
       segmentedGauge: true,
     ),
@@ -453,17 +538,24 @@ ThemeData _courtside() {
   const chalk = Color(0xFFF4F6FB);
   const gold = Color(0xFFE7B54A);
   const scheme = ColorScheme.dark(
-    primary: gold, onPrimary: navy,
-    secondary: chalk, onSecondary: navy,
-    surface: navy, onSurface: chalk,
+    primary: gold,
+    onPrimary: navy,
+    secondary: chalk,
+    onSecondary: navy,
+    surface: navy,
+    onSurface: chalk,
     onSurfaceVariant: Color(0xFF8695AE),
     surfaceContainer: Color(0xFF13203A),
     surfaceContainerHigh: Color(0xFF182747),
     surfaceContainerHighest: Color(0xFF1F3157),
-    outline: Color(0xFF34456A), outlineVariant: Color(0xFF223354),
-    error: Color(0xFFE06666), onError: navy,
-    inverseSurface: chalk, onInverseSurface: navy,
-    primaryContainer: Color(0xFF33291A), onPrimaryContainer: gold,
+    outline: Color(0xFF34456A),
+    outlineVariant: Color(0xFF223354),
+    error: Color(0xFFE06666),
+    onError: navy,
+    inverseSurface: chalk,
+    onInverseSurface: navy,
+    primaryContainer: Color(0xFF33291A),
+    onPrimaryContainer: gold,
   );
   return _build(
     brightness: Brightness.dark,
@@ -472,9 +564,13 @@ ThemeData _courtside() {
     palette: const AppPalette(
       name: 'Courtside',
       accent: gold,
-      gaugeFrom: Color(0xFF5E7BB0), gaugeTo: gold,
-      gelA: Color(0xFF4E86C6), gelB: gold,
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      gaugeFrom: Color(0xFF5E7BB0),
+      gaugeTo: gold,
+      gelA: Color(0xFF4E86C6),
+      gelB: gold,
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
       radius: 6,
     ),
   );
@@ -493,17 +589,24 @@ ThemeData _neon() {
   const scheme = ColorScheme.dark(
     // White button text, per the developer's call. A neon sign is lit
     // white-hot at its core; the colour is the glow around it.
-    primary: indigo, onPrimary: Color(0xFFFFFFFF),
-    secondary: glow, onSecondary: Color(0xFF0B0713),
-    surface: night, onSurface: Color(0xFFEDE7FA),
+    primary: indigo,
+    onPrimary: Color(0xFFFFFFFF),
+    secondary: glow,
+    onSecondary: Color(0xFF0B0713),
+    surface: night,
+    onSurface: Color(0xFFEDE7FA),
     onSurfaceVariant: Color(0xFF9186AE),
     surfaceContainer: Color(0xFF160E24),
     surfaceContainerHigh: Color(0xFF1D1430),
     surfaceContainerHighest: Color(0xFF261A3E),
-    outline: Color(0xFF3B2D57), outlineVariant: Color(0xFF2A2043),
-    error: Color(0xFFFF6B8A), onError: Color(0xFF0B0713),
-    inverseSurface: Color(0xFFEDE7FA), onInverseSurface: Color(0xFF0B0713),
-    primaryContainer: Color(0xFF2A1650), onPrimaryContainer: indigo,
+    outline: Color(0xFF3B2D57),
+    outlineVariant: Color(0xFF2A2043),
+    error: Color(0xFFFF6B8A),
+    onError: Color(0xFF0B0713),
+    inverseSurface: Color(0xFFEDE7FA),
+    onInverseSurface: Color(0xFF0B0713),
+    primaryContainer: Color(0xFF2A1650),
+    onPrimaryContainer: indigo,
   );
   return _build(
     brightness: Brightness.dark,
@@ -512,16 +615,19 @@ ThemeData _neon() {
     palette: const AppPalette(
       name: 'Neon',
       accent: glow,
-      gaugeFrom: indigo, gaugeTo: Color(0xFFAAA0FF),
-      gelA: glow, gelB: Color(0xFF5FE0FF),
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      gaugeFrom: indigo,
+      gaugeTo: Color(0xFFAAA0FF),
+      gelA: glow,
+      gelB: Color(0xFF5FE0FF),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
       radius: 14,
       signature: 'glow',
       segmentedGauge: true,
     ),
   );
 }
-
 
 // === BRAND EXPLORATION THEMES (2026-08-28) ==============================
 // Five whole-app brand directions, SEPARATE from the Card/Neon skins. Same
@@ -533,29 +639,45 @@ ThemeData _neon() {
 /// reward, restrained violet secondary. Velvet-curtain and spotlight.
 ThemeData _club() {
   const scheme = ColorScheme.dark(
-    primary: Color(0xFFD14B57), onPrimary: Color(0xFFFFF3EE),
-    secondary: Color(0xFF8A76B0), onSecondary: Color(0xFF15100A),
-    surface: Color(0xFF130D0F), onSurface: Color(0xFFFBEFE7),
+    primary: Color(0xFFD14B57),
+    onPrimary: Color(0xFFFFF3EE),
+    secondary: Color(0xFF8A76B0),
+    onSecondary: Color(0xFF15100A),
+    surface: Color(0xFF130D0F),
+    onSurface: Color(0xFFFBEFE7),
     onSurfaceVariant: Color(0xFFB7A39E),
     surfaceContainer: Color(0xFF1E1518),
     surfaceContainerHigh: Color(0xFF271B1F),
     surfaceContainerHighest: Color(0xFF322329),
-    outline: Color(0xFF4A393C), outlineVariant: Color(0xFF3A2C2E),
-    error: Color(0xFFE5606A), onError: Color(0xFF2A0C0F),
-    inverseSurface: Color(0xFFFBEFE7), onInverseSurface: Color(0xFF130D0F),
-    primaryContainer: Color(0xFF3A1A20), onPrimaryContainer: Color(0xFFF2B5BB),
+    outline: Color(0xFF4A393C),
+    outlineVariant: Color(0xFF3A2C2E),
+    error: Color(0xFFE5606A),
+    onError: Color(0xFF2A0C0F),
+    inverseSurface: Color(0xFFFBEFE7),
+    onInverseSurface: Color(0xFF130D0F),
+    primaryContainer: Color(0xFF3A1A20),
+    onPrimaryContainer: Color(0xFFF2B5BB),
   );
   return _build(
-    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    brightness: Brightness.dark,
+    scheme: scheme,
+    bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'Comedy Club',
       accent: Color(0xFFD14B57),
-      gaugeFrom: Color(0xFF8E2A3A), gaugeTo: Color(0xFFD9A94E),
-      gelA: Color(0xFFE06B75), gelB: Color(0xFF8A76B0),
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
-      radius: 16, signature: 'frame',
-      live: Color(0xFFFF5A5A), reward: Color(0xFFC9A24B),
-      currency: Color(0xFFE0B24A), winner: Color(0xFF5FB88C),
+      gaugeFrom: Color(0xFF8E2A3A),
+      gaugeTo: Color(0xFFD9A94E),
+      gelA: Color(0xFFE06B75),
+      gelB: Color(0xFF8A76B0),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
+      radius: 16,
+      signature: 'frame',
+      live: Color(0xFFFF5A5A),
+      reward: Color(0xFFC9A24B),
+      currency: Color(0xFFE0B24A),
+      winner: Color(0xFF5FB88C),
     ),
   );
 }
@@ -564,29 +686,45 @@ ThemeData _club() {
 /// magenta secondary, gold reward. Youthful energy without esports.
 ThemeData _electric() {
   const scheme = ColorScheme.dark(
-    primary: Color(0xFF7E3FF2), onPrimary: Color(0xFFFFFFFF),
-    secondary: Color(0xFFFF4D8D), onSecondary: Color(0xFF1A0710),
-    surface: Color(0xFF0B0713), onSurface: Color(0xFFEDE7FA),
+    primary: Color(0xFF7E3FF2),
+    onPrimary: Color(0xFFFFFFFF),
+    secondary: Color(0xFFFF4D8D),
+    onSecondary: Color(0xFF1A0710),
+    surface: Color(0xFF0B0713),
+    onSurface: Color(0xFFEDE7FA),
     onSurfaceVariant: Color(0xFF9186AE),
     surfaceContainer: Color(0xFF150E22),
     surfaceContainerHigh: Color(0xFF1E1533),
     surfaceContainerHighest: Color(0xFF271B42),
-    outline: Color(0xFF3B2D57), outlineVariant: Color(0xFF2A2043),
-    error: Color(0xFFFF6B8A), onError: Color(0xFF20060F),
-    inverseSurface: Color(0xFFEDE7FA), onInverseSurface: Color(0xFF0B0713),
-    primaryContainer: Color(0xFF2A1650), onPrimaryContainer: Color(0xFFC9A0FF),
+    outline: Color(0xFF3B2D57),
+    outlineVariant: Color(0xFF2A2043),
+    error: Color(0xFFFF6B8A),
+    onError: Color(0xFF20060F),
+    inverseSurface: Color(0xFFEDE7FA),
+    onInverseSurface: Color(0xFF0B0713),
+    primaryContainer: Color(0xFF2A1650),
+    onPrimaryContainer: Color(0xFFC9A0FF),
   );
   return _build(
-    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    brightness: Brightness.dark,
+    scheme: scheme,
+    bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'Electric Violet',
       accent: Color(0xFF8B5CFF),
-      gaugeFrom: Color(0xFF7E3FF2), gaugeTo: Color(0xFFC9A0FF),
-      gelA: Color(0xFF9B6BFF), gelB: Color(0xFFFF4D8D),
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
-      radius: 16, signature: 'frame',
-      live: Color(0xFFFF4D5E), reward: Color(0xFFE9C05A),
-      currency: Color(0xFFEAC24E), winner: Color(0xFF4FD69A),
+      gaugeFrom: Color(0xFF7E3FF2),
+      gaugeTo: Color(0xFFC9A0FF),
+      gelA: Color(0xFF9B6BFF),
+      gelB: Color(0xFFFF4D8D),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
+      radius: 16,
+      signature: 'frame',
+      live: Color(0xFFFF4D5E),
+      reward: Color(0xFFE9C05A),
+      currency: Color(0xFFEAC24E),
+      winner: Color(0xFF4FD69A),
     ),
   );
 }
@@ -598,34 +736,50 @@ ThemeData _electric() {
 /// "primary action" remain two distinct signals.
 ThemeData _comedyNight() {
   const scheme = ColorScheme.dark(
-    primary: Color(0xFFEA4C6D), onPrimary: Color(0xFFFFFFFF),
-    secondary: Color(0xFF8B5CF6), onSecondary: Color(0xFF120A20),
-    surface: Color(0xFF0D0D0F), onSurface: Color(0xFFF5F1EC),
+    primary: Color(0xFFEA4C6D),
+    onPrimary: Color(0xFFFFFFFF),
+    secondary: Color(0xFF8B5CF6),
+    onSecondary: Color(0xFF120A20),
+    surface: Color(0xFF0D0D0F),
+    onSurface: Color(0xFFF5F1EC),
     onSurfaceVariant: Color(0xFFA8A29E),
     surfaceContainer: Color(0xFF16161A),
     surfaceContainerHigh: Color(0xFF1F1F24),
     surfaceContainerHighest: Color(0xFF282830),
-    outline: Color(0xFF3A3A40), outlineVariant: Color(0xFF2A2A2E),
-    error: Color(0xFFFF5C6A), onError: Color(0xFF2A0A0D),
-    inverseSurface: Color(0xFFF5F1EC), onInverseSurface: Color(0xFF0D0D0F),
-    primaryContainer: Color(0xFF3A1622), onPrimaryContainer: Color(0xFFFFB3C6),
+    outline: Color(0xFF3A3A40),
+    outlineVariant: Color(0xFF2A2A2E),
+    error: Color(0xFFFF5C6A),
+    onError: Color(0xFF2A0A0D),
+    inverseSurface: Color(0xFFF5F1EC),
+    onInverseSurface: Color(0xFF0D0D0F),
+    primaryContainer: Color(0xFF3A1622),
+    onPrimaryContainer: Color(0xFFFFB3C6),
   );
   return _build(
-    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    brightness: Brightness.dark,
+    scheme: scheme,
+    bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'Comedy Night',
       accent: Color(0xFFFF6F90),
-      gaugeFrom: Color(0xFFEA4C6D), gaugeTo: Color(0xFFE8B84B),
-      gelA: Color(0xFFFF6F90), gelB: Color(0xFF8B5CF6),
+      gaugeFrom: Color(0xFFEA4C6D),
+      gaugeTo: Color(0xFFE8B84B),
+      gelA: Color(0xFFFF6F90),
+      gelB: Color(0xFF8B5CF6),
       // Fraunces: an elegant high-contrast serif for the display face (rank
       // title, headlines, app bar) - reads premium/editorial, which suits
       // the prestige framing, while its soft/wonk details keep it from being
       // stiff. Body stays Inter. displayWidth is irrelevant (Fraunces has no
       // width axis); a serif wants less weight than the wide Archivo did.
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
-      radius: 16, signature: 'frame',
-      live: Color(0xFFFF3B47), reward: Color(0xFFE8B84B),
-      currency: Color(0xFFEEC153), winner: Color(0xFF4FC98A),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
+      radius: 16,
+      signature: 'frame',
+      live: Color(0xFFFF3B47),
+      reward: Color(0xFFE8B84B),
+      currency: Color(0xFFEEC153),
+      winner: Color(0xFF4FC98A),
     ),
   );
 }
@@ -634,29 +788,45 @@ ThemeData _comedyNight() {
 /// magenta secondary, champagne gold. Sleek, for 20s-40s.
 ThemeData _nightlife() {
   const scheme = ColorScheme.dark(
-    primary: Color(0xFFA857E6), onPrimary: Color(0xFFFFFFFF),
-    secondary: Color(0xFFE84B9C), onSecondary: Color(0xFF1E0714),
-    surface: Color(0xFF0A0B14), onSurface: Color(0xFFECEEF5),
+    primary: Color(0xFFA857E6),
+    onPrimary: Color(0xFFFFFFFF),
+    secondary: Color(0xFFE84B9C),
+    onSecondary: Color(0xFF1E0714),
+    surface: Color(0xFF0A0B14),
+    onSurface: Color(0xFFECEEF5),
     onSurfaceVariant: Color(0xFF8B90A3),
     surfaceContainer: Color(0xFF13141F),
     surfaceContainerHigh: Color(0xFF1B1D2B),
     surfaceContainerHighest: Color(0xFF242739),
-    outline: Color(0xFF363B4E), outlineVariant: Color(0xFF262A38),
-    error: Color(0xFFFF6B84), onError: Color(0xFF2A0A12),
-    inverseSurface: Color(0xFFECEEF5), onInverseSurface: Color(0xFF0A0B14),
-    primaryContainer: Color(0xFF2C1A45), onPrimaryContainer: Color(0xFFD9B0F5),
+    outline: Color(0xFF363B4E),
+    outlineVariant: Color(0xFF262A38),
+    error: Color(0xFFFF6B84),
+    onError: Color(0xFF2A0A12),
+    inverseSurface: Color(0xFFECEEF5),
+    onInverseSurface: Color(0xFF0A0B14),
+    primaryContainer: Color(0xFF2C1A45),
+    onPrimaryContainer: Color(0xFFD9B0F5),
   );
   return _build(
-    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    brightness: Brightness.dark,
+    scheme: scheme,
+    bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'Premium Nightlife',
       accent: Color(0xFFBE7BF0),
-      gaugeFrom: Color(0xFFA857E6), gaugeTo: Color(0xFFE84B9C),
-      gelA: Color(0xFFBE7BF0), gelB: Color(0xFFE84B9C),
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
-      radius: 18, signature: 'frame',
-      live: Color(0xFFFF5277), reward: Color(0xFFD9B87A),
-      currency: Color(0xFFE0C08A), winner: Color(0xFF5FD3A6),
+      gaugeFrom: Color(0xFFA857E6),
+      gaugeTo: Color(0xFFE84B9C),
+      gelA: Color(0xFFBE7BF0),
+      gelB: Color(0xFFE84B9C),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
+      radius: 18,
+      signature: 'frame',
+      live: Color(0xFFFF5277),
+      reward: Color(0xFFD9B87A),
+      currency: Color(0xFFE0C08A),
+      winner: Color(0xFF5FD3A6),
     ),
   );
 }
@@ -667,29 +837,45 @@ ThemeData _nightlife() {
 /// pop. Premium via restraint, video-first.
 ThemeData _wildcard() {
   const scheme = ColorScheme.dark(
-    primary: Color(0xFFF2454F), onPrimary: Color(0xFFFFFFFF),
-    secondary: Color(0xFFA87E86), onSecondary: Color(0xFF1A0E11),
-    surface: Color(0xFF110D10), onSurface: Color(0xFFF7F1EE),
+    primary: Color(0xFFF2454F),
+    onPrimary: Color(0xFFFFFFFF),
+    secondary: Color(0xFFA87E86),
+    onSecondary: Color(0xFF1A0E11),
+    surface: Color(0xFF110D10),
+    onSurface: Color(0xFFF7F1EE),
     onSurfaceVariant: Color(0xFFB0A6A2),
     surfaceContainer: Color(0xFF1B1519),
     surfaceContainerHigh: Color(0xFF251D22),
     surfaceContainerHighest: Color(0xFF2F252B),
-    outline: Color(0xFF3C3138), outlineVariant: Color(0xFF2C2429),
-    error: Color(0xFFFF5C68), onError: Color(0xFF2A0A0E),
-    inverseSurface: Color(0xFFF7F1EE), onInverseSurface: Color(0xFF110D10),
-    primaryContainer: Color(0xFF3A171B), onPrimaryContainer: Color(0xFFFFB3B9),
+    outline: Color(0xFF3C3138),
+    outlineVariant: Color(0xFF2C2429),
+    error: Color(0xFFFF5C68),
+    onError: Color(0xFF2A0A0E),
+    inverseSurface: Color(0xFFF7F1EE),
+    onInverseSurface: Color(0xFF110D10),
+    primaryContainer: Color(0xFF3A171B),
+    onPrimaryContainer: Color(0xFFFFB3B9),
   );
   return _build(
-    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    brightness: Brightness.dark,
+    scheme: scheme,
+    bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'The Spotlight',
       accent: Color(0xFFFF6670),
-      gaugeFrom: Color(0xFFF2454F), gaugeTo: Color(0xFFE8B24A),
-      gelA: Color(0xFFFF6670), gelB: Color(0xFFE8B24A),
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
-      radius: 16, signature: 'frame',
-      live: Color(0xFFFF3345), reward: Color(0xFFE8B24A),
-      currency: Color(0xFFF0C255), winner: Color(0xFF52C98C),
+      gaugeFrom: Color(0xFFF2454F),
+      gaugeTo: Color(0xFFE8B24A),
+      gelA: Color(0xFFFF6670),
+      gelB: Color(0xFFE8B24A),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
+      radius: 16,
+      signature: 'frame',
+      live: Color(0xFFFF3345),
+      reward: Color(0xFFE8B24A),
+      currency: Color(0xFFF0C255),
+      winner: Color(0xFF52C98C),
     ),
   );
 }
@@ -700,17 +886,24 @@ ThemeData _riso() {
   const ink = Color(0xFF201A2C);
   const pink = Color(0xFFFF3C7A); // fluoro pink spot
   const scheme = ColorScheme.light(
-    primary: pink, onPrimary: stock,
-    secondary: Color(0xFF2C6FE8), onSecondary: stock,
-    surface: stock, onSurface: ink,
+    primary: pink,
+    onPrimary: stock,
+    secondary: Color(0xFF2C6FE8),
+    onSecondary: stock,
+    surface: stock,
+    onSurface: ink,
     onSurfaceVariant: Color(0xFF6B6478),
     surfaceContainer: Color(0xFFE9E2CC),
     surfaceContainerHigh: Color(0xFFE1D9C0),
     surfaceContainerHighest: Color(0xFFD8CFB2),
-    outline: Color(0xFFA89F8A), outlineVariant: Color(0xFFCFC6AC),
-    error: Color(0xFFD52B54), onError: stock,
-    inverseSurface: ink, onInverseSurface: stock,
-    primaryContainer: Color(0xFFFAD3E0), onPrimaryContainer: ink,
+    outline: Color(0xFFA89F8A),
+    outlineVariant: Color(0xFFCFC6AC),
+    error: Color(0xFFD52B54),
+    onError: stock,
+    inverseSurface: ink,
+    onInverseSurface: stock,
+    primaryContainer: Color(0xFFFAD3E0),
+    onPrimaryContainer: ink,
   );
   return _build(
     brightness: Brightness.light,
@@ -719,9 +912,13 @@ ThemeData _riso() {
     palette: const AppPalette(
       name: 'Riso',
       accent: pink,
-      gaugeFrom: Color(0xFF6FA0F0), gaugeTo: pink,
-      gelA: pink, gelB: Color(0xFF2C6FE8),
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      gaugeFrom: Color(0xFF6FA0F0),
+      gaugeTo: pink,
+      gelA: pink,
+      gelB: Color(0xFF2C6FE8),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
       radius: 3,
     ),
   );
@@ -733,26 +930,39 @@ ThemeData _fightNight() {
   const bone = Color(0xFFECE3D6);
   const blood = Color(0xFFD21F3C);
   const scheme = ColorScheme.dark(
-    primary: blood, onPrimary: bone,
-    secondary: bone, onSecondary: canvas,
-    surface: canvas, onSurface: bone,
+    primary: blood,
+    onPrimary: bone,
+    secondary: bone,
+    onSecondary: canvas,
+    surface: canvas,
+    onSurface: bone,
     onSurfaceVariant: Color(0xFF938A83),
     surfaceContainer: Color(0xFF1D1A1E),
     surfaceContainerHigh: Color(0xFF241F26),
     surfaceContainerHighest: Color(0xFF2C262E),
-    outline: Color(0xFF453E48), outlineVariant: Color(0xFF322C34),
-    error: Color(0xFFE0685A), onError: canvas,
-    inverseSurface: bone, onInverseSurface: canvas,
-    primaryContainer: Color(0xFF3A0E17), onPrimaryContainer: bone,
+    outline: Color(0xFF453E48),
+    outlineVariant: Color(0xFF322C34),
+    error: Color(0xFFE0685A),
+    onError: canvas,
+    inverseSurface: bone,
+    onInverseSurface: canvas,
+    primaryContainer: Color(0xFF3A0E17),
+    onPrimaryContainer: bone,
   );
   return _build(
-    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    brightness: Brightness.dark,
+    scheme: scheme,
+    bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'Fight Night',
       accent: blood,
-      gaugeFrom: Color(0xFF7A1520), gaugeTo: blood,
-      gelA: blood, gelB: Color(0xFF4E86C6),
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      gaugeFrom: Color(0xFF7A1520),
+      gaugeTo: blood,
+      gelA: blood,
+      gelB: Color(0xFF4E86C6),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
       radius: 0,
     ),
   );
@@ -764,26 +974,39 @@ ThemeData _comic() {
   const ink = Color(0xFF141019);
   const pop = Color(0xFF1F5EFF); // pop-art electric blue
   const scheme = ColorScheme.light(
-    primary: pop, onPrimary: Color(0xFFFFFFFF),
-    secondary: ink, onSecondary: paper,
-    surface: paper, onSurface: ink,
+    primary: pop,
+    onPrimary: Color(0xFFFFFFFF),
+    secondary: ink,
+    onSecondary: paper,
+    surface: paper,
+    onSurface: ink,
     onSurfaceVariant: Color(0xFF565064),
     surfaceContainer: Color(0xFFEDE9DE),
     surfaceContainerHigh: Color(0xFFE6E1D3),
     surfaceContainerHighest: Color(0xFFDED8C7),
-    outline: Color(0xFF141019), outlineVariant: Color(0xFF9C96A6),
-    error: Color(0xFFE5342B), onError: paper,
-    inverseSurface: ink, onInverseSurface: paper,
-    primaryContainer: Color(0xFFD5E0FF), onPrimaryContainer: ink,
+    outline: Color(0xFF141019),
+    outlineVariant: Color(0xFF9C96A6),
+    error: Color(0xFFE5342B),
+    onError: paper,
+    inverseSurface: ink,
+    onInverseSurface: paper,
+    primaryContainer: Color(0xFFD5E0FF),
+    onPrimaryContainer: ink,
   );
   return _build(
-    brightness: Brightness.light, scheme: scheme, bodyFont: 'Inter',
+    brightness: Brightness.light,
+    scheme: scheme,
+    bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'Comic',
       accent: pop,
-      gaugeFrom: Color(0xFF8FB0FF), gaugeTo: pop,
-      gelA: Color(0xFFE5342B), gelB: Color(0xFF178A4C),
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      gaugeFrom: Color(0xFF8FB0FF),
+      gaugeTo: pop,
+      gelA: Color(0xFFE5342B),
+      gelB: Color(0xFF178A4C),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
       radius: 2,
     ),
   );
@@ -795,26 +1018,39 @@ ThemeData _battle() {
   const chalk = Color(0xFFEDEDE8);
   const spray = Color(0xFFFF5A1F); // construction orange-red, not amber
   const scheme = ColorScheme.dark(
-    primary: spray, onPrimary: Color(0xFF12100E),
-    secondary: Color(0xFF35E06B), onSecondary: Color(0xFF12100E),
-    surface: concrete, onSurface: chalk,
+    primary: spray,
+    onPrimary: Color(0xFF12100E),
+    secondary: Color(0xFF35E06B),
+    onSecondary: Color(0xFF12100E),
+    surface: concrete,
+    onSurface: chalk,
     onSurfaceVariant: Color(0xFF8C8C86),
     surfaceContainer: Color(0xFF242427),
     surfaceContainerHigh: Color(0xFF2C2C30),
     surfaceContainerHighest: Color(0xFF353539),
-    outline: Color(0xFF4A4A4E), outlineVariant: Color(0xFF343438),
-    error: Color(0xFFFF5A5A), onError: Color(0xFF12100E),
-    inverseSurface: chalk, onInverseSurface: concrete,
-    primaryContainer: Color(0xFF3A1608), onPrimaryContainer: spray,
+    outline: Color(0xFF4A4A4E),
+    outlineVariant: Color(0xFF343438),
+    error: Color(0xFFFF5A5A),
+    onError: Color(0xFF12100E),
+    inverseSurface: chalk,
+    onInverseSurface: concrete,
+    primaryContainer: Color(0xFF3A1608),
+    onPrimaryContainer: spray,
   );
   return _build(
-    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    brightness: Brightness.dark,
+    scheme: scheme,
+    bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'Battle',
       accent: spray,
-      gaugeFrom: Color(0xFF35E06B), gaugeTo: spray,
-      gelA: Color(0xFFFF2E88), gelB: Color(0xFF35E06B),
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      gaugeFrom: Color(0xFF35E06B),
+      gaugeTo: spray,
+      gelA: Color(0xFFFF2E88),
+      gelB: Color(0xFF35E06B),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
       radius: 2,
     ),
   );
@@ -831,29 +1067,42 @@ ThemeData _card() {
   const frost = Color(0xFFE8ECF5);
   const cyan = Color(0xFF22D3EE); // holographic aurora cyan
   const scheme = ColorScheme.dark(
-    primary: cyan, onPrimary: Color(0xFF04121A),
-    secondary: Color(0xFF7DE8C4), onSecondary: Color(0xFF04121A),
-    surface: slate, onSurface: frost,
+    primary: cyan,
+    onPrimary: Color(0xFF04121A),
+    secondary: Color(0xFF7DE8C4),
+    onSecondary: Color(0xFF04121A),
+    surface: slate,
+    onSurface: frost,
     onSurfaceVariant: Color(0xFF8390A8),
     surfaceContainer: Color(0xFF17202E),
     surfaceContainerHigh: Color(0xFF1E2838),
     surfaceContainerHighest: Color(0xFF263143),
-    outline: Color(0xFF3A4759), outlineVariant: Color(0xFF232F3E),
-    error: Color(0xFFFF6B7D), onError: Color(0xFF04121A),
-    inverseSurface: frost, onInverseSurface: slate,
-    primaryContainer: Color(0xFF0A3A3F), onPrimaryContainer: cyan,
+    outline: Color(0xFF3A4759),
+    outlineVariant: Color(0xFF232F3E),
+    error: Color(0xFFFF6B7D),
+    onError: Color(0xFF04121A),
+    inverseSurface: frost,
+    onInverseSurface: slate,
+    primaryContainer: Color(0xFF0A3A3F),
+    onPrimaryContainer: cyan,
   );
   return _build(
-    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    brightness: Brightness.dark,
+    scheme: scheme,
+    bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'Card',
       accent: cyan,
       // Mint -> cyan, a cool aurora sweep. Solid smooth fill, not the
       // segmented power bar - a continuous stat bar sits better inside the
       // foil frame than an arcade-cabinet health bar.
-      gaugeFrom: Color(0xFF34E0B0), gaugeTo: cyan,
-      gelA: Color(0xFFFF6B9D), gelB: Color(0xFF6BA9FF),
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      gaugeFrom: Color(0xFF34E0B0),
+      gaugeTo: cyan,
+      gelA: Color(0xFFFF6B9D),
+      gelB: Color(0xFF6BA9FF),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
       radius: 20,
       signature: 'frame',
       segmentedGauge: false,
@@ -861,33 +1110,45 @@ ThemeData _card() {
   );
 }
 
-
 // --- 10. TAPE: camcorder / VHS. The app's own output is tape. -------------
 ThemeData _tape() {
   const tape = Color(0xFF0C0D0B);
   const white = Color(0xFFE6EFE6);
   const phosphor = Color(0xFF6AE86A);
   const scheme = ColorScheme.dark(
-    primary: phosphor, onPrimary: Color(0xFF071007),
-    secondary: white, onSecondary: tape,
-    surface: tape, onSurface: white,
+    primary: phosphor,
+    onPrimary: Color(0xFF071007),
+    secondary: white,
+    onSecondary: tape,
+    surface: tape,
+    onSurface: white,
     onSurfaceVariant: Color(0xFF7C877C),
     surfaceContainer: Color(0xFF151714),
     surfaceContainerHigh: Color(0xFF1C1F1B),
     surfaceContainerHighest: Color(0xFF242822),
-    outline: Color(0xFF39403A), outlineVariant: Color(0xFF282D28),
-    error: Color(0xFFFF5C7A), onError: Color(0xFF071007),
-    inverseSurface: white, onInverseSurface: tape,
-    primaryContainer: Color(0xFF0F2A0F), onPrimaryContainer: phosphor,
+    outline: Color(0xFF39403A),
+    outlineVariant: Color(0xFF282D28),
+    error: Color(0xFFFF5C7A),
+    onError: Color(0xFF071007),
+    inverseSurface: white,
+    onInverseSurface: tape,
+    primaryContainer: Color(0xFF0F2A0F),
+    onPrimaryContainer: phosphor,
   );
   return _build(
-    brightness: Brightness.dark, scheme: scheme, bodyFont: 'Inter',
+    brightness: Brightness.dark,
+    scheme: scheme,
+    bodyFont: 'Inter',
     palette: const AppPalette(
       name: 'Tape',
       accent: phosphor,
-      gaugeFrom: Color(0xFF2E7A2E), gaugeTo: phosphor,
-      gelA: Color(0xFFFF5C7A), gelB: Color(0xFF57C7FF),
-      display: 'Fraunces', displayWeight: 600, displayWidth: 100,
+      gaugeFrom: Color(0xFF2E7A2E),
+      gaugeTo: phosphor,
+      gelA: Color(0xFFFF5C7A),
+      gelB: Color(0xFF57C7FF),
+      display: 'Fraunces',
+      displayWeight: 600,
+      displayWidth: 100,
       radius: 2,
     ),
   );

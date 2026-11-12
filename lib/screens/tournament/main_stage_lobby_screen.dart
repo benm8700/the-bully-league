@@ -61,8 +61,9 @@ class _MainStageLobbyScreenState extends State<MainStageLobbyScreen>
 
   void _beat() {
     if (_uid.isEmpty) return;
-    _meRef.set({'lastSeenMs': DateTime.now().millisecondsSinceEpoch}).catchError(
-        (_) {});
+    _meRef
+        .set({'lastSeenMs': DateTime.now().millisecondsSinceEpoch})
+        .catchError((_) {});
   }
 
   @override
@@ -127,7 +128,10 @@ class _MainStageLobbyScreenState extends State<MainStageLobbyScreen>
             Text(
               n <= 1 ? 'You\'re here' : '$n watching now',
               style: TextStyle(
-                  color: pink, fontWeight: FontWeight.w800, fontSize: 16),
+                color: pink,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
             ),
           ],
         );
@@ -141,7 +145,8 @@ class _MainStageLobbyScreenState extends State<MainStageLobbyScreen>
       stream: _mainStage.watch(),
       builder: (context, snap) {
         final v = snap.data;
-        final mid = (v != null && v.status == 'live') ? v.liveBattleMatchId
+        final mid = (v != null && v.status == 'live')
+            ? v.liveBattleMatchId
             : null;
         if (mid == null) {
           return Container(
@@ -175,8 +180,7 @@ class _MainStageLobbyScreenState extends State<MainStageLobbyScreen>
             icon: const Icon(Icons.sensors),
             label: const Text('Watch the battle on stage'),
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                  builder: (_) => LiveViewerScreen(matchId: mid)),
+              MaterialPageRoute(builder: (_) => LiveViewerScreen(matchId: mid)),
             ),
           ),
         );

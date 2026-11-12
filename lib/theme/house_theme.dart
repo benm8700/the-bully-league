@@ -1,3 +1,4 @@
+import '../widgets/big_back_button.dart';
 import 'package:flutter/material.dart';
 
 /// "House Lights Down" - the visual identity for The Bully League.
@@ -173,7 +174,60 @@ class House {
           fontWeight: FontWeight.w600,
         ),
       ),
+      // Every AppBar back arrow is the big neon BackBadge (big_back_button.dart).
+      // THE NEON SWITCH (2026-11-11): every toggle in the app - hot-pink
+      // lit track with a white thumb when on, a dark track with a faint
+      // outline when off.
+      // THE NEON SHEET (2026-11-11): every bottom sheet is dark glass with a
+      // pink neon top edge and glow, matching NeonDialog.
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: const Color(0xFF130D1B),
+        modalBackgroundColor: const Color(0xFF130D1B),
+        surfaceTintColor: Colors.transparent,
+        elevation: 16,
+        modalElevation: 16,
+        shadowColor: const Color(0xAAFF2E7E),
+        dragHandleColor: const Color(0xFFFF2E7E),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          side: BorderSide(color: Color(0xCCFF2E7E), width: 1.5),
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? Colors.white
+              : const Color(0xFF8A8296),
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? const Color(0xFFFF2E7E)
+              : const Color(0xFF221C2B),
+        ),
+        trackOutlineColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? const Color(0xFFFF6FAA)
+              : const Color(0xFF4A4255),
+        ),
+        thumbIcon: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? const Icon(
+                  Icons.check_rounded,
+                  size: 16,
+                  color: Color(0xFFFF2E7E),
+                )
+              : null,
+        ),
+      ),
+      actionIconTheme: ActionIconThemeData(
+        backButtonIconBuilder: (_) => const AppBarBackBadge(),
+      ),
       appBarTheme: AppBarTheme(
+        // Room for the big BackBadge without squeezing it.
+        leadingWidth: 72,
+        // A little taller than the 56 default so the big back badge and
+        // its glow sit inside the bar instead of being clipped.
+        toolbarHeight: 64,
         backgroundColor: house,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
@@ -191,11 +245,13 @@ class House {
           // entire Home screen the first time this theme was applied,
           // taking every button with it while the app bar rendered fine.
           minimumSize: const Size(0, 52),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          textStyle: display(
+            size: 16,
+            weight: 800,
+            width: 116,
+            letterSpacing: 1.1,
           ),
-          textStyle: display(size: 16, weight: 800, width: 116,
-              letterSpacing: 1.1),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -203,9 +259,7 @@ class House {
           foregroundColor: spot,
           side: const BorderSide(color: smoke),
           minimumSize: const Size(0, 48),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           textStyle: const TextStyle(
             fontFamily: 'Inter',
             fontWeight: FontWeight.w600,
@@ -253,9 +307,7 @@ class House {
       snackBarTheme: SnackBarThemeData(
         backgroundColor: const Color(0xFF241C1B),
         contentTextStyle: const TextStyle(fontFamily: 'Inter', color: spot),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         behavior: SnackBarBehavior.floating,
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(

@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/empty_state.dart';
 import '../profile/performer_profile_screen.dart';
 import 'judges_room_screen.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// The Judges tab of the tournament hub.
 ///
@@ -112,7 +113,8 @@ class _JudgesTabState extends State<JudgesTab> {
       bool feeEnabled = false;
       int fee = 0;
       int balance = 0;
-      final cfg = (await db.collection('config').doc('tournament').get()).data();
+      final cfg = (await db.collection('config').doc('tournament').get())
+          .data();
       if (cfg?['enabled'] == true && cfg?['judgeApplyFeeEnabled'] == true) {
         feeEnabled = true;
         final f = (cfg?['judgeApplyFee'] as num?)?.toInt();
@@ -120,8 +122,10 @@ class _JudgesTabState extends State<JudgesTab> {
       }
       if (me != null) {
         final u = (await db.collection('users').doc(me).get()).data();
-        balance = (u?['pointsBalance'] as num?)?.toInt() ??
-            (u?['points'] as num?)?.toInt() ?? 0;
+        balance =
+            (u?['pointsBalance'] as num?)?.toInt() ??
+            (u?['points'] as num?)?.toInt() ??
+            0;
       }
       if (!mounted) return;
       setState(() {
@@ -145,7 +149,7 @@ class _JudgesTabState extends State<JudgesTab> {
     if (_feeEnabled) {
       final ok = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => NeonDialog(
           title: const Text('Apply to judge?'),
           content: Text(
             'It costs $_fee points to throw your hat in for the next panel. '
@@ -154,11 +158,13 @@ class _JudgesTabState extends State<JudgesTab> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Apply')),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Apply'),
+            ),
           ],
         ),
       );
@@ -185,21 +191,23 @@ class _JudgesTabState extends State<JudgesTab> {
     if (_acting) return;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => NeonDialog(
         title: const Text('Withdraw your application?'),
         content: Text(
           _feeEnabled
               ? "The points you spent to apply aren't refunded — but you can "
-                  'apply again before the panel locks at no extra cost.'
+                    'apply again before the panel locks at no extra cost.'
               : 'You can apply again any time before the panel locks.',
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Never mind')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Never mind'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Withdraw')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Withdraw'),
+          ),
         ],
       ),
     );
@@ -249,9 +257,13 @@ class _JudgesTabState extends State<JudgesTab> {
                   children: [
                     Icon(Icons.gavel, color: gold, size: 20),
                     const SizedBox(width: 8),
-                    Text('Judge the Main Stage',
-                        style: text.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800, color: gold)),
+                    Text(
+                      'Judge the Main Stage',
+                      style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: gold,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -259,8 +271,9 @@ class _JudgesTabState extends State<JudgesTab> {
                   'Earn your way onto the panel and judge the Main Stage live — '
                   'on camera, in front of the whole League. Your verdict, your '
                   'moment to shine, your spot on the show.',
-                  style:
-                      text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                  style: text.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -280,10 +293,13 @@ class _JudgesTabState extends State<JudgesTab> {
           const SizedBox(height: 6),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Text('Applicants',
-                style: text.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white.withValues(alpha: 0.8))),
+            child: Text(
+              'Applicants',
+              style: text.labelLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: Colors.white.withValues(alpha: 0.8),
+              ),
+            ),
           ),
           if (_volunteers.isEmpty)
             const Padding(
@@ -291,13 +307,15 @@ class _JudgesTabState extends State<JudgesTab> {
               child: EmptyState(
                 icon: Icons.how_to_reg_outlined,
                 title: 'No applicants yet',
-                message: 'Be the first to throw your hat in. Apply, then '
+                message:
+                    'Be the first to throw your hat in. Apply, then '
                     'judge matches to climb the roster.',
               ),
             )
           else
-            ..._volunteers.asMap().entries.map((e) =>
-                _row(e.key, e.value, selfUid, gold, text, scheme)),
+            ..._volunteers.asMap().entries.map(
+              (e) => _row(e.key, e.value, selfUid, gold, text, scheme),
+            ),
         ],
       ),
     );
@@ -331,8 +349,11 @@ class _JudgesTabState extends State<JudgesTab> {
               ),
               icon: const Icon(Icons.gavel),
               label: const Text("Join the judges' room"),
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => JudgesRoomScreen(matchId: mid))),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => JudgesRoomScreen(matchId: mid),
+                ),
+              ),
             ),
           ),
         );
@@ -340,8 +361,14 @@ class _JudgesTabState extends State<JudgesTab> {
     );
   }
 
-  Widget _row(int i, Map<String, dynamic> e, String? selfUid, Color gold,
-      TextTheme text, ColorScheme scheme) {
+  Widget _row(
+    int i,
+    Map<String, dynamic> e,
+    String? selfUid,
+    Color gold,
+    TextTheme text,
+    ColorScheme scheme,
+  ) {
     final uid = e['uid'] as String;
     final judged = (e['judged'] as num?)?.toInt() ?? 0;
     final qualified = e['qualified'] == true;
@@ -352,26 +379,33 @@ class _JudgesTabState extends State<JudgesTab> {
       child: ListTile(
         dense: true,
         visualDensity: const VisualDensity(vertical: -3),
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => PerformerProfileScreen(uid: uid))),
-        leading: Text('${i + 1}',
-            style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 16,
-                color: qualified ? gold : scheme.onSurfaceVariant)),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => PerformerProfileScreen(uid: uid)),
+        ),
+        leading: Text(
+          '${i + 1}',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 16,
+            color: qualified ? gold : scheme.onSurfaceVariant,
+          ),
+        ),
         title: Text(
           isSelf ? '$name  (you)' : name,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-              fontWeight: isSelf ? FontWeight.w800 : FontWeight.w600),
+            fontWeight: isSelf ? FontWeight.w800 : FontWeight.w600,
+          ),
         ),
         subtitle: Text(
           qualified
               ? 'Qualified · $judged votes'
               : '${_minToQualify - judged} more to qualify · $judged votes',
           style: TextStyle(
-              color: qualified ? gold : scheme.onSurfaceVariant, fontSize: 11),
+            color: qualified ? gold : scheme.onSurfaceVariant,
+            fontSize: 11,
+          ),
         ),
         trailing: qualified
             ? Icon(Icons.check_circle, color: gold, size: 18)
@@ -413,13 +447,14 @@ class _ApplyCard extends StatelessWidget {
     final String sub;
     if (applied) {
       title = 'Your application is in';
-      sub = 'Keep judging to climb the roster — the top applicants get the '
+      sub =
+          'Keep judging to climb the roster — the top applicants get the '
           'open seats.';
     } else {
       title = 'Apply for a seat on the panel';
       sub = feeEnabled
           ? 'It costs $fee pts to apply, then judge $minToQualify matches to '
-              'qualify. Top applicants get the seats.'
+                'qualify. Top applicants get the seats.'
           : 'Apply, then judge $minToQualify matches to qualify.';
     }
 
@@ -432,14 +467,19 @@ class _ApplyCard extends StatelessWidget {
       );
     } else if (!canAfford) {
       // Can't cover the fee yet - judge more battles to earn it.
-      action = Text('${fee - balance} more',
-          style: text.labelMedium
-              ?.copyWith(color: Colors.white.withValues(alpha: 0.6)));
+      action = Text(
+        '${fee - balance} more',
+        style: text.labelMedium?.copyWith(
+          color: Colors.white.withValues(alpha: 0.6),
+        ),
+      );
     } else {
       action = FilledButton(
         onPressed: acting ? null : onApply,
         style: FilledButton.styleFrom(
-            backgroundColor: gold, foregroundColor: const Color(0xFF3D2C00)),
+          backgroundColor: gold,
+          foregroundColor: const Color(0xFF3D2C00),
+        ),
         child: Text(feeEnabled ? 'Apply · $fee pts' : 'Apply'),
       );
     }
@@ -451,26 +491,36 @@ class _ApplyCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         color: Colors.black.withValues(alpha: 0.35),
         border: Border.all(
-            color: applied
-                ? gold.withValues(alpha: 0.6)
-                : Colors.white.withValues(alpha: 0.12)),
+          color: applied
+              ? gold.withValues(alpha: 0.6)
+              : Colors.white.withValues(alpha: 0.12),
+        ),
       ),
       child: Row(
         children: [
-          Icon(applied ? Icons.how_to_reg : Icons.pan_tool_alt_outlined,
-              color: applied ? gold : Colors.white.withValues(alpha: 0.7)),
+          Icon(
+            applied ? Icons.how_to_reg : Icons.pan_tool_alt_outlined,
+            color: applied ? gold : Colors.white.withValues(alpha: 0.7),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: text.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800, color: Colors.white)),
+                Text(
+                  title,
+                  style: text.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(sub,
-                    style: text.bodySmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.7))),
+                Text(
+                  sub,
+                  style: text.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                ),
               ],
             ),
           ),

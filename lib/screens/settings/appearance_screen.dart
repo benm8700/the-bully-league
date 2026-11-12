@@ -42,7 +42,8 @@ class AppearanceScreen extends StatelessWidget {
                 final data = snapshot.data!.data() ?? {};
                 final rankTitle = data['rankTitle'] as String?;
                 final storedSkin = data['equippedSkin'] as String?;
-                final equipped = (storedSkin != null &&
+                final equipped =
+                    (storedSkin != null &&
                         kEquippableSkins.contains(storedSkin))
                     ? storedSkin
                     : kBaseSkin;
@@ -77,7 +78,8 @@ class AppearanceScreen extends StatelessWidget {
                       _SkinTile(
                         skin: skin,
                         equipped: equipped == skin.id,
-                        unlocked: skin.id == kBaseSkin ||
+                        unlocked:
+                            skin.id == kBaseSkin ||
                             unlocked.contains(skin.id) ||
                             (skin.id == 'neon' && rankTitle == 'GOAT'),
                         onEquip: () {
@@ -85,8 +87,9 @@ class AppearanceScreen extends StatelessWidget {
                           // event window is overriding it) and persisted
                           // (follows the account).
                           kEquippedSkin.value = skin.id;
-                          ref.set({'equippedSkin': skin.id},
-                              SetOptions(merge: true));
+                          ref.set({
+                            'equippedSkin': skin.id,
+                          }, SetOptions(merge: true));
                         },
                       ),
                   ],
@@ -192,21 +195,29 @@ class _SkinTile extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(skin.name,
-                            style: text.titleMedium?.copyWith(
-                                color: scheme.onSurface,
-                                fontWeight: FontWeight.bold)),
+                        Text(
+                          skin.name,
+                          style: text.titleMedium?.copyWith(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: palette.accent.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: Text(skin.tier,
-                              style: text.labelSmall
-                                  ?.copyWith(color: palette.accent)),
+                          child: Text(
+                            skin.tier,
+                            style: text.labelSmall?.copyWith(
+                              color: palette.accent,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -216,9 +227,10 @@ class _SkinTile extends StatelessWidget {
                           ? (equipped ? 'Equipped' : 'Tap to equip')
                           : (skin.unlockHint ?? 'Locked'),
                       style: text.bodySmall?.copyWith(
-                          color: unlocked
-                              ? scheme.onSurfaceVariant
-                              : scheme.onSurfaceVariant),
+                        color: unlocked
+                            ? scheme.onSurfaceVariant
+                            : scheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),

@@ -27,8 +27,12 @@ import 'dart:typed_data';
 /// 17th row and 7th pixel is plenty for an average and is ~1% of the
 /// work. The strides are co-prime with typical widths so the sample does
 /// not land on a single column.
-int meanLuma(Uint8List yBuffer, {required int width, required int height,
-    required int yStride}) {
+int meanLuma(
+  Uint8List yBuffer, {
+  required int width,
+  required int height,
+  required int yStride,
+}) {
   if (width <= 0 || height <= 0 || yBuffer.isEmpty) return 0;
   var total = 0;
   var count = 0;
@@ -152,7 +156,7 @@ class CaptureQualityMonitor {
   }
 
   Map<String, Object?> get summary => {
-        'darkEpisodes': darkEpisodes,
-        'quietEpisodes': quietEpisodes,
-      };
+    'darkEpisodes': darkEpisodes,
+    'quietEpisodes': quietEpisodes,
+  };
 }

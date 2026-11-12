@@ -77,14 +77,17 @@ class _PrizeClaimBannerState extends State<PrizeClaimBanner>
                       Text(
                         '🎉 You won ${prize.prize}!',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: scheme.onTertiaryContainer,
-                            fontWeight: FontWeight.w800),
+                          color: scheme.onTertiaryContainer,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       Text(
                         'Tap to claim and tell us where to send it.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onTertiaryContainer.withValues(
-                                alpha: 0.85)),
+                          color: scheme.onTertiaryContainer.withValues(
+                            alpha: 0.85,
+                          ),
+                        ),
                       ),
                     ],
                   ),

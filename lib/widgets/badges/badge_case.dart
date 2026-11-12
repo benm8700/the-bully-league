@@ -17,11 +17,7 @@ import 'badge_art.dart';
 /// There is no "feature/pin" mechanism (removed 2026-09-29, developer's call):
 /// badges are just displayed, not pinned.
 class BadgeCase extends StatelessWidget {
-  const BadgeCase({
-    super.key,
-    required this.stats,
-    required this.earnedIds,
-  });
+  const BadgeCase({super.key, required this.stats, required this.earnedIds});
 
   final BadgeStats stats;
   final Set<String> earnedIds;
@@ -32,7 +28,8 @@ class BadgeCase extends StatelessWidget {
     // EARNED first (best -> worst), then the locked/greyed ones (best -> worst)
     // - so what you've won leads, top-left, and the chase sits after it
     // (developer's call, 2026-10-17). Within each group, higher prestige wins.
-    final slots = [...badgeSlots(stats, earnedIds)]..sort((a, b) {
+    final slots = [...badgeSlots(stats, earnedIds)]
+      ..sort((a, b) {
         if (a.earned != b.earned) return a.earned ? -1 : 1;
         return b.def.prestige.compareTo(a.def.prestige);
       });
@@ -61,13 +58,21 @@ class BadgeCase extends StatelessWidget {
             ),
             const Spacer(),
             if (columns.length > 3)
-              Row(children: [
-                Text('swipe',
-                    style: text.bodySmall
-                        ?.copyWith(color: const Color(0xFF6E6A78))),
-                const Icon(Icons.chevron_right,
-                    size: 16, color: Color(0xFF6E6A78)),
-              ]),
+              Row(
+                children: [
+                  Text(
+                    'swipe',
+                    style: text.bodySmall?.copyWith(
+                      color: const Color(0xFF6E6A78),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right,
+                    size: 16,
+                    color: Color(0xFF6E6A78),
+                  ),
+                ],
+              ),
           ],
         ),
         const SizedBox(height: 4),

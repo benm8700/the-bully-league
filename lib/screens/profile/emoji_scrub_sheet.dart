@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/emoji_ratings.dart';
 import '../../core/services/emoji_scrub_service.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// Spend points to clean up your NEGATIVE emoji ratings (🥱/💩). The rows are
 /// built from [kRemovableEmojiRatings] (derived from the `positive` flag), so a
@@ -13,7 +14,7 @@ class EmojiScrubSheet extends StatefulWidget {
   /// Opens the sheet. The caller should refresh the profile afterwards (one
   /// cheap read) so the Crowd-read card reflects any cleanup.
   static Future<void> show(BuildContext context) {
-    return showModalBottomSheet<void>(
+    return showNeonSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF17151C),
@@ -76,9 +77,12 @@ class _EmojiScrubSheetState extends State<EmojiScrubSheet> {
     final price = _price();
     if (price <= 0) return 0;
     final affordable = _balance() ~/ price;
-    return [_chunk, _countOf(key), _dailyRemaining(), affordable]
-        .reduce((a, b) => a < b ? a : b)
-        .clamp(0, 1 << 30);
+    return [
+      _chunk,
+      _countOf(key),
+      _dailyRemaining(),
+      affordable,
+    ].reduce((a, b) => a < b ? a : b).clamp(0, 1 << 30);
   }
 
   Future<void> _scrub(String key) async {
@@ -89,8 +93,9 @@ class _EmojiScrubSheetState extends State<EmojiScrubSheet> {
       final scrubbed = (r['scrubbed'] as num?)?.toInt() ?? 0;
       if (scrubbed > 0) {
         setState(() {
-          final counts =
-              Map<String, dynamic>.from(_state?['counts'] as Map? ?? {});
+          final counts = Map<String, dynamic>.from(
+            _state?['counts'] as Map? ?? {},
+          );
           counts[key] = (r['newCount'] as num?)?.toInt() ?? _countOf(key);
           _state = {
             ...?_state,
@@ -102,18 +107,22 @@ class _EmojiScrubSheetState extends State<EmojiScrubSheet> {
         });
         if (mounted) {
           final emoji = emojiCharFor(key);
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Cleaned up $scrubbed $emoji'),
-            duration: const Duration(seconds: 2),
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Cleaned up $scrubbed $emoji'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
         }
       }
     } on Exception catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(_friendly(e)),
-          duration: const Duration(seconds: 3),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_friendly(e)),
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -134,7 +143,11 @@ class _EmojiScrubSheetState extends State<EmojiScrubSheet> {
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-            20, 16, 20, 16 + MediaQuery.of(context).viewInsets.bottom),
+          20,
+          16,
+          20,
+          16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -150,14 +163,17 @@ class _EmojiScrubSheetState extends State<EmojiScrubSheet> {
                 ),
               ),
             ),
-            Text('Clean up your ratings',
-                style: text.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+            Text(
+              'Clean up your ratings',
+              style: text.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 4),
             Text(
               'Spend points to shave down the ratings you would rather not '
               'wear. Positives stay - you earn those.',
-              style: text.bodySmall
-                  ?.copyWith(color: Colors.white.withValues(alpha: 0.6)),
+              style: text.bodySmall?.copyWith(
+                color: Colors.white.withValues(alpha: 0.6),
+              ),
             ),
             const SizedBox(height: 16),
             _body(context),
@@ -184,8 +200,10 @@ class _EmojiScrubSheetState extends State<EmojiScrubSheet> {
     if (_state?['enabled'] == false) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Text("Cleaning up ratings isn't available right now.",
-            style: text.bodyMedium),
+        child: Text(
+          "Cleaning up ratings isn't available right now.",
+          style: text.bodyMedium,
+        ),
       );
     }
 
@@ -204,21 +222,29 @@ class _EmojiScrubSheetState extends State<EmojiScrubSheet> {
           children: [
             Icon(Icons.toll, size: 16, color: const Color(0xFFF4C838)),
             const SizedBox(width: 6),
-            Text('${_balance()} points',
-                style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+            Text(
+              '${_balance()} points',
+              style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
             const Spacer(),
-            Text('${_dailyRemaining()} left to clean today',
-                style: text.bodySmall
-                    ?.copyWith(color: Colors.white.withValues(alpha: 0.55))),
+            Text(
+              '${_dailyRemaining()} left to clean today',
+              style: text.bodySmall?.copyWith(
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 14),
         if (rows.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text('Nothing to clean up - your record is clean.',
-                style: text.bodyMedium
-                    ?.copyWith(color: Colors.white.withValues(alpha: 0.7))),
+            child: Text(
+              'Nothing to clean up - your record is clean.',
+              style: text.bodyMedium?.copyWith(
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
+            ),
           )
         else
           ...rows,
@@ -255,12 +281,16 @@ class _EmojiScrubSheetState extends State<EmojiScrubSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(r.label,
-                    style:
-                        text.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
-                Text('You have $count',
-                    style: text.bodySmall
-                        ?.copyWith(color: Colors.white.withValues(alpha: 0.55))),
+                Text(
+                  r.label,
+                  style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  'You have $count',
+                  style: text.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.55),
+                  ),
+                ),
               ],
             ),
           ),

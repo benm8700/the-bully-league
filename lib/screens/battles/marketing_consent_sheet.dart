@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// A battler's MARKETING-USE preference for one of their battles.
 ///
@@ -22,7 +23,7 @@ class MarketingConsentSheet extends StatefulWidget {
   final String matchId;
 
   static Future<void> show(BuildContext context, String matchId) {
-    return showModalBottomSheet<void>(
+    return showNeonSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -111,13 +112,13 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
   Future<void> _confirmRemoveEntirely() async {
     final body = _posted
         ? "You don't have to win to go viral. Are you sure you want to give up "
-            "your chance to get seen?\n\nThis clip is already up on our socials "
-            "- remove it and we'll take it down from our accounts."
+              "your chance to get seen?\n\nThis clip is already up on our socials "
+              "- remove it and we'll take it down from our accounts."
         : "You don't have to win to go viral. Are you sure you want to give up "
-            "your chance to get seen?";
+              "your chance to get seen?";
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => NeonDialog(
         title: const Text('Hold up'),
         content: Text(body),
         actions: [
@@ -161,8 +162,10 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Use this in our promos',
-                      style: theme.textTheme.titleLarge),
+                  Text(
+                    'Use this in our promos',
+                    style: theme.textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     "When you joined, you okayed us featuring your battles in our "
@@ -174,31 +177,36 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
                   const SizedBox(height: 16),
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(stateLine,
-                        style: theme.textTheme.labelLarge
-                            ?.copyWith(color: stateColor)),
+                    child: Text(
+                      stateLine,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: stateColor,
+                      ),
+                    ),
                   ),
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child:
-                          Text(_error!, style: TextStyle(color: scheme.error)),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(color: scheme.error),
+                      ),
                     ),
                   SizedBox(
                     width: double.infinity,
                     child: switch (_mode) {
                       'out' => FilledButton(
-                          onPressed: _busy ? null : () => _set('in'),
-                          child: const Text('Allow it in our promos'),
-                        ),
+                        onPressed: _busy ? null : () => _set('in'),
+                        child: const Text('Allow it in our promos'),
+                      ),
                       'blur' => OutlinedButton(
-                          onPressed: _busy ? null : () => _set('in'),
-                          child: const Text('Show my face again'),
-                        ),
+                        onPressed: _busy ? null : () => _set('in'),
+                        child: const Text('Show my face again'),
+                      ),
                       _ => OutlinedButton(
-                          onPressed: _busy ? null : () => _set('blur'),
-                          child: const Text('Blur my face'),
-                        ),
+                        onPressed: _busy ? null : () => _set('blur'),
+                        child: const Text('Blur my face'),
+                      ),
                     },
                   ),
                   if (_mode != 'out')
@@ -207,7 +215,8 @@ class _MarketingConsentSheetState extends State<MarketingConsentSheet> {
                       child: TextButton(
                         onPressed: _busy ? null : _confirmRemoveEntirely,
                         style: TextButton.styleFrom(
-                            foregroundColor: scheme.onSurfaceVariant),
+                          foregroundColor: scheme.onSurfaceVariant,
+                        ),
                         child: const Text('Remove it entirely'),
                       ),
                     ),

@@ -44,13 +44,17 @@ class _TurnstileChallengeState extends State<TurnstileChallenge> {
         },
       )
       ..setNavigationDelegate(
-        NavigationDelegate(onPageFinished: (_) => setState(() => _loaded = true)),
+        NavigationDelegate(
+          onPageFinished: (_) => setState(() => _loaded = true),
+        ),
       );
     _loadHtml();
   }
 
   Future<void> _loadHtml() async {
-    final raw = await DefaultAssetBundle.of(context).loadString('assets/turnstile.html');
+    final raw = await DefaultAssetBundle.of(
+      context,
+    ).loadString('assets/turnstile.html');
     final html = raw.replaceAll('__TURNSTILE_SITE_KEY__', turnstileSiteKey);
     // baseUrl must match a domain registered for the Turnstile site key
     // (see agora_config.dart-style setup notes) - without it the WebView's

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../screens/friends/challenge_screen.dart';
 import 'hero_mode_card.dart';
+import '../neon_dialog.dart';
 
 /// Battle a Friend, promoted to a FULL hero pill on Home (same size/shape/glow
 /// as the Basement and Main Stage pills), sitting directly under them.
@@ -26,9 +27,9 @@ class FriendBattleCard extends StatelessWidget {
       glow: purple,
       aspectRatio: kHeroPillAspect, // same size as the other two pills
       scrim: false, // centred title over the gradient; no bottom overlay to dim
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const ChallengeScreen()),
-      ),
+      onTap: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const ChallengeScreen())),
       topRight: IconButton(
         icon: const Icon(Icons.help_outline),
         iconSize: 28,
@@ -56,18 +57,18 @@ class FriendBattleCard extends StatelessWidget {
   void _showInfo(BuildContext context, Color accent) {
     final body = Theme.of(context).textTheme.bodyMedium;
     Widget heading(String label) => Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: accent,
-                ),
-          ),
-        );
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: accent,
+        ),
+      ),
+    );
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => NeonDialog(
         title: const Text('Challenge a Friend'),
         content: SingleChildScrollView(
           child: Column(

@@ -15,8 +15,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 /// never currency or power — which is what keeps it un-farmable.
 class FollowsService {
   FollowsService({FirebaseFirestore? db, FirebaseAuth? auth})
-      : _db = db ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance;
+    : _db = db ?? FirebaseFirestore.instance,
+      _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
@@ -38,10 +38,9 @@ class FollowsService {
   Future<void> follow(String targetUid) async {
     final me = _me;
     if (me == null || me == targetUid) return;
-    await _membershipDoc(targetUid).set({
-      'followerUid': me,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    await _membershipDoc(
+      targetUid,
+    ).set({'followerUid': me, 'createdAt': FieldValue.serverTimestamp()});
   }
 
   /// Unfollow [targetUid].

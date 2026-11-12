@@ -152,8 +152,8 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
       body: _error != null
           ? _centered(_error!)
           : _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _live(),
+          ? const Center(child: CircularProgressIndicator())
+          : _live(),
     );
   }
 
@@ -178,8 +178,9 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
         final completed = decided || match?['status'] == 'completed';
         if (completed && !_watchStopped) {
           _watchStopped = true;
-          WidgetsBinding.instance
-              .addPostFrameCallback((_) => _spectator.stopWatching());
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _spectator.stopWatching(),
+          );
         }
 
         // THE DEBATE: the battle is over but the verdict hasn't settled. The
@@ -249,7 +250,8 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
       children: [
         Container(
           decoration: BoxDecoration(border: Border.all(color: color, width: 3)),
-          child: view ??
+          child:
+              view ??
               ColoredBox(
                 color: const Color(0xFF111111),
                 child: Center(
@@ -272,13 +274,16 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
                 _numBadge(playerUid),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text(name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800)),
+                  child: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -299,20 +304,24 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
           children: [
             Icon(Icons.emoji_events, size: 56, color: context.palette.reward),
             const SizedBox(height: 12),
-            Text('${_nameOf(winner)} takes it',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white, fontWeight: FontWeight.w800)),
+            Text(
+              '${_nameOf(winner)} takes it',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 8),
-            const Text('The panel has decided. The bracket moves on.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70)),
+            const Text(
+              'The panel has decided. The bracket moves on.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70),
+            ),
             const SizedBox(height: 20),
             FilledButton(
               onPressed: () => Navigator.of(context).maybePop(),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(220, 48),
-              ),
+              style: FilledButton.styleFrom(minimumSize: const Size(220, 48)),
               child: const Text('Done'),
             ),
             _nextBattleButton(),
@@ -369,18 +378,25 @@ class _JudgesRoomScreenState extends State<JudgesRoomScreen>
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 1.5),
       ),
-      child: Text('$n',
-          style: const TextStyle(
-              color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900)),
+      child: Text(
+        '$n',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
     );
   }
 
   Widget _centered(String s) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(s,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70)),
-        ),
-      );
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Text(
+        s,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: Colors.white70),
+      ),
+    ),
+  );
 }

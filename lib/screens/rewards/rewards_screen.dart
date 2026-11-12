@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/tournament/wildcard_strip.dart';
 import '../vote/my_battles_screen.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// The Rewards screen - where the points wallet is spent.
 ///
@@ -81,7 +82,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
   Future<void> _redeemDayPass() async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => NeonDialog(
         title: const Text('Redeem a day pass?'),
         content: Text(
           'Spend $_dayPassPrice points to battle any time today - a full '
@@ -105,7 +106,9 @@ class _RewardsScreenState extends State<RewardsScreen> {
       await FirebaseFunctions.instance.httpsCallable('buyDayPass').call();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Day pass active - battle any time today.')),
+        const SnackBar(
+          content: Text('Day pass active - battle any time today.'),
+        ),
       );
       await _load();
     } on FirebaseFunctionsException catch (e) {
@@ -146,10 +149,9 @@ class _RewardsScreenState extends State<RewardsScreen> {
             else ...[
               Text(
                 'Redeem',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 12),
               _dayPassCard(context),
@@ -233,14 +235,15 @@ class _RewardsScreenState extends State<RewardsScreen> {
     return _RewardTile(
       emoji: '🎬',
       title: 'Highlight Reel',
-      subtitle: 'A studio-quality edit of your performance — download it and '
+      subtitle:
+          'A studio-quality edit of your performance — download it and '
           'share it with your friends or post it on your socials.',
       price: _clipPrice,
       affordable: affordable,
       actionLabel: 'My Battles',
-      onAction: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const MyBattlesScreen()),
-      ),
+      onAction: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const MyBattlesScreen())),
     );
   }
 }
@@ -296,8 +299,9 @@ class _RewardTile extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: text.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                      style: text.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -328,25 +332,28 @@ class _RewardTile extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : onAction != null
-                  ? FilledButton(
-                      onPressed: onAction,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      child: Text(actionLabel),
-                    )
-                  : Text(
-                      actionLabel,
-                      style: text.labelMedium?.copyWith(
-                        color: statusHighlight
-                            ? context.palette.accent
-                            : scheme.onSurfaceVariant,
-                        fontWeight:
-                            statusHighlight ? FontWeight.w800 : FontWeight.w600,
-                      ),
+              ? FilledButton(
+                  onPressed: onAction,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
                     ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: Text(actionLabel),
+                )
+              : Text(
+                  actionLabel,
+                  style: text.labelMedium?.copyWith(
+                    color: statusHighlight
+                        ? context.palette.accent
+                        : scheme.onSurfaceVariant,
+                    fontWeight: statusHighlight
+                        ? FontWeight.w800
+                        : FontWeight.w600,
+                  ),
+                ),
         ],
       ),
     );

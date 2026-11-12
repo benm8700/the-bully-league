@@ -84,6 +84,15 @@ function prepublishVerdict(safeSearch, failureReason) {
   return verdictFromSafeSearch(safeSearch, {failureReason});
 }
 
+/** The profile-selfie policy: blatant nudity only, fails CLOSED. */
+function selfieVerdict(safeSearch) {
+  return verdictFromSafeSearch(safeSearch, {
+    failureReason: "Could not read this photo - try taking it again.",
+    rejectLevels: LIVE_FRAME_REJECT_LEVELS,
+    categories: LIVE_FRAME_CATEGORIES,
+  });
+}
+
 /**
  * Runs Google Cloud Vision SafeSearch on an already-uploaded Storage
  * object and returns an approve/reject verdict. Used for profile photos
@@ -109,11 +118,20 @@ async function moderateFacePhoto(storagePath) {
   const bucket = getStorage().bucket();
   const gcsUri = `gs://${bucket.name}/${storagePath}`;
 
-  // 1. Nudity / explicit content (fails CLOSED on an unreadable image).
+  // 1. Nudity (fails CLOSED on an unreadable image). SELFIE RULE (2026-11-10):
+  // only blatant nudity (adult == VERY_LIKELY), the same band live battle
+  // frames use. The strict prepublish rule (LIKELY+ on adult/racy/violence)
+  // flagged an ordinary close-up face as "adult content" on a real sign-up;
+  // a selfie is a tight crop of skin, which is exactly what trips "racy" and
+  // low-confidence "adult". The face check below still has to pass.
   const [ss] = await client.safeSearchDetection(gcsUri);
-  const nudity = prepublishVerdict(ss.safeSearchAnnotation,
-      "Could not read this photo - try taking it again.");
-  if (!nudity.approved) return nudity;
+  const nudity = selfieVerdict(ss.safeSearchAnnotation);
+  if (!nudity.approved) {
+    const a = ss.safeSearchAnnotation || {};
+    console.warn("selfie rejected", storagePath,
+        JSON.stringify({adult: a.adult, racy: a.racy, violence: a.violence}));
+    return nudity;
+  }
 
   // 2. Must contain a clear face.
   const [fd] = await client.faceDetection(gcsUri);
@@ -229,6 +247,7 @@ async function moderateVideo(storagePath) {
 }
 
 module.exports = {
+  selfieVerdict,
   moderateImage, moderateFacePhoto, moderateImageContent, moderateVideo,
   moderateFrameStrict,
   // Exported for the pure regression test (functions/test/visualModeration.test.js).

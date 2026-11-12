@@ -105,8 +105,10 @@ class MainStageView {
   final String? liveBattleMatchId;
 
   bool get calloutOpen => isTopSeed && status == 'locked';
-  bool get hasBattleToPlay => liveStage == MainStageLiveStage.playNow &&
-      myMatchupRound != null && myMatchupIndex != null;
+  bool get hasBattleToPlay =>
+      liveStage == MainStageLiveStage.playNow &&
+      myMatchupRound != null &&
+      myMatchupIndex != null;
 }
 
 /// Reads the Main Stage tournament and drives its two player-facing callables
@@ -114,8 +116,8 @@ class MainStageView {
 /// deliberately NOT wrapped here — it belongs to the web admin dashboard.
 class MainStageService {
   MainStageService({FirebaseFirestore? firestore, FirebaseFunctions? functions})
-      : _db = firestore ?? FirebaseFirestore.instance,
-        _functions = functions ?? FirebaseFunctions.instance;
+    : _db = firestore ?? FirebaseFirestore.instance,
+      _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFirestore _db;
   final FirebaseFunctions _functions;
@@ -136,14 +138,18 @@ class MainStageService {
         .where('format', isEqualTo: 'mainstage')
         .snapshots()
         .asyncMap((snap) async {
-      if (uid == null) return null;
-      final live = snap.docs
-          .where((d) => _active.contains(d.data()['status']))
-          .toList()
-        ..sort((a, b) => _createdMs(b.data()).compareTo(_createdMs(a.data())));
-      if (live.isEmpty) return null;
-      return await _view(live.first.id, live.first.data(), uid);
-    });
+          if (uid == null) return null;
+          final live =
+              snap.docs
+                  .where((d) => _active.contains(d.data()['status']))
+                  .toList()
+                ..sort(
+                  (a, b) =>
+                      _createdMs(b.data()).compareTo(_createdMs(a.data())),
+                );
+          if (live.isEmpty) return null;
+          return await _view(live.first.id, live.first.data(), uid);
+        });
   }
 
   static int _createdMs(Map<String, dynamic> t) {
@@ -154,7 +160,10 @@ class MainStageService {
   }
 
   Future<MainStageView> _view(
-      String id, Map<String, dynamic> t, String uid) async {
+    String id,
+    Map<String, dynamic> t,
+    String uid,
+  ) async {
     final finalists = _strList(t['finalists']);
     final alternates = _strList(t['alternates']);
     final judgePool = _strList(t['judgePool']);
@@ -187,8 +196,9 @@ class MainStageService {
     }
 
     final isTopSeed = field.isNotEmpty && field.first == uid;
-    final candidates =
-        isTopSeed ? field.where((u) => u != uid).toList() : const <String>[];
+    final candidates = isTopSeed
+        ? field.where((u) => u != uid).toList()
+        : const <String>[];
 
     // The viewer's live standing + the one battle currently on stage. The
     // bracket is the Firestore-safe shape {rounds: [{matches: [{a, b, winner,
@@ -240,10 +250,10 @@ class MainStageService {
           if (winner != null) {
             liveStage = winner == uid
                 ? (hiR == lastRound
-                    ? MainStageLiveStage.champion
-                    // Won a non-final round but not yet placed in the next -
-                    // transient; show "through, waiting".
-                    : MainStageLiveStage.advancedWaiting)
+                      ? MainStageLiveStage.champion
+                      // Won a non-final round but not yet placed in the next -
+                      // transient; show "through, waiting".
+                      : MainStageLiveStage.advancedWaiting)
                 : MainStageLiveStage.eliminated;
           } else if (started) {
             // A matchId exists but no winner yet - and that is TWO different
@@ -259,8 +269,7 @@ class MainStageService {
             // safe "awaiting verdict" state if the read fails.
             String? matchStatus;
             try {
-              final md =
-                  await _db.collection('matches').doc(mid).get();
+              final md = await _db.collection('matches').doc(mid).get();
               matchStatus = md.data()?['status'] as String?;
             } catch (_) {}
             if (matchStatus == 'pending' || matchStatus == 'in_progress') {
@@ -314,9 +323,9 @@ class MainStageService {
     await _functions
         .httpsCallable('respondToMainStageInvite')
         .call<Map<String, dynamic>>({
-      'tournamentId': tournamentId,
-      'accept': accept,
-    });
+          'tournamentId': tournamentId,
+          'accept': accept,
+        });
   }
 
   /// The #1 seed's live callout. Throws on failure (only field[0], only while
@@ -325,9 +334,9 @@ class MainStageService {
     await _functions
         .httpsCallable('mainStageCallout')
         .call<Map<String, dynamic>>({
-      'tournamentId': tournamentId,
-      'pickUid': pickUid,
-    });
+          'tournamentId': tournamentId,
+          'pickUid': pickUid,
+        });
   }
 
   /// Start (or rejoin) a finals bracket battle. Returns the pairing the
@@ -341,10 +350,10 @@ class MainStageService {
     final res = await _functions
         .httpsCallable('startMainStageBattle')
         .call<Map<String, dynamic>>({
-      'tournamentId': tournamentId,
-      'roundIdx': roundIdx,
-      'matchIdx': matchIdx,
-    });
+          'tournamentId': tournamentId,
+          'roundIdx': roundIdx,
+          'matchIdx': matchIdx,
+        });
     final d = Map<String, dynamic>.from(res.data as Map);
     final cfg = Map<String, dynamic>.from(d['mainStageConfig'] as Map? ?? {});
     return MainStageBattlePairing(
@@ -365,9 +374,9 @@ class MainStageService {
     await _functions
         .httpsCallable('castMainStageJudgeVote')
         .call<Map<String, dynamic>>({
-      'matchId': matchId,
-      'winnerUid': winnerUid,
-    });
+          'matchId': matchId,
+          'winnerUid': winnerUid,
+        });
   }
 
   /// Nudge a DECIDED battle to finish once its 30s grace has elapsed. The server

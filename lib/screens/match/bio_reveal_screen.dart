@@ -10,6 +10,7 @@ import '../../widgets/photo_viewer.dart';
 import '../../widgets/match/loadout_panel.dart';
 import 'match_screen.dart';
 import 'matchmaking_screen.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// Pre-match bio reveal (CLAUDE.md's "Pre-match bio reveal" decision).
 ///
@@ -210,10 +211,17 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
           // to try again compounds it for no reason, and they passed those
           // checks moments ago.
           _requeue();
+        } else if (widget.pairing.mode != 'friend' && skippedBy == null) {
+          // (skippedBy set here = WE skipped; _onSkip shows its own message.)
+          // RANKED: the opponent backed out some other way (Back, Leave,
+          // closed the app). Same answer as a skip - straight back into the
+          // queue. If WE were the one who left, we already navigated away
+          // and _requeue is a no-op.
+          _requeue('Your opponent left. Finding someone else...');
         } else {
           // Friend battles have no queue to fall back into, so the honest
           // next step is to challenge them again rather than "find someone
-          // else". A ranked pairing just says the pairing is gone.
+          // else".
           _endMatch(
             widget.pairing.mode == 'friend'
                 ? 'That battle ended before it started. '
@@ -402,16 +410,16 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
   /// Sends the player back into matchmaking for the same mode after their
   /// opponent declined, replacing this screen so Back still returns Home
   /// rather than to a dead pairing.
-  void _requeue() {
+  void _requeue([
+    String message = 'Your opponent passed. Finding someone else...',
+  ]) {
     if (_navigated || _endedReason != null) return;
     _navigated = true;
     _ticker?.cancel();
     _matchSub?.cancel();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Your opponent passed. Finding someone else...'),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => MatchmakingScreen(mode: widget.pairing.mode),
@@ -470,7 +478,7 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
     }
     final leave = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => NeonDialog(
         title: const Text('Leave this match?'),
         content: const Text(
           "The battle hasn't started, so there's no penalty - this just "

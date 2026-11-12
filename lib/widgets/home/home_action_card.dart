@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../neon_dialog.dart';
 
 /// The shared Home mode button - Play, Watch, Main Stage.
 ///
@@ -72,14 +73,14 @@ class HomeActionCard extends StatelessWidget {
   /// A big glowing Material icon for the box - a tight core glow plus a soft
   /// wide halo, so it reads as a lit element rather than a flat glyph.
   static Widget neonIcon(IconData icon, Color color) => Icon(
-        icon,
-        color: color,
-        size: 48,
-        shadows: [
-          Shadow(color: color, blurRadius: 10),
-          Shadow(color: color.withValues(alpha: 0.6), blurRadius: 24),
-        ],
-      );
+    icon,
+    color: color,
+    size: 48,
+    shadows: [
+      Shadow(color: color, blurRadius: 10),
+      Shadow(color: color.withValues(alpha: 0.6), blurRadius: 24),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -95,9 +96,7 @@ class HomeActionCard extends StatelessWidget {
         FontVariation('wdth', p.displayWidth),
         const FontVariation('opsz', 33),
       ],
-      shadows: [
-        Shadow(color: accent.withValues(alpha: 0.5), blurRadius: 12),
-      ],
+      shadows: [Shadow(color: accent.withValues(alpha: 0.5), blurRadius: 12)],
     );
 
     // Centred icon + word.
@@ -128,13 +127,15 @@ class HomeActionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(_radius),
         boxShadow: [
           BoxShadow(
-              color: accent.withValues(alpha: 0.50),
-              blurRadius: 11,
-              spreadRadius: 0),
+            color: accent.withValues(alpha: 0.50),
+            blurRadius: 11,
+            spreadRadius: 0,
+          ),
           BoxShadow(
-              color: accentEnd.withValues(alpha: 0.24),
-              blurRadius: 26,
-              spreadRadius: 1),
+            color: accentEnd.withValues(alpha: 0.24),
+            blurRadius: 26,
+            spreadRadius: 1,
+          ),
         ],
       ),
       child: ClipRRect(
@@ -184,7 +185,8 @@ class HomeActionCard extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.vertical(
-                        bottom: Radius.circular(_radius - _border)),
+                      bottom: Radius.circular(_radius - _border),
+                    ),
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
@@ -207,7 +209,8 @@ class HomeActionCard extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(_radius - _border)),
+                      top: Radius.circular(_radius - _border),
+                    ),
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
@@ -390,7 +393,7 @@ void showModeInfo(
   final p = context.palette;
   showDialog<void>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => NeonDialog(
       backgroundColor: const Color(0xFF191320),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
@@ -416,7 +419,10 @@ void showModeInfo(
           Text(
             body,
             style: const TextStyle(
-                color: Colors.white70, height: 1.4, fontSize: 14.5),
+              color: Colors.white70,
+              height: 1.4,
+              fontSize: 14.5,
+            ),
           ),
           if (highlight != null) ...[
             const SizedBox(height: 16),
@@ -437,8 +443,10 @@ void showModeInfo(
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(),
-          child: Text('Got it',
-              style: TextStyle(color: accent, fontWeight: FontWeight.w700)),
+          child: Text(
+            'Got it',
+            style: TextStyle(color: accent, fontWeight: FontWeight.w700),
+          ),
         ),
       ],
     ),

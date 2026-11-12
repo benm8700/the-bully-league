@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/route_observer.dart';
 import '../../core/services/belt_service.dart';
 import '../../screens/profile/profile_screen.dart';
+import '../player_avatar.dart';
 import 'rank_badges.dart';
 
 /// The Home Player Status card: one horizontal HUD panel carrying the
@@ -42,18 +43,49 @@ class PlayerStatusCard extends StatefulWidget {
     required this.uid,
     this.fallbackTitle,
     this.fallbackPoints,
+    this.onTap,
+    this.extra,
+    this.photoUrl,
+    this.name,
+    this.onRankTap,
+    this.compact = false,
+    this.horizontalMargin = 20,
   });
 
   final String uid;
   final String? fallbackTitle;
   final num? fallbackPoints;
 
+  /// What a tap does. Defaults to opening the Profile.
+  final VoidCallback? onTap;
+
+  /// Appended after the XP numbers ("· 215 pts · 🔥 1 day") on the docked
+  /// Home card (2026-11-11 swipe layout).
+  final String? extra;
+
+  /// PHOTO MODE (2026-11-11 trial): when [name] is given, the card leads
+  /// with the player's own photo (initials if [photoUrl] is null) and the
+  /// rank crest shrinks to a patch on the photo's corner.
+  final String? photoUrl;
+  final String? name;
+
+  /// What tapping the GLOBAL RANK side does (e.g. open the Leaderboard).
+  /// Null = the whole card uses [onTap].
+  final VoidCallback? onRankTap;
+
+  /// COMPACT (Home, option B, 2026-11-11): photo, TITLE + crest, the bar and
+  /// "N XP to the next title" - no numbers, points or streak. The detailed card
+  /// lives at the top of Profile.
+  final bool compact;
+
+  /// Side margin around the card (20 on Home; 0 inside an already-padded page).
+  final double horizontalMargin;
+
   @override
   State<PlayerStatusCard> createState() => _PlayerStatusCardState();
 }
 
-class _PlayerStatusCardState extends State<PlayerStatusCard>
-    with RouteAware {
+class _PlayerStatusCardState extends State<PlayerStatusCard> with RouteAware {
   Map<String, dynamic>? _meter;
   int? _rank;
 
@@ -173,22 +205,31 @@ class _PlayerStatusCardState extends State<PlayerStatusCard>
 
   static const _gold = Color(0xFFF4C838);
 
+  /// The compact card's goal line: how far to the next title.
+  static String _nextLine(Map<String, dynamic>? meter, int xp, int? nextXp) {
+    final nextTitle = meter?['nextTitle'] as String?;
+    if (nextXp != null && nextTitle != null) {
+      final left = (nextXp - xp).clamp(0, nextXp);
+      return '${_comma(left)} XP to $nextTitle';
+    }
+    if (nextTitle == 'GOAT') return 'Top 5 rating takes GOAT';
+    if (meter?['title'] == 'GOAT') return 'Hold your GOAT spot';
+    return '${_comma(xp)} XP';
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
 
     final meter = _meter;
-    final title = (meter?['title'] as String?) ??
-        widget.fallbackTitle ??
-        'Average Joe';
-    final xp = (meter?['xp'] as num?)?.toInt() ??
-        widget.fallbackPoints?.toInt() ??
-        0;
+    final title =
+        (meter?['title'] as String?) ?? widget.fallbackTitle ?? 'Average Joe';
+    final xp =
+        (meter?['xp'] as num?)?.toInt() ?? widget.fallbackPoints?.toInt() ?? 0;
     final nextXp = (meter?['nextXp'] as num?)?.toInt();
-    final fill = (meter?['fill'] as num?)?.toDouble().clamp(0.0, 1.0) ??
-        (nextXp != null && nextXp > 0
-            ? (xp / nextXp).clamp(0.0, 1.0)
-            : 1.0);
+    final fill =
+        (meter?['fill'] as num?)?.toDouble().clamp(0.0, 1.0) ??
+        (nextXp != null && nextXp > 0 ? (xp / nextXp).clamp(0.0, 1.0) : 1.0);
 
     const gold = _gold;
 
@@ -224,7 +265,7 @@ class _PlayerStatusCardState extends State<PlayerStatusCard>
                   const SizedBox(width: 6),
                 ],
                 Text(
-                  title,
+                  widget.compact ? title.toUpperCase() : title,
                   maxLines: 1,
                   softWrap: false,
                   style: text.titleMedium?.copyWith(
@@ -237,12 +278,19 @@ class _PlayerStatusCardState extends State<PlayerStatusCard>
                 // match the card's "gold on the data" treatment, and it reads
                 // as a rank insignia rather than a video-game level. Absent for
                 // GOAT (the unnumbered throne above the ladder).
-                if (numeral != null) ...[
-                  Text('  ·  ',
-                      style: text.titleMedium?.copyWith(
-                        fontSize: 19,
-                        color: const Color(0xFF7A7A7A), // dim separator
-                      )),
+                // PHOTO MODE: the crest sits beside the title and the numeral
+                // moves onto the photo's corner (2026-11-11 trial).
+                if (widget.name != null) ...[
+                  const SizedBox(width: 6),
+                  RankBadge(title: title, size: widget.compact ? 44 : 55),
+                ] else if (numeral != null) ...[
+                  Text(
+                    '  ·  ',
+                    style: text.titleMedium?.copyWith(
+                      fontSize: 19,
+                      color: const Color(0xFF7A7A7A), // dim separator
+                    ),
+                  ),
                   Text(
                     numeral,
                     style: text.titleMedium?.copyWith(
@@ -269,9 +317,13 @@ class _PlayerStatusCardState extends State<PlayerStatusCard>
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
-              nextXp != null
-                  ? '${_comma(xp)} / ${_comma(nextXp)} XP'
-                  : '${_comma(xp)} XP',
+              widget.compact
+                  ? _nextLine(meter, xp, nextXp) +
+                        (widget.extra == null ? '' : '  ·  ${widget.extra}')
+                  : (nextXp != null
+                            ? '${_comma(xp)} / ${_comma(nextXp)} XP'
+                            : '${_comma(xp)} XP') +
+                        (widget.extra == null ? '' : '  ·  ${widget.extra}'),
               maxLines: 1,
               softWrap: false,
               style: text.bodySmall?.copyWith(
@@ -394,7 +446,16 @@ class _PlayerStatusCardState extends State<PlayerStatusCard>
                 // The illustrated rank crest - the main visual element of the
                 // HUD (progression badges are collectible rank emblems), so it
                 // is the largest thing here even as everything else is quieted.
-                RankBadge(title: title, size: 74),
+                if (widget.name != null)
+                  _PhotoWithCrest(
+                    name: widget.name!,
+                    photoUrl: widget.photoUrl,
+                    numeral: widget.compact ? null : numeral,
+                    numeralColor: rankTierColor(title) ?? gold,
+                    size: widget.compact ? 60 : 72,
+                  )
+                else
+                  RankBadge(title: title, size: 74),
                 const SizedBox(width: 12),
                 Expanded(child: rankColumn),
                 if (_rank != null) ...[
@@ -406,37 +467,50 @@ class _PlayerStatusCardState extends State<PlayerStatusCard>
                     color: const Color(0xFFB48AD4).withValues(alpha: 0.22),
                   ),
                   const SizedBox(width: 8),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'GLOBAL RANK',
-                        style: text.labelSmall?.copyWith(
-                          color: const Color(0xFF8C8C8C), // muted gray
-                          letterSpacing: 0.7,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onRankTap,
+                    child: Row(
+                      children: [
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'GLOBAL RANK',
+                              style: text.labelSmall?.copyWith(
+                                color: const Color(0xFF8C8C8C), // muted gray
+                                letterSpacing: 0.7,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              // Real data: the live count aggregation, not a
+                              // placeholder (a top-rated account genuinely shows #1).
+                              '#${_comma(_rank!)}',
+                              style: text.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: gold,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        // Real data: the live count aggregation, not a
-                        // placeholder (a top-rated account genuinely shows #1).
-                        '#${_comma(_rank!)}',
-                        style: text.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: gold,
-                          fontFeatures: const [FontFeature.tabularFigures()],
+                        const SizedBox(width: 2),
+                        // A small, conventional, MUTED chevron - just a tap
+                        // affordance, not a bright gold decorative element.
+                        Icon(
+                          Icons.chevron_right,
+                          color: Colors.white.withValues(alpha: 0.45),
+                          size: 18,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 2),
-                  // A small, conventional, MUTED chevron - just a tap
-                  // affordance, not a bright gold decorative element.
-                  Icon(Icons.chevron_right,
-                      color: Colors.white.withValues(alpha: 0.45), size: 18),
                 ],
               ],
             ),
@@ -446,15 +520,17 @@ class _PlayerStatusCardState extends State<PlayerStatusCard>
     );
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: EdgeInsets.symmetric(horizontal: widget.horizontalMargin),
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const ProfileScreen()),
-          ),
+          onTap:
+              widget.onTap ??
+              () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
           // A thin PURPLE/MAGENTA frame with a restrained purple glow halo.
           // Replaces the gold border so the Player Status card reads as player
           // identity, distinct from the gold/amber Tournament event card. The
@@ -469,7 +545,11 @@ class _PlayerStatusCardState extends State<PlayerStatusCard>
               gradient: const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0xFF6E3A94), Color(0xFF512873), Color(0xFF381C50)],
+                colors: [
+                  Color(0xFF6E3A94),
+                  Color(0xFF512873),
+                  Color(0xFF381C50),
+                ],
                 stops: [0.0, 0.5, 1.0],
               ),
               boxShadow: [
@@ -520,6 +600,92 @@ class _PlayerStatusCardState extends State<PlayerStatusCard>
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Your photo with your tier numeral ("III") pinned to its bottom-right
+/// corner, like a rank patch. A gold ring ties it to the card's gold accents.
+class _PhotoWithCrest extends StatelessWidget {
+  const _PhotoWithCrest({
+    required this.name,
+    required this.photoUrl,
+    required this.numeral,
+    required this.numeralColor,
+    this.size = 72,
+  });
+
+  final double size;
+
+  final String name;
+  final String? photoUrl;
+  final String? numeral;
+  final Color numeralColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size + 8,
+      height: size + 8,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            top: 4,
+            child: Container(
+              padding: const EdgeInsets.all(2.5),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFF2CE5A), Color(0xFF9C6B12)],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF4C838).withValues(alpha: 0.25),
+                    blurRadius: 12,
+                  ),
+                ],
+              ),
+              child: PlayerAvatar(
+                name: name,
+                photoUrl: photoUrl,
+                size: size - 5,
+              ),
+            ),
+          ),
+          if (numeral != null)
+            Positioned(
+              right: -4,
+              bottom: -2,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 32),
+                height: 32,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF120E1C),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: numeralColor, width: 2),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black, blurRadius: 6),
+                  ],
+                ),
+                child: Text(
+                  numeral!,
+                  style: TextStyle(
+                    color: numeralColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

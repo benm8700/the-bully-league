@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -38,8 +39,29 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final authService = context.read<AuthService>();
+      var email = _emailController.text.trim();
+      // No "@" = a phone number. The server checks the password against the
+      // account on that number and only then returns its email, so this
+      // can't be used to look up someone's email from their number.
+      if (!email.contains('@')) {
+        try {
+          final r = await FirebaseFunctions.instance
+              .httpsCallable('resolvePhoneLogin')
+              .call<Map<String, dynamic>>({
+                'phone': email,
+                'password': _passwordController.text,
+              });
+          email = r.data['email'] as String;
+        } on FirebaseFunctionsException catch (e) {
+          setState(
+            () => _errorMessage = e.message ?? 'Could not log in. Try again.',
+          );
+          return;
+        }
+      }
+      if (!mounted) return;
       await authService.signIn(
-        email: _emailController.text.trim(),
+        email: email,
         password: _passwordController.text,
       );
       if (!mounted) return;
@@ -70,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
       case 'wrong-password':
       case 'user-not-found':
       case 'invalid-email':
-        return 'Wrong email or password.';
+        return 'Wrong email, phone number or password.';
       case 'too-many-requests':
         return 'Too many attempts. Wait a few minutes and try again, '
             'or reset your password.';
@@ -89,8 +111,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _forgotPassword() async {
     final email = _emailController.text.trim();
     if (!email.contains('@')) {
-      setState(() => _errorMessage =
-          'Type your email above first, then tap "Forgot password?".');
+      setState(
+        () => _errorMessage =
+            'Type your email (not your phone number) above first, then tap '
+            '"Forgot password?".',
+      );
       return;
     }
     setState(() {
@@ -135,18 +160,28 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               TextFormField(
                 controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
+                decoration: const InputDecoration(
+                  labelText: 'Email or phone number',
+                ),
                 keyboardType: TextInputType.emailAddress,
-                validator: (value) =>
-                    (value == null || !value.contains('@')) ? 'Enter a valid email' : null,
+                autocorrect: false,
+                validator: (value) {
+                  final v = value?.trim() ?? '';
+                  if (v.contains('@')) return null;
+                  final digits = v.replaceAll(RegExp(r'[^0-9]'), '');
+                  return digits.length >= 10
+                      ? null
+                      : 'Enter your email or phone number';
+                },
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _passwordController,
                 decoration: const InputDecoration(labelText: 'Password'),
                 obscureText: true,
-                validator: (value) =>
-                    (value == null || value.isEmpty) ? 'Password is required' : null,
+                validator: (value) => (value == null || value.isEmpty)
+                    ? 'Password is required'
+                    : null,
               ),
               Align(
                 alignment: Alignment.centerRight,
@@ -157,7 +192,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               if (_errorMessage != null) ...[
-                Text(_errorMessage!, style: const TextStyle(color: Color(0xFFE05252))),
+                Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Color(0xFFE05252)),
+                ),
                 const SizedBox(height: 16),
               ],
               FilledButton(
@@ -183,8 +221,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     // no AuthGate left, so nothing ever navigates to
                     // HomeScreen no matter what auth state does).
                     : () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const SignupScreen()),
-                        ),
+                        MaterialPageRoute(builder: (_) => const SignupScreen()),
+                      ),
                 child: const Text("Don't have an account? Sign up"),
               ),
             ],

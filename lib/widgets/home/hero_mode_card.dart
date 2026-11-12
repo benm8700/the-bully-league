@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../neon_dialog.dart';
 
 /// The shared aspect ratio for the two Home hero pills (Basement + Main Stage),
 /// so they are the SAME size. The developer's matched banner art is ~2056x765
@@ -222,15 +223,15 @@ class HeroTitle extends StatelessWidget {
       text,
       textAlign: TextAlign.center,
       style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.5,
-            height: 1.0,
-            shadows: [
-              Shadow(color: color.withValues(alpha: 0.5), blurRadius: 18),
-              const Shadow(color: Colors.black, blurRadius: 8),
-            ],
-          ),
+        color: color,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 1.5,
+        height: 1.0,
+        shadows: [
+          Shadow(color: color.withValues(alpha: 0.5), blurRadius: 18),
+          const Shadow(color: Colors.black, blurRadius: 8),
+        ],
+      ),
     );
   }
 }
@@ -247,11 +248,11 @@ class HeroSubtitle extends StatelessWidget {
       text,
       textAlign: TextAlign.center,
       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: Colors.white.withValues(alpha: 0.85),
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-            shadows: const [Shadow(color: Colors.black, blurRadius: 6)],
-          ),
+        color: Colors.white.withValues(alpha: 0.85),
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
+        shadows: const [Shadow(color: Colors.black, blurRadius: 6)],
+      ),
     );
   }
 }
@@ -283,10 +284,10 @@ class HeroInfoChip extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                  shadows: const [Shadow(color: Colors.black, blurRadius: 6)],
-                ),
+              color: color,
+              fontWeight: FontWeight.w700,
+              shadows: const [Shadow(color: Colors.black, blurRadius: 6)],
+            ),
           ),
         ),
       ],
@@ -344,18 +345,18 @@ class RoastHero extends StatelessWidget {
   void _showRoastInfo(BuildContext context, Color accent) {
     final body = Theme.of(context).textTheme.bodyMedium;
     Widget heading(String label) => Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: accent,
-                ),
-          ),
-        );
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: accent,
+        ),
+      ),
+    );
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => NeonDialog(
         title: const Text('The Basement'),
         content: SingleChildScrollView(
           child: Column(
@@ -372,7 +373,7 @@ class RoastHero extends StatelessWidget {
               heading('How it works'),
               Text(
                 'You each get about 30 seconds of clock that only ticks while '
-                'you hold the floor; roast, then yield (or get cut off when it '
+                'you hold the floor; roast, then pass the mic (or get cut off when it '
                 'runs out). Before the bell you watch their intro video, so you '
                 'walk in with ammo instead of winging it. The whole thing is '
                 'recorded.',

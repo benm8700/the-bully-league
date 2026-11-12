@@ -1,3 +1,4 @@
+import '../../widgets/big_back_button.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -13,6 +14,7 @@ import '../../core/services/watch_feed_service.dart';
 import '../../widgets/turnstile_challenge.dart';
 import '../tournament/live_viewer_screen.dart';
 import 'feed_page.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// The Judge tab: one vertical feed of battles.
 ///
@@ -26,7 +28,11 @@ import 'feed_page.dart';
 /// between every video would make judging a chore, and votes are what the
 /// whole ranking system runs on.
 class WatchFeedScreen extends StatefulWidget {
-  const WatchFeedScreen({super.key, this.embedded = false, this.isActiveTab = true});
+  const WatchFeedScreen({
+    super.key,
+    this.embedded = false,
+    this.isActiveTab = true,
+  });
 
   final bool embedded;
 
@@ -105,19 +111,28 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
     if (!mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => NeonDialog(
         title: const Text('How judging works'),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _IntroLine('🎬', 'Each clip is one battle. The TOP half is one '
-                'roaster, the BOTTOM half is the other.'),
-            _IntroLine('👀', 'Watch it - the vote unlocks once you have '
-                'seen most of the battle.'),
+            _IntroLine(
+              '🎬',
+              'Each clip is one battle. The TOP half is one '
+                  'roaster, the BOTTOM half is the other.',
+            ),
+            _IntroLine(
+              '👀',
+              'Watch it - the vote unlocks once you have '
+                  'seen most of the battle.',
+            ),
             _IntroLine('👆', 'Tap the half of whoever won.'),
-            _IntroLine('🔥', 'Rate both roasters with an emoji, then Submit. '
-                'Swipe up for the next battle.'),
+            _IntroLine(
+              '🔥',
+              'Rate both roasters with an emoji, then Submit. '
+                  'Swipe up for the next battle.',
+            ),
           ],
         ),
         actions: [
@@ -128,10 +143,11 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
         ],
       ),
     );
-    ref.set(
-      {'judgeIntroSeenAt': FieldValue.serverTimestamp()},
-      SetOptions(merge: true),
-    ).catchError((_) {});
+    ref
+        .set({
+          'judgeIntroSeenAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true))
+        .catchError((_) {});
   }
 
   Future<void> _loadLiveNow() async {
@@ -141,14 +157,16 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
           .call<Map<String, dynamic>>();
       final list = (r.data['matches'] as List?) ?? const [];
       if (!mounted) return;
-      setState(() => _liveNow = [
-            for (final e in list)
-              _LiveMatch(
-                matchId: (e as Map)['matchId'] as String,
-                p1: e['player1Name'] as String? ?? 'Roaster',
-                p2: e['player2Name'] as String? ?? 'Roaster',
-              ),
-          ]);
+      setState(
+        () => _liveNow = [
+          for (final e in list)
+            _LiveMatch(
+              matchId: (e as Map)['matchId'] as String,
+              p1: e['player1Name'] as String? ?? 'Roaster',
+              p2: e['player2Name'] as String? ?? 'Roaster',
+            ),
+        ],
+      );
     } catch (_) {
       // Just don't show the banner - never let this break the feed.
     }
@@ -266,8 +284,9 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
         final page = await _service.fetch(cursorMs: _cursorMs);
         if (!mounted) return;
         final existing = {for (final m in _matches ?? const []) m.matchId};
-        final fresh =
-            page.matches.where((m) => !existing.contains(m.matchId)).toList();
+        final fresh = page.matches
+            .where((m) => !existing.contains(m.matchId))
+            .toList();
         setState(() {
           _matches = [...?_matches, ...fresh];
           _cursorMs = page.nextCursorMs;
@@ -314,8 +333,11 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
   /// The challenge is raised BEFORE the vote rather than after a rejection,
   /// so the interruption lands once at the start of a judging run instead
   /// of arriving as an error mid-scroll.
-  Future<bool> _vote(String matchId, Map<int, String> picks,
-      Map<String, String> emojiRatings) async {
+  Future<bool> _vote(
+    String matchId,
+    Map<int, String> picks,
+    Map<String, String> emojiRatings,
+  ) async {
     try {
       if (_votesRemaining <= 0) {
         final token = await _requestChallenge();
@@ -359,8 +381,10 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               duration: Duration(seconds: 4),
-              content: Text('Skip earned - judging just bought you an '
-                  'extra skip today.'),
+              content: Text(
+                'Skip earned - judging just bought you an '
+                'extra skip today.',
+              ),
             ),
           );
         } else if (reward.points > 0) {
@@ -369,10 +393,10 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
           // points show up on every single vote and say nothing new.
           final message = reward.extendedStreak
               ? '${reward.streakDays} day streak - '
-                  '+${reward.points + reward.streakPoints} points'
+                    '+${reward.points + reward.streakPoints} points'
               : reward.boosted
-                  ? '+${reward.points} points - ${_x(reward.multiplier)}x bonus'
-                  : '+${reward.points} points';
+              ? '+${reward.points} points - ${_x(reward.multiplier)}x bonus'
+              : '+${reward.points} points';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               duration: Duration(seconds: reward.extendedStreak ? 3 : 2),
@@ -400,7 +424,7 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
   Future<String?> _requestChallenge() async {
     if (_challenging) return null;
     setState(() => _challenging = true);
-    final token = await showModalBottomSheet<String>(
+    final token = await showNeonSheet<String>(
       context: context,
       isDismissible: true,
       builder: (sheetContext) => Padding(
@@ -408,11 +432,16 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Quick check before you start judging',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'Quick check before you start judging',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 4),
-            const Text('Once only - then judge as many battles as you like.',
-                style: TextStyle(fontSize: 12), textAlign: TextAlign.center),
+            const Text(
+              'Once only - then judge as many battles as you like.',
+              style: TextStyle(fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
             TurnstileChallenge(
               onToken: (t) => Navigator.of(sheetContext).pop(t),
@@ -432,6 +461,7 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
     // opaquely, so the art only shows in the loading / empty / error states -
     // exactly where a bare black screen looked most unfinished. A light scrim
     // keeps the empty-state / error copy legible over the busy stage art.
+    final showBack = !widget.embedded && Navigator.of(context).canPop();
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -450,15 +480,16 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0x4D000000), Color(0x1A000000), Color(0x66000000)],
+                  colors: [
+                    Color(0x4D000000),
+                    Color(0x1A000000),
+                    Color(0x66000000),
+                  ],
                 ),
               ),
             ),
           ),
-          SafeArea(
-            top: false,
-            child: _buildBody(),
-          ),
+          SafeArea(top: false, child: _buildBody()),
           // "Live now" sits ON TOP of the feed - a playing clip fills the
           // screen, so a banner is the only way to surface a live battle
           // without hijacking the judging feed.
@@ -467,9 +498,20 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
               child: Align(
                 alignment: Alignment.topCenter,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  // Leaves room for the back button on the left.
+                  padding: EdgeInsets.fromLTRB(showBack ? 66 : 12, 8, 12, 0),
                   child: _liveNowBanner(context),
                 ),
+              ),
+            ),
+          // BACK BUTTON (2026-11-11): since the tab bar went, Judge is a
+          // pushed full-screen route, and without this an empty feed left
+          // the player with no way out on iPhone (no system Back button).
+          if (showBack)
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6, 4, 0, 0),
+                child: const BigBackButton(),
               ),
             ),
         ],
@@ -497,29 +539,36 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
             children: [
               // White LIVE badge with a red dot - the universal "we're on air" cue.
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                  SizedBox(
-                    width: 7,
-                    height: 7,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                          color: Color(0xFFE11D2A), shape: BoxShape.circle),
-                    ),
-                  ),
-                  SizedBox(width: 5),
-                  Text('LIVE',
-                      style: TextStyle(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    SizedBox(
+                      width: 7,
+                      height: 7,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
                           color: Color(0xFFE11D2A),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
-                          letterSpacing: 0.5)),
-                ]),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'LIVE',
+                      style: TextStyle(
+                        color: Color(0xFFE11D2A),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -532,14 +581,16 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
                           ? 'A battle is happening right now'
                           : '$n battles happening right now',
                       style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15),
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
                     ),
                     const SizedBox(height: 1),
-                    const Text('Tap to watch it live',
-                        style:
-                            TextStyle(color: Colors.white70, fontSize: 12)),
+                    const Text(
+                      'Tap to watch it live',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
                   ],
                 ),
               ),
@@ -552,7 +603,7 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
   }
 
   void _openLiveSheet() {
-    showModalBottomSheet<void>(
+    showNeonSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (sheetCtx) => SafeArea(
@@ -562,9 +613,10 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
           children: [
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text('Live now',
-                  style:
-                      TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              child: Text(
+                'Live now',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
             ),
             for (final m in _liveNow)
               ListTile(
@@ -574,9 +626,11 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.of(sheetCtx).pop();
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => LiveViewerScreen(matchId: m.matchId),
-                  ));
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => LiveViewerScreen(matchId: m.matchId),
+                    ),
+                  );
                 },
               ),
           ],
@@ -593,9 +647,11 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_error!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white70)),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70),
+              ),
               const SizedBox(height: 16),
               FilledButton(onPressed: _load, child: const Text('Try again')),
             ],
@@ -610,7 +666,8 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
       return const EmptyState(
         icon: Icons.gavel_outlined,
         title: 'Nothing to judge right now',
-        message: 'When battles finish they land here for you to vote on - and '
+        message:
+            'When battles finish they land here for you to vote on - and '
             'judging earns you points. The most show up during Happy Hour, '
             'so check back then.',
       );

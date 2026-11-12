@@ -1452,7 +1452,8 @@ function sanitiseRoundBoundaries(raw) {
 
 async function completeMatch(auth, data, creds = null) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-  const {matchId, outcome = "completed", quality, roundBoundaries} = data || {};
+  const {matchId, outcome = "completed", quality, roundBoundaries, platform} =
+    data || {};
   if (!matchId) throw new HttpsError("invalid-argument", "matchId is required.");
   if (!["completed", "abandoned"].includes(outcome)) {
     throw new HttpsError("invalid-argument", "outcome must be 'completed' or 'abandoned'.");
@@ -1478,10 +1479,16 @@ async function completeMatch(auth, data, creds = null) {
   // there is no single number for a match. Never fatal: a bad report must
   // not stop a battle being settled.
   const cleanQuality = sanitiseQualityReport(quality);
-  if (cleanQuality) {
-    await matchRef.update({
-      ["captureQuality." + auth.uid]: cleanQuality,
-    }).catch((e) => console.error("quality report failed:", e.message));
+  // The caller's device platform, for the clip renderer's lip-sync correction
+  // (functions/clipSync.js). Same outside-the-claim reasoning: both players'
+  // platforms are needed, not just the settle winner's.
+  const cleanPlatform = require("./clipSync").sanitisePlatform(platform);
+  const reports = {};
+  if (cleanQuality) reports["captureQuality." + auth.uid] = cleanQuality;
+  if (cleanPlatform) reports["devicePlatform." + auth.uid] = cleanPlatform;
+  if (Object.keys(reports).length) {
+    await matchRef.update(reports)
+        .catch((e) => console.error("quality report failed:", e.message));
   }
 
   // Per-round time windows in the recorded clip, sent by the HOST device
@@ -1669,6 +1676,13 @@ async function completeMatch(auth, data, creds = null) {
         })));
     } catch (e) {
       console.error(`match points for ${matchId} failed:`, e.message);
+    }
+    // The weekly RANKED streak (rankedStreak.js). Ranked only - not
+    // tournament or improv. Best-effort, never throws.
+    if (match.mode === "ranked") {
+      const {recordRankedForStreak} = require("./rankedStreak");
+      await Promise.all([match.player1Id, match.player2Id]
+          .map((uid) => recordRankedForStreak(uid)));
     }
   }
 

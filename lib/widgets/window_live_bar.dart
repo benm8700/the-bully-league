@@ -60,8 +60,7 @@ class _WindowLiveBarState extends State<WindowLiveBar>
           color: Colors.transparent,
           child: InkWell(
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                  builder: (_) => const TournamentHubScreen()),
+              MaterialPageRoute(builder: (_) => const TournamentHubScreen()),
             ),
             child: Stack(
               children: [
@@ -86,7 +85,11 @@ class _WindowLiveBarState extends State<WindowLiveBar>
                     ],
                   ),
                   padding: EdgeInsets.only(
-                      left: 14, right: 12, top: topInset + 9, bottom: 9),
+                    left: 14,
+                    right: 12,
+                    top: topInset + 9,
+                    bottom: 9,
+                  ),
                   child: _content(context),
                 ),
                 // The shine sweep, over everything, ignoring taps.
@@ -148,15 +151,19 @@ class _WindowLiveBarState extends State<WindowLiveBar>
                   width: 7,
                   height: 7,
                   decoration: const BoxDecoration(
-                      color: Colors.white, shape: BoxShape.circle),
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
                 ),
                 const SizedBox(width: 5),
-                Text('LIVE',
-                    style: text.labelSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1,
-                    )),
+                Text(
+                  'LIVE',
+                  style: text.labelSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                  ),
+                ),
               ],
             ),
           ),
@@ -167,24 +174,26 @@ class _WindowLiveBarState extends State<WindowLiveBar>
           child: ValueListenableBuilder<String>(
             valueListenable: kWindowName,
             builder: (context, name, _) => Text.rich(
-              TextSpan(children: [
-                TextSpan(
-                  text: '${name.toUpperCase()}  ',
-                  style: text.labelLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.3,
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '${name.toUpperCase()}  ',
+                    style: text.labelLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.3,
+                    ),
                   ),
-                ),
-                TextSpan(
-                  text: '· 2X POINTS',
-                  style: text.labelSmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
+                  TextSpan(
+                    text: '· 2X POINTS',
+                    style: text.labelSmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
                   ),
-                ),
-              ]),
+                ],
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -201,14 +210,19 @@ class _WindowLiveBarState extends State<WindowLiveBar>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('JOIN',
-                  style: text.labelLarge?.copyWith(
-                    color: const Color(0xFFC81232),
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.5,
-                  )),
-              const Icon(Icons.chevron_right,
-                  size: 16, color: Color(0xFFC81232)),
+              Text(
+                'JOIN',
+                style: text.labelLarge?.copyWith(
+                  color: const Color(0xFFC81232),
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                size: 16,
+                color: Color(0xFFC81232),
+              ),
             ],
           ),
         ),

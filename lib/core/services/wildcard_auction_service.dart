@@ -88,7 +88,7 @@ class WildcardBidResult {
 
 class WildcardAuctionService {
   WildcardAuctionService({FirebaseFunctions? functions})
-      : _functions = functions ?? FirebaseFunctions.instance;
+    : _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFunctions _functions;
 

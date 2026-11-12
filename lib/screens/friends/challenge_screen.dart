@@ -1,3 +1,5 @@
+import '../../widgets/incoming_challenge_card.dart';
+import '../../widgets/neon_action_button.dart';
 import 'dart:async';
 
 import 'package:cloud_functions/cloud_functions.dart';
@@ -5,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../widgets/expiry_countdown.dart';
 import '../directory/player_search_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
@@ -40,10 +43,10 @@ class ChallengeScreen extends StatefulWidget {
 
 class _ChallengeScreenState extends State<ChallengeScreen> {
   final _controller = TextEditingController();
-  final _phoneController = TextEditingController();
   List<Map<String, dynamic>> _incoming = const [];
   List<Map<String, dynamic>> _outgoing = const [];
   List<Map<String, dynamic>> _accepted = const [];
+  List<Map<String, dynamic>> _invites = const [];
   List<Map<String, dynamic>> _recent = _cachedRecentTargets;
   bool _loading = true;
   bool _busy = false;
@@ -71,7 +74,6 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
   void dispose() {
     _poll?.cancel();
     _controller.dispose();
-    _phoneController.dispose();
     super.dispose();
   }
 
@@ -89,6 +91,9 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
             .map((e) => (e as Map).cast<String, dynamic>())
             .toList();
         _accepted = ((r.data['accepted'] as List?) ?? const [])
+            .map((e) => (e as Map).cast<String, dynamic>())
+            .toList();
+        _invites = ((r.data['invites'] as List?) ?? const [])
             .map((e) => (e as Map).cast<String, dynamic>())
             .toList();
         _loading = false;
@@ -132,7 +137,11 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
       final r = await FirebaseFunctions.instance
           .httpsCallable('challengeFriend')
           .call<Map<String, dynamic>>(
-            looksPhone ? {'phone': input} : {'username': input},
+            looksPhone
+                ? {'phone': input}
+                : input.contains('@')
+                ? {'email': input}
+                : {'username': input},
           );
       if (!mounted) return;
       // No account on that number yet - fire an SMS invite; the challenge is
@@ -148,8 +157,10 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
           _busy = false;
           _sent =
               "No account on that number yet - we opened a text invite. "
-              "When they join, your challenge is waiting.";
+              "Hit Send in Messages. When they join, your challenge is "
+              "waiting.";
         });
+        await _load();
         return;
       }
       field.clear();
@@ -335,41 +346,24 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   Text('Ready to battle', style: text.titleMedium),
                   const SizedBox(height: 8),
                   ..._accepted.map(
-                    (c) => Card(
-                      color: scheme.surfaceContainerHigh,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.sports_mma,
-                                  size: 18,
-                                  color: scheme.primary,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    '${c['toUsername']} accepted your challenge',
-                                    style: text.titleSmall,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            // The hottest action on the screen - your friend
-                            // is ready NOW - so it is the one solid-pink CTA.
-                            FilledButton(
-                              onPressed: _busy
-                                  ? null
-                                  : () =>
-                                        _startAccepted(c['matchId'] as String),
-                              child: const Text('Battle now'),
-                            ),
+                    (c) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: NeonAlertStrip(
+                        pulse: true,
+                        leading: const Icon(
+                          Icons.sports_mma_rounded,
+                          color: Color(0xFFFF2E7E),
+                          size: 24,
+                          shadows: [
+                            Shadow(color: Color(0xFFFF2E7E), blurRadius: 10),
                           ],
                         ),
+                        title: '${c['toUsername']} accepted your challenge',
+                        subtitle: 'They are ready right now',
+                        pillLabel: 'Battle now',
+                        onTap: () {
+                          if (!_busy) _startAccepted(c['matchId'] as String);
+                        },
                       ),
                     ),
                   ),
@@ -379,113 +373,54 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   Text('Waiting for you', style: text.titleMedium),
                   const SizedBox(height: 8),
                   ..._incoming.map(
-                    (c) => Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              '${c['fromUsername']} challenged you',
-                              style: text.titleSmall,
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                Expanded(
-                                  // Pink (the brand primary) - the green read
-                                  // as out of place here (developer's call).
-                                  child: FilledButton(
-                                    onPressed: _busy
-                                        ? null
-                                        : () => _respond(
-                                            c['challengeId'] as String,
-                                            true,
-                                          ),
-                                    child: const Text('Accept'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                TextButton(
-                                  onPressed: _busy
-                                      ? null
-                                      : () => _respond(
-                                          c['challengeId'] as String,
-                                          false,
-                                        ),
-                                  child: const Text('No thanks'),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                    (c) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: IncomingChallengeCard(
+                        fromUsername: '${c['fromUsername']}',
+                        expiresAtMs: c['expiresAtMs'],
+                        busy: _busy,
+                        onAccept: () =>
+                            _respond(c['challengeId'] as String, true),
+                        onDecline: () =>
+                            _respond(c['challengeId'] as String, false),
+                        declineLabel: 'No thanks',
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 12),
                 ],
-                // TEXT A FRIEND FIRST (2026-11-09): a text is how a new person
-                // joins - the number is stashed and the challenge is waiting
-                // when they sign up with it (phoneChallenges). If they already
-                // have an account on that number, it is just sent in-app.
-                Text('Text a friend', style: text.titleMedium),
+                // ONE BOX (2026-11-10): a phone number or a username. _send
+                // tells them apart. A number on an account gets the challenge
+                // in-app; a number with no account opens a text invite, and
+                // the challenge waits for them when they sign up with it.
+                Text('Who are you roasting?', style: text.titleMedium),
                 const SizedBox(height: 4),
                 Text(
-                  'Enter their number. If they are not on The Bully League yet, '
-                  'we open a text invite and your challenge is waiting when '
-                  'they join. If they are, they get it right away.',
-                  style: text.bodySmall,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  textInputAction: TextInputAction.send,
-                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
-                  decoration: const InputDecoration(
-                    labelText: 'Phone number',
-                    prefixIcon: Icon(Icons.sms_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (_) => _send(_phoneController),
-                ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: _busy ? null : () => _send(_phoneController),
-                  icon: const Icon(Icons.send),
-                  label: const Text('Text them a challenge'),
-                ),
-                const SizedBox(height: 28),
-                Text('Or challenge by username', style: text.titleMedium),
-                const SizedBox(height: 4),
-                Text(
-                  // Judged by the crowd since 2026-11-09, still no rank.
-                  'Strangers judge it and tell you who won. It never touches '
-                  'your rank.',
+                  "Enter a friend's phone number, username or email. If they "
+                  "aren't on The Bully League yet, we'll text them a link to "
+                  'join, and your challenge will be waiting. Strangers judge '
+                  'it and tell you who won. It never touches your rank.',
                   style: text.bodySmall,
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _controller,
                   textInputAction: TextInputAction.send,
+                  autocorrect: false,
                   onTapOutside: (_) => FocusScope.of(context).unfocus(),
                   decoration: const InputDecoration(
-                    labelText: 'Username',
+                    labelText: 'Phone number, username or email',
+                    prefixIcon: Icon(Icons.person_search_outlined),
                     border: OutlineInputBorder(),
                   ),
                   onSubmitted: (_) => _send(),
                 ),
                 const SizedBox(height: 12),
-                // Purple compose action - initiating a challenge is calmer
-                // than answering a live one, and the colour keeps it clearly
-                // apart from the pink/green "a battle is happening" buttons.
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: scheme.secondary,
-                    foregroundColor: scheme.onSecondary,
-                  ),
-                  onPressed: _busy ? null : _send,
-                  child: const Text('Send challenge'),
+                const SizedBox(height: 6),
+                NeonActionButton(
+                  label: 'Send challenge',
+                  busy: _busy,
+                  onPressed: _send,
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
@@ -557,7 +492,7 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                     ),
                   ),
                 ],
-                if (_outgoing.isNotEmpty) ...[
+                if (_outgoing.isNotEmpty || _invites.isNotEmpty) ...[
                   const SizedBox(height: 24),
                   Text('Sent', style: text.titleMedium),
                   const SizedBox(height: 8),
@@ -567,6 +502,21 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.hourglass_empty, size: 18),
                       title: Text('Waiting on ${c['toUsername']}'),
+                      trailing: ExpiryCountdown(expiresAtMs: c['expiresAtMs']),
+                    ),
+                  ),
+                  ..._invites.map(
+                    (c) => ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.sms_outlined, size: 18),
+                      title: Text('Invited ${_prettyPhone(c['phone'])}'),
+                      subtitle: const Text('Waiting for them to join'),
+                      trailing: TextButton(
+                        onPressed: () =>
+                            _inviteBySms(c['phone'] as String? ?? '', null),
+                        child: const Text('Text again'),
+                      ),
                     ),
                   ),
                 ],
@@ -574,6 +524,13 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
             ),
     );
   }
+}
+
+/// "+16195551234" -> "(619) 555-1234"; anything else is shown as-is.
+String _prettyPhone(Object? raw) {
+  final p = raw is String ? raw : '';
+  final m = RegExp(r'^\+1(\d{3})(\d{3})(\d{4})$').firstMatch(p);
+  return m == null ? p : '(${m[1]}) ${m[2]}-${m[3]}';
 }
 
 /// Takes an accepted challenge straight into the camera check + battle.

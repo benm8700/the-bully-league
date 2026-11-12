@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 
 import '../theme/house_theme.dart';
 
-
 /// Live head-to-head scoreboard for a match still open for voting.
 ///
 /// Genuinely live: it listens to `matches/{matchId}/tally/live`, which the
@@ -87,7 +86,9 @@ class LiveTally extends StatelessWidget {
     );
     return compact
         ? content
-        : Card(child: Padding(padding: const EdgeInsets.all(16), child: content));
+        : Card(
+            child: Padding(padding: const EdgeInsets.all(16), child: content),
+          );
   }
 
   Widget _scoreboard(BuildContext context, int p1, int p2) {
@@ -104,16 +105,25 @@ class LiveTally extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _side(context, player1Name, p1,
-                color: House.gelRed, highlight: !tied && leaderIsP1),
+            _side(
+              context,
+              player1Name,
+              p1,
+              color: House.gelRed,
+              highlight: !tied && leaderIsP1,
+            ),
             Text(
               tied ? 'TIED' : 'vs',
               style: Theme.of(context).textTheme.labelLarge,
             ),
-            _side(context, player2Name, p2,
-                color: House.gelBlue,
-                highlight: !tied && !leaderIsP1,
-                alignEnd: true),
+            _side(
+              context,
+              player2Name,
+              p2,
+              color: House.gelBlue,
+              highlight: !tied && !leaderIsP1,
+              alignEnd: true,
+            ),
           ],
         ),
         SizedBox(height: compact ? 8 : 12),
@@ -165,20 +175,27 @@ class LiveTally extends StatelessWidget {
     // 16px padding; full-size keeps the standalone Card for the vote screen.
     return compact
         ? content
-        : Card(child: Padding(padding: const EdgeInsets.all(16), child: content));
+        : Card(
+            child: Padding(padding: const EdgeInsets.all(16), child: content),
+          );
   }
 
-  Widget _side(BuildContext context, String name, int votes,
-      {required Color color,
-      required bool highlight,
-      bool alignEnd = false}) {
+  Widget _side(
+    BuildContext context,
+    String name,
+    int votes, {
+    required Color color,
+    required bool highlight,
+    bool alignEnd = false,
+  }) {
     final numberStyle = compact
         ? Theme.of(context).textTheme.titleMedium
         : Theme.of(context).textTheme.headlineSmall;
     return Expanded(
       child: Column(
-        crossAxisAlignment:
-            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: alignEnd
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Text(
             name,
@@ -186,10 +203,7 @@ class LiveTally extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             // The name wears the player's gel so it matches their half of the
             // bar below - left/red is player 1, right/blue is player 2.
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
           ),
           // The number now says "votes" so it never reads as a bare figure.
           Text(

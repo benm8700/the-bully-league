@@ -39,8 +39,7 @@ class _FollowButtonState extends State<FollowButton> {
   final _service = FollowsService();
   bool _busy = false;
 
-  bool get _isSelf =>
-      FirebaseAuth.instance.currentUser?.uid == widget.uid;
+  bool get _isSelf => FirebaseAuth.instance.currentUser?.uid == widget.uid;
 
   @override
   Widget build(BuildContext context) {
@@ -52,9 +51,7 @@ class _FollowButtonState extends State<FollowButton> {
       builder: (context, snap) {
         final following = snap.data ?? false;
         if (widget.iconOnly) return _iconOnly(following);
-        return widget.compact
-            ? _compact(following)
-            : _full(following);
+        return widget.compact ? _compact(following) : _full(following);
       },
     );
   }
@@ -93,7 +90,8 @@ class _FollowButtonState extends State<FollowButton> {
                 foregroundColor: Colors.white,
                 side: BorderSide(color: Colors.white.withValues(alpha: 0.4)),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             )
           : FilledButton.icon(
@@ -103,10 +101,13 @@ class _FollowButtonState extends State<FollowButton> {
               style: FilledButton.styleFrom(
                 backgroundColor: kFollowPink,
                 foregroundColor: Colors.white,
-                textStyle:
-                    const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                textStyle: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
     );
@@ -126,13 +127,19 @@ class _FollowButtonState extends State<FollowButton> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(following ? Icons.check : Icons.person_add_alt_1,
-                  size: 15, color: fg),
+              Icon(
+                following ? Icons.check : Icons.person_add_alt_1,
+                size: 15,
+                color: fg,
+              ),
               const SizedBox(width: 5),
               Text(
                 following ? 'Following' : 'Follow',
                 style: TextStyle(
-                    color: fg, fontWeight: FontWeight.w700, fontSize: 13),
+                  color: fg,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
               ),
             ],
           ),

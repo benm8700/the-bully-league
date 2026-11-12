@@ -106,11 +106,11 @@ class _VoteScreenState extends State<VoteScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
-    final matchRef =
-        FirebaseFirestore.instance.collection('matches').doc(widget.matchId);
+    final matchRef = FirebaseFirestore.instance
+        .collection('matches')
+        .doc(widget.matchId);
     final myUid = FirebaseAuth.instance.currentUser?.uid;
 
     return Scaffold(
@@ -130,7 +130,8 @@ class _VoteScreenState extends State<VoteScreen> {
           final isParticipant = myUid == player1Id || myUid == player2Id;
           final closesAtMs = _closesAtMs(match);
           final roundCount =
-              (((match['settings'] as Map?)?['roundCount'] as num?)?.toInt() ?? 3)
+              (((match['settings'] as Map?)?['roundCount'] as num?)?.toInt() ??
+                      3)
                   .clamp(1, 12);
 
           return FutureBuilder<List<String>>(
@@ -172,11 +173,11 @@ class _VoteScreenState extends State<VoteScreen> {
       stream: myUid == null
           ? const Stream.empty()
           : FirebaseFirestore.instance
-              .collection('votes')
-              .doc(widget.matchId)
-              .collection('ballots')
-              .doc(myUid)
-              .snapshots(),
+                .collection('votes')
+                .doc(widget.matchId)
+                .collection('ballots')
+                .doc(myUid)
+                .snapshots(),
       builder: (context, ballotSnap) {
         final alreadyVoted = _justVoted || (ballotSnap.data?.exists ?? false);
         final canVote = !isParticipant && !alreadyVoted;
@@ -219,8 +220,8 @@ class _VoteScreenState extends State<VoteScreen> {
                       selectedRegion: _selectedWinner == player1Id
                           ? ClipSelectRegion.top
                           : _selectedWinner == player2Id
-                              ? ClipSelectRegion.bottom
-                              : ClipSelectRegion.none,
+                          ? ClipSelectRegion.bottom
+                          : ClipSelectRegion.none,
                     ),
                   ),
                 ),
@@ -234,20 +235,22 @@ class _VoteScreenState extends State<VoteScreen> {
                         textAlign: TextAlign.center,
                       )
                     : Text.rich(
-                        TextSpan(children: [
-                          const TextSpan(text: 'Your pick: '),
-                          TextSpan(
-                            text: _selectedWinner == player1Id
-                                ? player1Name
-                                : player2Name,
-                            style: TextStyle(
-                              color: _selectedWinner == player1Id
-                                  ? House.gelRed
-                                  : House.gelBlue,
-                              fontWeight: FontWeight.w800,
+                        TextSpan(
+                          children: [
+                            const TextSpan(text: 'Your pick: '),
+                            TextSpan(
+                              text: _selectedWinner == player1Id
+                                  ? player1Name
+                                  : player2Name,
+                              style: TextStyle(
+                                color: _selectedWinner == player1Id
+                                    ? House.gelRed
+                                    : House.gelBlue,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                          ),
-                        ]),
+                          ],
+                        ),
                         style: Theme.of(context).textTheme.titleLarge,
                         textAlign: TextAlign.center,
                       ),
@@ -260,8 +263,10 @@ class _VoteScreenState extends State<VoteScreen> {
                 ),
                 const SizedBox(height: 16),
                 if (_selectedWinner != null) ...[
-                  Text('Now rate both:',
-                      style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    'Now rate both:',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   const SizedBox(height: 8),
                   EmojiRateRow(
                     name: player1Name,
@@ -281,7 +286,8 @@ class _VoteScreenState extends State<VoteScreen> {
                   const SizedBox(height: 12),
                 ],
                 TurnstileChallenge(
-                    onToken: (token) => setState(() => _turnstileToken = token)),
+                  onToken: (token) => setState(() => _turnstileToken = token),
+                ),
                 const SizedBox(height: 16),
                 if (!_watchedEnough) ...[
                   Text(
@@ -299,7 +305,8 @@ class _VoteScreenState extends State<VoteScreen> {
                   const SizedBox(height: 8),
                 ],
                 FilledButton(
-                  onPressed: (_selectedWinner != null &&
+                  onPressed:
+                      (_selectedWinner != null &&
                           _turnstileToken != null &&
                           _watchedEnough &&
                           _emojiP1 != null &&
@@ -367,8 +374,9 @@ class _VoteScreenState extends State<VoteScreen> {
                   onSelected: (p) => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => ReportScreen(
-                          reportedUserId: p == 1 ? player1Id : player2Id,
-                          matchId: widget.matchId),
+                        reportedUserId: p == 1 ? player1Id : player2Id,
+                        matchId: widget.matchId,
+                      ),
                     ),
                   ),
                   itemBuilder: (_) => [
@@ -406,4 +414,3 @@ class _VoteScreenState extends State<VoteScreen> {
     ];
   }
 }
-

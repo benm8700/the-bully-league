@@ -41,11 +41,17 @@ class PerformerProfileScreen extends StatelessWidget {
   static const _pink = Color(0xFFFF3B6B);
   static const _bg = Color(0xFF0E0B14);
 
-  static Future<void> open(BuildContext context, String uid,
-      {String? username}) {
-    return Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => PerformerProfileScreen(uid: uid, seedUsername: username),
-    ));
+  static Future<void> open(
+    BuildContext context,
+    String uid, {
+    String? username,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            PerformerProfileScreen(uid: uid, seedUsername: username),
+      ),
+    );
   }
 
   @override
@@ -69,14 +75,18 @@ class PerformerProfileScreen extends StatelessWidget {
               tooltip: 'More',
               onSelected: (v) {
                 if (v == 'report') {
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => ReportScreen(reportedUserId: uid),
-                  ));
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ReportScreen(reportedUserId: uid),
+                    ),
+                  );
                 }
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(
-                    value: 'report', child: Text('Report this player')),
+                  value: 'report',
+                  child: Text('Report this player'),
+                ),
               ],
             ),
         ],
@@ -104,9 +114,9 @@ class PerformerProfileScreen extends StatelessWidget {
                   username,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -123,23 +133,28 @@ class PerformerProfileScreen extends StatelessWidget {
                         // Gold for the two top tiers (matching Home/Profile) so
                         // the most prestigious ranks read as prestige.
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: rankTitle == 'Legend' || rankTitle == 'GOAT'
-                                  ? const Color(0xFFF4C838)
-                                  : Colors.white.withValues(alpha: 0.75),
-                              fontWeight: FontWeight.w600,
-                            ),
+                          color: rankTitle == 'Legend' || rankTitle == 'GOAT'
+                              ? const Color(0xFFF4C838)
+                              : Colors.white.withValues(alpha: 0.75),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       // The ladder rung as a Roman numeral ("· V"), matching
                       // Home/Profile. Absent for GOAT and unknown titles.
                       if (rankTierNumeral(rankTitle) != null) ...[
-                        Text('  ·  ',
-                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.4),
-                                )),
+                        Text(
+                          '  ·  ',
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.4),
+                              ),
+                        ),
                         Text(
                           rankTierNumeral(rankTitle)!,
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                color: rankTierColor(rankTitle) ??
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color:
+                                    rankTierColor(rankTitle) ??
                                     const Color(0xFFF4C838),
                                 fontWeight: FontWeight.w800,
                               ),
@@ -204,24 +219,30 @@ class _StudyCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          const Icon(Icons.menu_book_outlined,
-              color: Colors.white70, size: 18),
-          const SizedBox(width: 6),
-          Text('Study them',
+        Row(
+          children: [
+            const Icon(
+              Icons.menu_book_outlined,
+              color: Colors.white70,
+              size: 18,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Study them',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  )),
-        ]),
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 4),
         Text(
           "Their intro and what they want you to know - fair game before you "
           'face off.',
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: Colors.white54),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.white54),
         ),
         const SizedBox(height: 12),
         if (hasIntro)
@@ -235,8 +256,7 @@ class _StudyCard extends StatelessWidget {
             color: Colors.white.withValues(alpha: 0.06),
             child: Padding(
               padding: const EdgeInsets.all(14),
-              child: Text(about,
-                  style: const TextStyle(color: Colors.white)),
+              child: Text(about, style: const TextStyle(color: Colors.white)),
             ),
           ),
         ],
@@ -312,14 +332,17 @@ class _Avatar extends StatelessWidget {
         shape: BoxShape.circle,
         color: const Color(0xFF241B33),
         border: Border.all(
-            color: PerformerProfileScreen._pink.withValues(alpha: 0.5),
-            width: 2),
+          color: PerformerProfileScreen._pink.withValues(alpha: 0.5),
+          width: 2,
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: photoUrl != null
-          ? Image.network(photoUrl!,
+          ? Image.network(
+              photoUrl!,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const _AvatarPlaceholder())
+              errorBuilder: (_, _, _) => const _AvatarPlaceholder(),
+            )
           : const _AvatarPlaceholder(),
     );
   }
@@ -331,8 +354,11 @@ class _AvatarPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Icon(Icons.person,
-          size: 48, color: Colors.white.withValues(alpha: 0.35)),
+      child: Icon(
+        Icons.person,
+        size: 48,
+        color: Colors.white.withValues(alpha: 0.35),
+      ),
     );
   }
 }
@@ -353,6 +379,21 @@ class _ClipsSection extends StatefulWidget {
 class _ClipsSectionState extends State<_ClipsSection> {
   List<_Clip> _clips = const [];
   bool _loading = true;
+  // SUBSCRIBER PERK (2026-11-11, developer's call): only subscribers get
+  // their approved (published) clips shown on their profile. The clips stay
+  // published for the website/socials either way - this only gates the
+  // profile display. While config/monetization.enabled is false (no way to
+  // subscribe yet) everyone qualifies, same as the other subscriber perks.
+  bool _gated = false;
+
+  /// Mirrors functions/entitlement.js isSubscriber: explicit active:true, and
+  /// an expiry in the future (or none = open-ended).
+  static bool _isSubscriber(Map<String, dynamic>? user) {
+    final sub = user?['subscription'];
+    if (sub is! Map || sub['active'] != true) return false;
+    final exp = (sub['expiresAtMs'] as num?)?.toInt() ?? 0;
+    return exp <= 0 || DateTime.now().millisecondsSinceEpoch < exp;
+  }
 
   @override
   void initState() {
@@ -362,8 +403,17 @@ class _ClipsSectionState extends State<_ClipsSection> {
 
   Future<void> _load() async {
     final clips = <_Clip>[];
+    var gated = false;
     try {
       final db = FirebaseFirestore.instance;
+      final monetization =
+          (await db.collection('config').doc('monetization').get()).data();
+      if (monetization?['enabled'] == true) {
+        final user = (await db.collection('users').doc(widget.uid).get())
+            .data();
+        gated = !_isSubscriber(user);
+      }
+      if (gated) throw const _Gated();
       for (final field in ['player1Id', 'player2Id']) {
         final snap = await db
             .collection('matches')
@@ -376,12 +426,15 @@ class _ClipsSectionState extends State<_ClipsSection> {
           if (url != null) clips.add(_Clip(matchId: d.id, url: url));
         }
       }
+    } on _Gated {
+      // Not a subscriber: no clips on the profile.
     } catch (_) {
       // Missing index or any read error → just show the empty state.
     }
     if (!mounted) return;
     setState(() {
       _clips = clips;
+      _gated = gated;
       _loading = false;
     });
   }
@@ -389,11 +442,15 @@ class _ClipsSectionState extends State<_ClipsSection> {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const SizedBox.shrink();
+    final mine = FirebaseAuth.instance.currentUser?.uid == widget.uid;
+    // Other people see nothing at all for a non-subscriber; the owner sees
+    // what they'd get.
+    if (_gated && !mine) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'CLIPS',
+          'FEATURED CLIPS',
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.6),
             fontSize: 12,
@@ -402,26 +459,42 @@ class _ClipsSectionState extends State<_ClipsSection> {
           ),
         ),
         const SizedBox(height: 12),
-        if (_clips.isEmpty)
+        if (_gated)
           Text(
-            'No public clips yet.',
+            'Subscribers can show their featured clips here.',
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+          )
+        else if (_clips.isEmpty)
+          Text(
+            'No featured clips yet.',
             style: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
           )
         else
           for (final clip in _clips)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: MatchClipPlayer(videoUrl: clip.url),
+              // The stacked 9:16 cut (top/bottom), sized so it doesn't
+              // swallow the whole profile.
+              child: Center(
+                child: SizedBox(
+                  height: 460,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: AspectRatio(
+                      aspectRatio: 9 / 16,
+                      child: MatchClipPlayer(videoUrl: clip.url),
+                    ),
+                  ),
                 ),
               ),
             ),
       ],
     );
   }
+}
+
+class _Gated implements Exception {
+  const _Gated();
 }
 
 class _Clip {
@@ -435,7 +508,9 @@ String? _clipUrl(Map<String, dynamic> match) {
   if (highlight is! Map) return null;
   final urls = highlight['publicUrls'];
   if (urls is Map) {
-    return (urls['landscape'] ?? urls['vertical'] ?? urls.values.firstOrNull)
+    // Vertical = stacked top/bottom, the phone cut. Landscape (side by side)
+    // is the website's.
+    return (urls['vertical'] ?? urls['landscape'] ?? urls.values.firstOrNull)
         as String?;
   }
   return null;

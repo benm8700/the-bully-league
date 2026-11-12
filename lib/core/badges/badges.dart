@@ -405,12 +405,15 @@ class BadgeStats {
   factory BadgeStats.fromUser(Map<String, dynamic>? user) {
     final u = user ?? const {};
     final streak = u['voteStreak'];
-    final streakDays = streak is Map ? (streak['days'] as num?)?.toInt() ?? 0 : 0;
+    final streakDays = streak is Map
+        ? (streak['days'] as num?)?.toInt() ?? 0
+        : 0;
     final awards = u['emojiTopAwards'];
     bool flag(String k) => awards is Map && awards[k] == true;
     return BadgeStats(
       wins: (u['wins'] as num?)?.toInt() ?? 0,
-      battlesPlayed: (u['careerRankedMatches'] as num?)?.toInt() ??
+      battlesPlayed:
+          (u['careerRankedMatches'] as num?)?.toInt() ??
           (u['rankedMatchesPlayed'] as num?)?.toInt() ??
           0,
       voteStreakDays: streakDays,
@@ -418,8 +421,7 @@ class BadgeStats {
       tournamentWins: (u['tournamentWins'] as num?)?.toInt() ?? 0,
       tournamentRunnerUps: (u['tournamentRunnerUps'] as num?)?.toInt() ?? 0,
       editorsChoicePicks: (u['editorsChoicePicks'] as num?)?.toInt() ?? 0,
-      mainStagePanelsServed:
-          (u['mainStagePanelsServed'] as num?)?.toInt() ?? 0,
+      mainStagePanelsServed: (u['mainStagePanelsServed'] as num?)?.toInt() ?? 0,
       topFire: flag('fire'),
       topClever: flag('clever'),
       topBoring: flag('boring'),
@@ -429,25 +431,27 @@ class BadgeStats {
   }
 
   int value(BadgeMetric m) => switch (m) {
-        BadgeMetric.wins => wins,
-        BadgeMetric.battlesPlayed => battlesPlayed,
-        BadgeMetric.voteStreakDays => voteStreakDays,
-        BadgeMetric.votesCast => votesCast,
-        BadgeMetric.tournamentWins => tournamentWins,
-        BadgeMetric.tournamentRunnerUps => tournamentRunnerUps,
-        BadgeMetric.editorsChoicePicks => editorsChoicePicks,
-        BadgeMetric.mainStagePanelsServed => mainStagePanelsServed,
-        BadgeMetric.topFire => topFire ? 1 : 0,
-        BadgeMetric.topClever => topClever ? 1 : 0,
-        BadgeMetric.topBoring => topBoring ? 1 : 0,
-        BadgeMetric.topTrash => topTrash ? 1 : 0,
-        BadgeMetric.topRedFlag => topRedFlag ? 1 : 0,
-      };
+    BadgeMetric.wins => wins,
+    BadgeMetric.battlesPlayed => battlesPlayed,
+    BadgeMetric.voteStreakDays => voteStreakDays,
+    BadgeMetric.votesCast => votesCast,
+    BadgeMetric.tournamentWins => tournamentWins,
+    BadgeMetric.tournamentRunnerUps => tournamentRunnerUps,
+    BadgeMetric.editorsChoicePicks => editorsChoicePicks,
+    BadgeMetric.mainStagePanelsServed => mainStagePanelsServed,
+    BadgeMetric.topFire => topFire ? 1 : 0,
+    BadgeMetric.topClever => topClever ? 1 : 0,
+    BadgeMetric.topBoring => topBoring ? 1 : 0,
+    BadgeMetric.topTrash => topTrash ? 1 : 0,
+    BadgeMetric.topRedFlag => topRedFlag ? 1 : 0,
+  };
 }
 
 /// The set of badge ids that currently QUALIFY for these stats (live).
-Set<String> qualifyingBadgeIds(BadgeStats stats) =>
-    {for (final b in kBadges) if (b.earnedBy(stats)) b.id};
+Set<String> qualifyingBadgeIds(BadgeStats stats) => {
+  for (final b in kBadges)
+    if (b.earnedBy(stats)) b.id,
+};
 
 /// The displayed earned set: badges are earned AND KEPT, so this unions the
 /// sticky stored set (`badges.earned` on the user doc) with whatever currently
@@ -514,19 +518,23 @@ List<BadgeSlot> badgeSlots(BadgeStats stats, Set<String> earnedIds) {
         }
       }
       final goalDef = nextUnearned ?? tiers.last;
-      slots.add(BadgeSlot(
-        def: display,
-        earned: earnedIds.contains(display.id),
-        current: stats.value(b.metric),
-        goal: goalDef.threshold,
-      ));
+      slots.add(
+        BadgeSlot(
+          def: display,
+          earned: earnedIds.contains(display.id),
+          current: stats.value(b.metric),
+          goal: goalDef.threshold,
+        ),
+      );
     } else {
-      slots.add(BadgeSlot(
-        def: b,
-        earned: earnedIds.contains(b.id),
-        current: stats.value(b.metric),
-        goal: b.threshold,
-      ));
+      slots.add(
+        BadgeSlot(
+          def: b,
+          earned: earnedIds.contains(b.id),
+          current: stats.value(b.metric),
+          goal: b.threshold,
+        ),
+      );
     }
   }
   return slots;

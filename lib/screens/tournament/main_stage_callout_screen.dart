@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/main_stage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/home/rank_badges.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// The #1 seed's callout: three candidates on ONE screen, tap to pick, confirm,
 /// and the bracket is built. The research is front-loaded into the week's
@@ -64,8 +65,12 @@ class _MainStageCalloutScreenState extends State<MainStageCalloutScreen> {
         name = d?['username'] as String?;
         rank = d?['rankTitle'] as String?;
         final photos = (d?['profile'] as Map?)?['photoUrls'];
-        if (photos is List && photos.isNotEmpty) photo = photos.first as String?;
-      } catch (_) {/* a candidate we can't resolve still shows as a finalist */}
+        if (photos is List && photos.isNotEmpty) {
+          photo = photos.first as String?;
+        }
+      } catch (_) {
+        /* a candidate we can't resolve still shows as a finalist */
+      }
       out.add(_CandidateInfo(uid, name, photo, rank));
     }
     if (!mounted) return;
@@ -79,7 +84,7 @@ class _MainStageCalloutScreenState extends State<MainStageCalloutScreen> {
     final pick = _cands.firstWhere((c) => c.uid == _selected);
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => NeonDialog(
         title: Text('Call out ${pick.display}?'),
         content: const Text(
           "They're your semifinal opponent. This locks the bracket and goes "
@@ -139,8 +144,7 @@ class _MainStageCalloutScreenState extends State<MainStageCalloutScreen> {
                 for (final c in _cands) _candidateCard(c, gold),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
-                  Text(_error!,
-                      style: TextStyle(color: context.palette.live)),
+                  Text(_error!, style: TextStyle(color: context.palette.live)),
                 ],
                 const SizedBox(height: 20),
                 FilledButton(
@@ -149,16 +153,20 @@ class _MainStageCalloutScreenState extends State<MainStageCalloutScreen> {
                     foregroundColor: Colors.black,
                     minimumSize: const Size(0, 52),
                   ),
-                  onPressed:
-                      (_selected == null || _submitting) ? null : _confirm,
+                  onPressed: (_selected == null || _submitting)
+                      ? null
+                      : _confirm,
                   child: _submitting
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(_selected == null
-                          ? 'Pick an opponent'
-                          : 'Call out ${_cands.firstWhere((c) => c.uid == _selected).display}'),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          _selected == null
+                              ? 'Pick an opponent'
+                              : 'Call out ${_cands.firstWhere((c) => c.uid == _selected).display}',
+                        ),
                 ),
               ],
             ),
@@ -171,7 +179,9 @@ class _MainStageCalloutScreenState extends State<MainStageCalloutScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
-        color: selected ? gold.withValues(alpha: 0.14) : scheme.surfaceContainerHighest,
+        color: selected
+            ? gold.withValues(alpha: 0.14)
+            : scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
@@ -193,23 +203,27 @@ class _MainStageCalloutScreenState extends State<MainStageCalloutScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(c.display,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700)),
+                      Text(
+                        c.display,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
                       if (c.rankTitle != null)
-                        Text(c.rankTitle!,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant)),
+                        Text(
+                          c.rankTitle!,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
                     ],
                   ),
                 ),
                 if (selected)
                   Icon(Icons.check_circle, color: gold)
                 else
-                  Icon(Icons.radio_button_unchecked,
-                      color: scheme.onSurfaceVariant),
+                  Icon(
+                    Icons.radio_button_unchecked,
+                    color: scheme.onSurfaceVariant,
+                  ),
               ],
             ),
           ),
@@ -223,9 +237,13 @@ class _MainStageCalloutScreenState extends State<MainStageCalloutScreen> {
     if (c.photoUrl != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: Image.network(c.photoUrl!,
-            width: size, height: size, fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => _crest(c, size)),
+        child: Image.network(
+          c.photoUrl!,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _crest(c, size),
+        ),
       );
     }
     return _crest(c, size);

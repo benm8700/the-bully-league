@@ -47,19 +47,25 @@ class MainStageBattleConfig {
     this.interrupts = kMainStageInterrupts,
     this.shotClockMs = kMainStageShotClockMs,
     this.graceMs = kMainStageGraceMs,
+    this.minHoldMs = 0,
   });
   final int turnMs;
   final int interrupts;
   final int shotClockMs;
   final int graceMs;
+
+  /// Regular/friend battles: once you take the floor, Yield is refused for
+  /// this long, so two players can't ping-pong the mic and drain both clocks
+  /// without saying anything. 0 (the default, and the Main Stage) = off.
+  final int minHoldMs;
 }
 
 class MainStageBattleState {
   MainStageBattleState._(this.players, this.config)
-      : remaining = {},
-        steals = {},
-        instantSteals = {},
-        extendTokens = {};
+    : remaining = {},
+      steals = {},
+      instantSteals = {},
+      extendTokens = {};
 
   /// A fresh battle between two distinct players.
   ///
@@ -156,26 +162,27 @@ class MainStageBattleState {
   /// guest that somehow created its state with different timings still renders
   /// the host's truth.
   Map<String, dynamic> toMap() => {
-        'players': players,
-        'config': {
-          'turnMs': config.turnMs,
-          'interrupts': config.interrupts,
-          'shotClockMs': config.shotClockMs,
-          'graceMs': config.graceMs,
-        },
-        'remaining': remaining,
-        'steals': steals,
-        'instantSteals': instantSteals,
-        'extends': extendTokens,
-        'floor': floor,
-        'talking': talking,
-        'floorTakenMs': floorTakenMs,
-        'lastMs': lastMs,
-        'pendingBy': pendingBy,
-        'pendingAtMs': pendingAtMs,
-        'status': status.name,
-        'endReason': endReason,
-      };
+    'players': players,
+    'config': {
+      'turnMs': config.turnMs,
+      'interrupts': config.interrupts,
+      'shotClockMs': config.shotClockMs,
+      'graceMs': config.graceMs,
+      'minHoldMs': config.minHoldMs,
+    },
+    'remaining': remaining,
+    'steals': steals,
+    'instantSteals': instantSteals,
+    'extends': extendTokens,
+    'floor': floor,
+    'talking': talking,
+    'floorTakenMs': floorTakenMs,
+    'lastMs': lastMs,
+    'pendingBy': pendingBy,
+    'pendingAtMs': pendingAtMs,
+    'status': status.name,
+    'endReason': endReason,
+  };
 
   /// Rebuild a state a host broadcast. Tolerant of the JSON round-trip
   /// (num->int, dynamic maps) the data channel imposes.
@@ -186,10 +193,12 @@ class MainStageBattleState {
       [players[0], players[1]],
       MainStageBattleConfig(
         turnMs: (cfg['turnMs'] as num?)?.toInt() ?? kMainStageTurnMs,
-        interrupts: (cfg['interrupts'] as num?)?.toInt() ?? kMainStageInterrupts,
+        interrupts:
+            (cfg['interrupts'] as num?)?.toInt() ?? kMainStageInterrupts,
         shotClockMs:
             (cfg['shotClockMs'] as num?)?.toInt() ?? kMainStageShotClockMs,
         graceMs: (cfg['graceMs'] as num?)?.toInt() ?? kMainStageGraceMs,
+        minHoldMs: (cfg['minHoldMs'] as num?)?.toInt() ?? 0,
       ),
     );
     (m['remaining'] as Map).forEach((k, v) {
@@ -224,8 +233,12 @@ class MainStageBattleState {
   /// Apply one event, returning a NEW state; the input is never mutated.
   /// [instant] (only meaningful for [MsEvent.interrupt]) uses the no-grace
   /// instant-interrupt token pool instead of the graced one.
-  MainStageBattleState reduce(MsEvent type,
-      {String? by, required int atMs, bool instant = false}) {
+  MainStageBattleState reduce(
+    MsEvent type, {
+    String? by,
+    required int atMs,
+    bool instant = false,
+  }) {
     final s = _clone();
     if (s.status == MsStatus.live) s._settle(atMs);
     if (s.status == MsStatus.ended) return s;
@@ -266,6 +279,11 @@ class MainStageBattleState {
 
       case MsEvent.yield:
         if (by == null || s.floor != by) return s; // only the holder can yield
+        if (s.config.minHoldMs > 0 &&
+            s.floorTakenMs != null &&
+            atMs - s.floorTakenMs! < s.config.minHoldMs) {
+          return s; // too soon - hold the floor a beat first
+        }
         final opp = s._other(by);
         if (s.remaining[opp]! > 0) {
           s._takeFloor(opp, atMs);
@@ -338,8 +356,7 @@ class MainStageBattleState {
           final opp = s._other(s.floor!);
           if (s.remaining[opp]! > 0) s._takeFloor(opp, atMs);
         }
-        if (s.remaining[s.players[0]] == 0 &&
-            s.remaining[s.players[1]] == 0) {
+        if (s.remaining[s.players[0]] == 0 && s.remaining[s.players[1]] == 0) {
           s.status = MsStatus.ended;
           s.endReason = 'time';
           s.floor = null;

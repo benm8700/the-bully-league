@@ -27,11 +27,13 @@ class EmojiScrubService {
   }) async {
     final requestId =
         'scrub_${DateTime.now().microsecondsSinceEpoch}_${_rand.nextInt(1 << 32)}';
-    final r = await _fns.httpsCallable('scrubEmojiRating').call<Map<String, dynamic>>({
-      'emojiKey': emojiKey,
-      'count': count,
-      'requestId': requestId,
-    });
+    final r = await _fns
+        .httpsCallable('scrubEmojiRating')
+        .call<Map<String, dynamic>>({
+          'emojiKey': emojiKey,
+          'count': count,
+          'requestId': requestId,
+        });
     return r.data;
   }
 }

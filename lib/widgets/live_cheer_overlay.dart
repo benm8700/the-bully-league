@@ -46,11 +46,11 @@ class _LiveCheerOverlayState extends State<LiveCheerOverlay>
   final Random _rng = Random();
   int _lastSendMs = 0;
 
-  CollectionReference<Map<String, dynamic>> get _cheers =>
-      FirebaseFirestore.instance
-          .collection('liveReactions')
-          .doc(widget.matchId)
-          .collection('cheers');
+  CollectionReference<Map<String, dynamic>> get _cheers => FirebaseFirestore
+      .instance
+      .collection('liveReactions')
+      .doc(widget.matchId)
+      .collection('cheers');
 
   Future<void> _send(String emojiKey) async {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -65,8 +65,7 @@ class _LiveCheerOverlayState extends State<LiveCheerOverlay>
         'atMs': nowMs,
         // Self-expiry: a Firestore TTL policy on this field sweeps old cheers,
         // so the ephemeral vibe never becomes unbounded storage.
-        'expireAt':
-            Timestamp.fromMillisecondsSinceEpoch(nowMs + 5 * 60 * 1000),
+        'expireAt': Timestamp.fromMillisecondsSinceEpoch(nowMs + 5 * 60 * 1000),
       });
       // We already floated this one locally on tap (instant feedback), so mark
       // it seen to skip the stream echo and avoid a double float.
@@ -79,7 +78,9 @@ class _LiveCheerOverlayState extends State<LiveCheerOverlay>
   void _spawn(String emojiKey) {
     if (!mounted) return;
     final ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1600));
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    );
     final float = _Float(
       id: UniqueKey(),
       emoji: emojiCharFor(emojiKey),
@@ -161,8 +162,10 @@ class _LiveCheerOverlayState extends State<LiveCheerOverlay>
         // drift; fade in fast, fade out toward the end.
         final x = -0.75 + 1.5 * f.dx + 0.12 * sin(t * pi);
         final y = 0.75 - 1.5 * t;
-        final opacity =
-            (t < 0.12 ? t / 0.12 : (1 - (t - 0.12) / 0.88)).clamp(0.0, 1.0);
+        final opacity = (t < 0.12 ? t / 0.12 : (1 - (t - 0.12) / 0.88)).clamp(
+          0.0,
+          1.0,
+        );
         return Align(
           alignment: Alignment(x.clamp(-1.0, 1.0), y),
           child: Opacity(
@@ -188,12 +191,17 @@ class _LiveCheerOverlayState extends State<LiveCheerOverlay>
             InkWell(
               onTap: () {
                 _send(k);
-                _spawn(k); // instant local feedback; the stream floats it for others
+                _spawn(
+                  k,
+                ); // instant local feedback; the stream floats it for others
               },
               borderRadius: BorderRadius.circular(999),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Text(emojiCharFor(k), style: const TextStyle(fontSize: 24)),
+                child: Text(
+                  emojiCharFor(k),
+                  style: const TextStyle(fontSize: 24),
+                ),
               ),
             ),
         ],
@@ -203,7 +211,12 @@ class _LiveCheerOverlayState extends State<LiveCheerOverlay>
 }
 
 class _Float {
-  _Float({required this.id, required this.emoji, required this.ctrl, required this.dx});
+  _Float({
+    required this.id,
+    required this.emoji,
+    required this.ctrl,
+    required this.dx,
+  });
   final Key id;
   final String emoji;
   final AnimationController ctrl;

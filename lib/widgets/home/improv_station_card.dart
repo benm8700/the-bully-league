@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'hero_mode_card.dart';
+import '../neon_dialog.dart';
 
 /// IMPROV STATION - a FULL hero pill on Home, under the other modes. A
 /// prompt-based comedy showcase (both comedians riff the same prompt, blind,
@@ -53,18 +54,18 @@ class ImprovStationCard extends StatelessWidget {
   void _showInfo(BuildContext context) {
     final body = Theme.of(context).textTheme.bodyMedium;
     Widget heading(String label) => Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: _teal,
-                ),
-          ),
-        );
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: _teal,
+        ),
+      ),
+    );
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => NeonDialog(
         title: const Text('Face-Off'),
         content: SingleChildScrollView(
           child: Column(

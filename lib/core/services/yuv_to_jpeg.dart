@@ -22,7 +22,10 @@ class I420FrameData {
     this.quality = 70,
   });
 
-  factory I420FrameData.fromRawVideoFrame(RawVideoFrame frame, {int quality = 70}) {
+  factory I420FrameData.fromRawVideoFrame(
+    RawVideoFrame frame, {
+    int quality = 70,
+  }) {
     return I420FrameData(
       width: frame.width,
       height: frame.height,

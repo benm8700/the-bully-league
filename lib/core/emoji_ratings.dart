@@ -9,7 +9,13 @@
 library;
 
 class EmojiRating {
-  const EmojiRating(this.key, this.emoji, this.label, this.blurb, this.positive);
+  const EmojiRating(
+    this.key,
+    this.emoji,
+    this.label,
+    this.blurb,
+    this.positive,
+  );
 
   final String key;
   final String emoji;
@@ -25,10 +31,22 @@ class EmojiRating {
 /// ban button (developer's call, 2026-10-07).
 const List<EmojiRating> kEmojiRatings = [
   EmojiRating('fire', '\u{1F525}', 'Fire', 'Overall great performance', true),
-  EmojiRating('clever', '\u{1F9E0}', 'Clever', 'Smart / original material', true),
+  EmojiRating(
+    'clever',
+    '\u{1F9E0}',
+    'Clever',
+    'Smart / original material',
+    true,
+  ),
   EmojiRating('boring', '\u{1F971}', 'Boring', "Didn't entertain me", false),
   EmojiRating('trash', '\u{1F4A9}', 'Trash', 'Overall bad performance', false),
-  EmojiRating('red_flag', '\u{1F6A9}', 'Red Flag', 'Crossed the line / offensive', false),
+  EmojiRating(
+    'red_flag',
+    '\u{1F6A9}',
+    'Red Flag',
+    'Crossed the line / offensive',
+    false,
+  ),
 ];
 
 /// The ratings a player can pay to clean up - the NEGATIVE ones. DERIVED from
@@ -81,8 +99,11 @@ Map<String, int> emojiPercentsOf(Map<String, dynamic>? counts) {
   }
   var remaining = 100 - used;
   final byFrac = kEmojiRatings.toList()
-    ..sort((a, b) => (exact[b.key]! - exact[b.key]!.floor())
-        .compareTo(exact[a.key]! - exact[a.key]!.floor()));
+    ..sort(
+      (a, b) => (exact[b.key]! - exact[b.key]!.floor()).compareTo(
+        exact[a.key]! - exact[a.key]!.floor(),
+      ),
+    );
   for (final r in byFrac) {
     if (remaining <= 0) break;
     floors[r.key] = floors[r.key]! + 1;
@@ -106,14 +127,43 @@ String? emojiNicknameOf(Map<String, dynamic>? counts) {
   final ranked = c.keys.toList()..sort((a, b) => c[b]!.compareTo(c[a]!));
   final t1 = ranked[0], t2 = ranked[1];
   const nicks = {
-    'fire': {'clever': 'The Headliner', 'boring': 'All Flash', 'trash': 'Hit or Miss', 'red_flag': 'Shock Jock', 'fire': 'On Fire'},
-    'clever': {'fire': 'The Mastermind', 'boring': 'Too Smart for the Room', 'trash': 'Cult Favourite', 'red_flag': 'The Provocateur', 'clever': 'Big Brain'},
-    'boring': {'fire': 'Slow Burn', 'clever': 'Dry', 'trash': 'Human Ambien', 'red_flag': 'Just Mean', 'boring': 'The Snooze'},
-    'trash': {'fire': 'Trainwreck', 'clever': 'Misunderstood', 'boring': 'Dumpster Fire', 'red_flag': 'Cancelled', 'trash': 'The Stinker'},
-    'red_flag': {'fire': 'Shock Jock', 'clever': 'The Provocateur', 'boring': 'Just Offensive', 'trash': 'Cancelled', 'red_flag': 'Walking Red Flag'},
+    'fire': {
+      'clever': 'The Headliner',
+      'boring': 'All Flash',
+      'trash': 'Hit or Miss',
+      'red_flag': 'Shock Jock',
+      'fire': 'On Fire',
+    },
+    'clever': {
+      'fire': 'The Mastermind',
+      'boring': 'Too Smart for the Room',
+      'trash': 'Cult Favourite',
+      'red_flag': 'The Provocateur',
+      'clever': 'Big Brain',
+    },
+    'boring': {
+      'fire': 'Slow Burn',
+      'clever': 'Dry',
+      'trash': 'Human Ambien',
+      'red_flag': 'Just Mean',
+      'boring': 'The Snooze',
+    },
+    'trash': {
+      'fire': 'Trainwreck',
+      'clever': 'Misunderstood',
+      'boring': 'Dumpster Fire',
+      'red_flag': 'Cancelled',
+      'trash': 'The Stinker',
+    },
+    'red_flag': {
+      'fire': 'Shock Jock',
+      'clever': 'The Provocateur',
+      'boring': 'Just Offensive',
+      'trash': 'Cancelled',
+      'red_flag': 'Walking Red Flag',
+    },
   };
-  return nicks[t1]?[t2] ??
-      kEmojiRatings.firstWhere((r) => r.key == t1).label;
+  return nicks[t1]?[t2] ?? kEmojiRatings.firstWhere((r) => r.key == t1).label;
 }
 
 /// One tier of an emoji "badge of honour". MIRRORS BADGE_TIERS in
@@ -217,13 +267,15 @@ List<EmojiBadgeSlot> emojiBadgeSlots(Map<String, dynamic>? counts) {
         next ??= tier;
       }
     }
-    slots.add(EmojiBadgeSlot(
-      emojiKey: key,
-      emoji: emojiCharFor(key),
-      count: count,
-      earnedTier: earned,
-      nextTier: next,
-    ));
+    slots.add(
+      EmojiBadgeSlot(
+        emojiKey: key,
+        emoji: emojiCharFor(key),
+        count: count,
+        earnedTier: earned,
+        nextTier: next,
+      ),
+    );
   }
   return slots;
 }

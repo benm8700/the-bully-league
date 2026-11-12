@@ -54,17 +54,27 @@ class _LoadoutPanelState extends State<LoadoutPanel> {
     // bought/balance when it returns; revert to `before` if it fails.
     setState(() {
       _busyId = a.id;
-      _loadout =
-          before.withPurchase(a.id, bought: a.bought + 1, balance: before.balance - a.cost);
+      _loadout = before.withPurchase(
+        a.id,
+        bought: a.bought + 1,
+        balance: before.balance - a.cost,
+      );
     });
     try {
       final res = await AbilitiesService.buyAbility(
-          matchId: widget.matchId, abilityId: a.id);
+        matchId: widget.matchId,
+        abilityId: a.id,
+      );
       final nb = (res['bought'] as num?)?.toInt();
       final bal = (res['balance'] as num?)?.toInt();
       if (mounted && nb != null && bal != null) {
-        setState(() =>
-            _loadout = (_loadout ?? before).withPurchase(a.id, bought: nb, balance: bal));
+        setState(
+          () => _loadout = (_loadout ?? before).withPurchase(
+            a.id,
+            bought: nb,
+            balance: bal,
+          ),
+        );
       }
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
@@ -104,26 +114,30 @@ class _LoadoutPanelState extends State<LoadoutPanel> {
                 const SizedBox(width: 6),
                 Text('Your loadout', style: theme.textTheme.titleMedium),
                 const Spacer(),
-                Text('${l.balance} pts',
-                    style: theme.textTheme.labelLarge
-                        ?.copyWith(color: scheme.primary)),
+                Text(
+                  '${l.balance} pts',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: scheme.primary,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 2),
             Text(
               l.friendFree
                   ? "It's a friend battle - everything's free. Deploy them "
-                      "during the fight."
+                        "during the fight."
                   : 'Bring weapons to throw them off. Unlock more as you rank up.',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
-            for (final a in l.abilities) _AbilityRow(
-              ability: a,
-              friendFree: l.friendFree,
-              busy: _busyId == a.id,
-              onBuy: () => _buy(a),
-            ),
+            for (final a in l.abilities)
+              _AbilityRow(
+                ability: a,
+                friendFree: l.friendFree,
+                busy: _busyId == a.id,
+                onBuy: () => _buy(a),
+              ),
           ],
         ),
       ),
@@ -157,8 +171,11 @@ class _AbilityRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(locked ? Icons.lock_outline : abilityIcon(ability.id),
-                size: 22, color: scheme.primary),
+            Icon(
+              locked ? Icons.lock_outline : abilityIcon(ability.id),
+              size: 22,
+              color: scheme.primary,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -171,14 +188,19 @@ class _AbilityRow extends StatelessWidget {
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: scheme.primary.withValues(alpha: 0.18),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Text('×${ability.total}',
-                              style: theme.textTheme.labelMedium
-                                  ?.copyWith(color: scheme.primary)),
+                          child: Text(
+                            '×${ability.total}',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: scheme.primary,
+                            ),
+                          ),
                         ),
                       ],
                     ],
@@ -188,17 +210,21 @@ class _AbilityRow extends StatelessWidget {
                   if (friendFree)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Text('Free in this friend battle',
-                          style: theme.textTheme.labelSmall
-                              ?.copyWith(color: scheme.primary)),
+                      child: Text(
+                        'Free in this friend battle',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.primary,
+                        ),
+                      ),
                     )
                   else if (ability.free > 0)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
                         '${ability.free} included with your membership',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: scheme.primary),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.primary,
+                        ),
                       ),
                     ),
                 ],
@@ -231,18 +257,23 @@ class _AbilityRow extends StatelessWidget {
     if (friendFree) {
       return SizedBox(
         width: 92,
-        child: Text('Free',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.labelMedium
-                ?.copyWith(color: theme.colorScheme.primary)),
+        child: Text(
+          'Free',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.primary,
+          ),
+        ),
       );
     }
     if (ability.atCap) {
       return SizedBox(
         width: 92,
-        child: Text('Maxed',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.labelMedium),
+        child: Text(
+          'Maxed',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.labelMedium,
+        ),
       );
     }
     // No spinner: the count bumps optimistically on tap, so the button just

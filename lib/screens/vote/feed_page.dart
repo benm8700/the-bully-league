@@ -12,6 +12,7 @@ import '../../widgets/follow_button.dart';
 import '../moderation/report_screen.dart';
 import '../profile/performer_profile_screen.dart';
 import '../../widgets/live_tally.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// One battle, full screen. You watch the clip, then pick the overall winner
 /// by TAPPING that roaster's half of the video - the composite is player 1 on
@@ -1179,7 +1180,7 @@ class _FeedPageState extends State<FeedPage> {
   /// their fame page, and follows inline via the Follow pill.
   Future<void> _openFollow(BuildContext context) async {
     final m = widget.match;
-    await showModalBottomSheet<void>(
+    await showNeonSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
@@ -1225,7 +1226,7 @@ class _FeedPageState extends State<FeedPage> {
       if (mounted) setState(() {}); // repaint the corner icon to "play"
     }
     if (!context.mounted) return;
-    final choice = await showModalBottomSheet<String>(
+    final choice = await showNeonSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/services/wildcard_auction_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// Open the wildcard bid sheet. The sheet handles the bid and shows its own
 /// feedback; openers should simply re-fetch their auction state on return (the
@@ -15,7 +16,7 @@ Future<void> showWildcardBidSheet(
   BuildContext context, {
   WildcardAuctionState? initial,
 }) {
-  return showModalBottomSheet<void>(
+  return showNeonSheet<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: const Color(0xFF15110A),
@@ -89,8 +90,9 @@ class _WildcardBidSheetState extends State<_WildcardBidSheet> {
       return;
     }
     if (amount > s.balance) {
-      setState(() => _error =
-          'You only have ${s.balance} points to back that bid.');
+      setState(
+        () => _error = 'You only have ${s.balance} points to back that bid.',
+      );
       return;
     }
     setState(() {
@@ -147,9 +149,13 @@ class _WildcardBidSheetState extends State<_WildcardBidSheet> {
             children: [
               Text('🎟️', style: text.headlineSmall),
               const SizedBox(width: 10),
-              Text('The Wildcard Seat',
-                  style: text.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900, color: gold)),
+              Text(
+                'The Wildcard Seat',
+                style: text.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: gold,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -160,7 +166,9 @@ class _WildcardBidSheetState extends State<_WildcardBidSheet> {
             'out-roast everyone once you are up there - the seat buys a shot, '
             'not a win.',
             style: text.bodyMedium?.copyWith(
-                height: 1.4, color: Colors.white.withValues(alpha: 0.82)),
+              height: 1.4,
+              color: Colors.white.withValues(alpha: 0.82),
+            ),
           ),
           const SizedBox(height: 20),
           if (_loading && s == null)
@@ -180,14 +188,16 @@ class _WildcardBidSheetState extends State<_WildcardBidSheet> {
   }
 
   Widget _closedBody(TextTheme text) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(
-          'Bidding is closed right now. The wildcard opens each week alongside '
-          'the race to the Main Stage.',
-          style: text.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.7), height: 1.4),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      'Bidding is closed right now. The wildcard opens each week alongside '
+      'the race to the Main Stage.',
+      style: text.bodyMedium?.copyWith(
+        color: Colors.white.withValues(alpha: 0.7),
+        height: 1.4,
+      ),
+    ),
+  );
 
   Widget _ineligibleBody(TextTheme text, WildcardAuctionState s) {
     return Container(
@@ -204,8 +214,9 @@ class _WildcardBidSheetState extends State<_WildcardBidSheet> {
           Expanded(
             child: Text(
               s.message ?? 'You cannot bid on the wildcard yet.',
-              style: text.bodyMedium
-                  ?.copyWith(color: Colors.white.withValues(alpha: 0.85)),
+              style: text.bodyMedium?.copyWith(
+                color: Colors.white.withValues(alpha: 0.85),
+              ),
             ),
           ),
         ],
@@ -218,11 +229,19 @@ class _WildcardBidSheetState extends State<_WildcardBidSheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (s.hasBid)
-          _statusRow(text, gold, 'Your bid',
-              '${s.yourBid} pts - highest Thursday wins')
+          _statusRow(
+            text,
+            gold,
+            'Your bid',
+            '${s.yourBid} pts - highest Thursday wins',
+          )
         else
-          _statusRow(text, gold, 'Entry fee',
-              '${s.entryFee} pts, charged once'),
+          _statusRow(
+            text,
+            gold,
+            'Entry fee',
+            '${s.entryFee} pts, charged once',
+          ),
         const SizedBox(height: 6),
         _statusRow(text, Colors.white70, 'Your points', '${s.balance}'),
         const SizedBox(height: 18),
@@ -240,8 +259,10 @@ class _WildcardBidSheetState extends State<_WildcardBidSheet> {
         ),
         if (_error != null) ...[
           const SizedBox(height: 10),
-          Text(_error!,
-              style: text.bodySmall?.copyWith(color: context.palette.live)),
+          Text(
+            _error!,
+            style: text.bodySmall?.copyWith(color: context.palette.live),
+          ),
         ],
         const SizedBox(height: 16),
         SizedBox(
@@ -249,15 +270,20 @@ class _WildcardBidSheetState extends State<_WildcardBidSheet> {
           height: 52,
           child: FilledButton(
             style: FilledButton.styleFrom(
-                backgroundColor: gold, foregroundColor: Colors.black),
+              backgroundColor: gold,
+              foregroundColor: Colors.black,
+            ),
             onPressed: _submitting ? null : _submit,
             child: _submitting
                 ? const SizedBox(
                     width: 22,
                     height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(s.hasBid ? 'Raise bid' : 'Place bid',
-                    style: const TextStyle(fontWeight: FontWeight.w900)),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    s.hasBid ? 'Raise bid' : 'Place bid',
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
           ),
         ),
         const SizedBox(height: 10),
@@ -265,7 +291,9 @@ class _WildcardBidSheetState extends State<_WildcardBidSheet> {
           'Only the winner pays their bid. Lose, and you keep your points - the '
           'entry fee is the only cost.',
           style: text.bodySmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.55), height: 1.35),
+            color: Colors.white.withValues(alpha: 0.55),
+            height: 1.35,
+          ),
         ),
       ],
     );
@@ -275,12 +303,19 @@ class _WildcardBidSheetState extends State<_WildcardBidSheet> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label,
-            style: text.bodyMedium
-                ?.copyWith(color: Colors.white.withValues(alpha: 0.6))),
-        Text(value,
-            style:
-                text.bodyMedium?.copyWith(color: accent, fontWeight: FontWeight.w800)),
+        Text(
+          label,
+          style: text.bodyMedium?.copyWith(
+            color: Colors.white.withValues(alpha: 0.6),
+          ),
+        ),
+        Text(
+          value,
+          style: text.bodyMedium?.copyWith(
+            color: accent,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
       ],
     );
   }

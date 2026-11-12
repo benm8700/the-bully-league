@@ -55,22 +55,21 @@ class MainStageBanner extends StatelessWidget {
                         children: [
                           Text(
                             copy.title,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
+                            style: Theme.of(context).textTheme.titleSmall
                                 ?.copyWith(
-                                    fontWeight: FontWeight.w800, color: gold),
+                                  fontWeight: FontWeight.w800,
+                                  color: gold,
+                                ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             copy.sub,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
+                            style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant),
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
                           ),
                         ],
                       ),
@@ -87,7 +86,8 @@ class MainStageBanner extends StatelessWidget {
   }
 
   ({String title, String sub, IconData icon, bool urgent})? _copy(
-      MainStageView v) {
+    MainStageView v,
+  ) {
     // Live - the copy tracks where the viewer stands so it never invites them
     // back into a battle they've already played (the stale-banner bug).
     if (v.status == 'live') {
@@ -155,7 +155,8 @@ class MainStageBanner extends StatelessWidget {
       );
     }
     // accepting
-    final needsAnswer = v.invite == InviteStatus.pending ||
+    final needsAnswer =
+        v.invite == InviteStatus.pending ||
         v.invite == InviteStatus.declined ||
         v.invite == InviteStatus.notInvited;
     switch (v.role) {
@@ -186,13 +187,15 @@ class MainStageBanner extends StatelessWidget {
         if (v.invite == InviteStatus.notInvited) {
           return (
             title: "You're in the judge pool",
-            sub: 'The panel fills from the applicant pool when it locks — '
+            sub:
+                'The panel fills from the applicant pool when it locks — '
                 'no action needed.',
             icon: Icons.gavel,
             urgent: false,
           );
         }
-        final judgeConfirm = v.invite == InviteStatus.pending ||
+        final judgeConfirm =
+            v.invite == InviteStatus.pending ||
             v.invite == InviteStatus.declined;
         return (
           title: judgeConfirm

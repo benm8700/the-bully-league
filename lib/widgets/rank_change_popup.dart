@@ -81,9 +81,9 @@ class _RankChangeDialog extends StatelessWidget {
   /// Falls back to a plain white headline if the two don't line up.
   Widget _headlineText(BuildContext context, Color goldName) {
     final style = Theme.of(context).textTheme.headlineMedium?.copyWith(
-          color: Colors.white,
-          fontWeight: FontWeight.w800,
-        );
+      color: Colors.white,
+      fontWeight: FontWeight.w800,
+    );
     final r = rankTitle;
     if (r != null && r.isNotEmpty && title.endsWith(r)) {
       return RichText(
@@ -92,7 +92,10 @@ class _RankChangeDialog extends StatelessWidget {
           style: style,
           children: [
             TextSpan(text: title.substring(0, title.length - r.length)),
-            TextSpan(text: r, style: TextStyle(color: goldName)),
+            TextSpan(
+              text: r,
+              style: TextStyle(color: goldName),
+            ),
           ],
         ),
       );
@@ -171,108 +174,117 @@ class _RankChangeDialog extends StatelessWidget {
                     ),
                     child: SingleChildScrollView(
                       child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Eyebrow: what just happened, in one loud little word.
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  up
-                      ? Icons.keyboard_double_arrow_up_rounded
-                      : Icons.keyboard_double_arrow_down_rounded,
-                  color: accent,
-                  size: 18,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  up ? 'RANK UP' : 'RANK DOWN',
-                  style: text.labelLarge?.copyWith(
-                    color: accent,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 3,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            // Headline ABOVE the badge (developer's call, 2026-09-18), with
-            // the earned RANK NAME in gold so it stands out from the white
-            // rest of the sentence.
-            _headlineText(context, up ? _gold : accent),
-            const SizedBox(height: 8),
-            // The signature: the earned crest pops in over its own glow. It
-            // is the HERO of the popup - big, in a FittedBox(scaleDown) so it
-            // can never overflow the box on a narrow screen.
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: 1),
-              duration: const Duration(milliseconds: 700),
-              curve: Curves.easeOutBack,
-              builder: (_, t, child) => Opacity(
-                opacity: t.clamp(0.0, 1.0),
-                child: Transform.scale(scale: 0.6 + 0.4 * t, child: child),
-              ),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        glow.withValues(alpha: up ? 0.5 : 0.2),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.2, 1.0],
-                    ),
-                  ),
-                  child: RankBadge(title: rankTitle, size: 300),
-                ),
-              ),
-            ),
-            // The ladder rung as a Roman numeral ("· V"), matching Home/Profile
-            // so the climb reads consistently. Absent for GOAT (unnumbered
-            // throne) and unknown titles.
-            if (rankTierNumeral(rankTitle) != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                '· ${rankTierNumeral(rankTitle)} ·',
-                style: text.titleLarge?.copyWith(
-                  // Bronze/silver/gold by tier band; the demotion case dims to
-                  // the cool accent.
-                  color: up ? (rankTierColor(rankTitle) ?? _gold) : accent,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 2,
-                ),
-              ),
-            ],
-            const SizedBox(height: 8),
-            // The one-liner sits BELOW the badge.
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: text.bodyMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.82),
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 46),
-                  backgroundColor: up ? _gold : const Color(0xFF3A3446),
-                  foregroundColor: up ? Colors.black : Colors.white,
-                ),
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text(
-                  'Accept',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Eyebrow: what just happened, in one loud little word.
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                up
+                                    ? Icons.keyboard_double_arrow_up_rounded
+                                    : Icons.keyboard_double_arrow_down_rounded,
+                                color: accent,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                up ? 'RANK UP' : 'RANK DOWN',
+                                style: text.labelLarge?.copyWith(
+                                  color: accent,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 3,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          // Headline ABOVE the badge (developer's call, 2026-09-18), with
+                          // the earned RANK NAME in gold so it stands out from the white
+                          // rest of the sentence.
+                          _headlineText(context, up ? _gold : accent),
+                          const SizedBox(height: 8),
+                          // The signature: the earned crest pops in over its own glow. It
+                          // is the HERO of the popup - big, in a FittedBox(scaleDown) so it
+                          // can never overflow the box on a narrow screen.
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: 1),
+                            duration: const Duration(milliseconds: 700),
+                            curve: Curves.easeOutBack,
+                            builder: (_, t, child) => Opacity(
+                              opacity: t.clamp(0.0, 1.0),
+                              child: Transform.scale(
+                                scale: 0.6 + 0.4 * t,
+                                child: child,
+                              ),
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: RadialGradient(
+                                    colors: [
+                                      glow.withValues(alpha: up ? 0.5 : 0.2),
+                                      Colors.transparent,
+                                    ],
+                                    stops: const [0.2, 1.0],
+                                  ),
+                                ),
+                                child: RankBadge(title: rankTitle, size: 300),
+                              ),
+                            ),
+                          ),
+                          // The ladder rung as a Roman numeral ("· V"), matching Home/Profile
+                          // so the climb reads consistently. Absent for GOAT (unnumbered
+                          // throne) and unknown titles.
+                          if (rankTierNumeral(rankTitle) != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              '· ${rankTierNumeral(rankTitle)} ·',
+                              style: text.titleLarge?.copyWith(
+                                // Bronze/silver/gold by tier band; the demotion case dims to
+                                // the cool accent.
+                                color: up
+                                    ? (rankTierColor(rankTitle) ?? _gold)
+                                    : accent,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          // The one-liner sits BELOW the badge.
+                          Text(
+                            message,
+                            textAlign: TextAlign.center,
+                            style: text.bodyMedium?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.82),
+                              height: 1.35,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 46),
+                                backgroundColor: up
+                                    ? _gold
+                                    : const Color(0xFF3A3446),
+                                foregroundColor: up
+                                    ? Colors.black
+                                    : Colors.white,
+                              ),
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text(
+                                'Accept',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

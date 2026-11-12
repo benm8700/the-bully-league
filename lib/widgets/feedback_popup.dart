@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'neon_dialog.dart';
 
 /// After a handful of real battles - proof the player has actually used the
 /// app - asks ONCE how we can make it more fun. Shown on app open alongside
@@ -21,7 +22,8 @@ class FeedbackPopup {
       final data = snap.data();
       if (data == null) return;
       if (data['feedbackPrompted'] == true) return;
-      final battles = ((data['wins'] as num?)?.toInt() ?? 0) +
+      final battles =
+          ((data['wins'] as num?)?.toInt() ?? 0) +
           ((data['losses'] as num?)?.toInt() ?? 0);
       if (battles < _minBattles) return;
       // Marked asked BEFORE showing, so a dismissed dialog or a killed app
@@ -86,7 +88,7 @@ class _FeedbackDialogState extends State<_FeedbackDialog> {
   @override
   Widget build(BuildContext context) {
     if (_sent) {
-      return AlertDialog(
+      return NeonDialog(
         backgroundColor: const Color(0xFF17131B),
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
@@ -94,10 +96,15 @@ class _FeedbackDialogState extends State<_FeedbackDialog> {
           side: const BorderSide(color: _pink, width: 1.4),
         ),
         icon: const Text('🔥', style: TextStyle(fontSize: 42)),
-        title: const Text('Thanks!',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
+        title: const Text(
+          'Thanks!',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            fontSize: 20,
+          ),
+        ),
         content: const Text(
           "We read every one of these. Now get back in there.",
           textAlign: TextAlign.center,
@@ -108,14 +115,18 @@ class _FeedbackDialogState extends State<_FeedbackDialog> {
           FilledButton(
             onPressed: () => Navigator.of(context).pop(),
             style: FilledButton.styleFrom(
-                backgroundColor: _pink, foregroundColor: Colors.white),
-            child: const Text("Let's go",
-                style: TextStyle(fontWeight: FontWeight.w800)),
+              backgroundColor: _pink,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(
+              "Let's go",
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       );
     }
-    return AlertDialog(
+    return NeonDialog(
       backgroundColor: const Color(0xFF17131B),
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
@@ -123,10 +134,15 @@ class _FeedbackDialogState extends State<_FeedbackDialog> {
         side: BorderSide(color: _pink.withValues(alpha: 0.6), width: 1.4),
       ),
       icon: const Text('🎤', style: TextStyle(fontSize: 38)),
-      title: const Text('Enjoying the carnage?',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
+      title: const Text(
+        'Enjoying the carnage?',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+          fontSize: 20,
+        ),
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -161,15 +177,21 @@ class _FeedbackDialogState extends State<_FeedbackDialog> {
       actions: [
         TextButton(
           onPressed: _sending ? null : () => Navigator.of(context).pop(),
-          child: const Text('Maybe later',
-              style: TextStyle(color: Colors.white54)),
+          child: const Text(
+            'Maybe later',
+            style: TextStyle(color: Colors.white54),
+          ),
         ),
         FilledButton(
           onPressed: _sending ? null : _send,
           style: FilledButton.styleFrom(
-              backgroundColor: _pink, foregroundColor: Colors.white),
-          child: Text(_sending ? 'Sending…' : 'Send it',
-              style: const TextStyle(fontWeight: FontWeight.w800)),
+            backgroundColor: _pink,
+            foregroundColor: Colors.white,
+          ),
+          child: Text(
+            _sending ? 'Sending…' : 'Send it',
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
         ),
       ],
     );

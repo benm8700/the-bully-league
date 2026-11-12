@@ -24,8 +24,8 @@ class LobbyChatMessage {
 /// tournament ends (onGauntletEnded), so a night's chat never outlives the show.
 class LobbyChatService {
   LobbyChatService({FirebaseFirestore? firestore, FirebaseFunctions? functions})
-      : _db = firestore ?? FirebaseFirestore.instance,
-        _functions = functions ?? FirebaseFunctions.instance;
+    : _db = firestore ?? FirebaseFirestore.instance,
+      _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFirestore _db;
   final FirebaseFunctions _functions;
@@ -39,15 +39,17 @@ class LobbyChatService {
         .orderBy('createdAt')
         .limitToLast(100)
         .snapshots()
-        .map((snap) => snap.docs.map((d) {
-              final m = d.data();
-              return LobbyChatMessage(
-                id: d.id,
-                uid: (m['uid'] as String?) ?? '',
-                username: (m['username'] as String?) ?? 'Roaster',
-                text: (m['text'] as String?) ?? '',
-              );
-            }).toList());
+        .map(
+          (snap) => snap.docs.map((d) {
+            final m = d.data();
+            return LobbyChatMessage(
+              id: d.id,
+              uid: (m['uid'] as String?) ?? '',
+              username: (m['username'] as String?) ?? 'Roaster',
+              text: (m['text'] as String?) ?? '',
+            );
+          }).toList(),
+        );
   }
 
   /// Post a message. Throws [FirebaseFunctionsException] with the server's
@@ -56,8 +58,8 @@ class LobbyChatService {
     await _functions
         .httpsCallable('postLobbyMessage')
         .call<Map<String, dynamic>>({
-      'tournamentId': tournamentId,
-      'text': text,
-    });
+          'tournamentId': tournamentId,
+          'text': text,
+        });
   }
 }

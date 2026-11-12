@@ -46,13 +46,9 @@ class _ContentPolicyScreenState extends State<ContentPolicyScreen> {
       // timestamp so there is a real consent record. Once it lands, the user-
       // doc stream in _AccountStatusGate re-renders straight into the app
       // (Battle tab) - no navigation needed here.
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.uid)
-          .set(
-        {'contentPolicyAcceptedAt': FieldValue.serverTimestamp()},
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance.collection('users').doc(widget.uid).set({
+        'contentPolicyAcceptedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     } catch (_) {
       // Let them try again rather than trapping them on a spinner.
       if (mounted) setState(() => _submitting = false);
@@ -93,8 +89,11 @@ class _ContentPolicyScreenState extends State<ContentPolicyScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 12),
-                      Icon(Icons.local_fire_department,
-                          size: 44, color: scheme.primary),
+                      Icon(
+                        Icons.local_fire_department,
+                        size: 44,
+                        color: scheme.primary,
+                      ),
                       const SizedBox(height: 16),
                       Text(
                         'Before you roast',
@@ -142,9 +141,7 @@ class _ContentPolicyScreenState extends State<ContentPolicyScreen> {
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: _submitting ? null : _accept,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 52),
-                ),
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
                 child: _submitting
                     ? const SizedBox(
                         height: 20,

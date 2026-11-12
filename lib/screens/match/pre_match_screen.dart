@@ -12,6 +12,7 @@ import '../../core/services/agora_video_service.dart';
 import '../../core/services/capture_quality.dart';
 import '../../core/services/main_stage_service.dart';
 import '../../core/services/matchmaking_service.dart';
+import '../../core/services/mic_check.dart';
 import '../../core/services/steadiness_monitor.dart';
 import '../../core/services/video_call_service.dart';
 import '../../theme/app_theme.dart';
@@ -107,6 +108,23 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
   /// most of why the check felt broken. /45 makes speech visibly move the bar
   /// and cross the target marker.
   static const _micMeterReference = 45.0;
+
+  /// MIC CHECK (2026-11-10, developer's call): "Checking the room" (stay
+  /// quiet ~1.5s) then 'Say "THE BULLY LEAGUE"'. The rules live in MicCheck:
+  /// the room is measured first, so background noise can't pass the check -
+  /// it either fails the room step ("Too noisy") or raises the bar the voice
+  /// is judged against - and shouting doesn't count ("Too loud"). Passing
+  /// flashes MIC CHECK and advances BY ITSELF - no tap. Not real speech
+  /// recognition: no extra permission, nothing else competing for the mic.
+  /// The player sets the phone up FIRST, so this also proves the mic works
+  /// from the battle position (a phone on its bottom edge can muffle it).
+  final MicCheck _mic = MicCheck();
+  bool _tooLoud = false;
+  bool _readyFlash = false;
+  Timer? _advanceTimer;
+  // After this long with no voice, explain why (covered mic is the usual cause).
+  Timer? _cantHearTimer;
+  bool _cantHear = false;
 
   // --- Steadiness (non-blocking indicator) ---
   final SteadinessMonitor _steadiness = SteadinessMonitor();
@@ -218,6 +236,9 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     debugPrint('PRECHECK: joined, camera check ready');
     setState(() => _initialized = true);
     _videoCallService.localAudioLevel.addListener(_onAudioLevel);
+    _cantHearTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted && !_micVerified) setState(() => _cantHear = true);
+    });
     // Sensor + frame errors must never break the check - a failed sensor
     // just leaves its indicator neutral, which is harmless.
     _accelSub = accelerometerEventStream(
@@ -230,13 +251,30 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
   }
 
   void _onAudioLevel() {
-    if (_micVerified) return;
+    if (_micVerified || _navigating) return;
     final level = _videoCallService.localAudioLevel.value;
-    if (level <= _micPeak) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final phase = _mic.add(
+      level: level,
+      voice: _videoCallService.localVoiceActive.value,
+      nowMs: now,
+    );
     setState(() {
-      _micPeak = level;
-      if (_micPeak >= _micThreshold) _micVerified = true;
+      if (level > _micPeak) _micPeak = level;
+      _tooLoud = _mic.tooLoudAt(now);
+      if (phase == MicPhase.speak && level >= _mic.bar) _cantHear = false;
+      if (phase == MicPhase.passed) {
+        _micVerified = true;
+        _readyFlash = true;
+        _cantHearTimer?.cancel();
+      }
     });
+    if (_micVerified) {
+      // A beat to see the green MIC CHECK, then straight on - no tap needed.
+      _advanceTimer = Timer(const Duration(milliseconds: 700), () {
+        if (mounted && !_navigating) _onReady();
+      });
+    }
   }
 
   void _onAccel(AccelerometerEvent e) {
@@ -270,6 +308,8 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
 
   @override
   void dispose() {
+    _advanceTimer?.cancel();
+    _cantHearTimer?.cancel();
     _accelSub?.cancel();
     _frameSub?.cancel();
     _videoCallService.localAudioLevel.removeListener(_onAudioLevel);
@@ -285,19 +325,11 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     super.dispose();
   }
 
-  /// The ready button's label. "Find an Opponent" only fits plain matchmaking;
-  /// in every flow where the opponent is ALREADY known (Main Stage, a
-  /// tournament, the gauntlet, a friend challenge) that reads as redundant - so
-  /// the camera check just confirms you're set and sends you straight in.
-  String get _readyLabel {
-    if (widget.mainStageStart != null) return 'Step on stage';
-    if (widget.challengeMatchId != null) return "I'm Ready";
-    return 'Find an Opponent';
-  }
-
   Future<void> _onReady() async {
     if (_navigating) return;
     setState(() => _navigating = true);
+    _advanceTimer?.cancel();
+    _cantHearTimer?.cancel();
     _accelSub?.cancel();
     _frameSub?.cancel();
     _videoCallService.localAudioLevel.removeListener(_onAudioLevel);
@@ -458,34 +490,38 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const _SetupReminder(),
-                const SizedBox(height: 16),
-                _buildMicMeter(),
-                const SizedBox(height: 12),
+                // Three glanceable checks instead of a paragraph (2026-11-10).
                 Row(
                   children: [
                     Expanded(child: _buildSteadyChip()),
                     const SizedBox(width: 8),
                     Expanded(child: _buildLightChip()),
+                    const SizedBox(width: 8),
+                    Expanded(child: _buildQuietChip()),
                   ],
                 ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: (_micVerified && !_navigating) ? _onReady : null,
-                  child: _navigating
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          _micVerified
-                              ? _readyLabel
-                              : _micPeak > 2
-                              ? 'Almost - a little louder'
-                              : 'Say something to test your mic...',
-                        ),
-                ),
+                const SizedBox(height: 14),
+                _buildSayReady(),
+                if (_mic.phase == MicPhase.speak && !_micVerified) ...[
+                  const SizedBox(height: 10),
+                  _buildMicMeter(),
+                ],
+                if (_mic.phase == MicPhase.speak &&
+                    !_micVerified &&
+                    (_tooLoud || _cantHear)) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _tooLoud
+                        ? 'Too loud - sit back a little'
+                        : "Can't hear you - keep the bottom of your phone clear",
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFFE0A030),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
                 if (kDebugMode && !_micVerified)
                   TextButton(
                     onPressed: _navigating ? null : _onReady,
@@ -499,11 +535,77 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     );
   }
 
+  /// The big 'Say "THE BULLY LEAGUE"' mic-check prompt. Not a button: the check advances by
+  /// itself once it hears you (see MicCheck). Turns green on success.
+  Widget _buildSayReady() {
+    final winner = context.palette.winner;
+    final accent = context.palette.accent;
+    final done = _readyFlash || _navigating;
+    final color = done ? winner : accent;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: done ? 0.22 : 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color, width: 2),
+      ),
+      child: Column(
+        children: [
+          Text(
+            done
+                ? 'MIC CHECK ✓'
+                : switch (_mic.phase) {
+                    MicPhase.room => 'Checking the room...',
+                    MicPhase.tooNoisy => 'Too noisy',
+                    _ => 'Say "THE BULLY LEAGUE"',
+                  },
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _mic.phase == MicPhase.tooNoisy && !done
+                  ? const Color(0xFFE0A030)
+                  : color,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            done
+                ? 'Sounds good - here we go'
+                : switch (_mic.phase) {
+                    MicPhase.room => 'Stay quiet for a second',
+                    MicPhase.tooNoisy =>
+                      'Turn down the TV or music, or find a quieter spot',
+                    _ => 'Out loud, like you\'re on stage',
+                  },
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSteadyChip() {
     return _StatusChip(
       icon: Icons.smartphone,
       label: _steady ? 'Steady' : 'Prop it up',
       state: _steady ? _ChipState.good : _ChipState.pending,
+    );
+  }
+
+  Widget _buildQuietChip() {
+    final quiet = _mic.roomQuiet;
+    return _StatusChip(
+      icon: Icons.hearing,
+      label: quiet == false ? 'Too noisy' : 'Quiet room',
+      state: quiet == null
+          ? _ChipState.pending
+          : quiet
+          ? _ChipState.good
+          : _ChipState.warn,
     );
   }
 
@@ -515,7 +617,11 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
         : _ChipState.good;
     return _StatusChip(
       icon: Icons.wb_sunny_outlined,
-      label: _tooDark ? 'Too dark' : 'Good light',
+      label: _tooDark
+          ? 'Too dark'
+          : _gotLightReading
+          ? 'Good light'
+          : 'Face the light',
       state: state,
     );
   }
@@ -577,43 +683,6 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
           ],
         );
       },
-    );
-  }
-}
-
-/// The compact "how to set up" reminder shown every match. The full teaching
-/// lives once in the tutorial; this is the small persistent nudge.
-class _SetupReminder extends StatelessWidget {
-  const _SetupReminder();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.tips_and_updates_outlined,
-            size: 20,
-            color: scheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Rest your phone on something and sit back — a steady shot beats '
-              'everything. Get some light on your face and your head and '
-              'shoulders in the outline.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

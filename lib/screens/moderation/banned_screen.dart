@@ -47,7 +47,9 @@ class _BannedScreenState extends State<BannedScreen> {
       });
       if (mounted) setState(() => _submitted = true);
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = 'Failed to submit appeal: $e');
+      if (mounted) {
+        setState(() => _errorMessage = 'Failed to submit appeal: $e');
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -66,9 +68,9 @@ class _BannedScreenState extends State<BannedScreen> {
           IconButton(
             icon: const Icon(Icons.help_outline),
             tooltip: 'Support & Feedback',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SupportScreen()),
-            ),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SupportScreen())),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -80,7 +82,11 @@ class _BannedScreenState extends State<BannedScreen> {
       body: Padding(
         // Bottom inset clears the gesture bar (S22 gesture-nav, 2026-09-01).
         padding: EdgeInsets.fromLTRB(
-            24, 24, 24, 24 + MediaQuery.of(context).padding.bottom),
+          24,
+          24,
+          24,
+          24 + MediaQuery.of(context).padding.bottom,
+        ),
         child: _submitted
             ? const Center(
                 child: Text(
@@ -113,7 +119,10 @@ class _BannedScreenState extends State<BannedScreen> {
                     ),
                     const SizedBox(height: 16),
                     if (_errorMessage != null) ...[
-                      Text(_errorMessage!, style: const TextStyle(color: Color(0xFFE05252))),
+                      Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: Color(0xFFE05252)),
+                      ),
                       const SizedBox(height: 16),
                     ],
                     FilledButton(

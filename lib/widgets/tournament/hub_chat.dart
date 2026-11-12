@@ -7,6 +7,7 @@ import '../../core/services/hub_service.dart';
 import '../../screens/moderation/report_screen.dart';
 import '../../theme/app_theme.dart';
 import '../admin_only.dart';
+import '../neon_dialog.dart';
 
 /// The Main Stage HUB weekly lobby chat.
 ///
@@ -29,11 +30,11 @@ class _HubChatState extends State<HubChat> {
   final _controller = TextEditingController();
   bool _sending = false;
 
-  CollectionReference<Map<String, dynamic>> get _messages =>
-      FirebaseFirestore.instance
-          .collection('lobbyRooms')
-          .doc(widget.weekKey)
-          .collection('messages');
+  CollectionReference<Map<String, dynamic>> get _messages => FirebaseFirestore
+      .instance
+      .collection('lobbyRooms')
+      .doc(widget.weekKey)
+      .collection('messages');
 
   @override
   void dispose() {
@@ -50,9 +51,9 @@ class _HubChatState extends State<HubChat> {
       _controller.clear();
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? 'Could not post.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message ?? 'Could not post.')));
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -63,7 +64,7 @@ class _HubChatState extends State<HubChat> {
     final controller = TextEditingController();
     final text = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => NeonDialog(
         title: const Text('Pin an announcement'),
         content: TextField(
           controller: controller,
@@ -91,9 +92,9 @@ class _HubChatState extends State<HubChat> {
       await HubService.postAnnouncement(text);
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? 'Could not post.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message ?? 'Could not post.')));
       }
     }
   }
@@ -104,7 +105,9 @@ class _HubChatState extends State<HubChat> {
     return Column(
       children: [
         _Announcements(messages: _messages),
-        Expanded(child: _ChatList(messages: _messages, myUid: myUid)),
+        Expanded(
+          child: _ChatList(messages: _messages, myUid: myUid),
+        ),
         _Composer(
           controller: _controller,
           sending: _sending,
@@ -132,7 +135,8 @@ class _Announcements extends StatelessWidget {
       builder: (context, snap) {
         final docs = snap.data?.docs ?? const [];
         if (docs.isEmpty) return const SizedBox.shrink();
-        final sorted = [...docs]..sort((a, b) {
+        final sorted = [...docs]
+          ..sort((a, b) {
             final ta = a.data()['createdAt'];
             final tb = b.data()['createdAt'];
             if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
@@ -183,7 +187,10 @@ class _ChatList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: messages.orderBy('createdAt', descending: true).limit(100).snapshots(),
+      stream: messages
+          .orderBy('createdAt', descending: true)
+          .limit(100)
+          .snapshots(),
       builder: (context, snap) {
         if (snap.hasError) {
           return const Center(child: Text('Could not load the chat.'));
@@ -203,7 +210,8 @@ class _ChatList extends StatelessWidget {
           itemBuilder: (context, i) {
             if (i == docs.length) {
               return const _RoomIntro(
-                text: 'This is the Main Stage chat room — keep it relevant, '
+                text:
+                    'This is the Main Stage chat room — keep it relevant, '
                     'and keep it comedy.',
               );
             }
@@ -218,8 +226,11 @@ class _ChatList extends StatelessWidget {
               isMine: isMine,
               onReport: isMine || uid.isEmpty
                   ? null
-                  : () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => ReportScreen(reportedUserId: uid))),
+                  : () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ReportScreen(reportedUserId: uid),
+                      ),
+                    ),
             );
           },
         );
@@ -252,19 +263,21 @@ class _MessageTile extends StatelessWidget {
         onLongPress: onReport,
         behavior: HitTestBehavior.opaque,
         child: Text.rich(
-          TextSpan(children: [
-            TextSpan(
-              text: '${isMine ? 'You' : name}: ',
-              style: TextStyle(
-                color: isMine ? accent : Colors.white.withValues(alpha: 0.72),
-                fontWeight: FontWeight.w800,
+          TextSpan(
+            children: [
+              TextSpan(
+                text: '${isMine ? 'You' : name}: ',
+                style: TextStyle(
+                  color: isMine ? accent : Colors.white.withValues(alpha: 0.72),
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-            TextSpan(
-              text: text,
-              style: const TextStyle(color: Colors.white),
-            ),
-          ]),
+              TextSpan(
+                text: text,
+                style: const TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
           style: const TextStyle(fontSize: 14, height: 1.3),
         ),
       ),
@@ -339,8 +352,10 @@ class _Composer extends StatelessWidget {
                   hintText: 'Message the room…',
                   counterText: '',
                   border: OutlineInputBorder(),
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                 ),
               ),
             ),

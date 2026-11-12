@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/badges/badges.dart';
 import 'badge_art.dart';
+import '../neon_dialog.dart';
 
 /// Celebrates a newly-earned badge the next time the app is opened, and keeps
 /// the sticky earned set on the user document up to date.
@@ -69,7 +70,7 @@ class BadgePopup {
       context: context,
       builder: (dialogContext) {
         const gold = Color(0xFFF4C838);
-        return AlertDialog(
+        return NeonDialog(
           // A gold-outlined, dark "trophy case" look so an earned badge
           // reads as a reward, not a system alert (developer's call,
           // 2026-10-07).

@@ -17,9 +17,9 @@ class AbilitiesService {
   /// player's spendable balance, and each ability's cost/owned/cap. Throws on
   /// a backend/auth error - callers decide whether to fail quiet.
   static Future<Loadout> getLoadout(String matchId) async {
-    final r = await _fns
-        .httpsCallable('getLoadout')
-        .call<Object?>({'matchId': matchId});
+    final r = await _fns.httpsCallable('getLoadout').call<Object?>({
+      'matchId': matchId,
+    });
     return Loadout.fromMap(_asMap(r.data));
   }
 
@@ -28,9 +28,9 @@ class AbilitiesService {
   /// opponent's loadout, which the client can't). Returns
   /// `{enabled, players: {uid: {interrupt, tomato, extend, goFirst}}}`.
   static Future<MatchAbilities> getMatchAbilities(String matchId) async {
-    final r = await _fns
-        .httpsCallable('getMatchAbilities')
-        .call<Object?>({'matchId': matchId});
+    final r = await _fns.httpsCallable('getMatchAbilities').call<Object?>({
+      'matchId': matchId,
+    });
     return MatchAbilities.fromMap(_asMap(r.data));
   }
 
@@ -136,8 +136,12 @@ class Loadout {
       );
     }).toList();
     return Loadout(
-      enabled: enabled, balance: balance, matchId: matchId,
-      friendFree: friendFree, abilities: updated);
+      enabled: enabled,
+      balance: balance,
+      matchId: matchId,
+      friendFree: friendFree,
+      abilities: updated,
+    );
   }
 }
 
@@ -195,7 +199,8 @@ class AbilityOption {
 
   bool get atCap => total >= max;
 
-  AbilityOption copyWith({int? bought, int? total, bool? canBuy}) => AbilityOption(
+  AbilityOption copyWith({int? bought, int? total, bool? canBuy}) =>
+      AbilityOption(
         id: id,
         name: name,
         description: description,
@@ -211,19 +216,19 @@ class AbilityOption {
       );
 
   factory AbilityOption.fromMap(Map<String, dynamic> m) => AbilityOption(
-        id: m['id']?.toString() ?? '',
-        name: m['name']?.toString() ?? '',
-        description: m['description']?.toString() ?? '',
-        deploy: m['deploy']?.toString() ?? 'bar',
-        cost: _asInt(m['cost']),
-        free: _asInt(m['free']),
-        bought: _asInt(m['bought']),
-        total: _asInt(m['total']),
-        max: _asInt(m['max']),
-        canBuy: m['canBuy'] == true,
-        // Back-compat: older server responses without `unlocked` read as
-        // unlocked (the gate simply isn't enforced), never as locked.
-        unlocked: m['unlocked'] != false,
-        unlockTitle: m['unlockTitle']?.toString(),
-      );
+    id: m['id']?.toString() ?? '',
+    name: m['name']?.toString() ?? '',
+    description: m['description']?.toString() ?? '',
+    deploy: m['deploy']?.toString() ?? 'bar',
+    cost: _asInt(m['cost']),
+    free: _asInt(m['free']),
+    bought: _asInt(m['bought']),
+    total: _asInt(m['total']),
+    max: _asInt(m['max']),
+    canBuy: m['canBuy'] == true,
+    // Back-compat: older server responses without `unlocked` read as
+    // unlocked (the gate simply isn't enforced), never as locked.
+    unlocked: m['unlocked'] != false,
+    unlockTitle: m['unlockTitle']?.toString(),
+  );
 }

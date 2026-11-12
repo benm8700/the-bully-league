@@ -11,7 +11,9 @@ class HubService {
   /// callers degrade to a neutral "opens with the Main Stage" state.
   static Future<String?> getHubRoom() async {
     try {
-      final r = await _fns.httpsCallable('getHubRoom').call<Map<dynamic, dynamic>>({});
+      final r = await _fns
+          .httpsCallable('getHubRoom')
+          .call<Map<dynamic, dynamic>>({});
       final w = r.data['weekKey'];
       return w is String && w.isNotEmpty ? w : null;
     } catch (_) {
@@ -30,9 +32,9 @@ class HubService {
 
   /// Pin an announcement (admin/founder only - the server enforces it).
   static Future<void> postAnnouncement(String text) async {
-    await _fns
-        .httpsCallable('postHubAnnouncement')
-        .call<Map<dynamic, dynamic>>({'text': text});
+    await _fns.httpsCallable('postHubAnnouncement').call<Map<dynamic, dynamic>>(
+      {'text': text},
+    );
   }
 
   /// Opt in/out of judging this week's Main Stage. Returns the new state.

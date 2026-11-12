@@ -72,7 +72,9 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
   void initState() {
     super.initState();
     _pulse = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 450));
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
     _video = AgoraVideoCallService();
     _setup();
   }
@@ -90,9 +92,11 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
       // Never surface a raw Firebase error. The usual cause is the match
       // having already ended (its token is refused), so point back.
       if (mounted) {
-        setState(() => _error =
-            "Couldn't connect to the battle. It may have already ended — "
-            'head back and try again.');
+        setState(
+          () => _error =
+              "Couldn't connect to the battle. It may have already ended — "
+              'head back and try again.',
+        );
       }
       return;
     }
@@ -265,8 +269,7 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
       _pulse.stop();
       _pulse.value = 0;
     }
-    final iAmTarget =
-        pending && b.pendingBy == _oppUid && b.floor == _myUid;
+    final iAmTarget = pending && b.pendingBy == _oppUid && b.floor == _myUid;
     if (iAmTarget && !_beingInterrupted) {
       _beingInterrupted = true;
       HapticFeedback.heavyImpact();
@@ -303,12 +306,15 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('BOTH ON STAGE',
-              style: TextStyle(
-                  color: gold,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 3)),
+          Text(
+            'BOTH ON STAGE',
+            style: TextStyle(
+              color: gold,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 3,
+            ),
+          ),
           const SizedBox(height: 12),
           TweenAnimationBuilder<double>(
             key: ValueKey(n),
@@ -317,16 +323,21 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
             curve: Curves.easeOutBack,
             builder: (context, s, child) =>
                 Transform.scale(scale: s, child: child),
-            child: Text('$n',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 120,
-                    height: 1,
-                    fontWeight: FontWeight.w900)),
+            child: Text(
+              '$n',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 120,
+                height: 1,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
           const SizedBox(height: 8),
-          Text(n > 0 ? 'Battle starts…' : 'Here we go.',
-              style: const TextStyle(color: Colors.white70, fontSize: 16)),
+          Text(
+            n > 0 ? 'Battle starts…' : 'Here we go.',
+            style: const TextStyle(color: Colors.white70, fontSize: 16),
+          ),
         ],
       ),
     );
@@ -337,9 +348,11 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(_error!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70)),
+          child: Text(
+            _error!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70),
+          ),
         ),
       );
     }
@@ -381,8 +394,10 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
             const ColoredBox(
               color: Colors.black,
               child: Center(
-                child: Text('Waiting for your opponent…',
-                    style: TextStyle(color: Colors.white70)),
+                child: Text(
+                  'Waiting for your opponent…',
+                  style: TextStyle(color: Colors.white70),
+                ),
               ),
             ),
         Positioned(
@@ -416,8 +431,9 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
   Widget _clocks(MainStageBattleState b) {
     // The clock of whoever is being cut into flashes red (shown on both
     // screens). target == the holder the pending interrupt is aimed at.
-    final target =
-        b.pendingBy == null ? null : (b.pendingBy == _myUid ? _oppUid : _myUid);
+    final target = b.pendingBy == null
+        ? null
+        : (b.pendingBy == _myUid ? _oppUid : _myUid);
     return Positioned(
       // Both clocks STACKED on the top-LEFT, freeing the top-right for the
       // self-view camera (developer's call, 2026-11-01). Just below the status
@@ -430,21 +446,34 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            _clockChip('You', b.remaining[_myUid] ?? 0, b.floor == _myUid,
-                b.steals[_myUid] ?? 0,
-                flash: target == _myUid),
+            _clockChip(
+              'You',
+              b.remaining[_myUid] ?? 0,
+              b.floor == _myUid,
+              b.steals[_myUid] ?? 0,
+              flash: target == _myUid,
+            ),
             const SizedBox(height: 8),
-            _clockChip('Them', b.remaining[_oppUid] ?? 0, b.floor == _oppUid,
-                b.steals[_oppUid] ?? 0,
-                flash: target == _oppUid),
+            _clockChip(
+              'Them',
+              b.remaining[_oppUid] ?? 0,
+              b.floor == _oppUid,
+              b.steals[_oppUid] ?? 0,
+              flash: target == _oppUid,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _clockChip(String label, int ms, bool onFloor, int steals,
-      {bool flash = false}) {
+  Widget _clockChip(
+    String label,
+    int ms,
+    bool onFloor,
+    int steals, {
+    bool flash = false,
+  }) {
     final gold = context.palette.reward;
     const hotRed = Color(0xFFFF2D3A);
     final t = flash ? Curves.easeInOut.transform(_pulse.value) : 0.0;
@@ -455,7 +484,9 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
         color: onFloor ? gold.withValues(alpha: 0.9) : Colors.black54,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: flash ? Color.lerp(baseBorder, hotRed, 0.4 + 0.6 * t)! : baseBorder,
+          color: flash
+              ? Color.lerp(baseBorder, hotRed, 0.4 + 0.6 * t)!
+              : baseBorder,
           width: flash ? 2.5 : (onFloor ? 2 : 1),
         ),
         boxShadow: flash
@@ -470,20 +501,29 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
       ),
       child: Column(
         children: [
-          Text(label,
-              style: TextStyle(
-                  color: onFloor ? Colors.black : Colors.white70,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
-          Text(_fmt(ms),
-              style: TextStyle(
-                  color: onFloor ? Colors.black : Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900)),
-          Text('${'●' * steals}${'○' * ((widget.pairing.interrupts) - steals)}',
-              style: TextStyle(
-                  color: onFloor ? Colors.black87 : Colors.white54,
-                  fontSize: 12)),
+          Text(
+            label,
+            style: TextStyle(
+              color: onFloor ? Colors.black : Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            _fmt(ms),
+            style: TextStyle(
+              color: onFloor ? Colors.black : Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            '${'●' * steals}${'○' * ((widget.pairing.interrupts) - steals)}',
+            style: TextStyle(
+              color: onFloor ? Colors.black87 : Colors.white54,
+              fontSize: 12,
+            ),
+          ),
         ],
       ),
     );
@@ -494,7 +534,8 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
     final oppHoldsFloor = b.floor == _oppUid;
     final oppOutOfTime = (b.remaining[_oppUid] ?? 0) == 0;
     final iAmInterrupting = b.pendingBy == _myUid; // my cut-in is winding up
-    final canInterrupt = oppHoldsFloor &&
+    final canInterrupt =
+        oppHoldsFloor &&
         (b.steals[_myUid] ?? 0) > 0 &&
         (b.remaining[_myUid] ?? 0) > 0 &&
         b.pendingBy == null; // one interrupt in flight at a time
@@ -544,9 +585,10 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
             child: FilledButton(
               onPressed: iHoldFloor ? () => _intent(MsEvent.yield) : null,
               style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 54),
-                  backgroundColor: Colors.white24),
-              child: const Text('Yield'),
+                minimumSize: const Size(0, 54),
+                backgroundColor: Colors.white24,
+              ),
+              child: const Text('Pass the mic'),
             ),
           ),
           const SizedBox(width: 12),
@@ -555,17 +597,20 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
               onPressed: canInterrupt ? () => _intent(MsEvent.interrupt) : null,
               style: FilledButton.styleFrom(
                 minimumSize: const Size(0, 54),
-                backgroundColor:
-                    iAmInterrupting ? context.palette.reward : context.palette.live,
+                backgroundColor: iAmInterrupting
+                    ? context.palette.reward
+                    : context.palette.live,
                 foregroundColor: iAmInterrupting ? Colors.black : null,
                 disabledBackgroundColor: iAmInterrupting
                     ? context.palette.reward.withValues(alpha: 0.9)
                     : null,
                 disabledForegroundColor: iAmInterrupting ? Colors.black : null,
               ),
-              child: Text(iAmInterrupting
-                  ? 'Cutting in…'
-                  : 'Interrupt (${b.steals[_myUid] ?? 0})'),
+              child: Text(
+                iAmInterrupting
+                    ? 'Cutting in…'
+                    : 'Interrupt (${b.steals[_myUid] ?? 0})',
+              ),
             ),
           ),
         ],
@@ -584,11 +629,14 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Time',
-                style: TextStyle(
-                    color: context.palette.reward,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900)),
+            Text(
+              'Time',
+              style: TextStyle(
+                color: context.palette.reward,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
             const SizedBox(height: 6),
             const Text(
               "Both clocks are out — now watch the panel decide it. That's the "

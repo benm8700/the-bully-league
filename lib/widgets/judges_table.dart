@@ -60,11 +60,16 @@ class JudgesTable extends StatelessWidget {
     //
     // No running-tally bar either: each judge's vote already colours their own
     // tile, so the count is redundant and the cameras get the whole area.
-    final visible = [for (final s in seats) if (!s.isMe) s];
+    final visible = [
+      for (final s in seats)
+        if (!s.isMe) s,
+    ];
     if (visible.isEmpty) {
       return const Center(
-        child: Text('Waiting for the rest of the panel…',
-            style: TextStyle(color: Colors.white54)),
+        child: Text(
+          'Waiting for the rest of the panel…',
+          style: TextStyle(color: Colors.white54),
+        ),
       );
     }
     return visible.length >= 5
@@ -80,7 +85,10 @@ class JudgesTable extends StatelessWidget {
   /// first seat). All faces stay on screen - no scrolling.
   Widget _spotlight(BuildContext context, List<JudgeSeat> list) {
     final big = _spotlightSeat(list);
-    final rest = [for (final s in list) if (s.seatUid != big.seatUid) s];
+    final rest = [
+      for (final s in list)
+        if (s.seatUid != big.seatUid) s,
+    ];
     return Column(
       children: [
         Expanded(
@@ -125,12 +133,14 @@ class JudgesTable extends StatelessWidget {
     for (final count in rows) {
       final tiles = <Widget>[];
       for (var c = 0; c < count; c++) {
-        tiles.add(Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: _seatTile(context, ordered[i++]),
+        tiles.add(
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: _seatTile(context, ordered[i++]),
+            ),
           ),
-        ));
+        );
       }
       rowWidgets.add(Expanded(child: Row(children: tiles)));
     }
@@ -177,11 +187,17 @@ class JudgesTable extends StatelessWidget {
       duration: const Duration(milliseconds: 250),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border:
-            voteColor == null ? null : Border.all(color: voteColor, width: 4),
+        border: voteColor == null
+            ? null
+            : Border.all(color: voteColor, width: 4),
         boxShadow: voteColor == null
             ? null
-            : [BoxShadow(color: voteColor.withValues(alpha: 0.55), blurRadius: 14)],
+            : [
+                BoxShadow(
+                  color: voteColor.withValues(alpha: 0.55),
+                  blurRadius: 14,
+                ),
+              ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(voteColor == null ? 12 : 9),
@@ -192,22 +208,31 @@ class JudgesTable extends StatelessWidget {
             children: [
               video ??
                   const Center(
-                    child: Icon(Icons.videocam_off_outlined,
-                        color: Colors.white24, size: 28),
+                    child: Icon(
+                      Icons.videocam_off_outlined,
+                      color: Colors.white24,
+                      size: 28,
+                    ),
                   ),
               if (s.isHead)
                 Positioned(
                   top: 6,
                   left: 6,
-                  child:
-                      _pill(context, '\u{1F451} Head', context.palette.reward),
+                  child: _pill(
+                    context,
+                    '\u{1F451} Head',
+                    context.palette.reward,
+                  ),
                 ),
               if (s.votedFor != null && voteColor != null)
                 Positioned(
                   top: 6,
                   right: 6,
                   child: _pill(
-                      context, playerNames[s.votedFor] ?? 'picked', voteColor),
+                    context,
+                    playerNames[s.votedFor] ?? 'picked',
+                    voteColor,
+                  ),
                 ),
               Positioned(
                 left: 6,
@@ -238,10 +263,14 @@ class JudgesTable extends StatelessWidget {
         color: color.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(text,
-          style: const TextStyle(
-              color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
-
 }

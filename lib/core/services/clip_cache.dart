@@ -92,13 +92,16 @@ class ClipCacheService {
     // Download to a .part file and rename on completion, so a half-written
     // file is never handed to the player.
     final part = File('${file.path}.part');
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 20);
     try {
       final req = await client.getUrl(Uri.parse(url));
       final resp = await req.close();
       if (resp.statusCode != 200) {
-        throw HttpException('clip download HTTP ${resp.statusCode}',
-            uri: Uri.parse(url));
+        throw HttpException(
+          'clip download HTTP ${resp.statusCode}',
+          uri: Uri.parse(url),
+        );
       }
       final sink = part.openWrite();
       try {
@@ -142,7 +145,8 @@ class ClipCacheService {
           .toList();
       if (files.length <= _maxFiles) return;
       files.sort(
-          (a, b) => a.statSync().modified.compareTo(b.statSync().modified));
+        (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
+      );
       for (final f in files.take(files.length - _maxFiles)) {
         try {
           await f.delete();

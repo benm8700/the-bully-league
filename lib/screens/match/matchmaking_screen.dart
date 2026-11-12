@@ -98,7 +98,8 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
     // which would delete the very thing that makes off-peak queueing work.
     // Below that threshold there is no challenge yet, so leaving really
     // does mean giving up, and the queue entry should go with it.
-    final becameStanding = (_progress?.waited ?? Duration.zero) >= _standingAfter;
+    final becameStanding =
+        (_progress?.waited ?? Duration.zero) >= _standingAfter;
     if (becameStanding && !_standDown.isCompleted) {
       _standDown.complete();
     }
@@ -164,10 +165,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 12),
-        Text(
-          _waitLabel(waited),
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
+        Text(_waitLabel(waited), style: Theme.of(context).textTheme.bodyMedium),
         const SizedBox(height: 16),
         // The server widens the acceptable tier gap the longer someone
         // waits (CLAUDE.md's matchmaking fallback decision), so say so
@@ -352,10 +350,9 @@ class _QuietQueueHint extends StatelessWidget {
                       others != null && others > 0
                           ? 'A few people are around - hang tight'
                           : 'It\'s quiet right now',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleSmall
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 6),

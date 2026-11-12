@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// Naming whoever invited you.
 ///
@@ -44,14 +45,16 @@ class _ReferrerFieldState extends State<ReferrerField> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     try {
-      final snap =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
       final d = snap.data() ?? {};
-      final played = ((d['rankedMatchesPlayed'] as num?) ?? 0) +
+      final played =
+          ((d['rankedMatchesPlayed'] as num?) ?? 0) +
           ((d['exhibitionMatchesPlayed'] as num?) ?? 0);
       if (mounted) {
-        setState(() =>
-            _visible = d['referredByUserId'] == null && played == 0);
+        setState(() => _visible = d['referredByUserId'] == null && played == 0);
       }
     } catch (_) {
       // Not worth an error state - the field simply stays hidden.
@@ -73,7 +76,8 @@ class _ReferrerFieldState extends State<ReferrerField> {
       setState(() {
         _busy = false;
         _visible = false;
-        _message = '${result.data['referrer']} will get credit once you '
+        _message =
+            '${result.data['referrer']} will get credit once you '
             'play your first battle.';
       });
     } on FirebaseFunctionsException catch (e) {
@@ -91,8 +95,7 @@ class _ReferrerFieldState extends State<ReferrerField> {
       if (_message == null) return const SizedBox.shrink();
       return _Section(
         title: 'Invited by',
-        child: Text(_message!,
-            style: Theme.of(context).textTheme.bodySmall),
+        child: Text(_message!, style: Theme.of(context).textTheme.bodySmall),
       );
     }
     return _Section(
@@ -157,8 +160,10 @@ class _InviteCardState extends State<InviteCard> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     try {
-      final snap =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
       if (mounted) {
         setState(() => _username = snap.data()?['username'] as String?);
       }
@@ -280,7 +285,7 @@ class _UsernameCardState extends State<UsernameCard> {
     final cooldownDays = (_state?['cooldownDays'] as num?)?.toInt() ?? 30;
     final chosen = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => NeonDialog(
         title: const Text('Change username'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -305,8 +310,7 @@ class _UsernameCardState extends State<UsernameCard> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () =>
-                Navigator.of(context).pop(controller.text.trim()),
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
             child: const Text('Change it'),
           ),
         ],
@@ -321,9 +325,9 @@ class _UsernameCardState extends State<UsernameCard> {
           .call<Map<String, dynamic>>({'username': chosen});
       await _load();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('You are $chosen now.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('You are $chosen now.')));
       }
     } on FirebaseFunctionsException catch (e) {
       // The server's own message is shown verbatim - it is the one that

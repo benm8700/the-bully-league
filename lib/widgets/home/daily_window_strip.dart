@@ -13,7 +13,11 @@ import '../../theme/app_theme.dart';
 /// unreadable, so a switched-off promo never makes Home look wrong. Ticks once a
 /// minute for the countdown (plenty for a minutes-granularity display).
 class DailyWindowStrip extends StatefulWidget {
-  const DailyWindowStrip({super.key, this.compact = false});
+  const DailyWindowStrip({super.key, this.compact = false, this.color});
+
+  /// Overrides the brand accent, so the strip matches the box it sits in
+  /// (purple inside the Ranked button).
+  final Color? color;
 
   /// When true, render a tiny inline line ("⚡ 2X POINTS · in 18h 5m") with no
   /// container - for dropping inside the Play box instead of a full banner. The
@@ -69,7 +73,7 @@ class _DailyWindowStripState extends State<DailyWindowStrip>
         // Basement colours (the brand pink), NOT the tournament gold: the 2x
         // multiplier is for everyday Basement play, so it reads in the same
         // family as the Basement hero rather than the gold Main Stage.
-        final accent = context.palette.accent;
+        final accent = widget.color ?? context.palette.accent;
 
         // Compact inline line for inside the Play box: just the draw + how long.
         if (widget.compact) {
@@ -77,39 +81,39 @@ class _DailyWindowStripState extends State<DailyWindowStrip>
               ? 'LIVE  ${_mins(window.end, now)} left'
               : 'in ${_remaining(window.start, now)}';
           return Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.bolt, size: 13, color: accent),
-                const SizedBox(width: 3),
-                Flexible(
-                  child: Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '2X POINTS',
-                          style: TextStyle(
-                            color: accent,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.2,
-                            fontSize: 11.5,
-                          ),
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.bolt, size: 13, color: accent),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '2X POINTS',
+                        style: TextStyle(
+                          color: accent,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.2,
+                          fontSize: 11.5,
                         ),
-                        TextSpan(
-                          text: '  $tail',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.72),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 11.5,
-                          ),
+                      ),
+                      TextSpan(
+                        text: '  $tail',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.72),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11.5,
                         ),
-                      ],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
+              ),
+            ],
           );
         }
 
@@ -121,8 +125,11 @@ class _DailyWindowStripState extends State<DailyWindowStrip>
 
         final content = Row(
           children: [
-            Icon(live ? Icons.bolt : Icons.bolt_outlined,
-                size: 18, color: accent),
+            Icon(
+              live ? Icons.bolt : Icons.bolt_outlined,
+              size: 18,
+              color: accent,
+            ),
             const SizedBox(width: 8),
             // One line, with the DRAW first: "2X POINTS - Happy Hour - 6pm to
             // 7pm". 2x points leads (the value), the named window gives
@@ -177,30 +184,32 @@ class _DailyWindowStripState extends State<DailyWindowStrip>
         // one hour it's on actively pulls people in. Outside the window it's the
         // quiet static countdown.
         Widget strip(double t) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                    horizontal: 12, vertical: live ? 10 : 8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: accent.withValues(alpha: live ? 0.22 : 0.12),
-                  border: Border.all(
-                    color: accent.withValues(alpha: live ? 0.95 : 0.5),
-                    width: live ? 1.6 : 1,
-                  ),
-                  boxShadow: live
-                      ? [
-                          BoxShadow(
-                            color: accent.withValues(alpha: 0.30 + 0.30 * t),
-                            blurRadius: 14 + 10 * t,
-                            spreadRadius: 1,
-                          ),
-                        ]
-                      : null,
-                ),
-                child: content,
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: live ? 10 : 8,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: accent.withValues(alpha: live ? 0.22 : 0.12),
+              border: Border.all(
+                color: accent.withValues(alpha: live ? 0.95 : 0.5),
+                width: live ? 1.6 : 1,
               ),
-            );
+              boxShadow: live
+                  ? [
+                      BoxShadow(
+                        color: accent.withValues(alpha: 0.30 + 0.30 * t),
+                        blurRadius: 14 + 10 * t,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: content,
+          ),
+        );
 
         if (!live) return strip(0);
         return AnimatedBuilder(

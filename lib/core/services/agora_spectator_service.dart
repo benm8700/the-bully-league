@@ -121,8 +121,8 @@ class AgoraSpectatorService implements SpectatorService {
         // records what the SDK actually reports for each performer's video.
         onRemoteVideoStateChanged:
             (connection, remoteUid, state, reason, elapsed) {
-          debugPrint('Spectator: video of $remoteUid -> $state ($reason)');
-        },
+              debugPrint('Spectator: video of $remoteUid -> $state ($reason)');
+            },
         onLeaveChannel: (connection, stats) {
           _watching.value = false;
           _present.value = {};

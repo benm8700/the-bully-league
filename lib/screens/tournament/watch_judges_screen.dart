@@ -56,7 +56,8 @@ class _WatchJudgesScreenState extends State<WatchJudgesScreen> {
         if (uid == null) return null;
         try {
           return (await db.collection('users').doc(uid).get())
-              .data()?['username'] as String?;
+                  .data()?['username']
+              as String?;
         } catch (_) {
           return null;
         }
@@ -87,8 +88,8 @@ class _WatchJudgesScreenState extends State<WatchJudgesScreen> {
       body: _error != null
           ? _centered(_error!)
           : _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _body(),
+          ? const Center(child: CircularProgressIndicator())
+          : _body(),
     );
   }
 
@@ -103,21 +104,30 @@ class _WatchJudgesScreenState extends State<WatchJudgesScreen> {
           final name = winnerId == _p1Id
               ? _p1Name
               : winnerId == _p2Id
-                  ? _p2Name
-                  : null;
+              ? _p2Name
+              : null;
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.emoji_events,
-                      size: 56, color: context.palette.reward),
+                  Icon(
+                    Icons.emoji_events,
+                    size: 56,
+                    color: context.palette.reward,
+                  ),
                   const SizedBox(height: 12),
-                  Text(name == null ? 'The judges have decided.' : '$name takes it.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: Colors.white, fontWeight: FontWeight.w800)),
+                  Text(
+                    name == null
+                        ? 'The judges have decided.'
+                        : '$name takes it.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -137,11 +147,13 @@ class _WatchJudgesScreenState extends State<WatchJudgesScreen> {
   }
 
   Widget _centered(String s) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(s,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70)),
-        ),
-      );
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Text(
+        s,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: Colors.white70),
+      ),
+    ),
+  );
 }

@@ -33,7 +33,9 @@ class _FinalizeTestScreenState extends State<FinalizeTestScreen> {
     });
 
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable('debugFinalizeMatch');
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'debugFinalizeMatch',
+      );
       final result = await callable.call({'matchId': matchId});
       setState(() => _resultMessage = result.data.toString());
     } on FirebaseFunctionsException catch (e) {

@@ -156,7 +156,11 @@ class _MainStageScreenState extends State<MainStageScreen> {
               // Keep the input + send clear of the system gesture bar at the
               // bottom edge (the recurring bottom-inset gotcha in this app).
               padding: EdgeInsets.fromLTRB(
-                  16, 0, 16, 12 + MediaQuery.of(context).padding.bottom),
+                16,
+                0,
+                16,
+                12 + MediaQuery.of(context).padding.bottom,
+              ),
               child: JudgeChat(tournamentId: v.tournamentId, expand: true),
             ),
           ),
@@ -177,8 +181,10 @@ class _MainStageScreenState extends State<MainStageScreen> {
     return [
       _headline('The Main Stage is LIVE', context.palette.live),
       const SizedBox(height: 8),
-      Text('You are on the panel. Watch the battle and cast your verdict.',
-          style: _muted()),
+      Text(
+        'You are on the panel. Watch the battle and cast your verdict.',
+        style: _muted(),
+      ),
       const SizedBox(height: 16),
       if (battle != null)
         FilledButton.icon(
@@ -196,9 +202,13 @@ class _MainStageScreenState extends State<MainStageScreen> {
           ),
         )
       else
-        _statusPill(Icons.hourglass_top, 'Between battles',
-            'The next battle is being set up. The room opens when the '
-                'battlers step on stage.', gold),
+        _statusPill(
+          Icons.hourglass_top,
+          'Between battles',
+          'The next battle is being set up. The room opens when the '
+              'battlers step on stage.',
+          gold,
+        ),
     ];
   }
 
@@ -211,33 +221,33 @@ class _MainStageScreenState extends State<MainStageScreen> {
       final battle = v.liveBattleMatchId;
 
       Widget watchBtn(String label) => FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: context.palette.live,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(0, 54),
-            ),
-            icon: const Icon(Icons.visibility),
-            label: Text(label),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => LiveViewerScreen(matchId: battle!),
-              ),
-            ),
-          );
+        style: FilledButton.styleFrom(
+          backgroundColor: context.palette.live,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(0, 54),
+        ),
+        icon: const Icon(Icons.visibility),
+        label: Text(label),
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => LiveViewerScreen(matchId: battle!)),
+        ),
+      );
 
       switch (v.liveStage) {
         case MainStageLiveStage.playNow:
           final isFinal = v.myMatchupIsFinal;
           return [
             _headline(
-                isFinal ? "You're in the FINAL" : "You're up on the Main Stage",
-                context.palette.live),
+              isFinal ? "You're in the FINAL" : "You're up on the Main Stage",
+              context.palette.live,
+            ),
             const SizedBox(height: 8),
             Text(
-                isFinal
-                    ? 'This is it - the final. Step on stage when you are.'
-                    : 'Your semifinal is ready. Step on stage when you are.',
-                style: _muted()),
+              isFinal
+                  ? 'This is it - the final. Step on stage when you are.'
+                  : 'Your semifinal is ready. Step on stage when you are.',
+              style: _muted(),
+            ),
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(_error!, style: TextStyle(color: context.palette.live)),
@@ -255,7 +265,8 @@ class _MainStageScreenState extends State<MainStageScreen> {
             ),
             const SizedBox(height: 8),
             Center(
-                child: _rulesLink('New to this? How a Main Stage battle works')),
+              child: _rulesLink('New to this? How a Main Stage battle works'),
+            ),
           ];
 
         case MainStageLiveStage.awaitingVerdict:
@@ -266,9 +277,10 @@ class _MainStageScreenState extends State<MainStageScreen> {
             _headline('Battle done', context.palette.reward),
             const SizedBox(height: 8),
             Text(
-                'Nice work — now watch the panel decide it. Head to the '
-                "judges' table and see the verdict land live.",
-                style: _muted()),
+              'Nice work — now watch the panel decide it. Head to the '
+              "judges' table and see the verdict land live.",
+              style: _muted(),
+            ),
             const SizedBox(height: 20),
             if (battle != null) ...[
               FilledButton.icon(
@@ -279,14 +291,20 @@ class _MainStageScreenState extends State<MainStageScreen> {
                 ),
                 icon: const Icon(Icons.gavel),
                 label: const Text('Watch the judges decide'),
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => WatchJudgesScreen(matchId: battle))),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => WatchJudgesScreen(matchId: battle),
+                  ),
+                ),
               ),
               const SizedBox(height: 10),
             ],
-            _statusPill(Icons.gavel, 'Judges are deciding',
-                'The verdict lands here in a moment.',
-                Theme.of(context).colorScheme.onSurfaceVariant),
+            _statusPill(
+              Icons.gavel,
+              'Judges are deciding',
+              'The verdict lands here in a moment.',
+              Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ];
 
         case MainStageLiveStage.advancedWaiting:
@@ -295,33 +313,42 @@ class _MainStageScreenState extends State<MainStageScreen> {
             _headline('You advanced!', context.palette.reward),
             const SizedBox(height: 8),
             Text(
-                'You won your battle and you are through to the next round. '
-                'Waiting on the other matchup to finish - then your next '
-                'battle starts right here.',
-                style: _muted()),
+              'You won your battle and you are through to the next round. '
+              'Waiting on the other matchup to finish - then your next '
+              'battle starts right here.',
+              style: _muted(),
+            ),
             const SizedBox(height: 20),
             if (battle != null)
               watchBtn('Watch the other battle')
             else
-              _statusPill(Icons.hourglass_top, 'Standing by',
-                  'Your next opponent is being decided.',
-                  Theme.of(context).colorScheme.onSurfaceVariant),
+              _statusPill(
+                Icons.hourglass_top,
+                'Standing by',
+                'Your next opponent is being decided.',
+                Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
           ];
 
         case MainStageLiveStage.champion:
           return [
             _headline('You won the Main Stage! 🏆', context.palette.reward),
             const SizedBox(height: 8),
-            Text('You took the whole thing. Champion of the night.',
-                style: _muted()),
+            Text(
+              'You took the whole thing. Champion of the night.',
+              style: _muted(),
+            ),
           ];
 
         case MainStageLiveStage.eliminated:
           return [
             _headline('Your run is over', context.palette.live),
             const SizedBox(height: 8),
-            Text('You got knocked out - but the show goes on. Watch who takes '
-                'the crown.', style: _muted()),
+            Text(
+              'You got knocked out - but the show goes on. Watch who takes '
+              'the crown.',
+              style: _muted(),
+            ),
             const SizedBox(height: 20),
             if (battle != null) watchBtn('Watch the rest'),
             _joinCrowdBtn(v),
@@ -331,15 +358,20 @@ class _MainStageScreenState extends State<MainStageScreen> {
           return [
             _headline('The Main Stage is LIVE', context.palette.live),
             const SizedBox(height: 8),
-            Text('The finals are happening now - watch the battles live.',
-                style: _muted()),
+            Text(
+              'The finals are happening now - watch the battles live.',
+              style: _muted(),
+            ),
             const SizedBox(height: 20),
             if (battle != null)
               watchBtn('Watch the battle')
             else
-              _statusPill(Icons.hourglass_top, 'Between battles',
-                  'The next battle is being set up - hang tight.',
-                  Theme.of(context).colorScheme.onSurfaceVariant),
+              _statusPill(
+                Icons.hourglass_top,
+                'Between battles',
+                'The next battle is being set up - hang tight.',
+                Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             _joinCrowdBtn(v),
           ];
       }
@@ -355,32 +387,42 @@ class _MainStageScreenState extends State<MainStageScreen> {
     }
     // accepting
     final base = switch (v.role) {
-      MainStageRole.finalist => _invite(v, "Congratulations! You made the Main Stage.",
-          "Top 4 this week. Confirm you're in by Thursday 4pm or your spot "
-              'goes to an alternate.'),
-      MainStageRole.alternate => _invite(v, "You're an alternate.",
-          "Ranks 5-8 this week. If a finalist drops by Thursday 4pm, the "
-              'highest confirmed alternate rolls in — so confirm you\'re '
-              'around just in case.'),
+      MainStageRole.finalist => _invite(
+        v,
+        "Congratulations! You made the Main Stage.",
+        "Top 4 this week. Confirm you're in by Thursday 4pm or your spot "
+            'goes to an alternate.',
+      ),
+      MainStageRole.alternate => _invite(
+        v,
+        "You're an alternate.",
+        "Ranks 5-8 this week. If a finalist drops by Thursday 4pm, the "
+            'highest confirmed alternate rolls in — so confirm you\'re '
+            'around just in case.',
+      ),
       // A hand-picked judge is in the invite list and confirms ("I'm in"); a
       // volunteer/pool judge is NOT invited - the panel autofills from the
       // volunteer pool at the 4pm lock with no confirmation. Showing a pool
       // judge an accept button was the bug: the backend only honours invited
       // uids, so their tap failed ("Couldn't save").
-      MainStageRole.judge => v.invite == InviteStatus.notInvited
-          ? _judgePoolInfo(v)
-          : _invite(v, "Congratulations! You're on the judging panel.",
-              'Five judges decide the finals live on stage. Confirm by '
-                  'Thursday 4pm.'),
+      MainStageRole.judge =>
+        v.invite == InviteStatus.notInvited
+            ? _judgePoolInfo(v)
+            : _invite(
+                v,
+                "Congratulations! You're on the judging panel.",
+                'Five judges decide the finals live on stage. Confirm by '
+                    'Thursday 4pm.',
+              ),
       MainStageRole.none => <Widget>[
-          const EmptyState(
-            icon: Icons.visibility_outlined,
-            title: "You're not in this week's finals",
-            message:
-                'Watch the Main Stage live — the crowd is half the show. Climb '
-                'the ladder this week for a shot next time.',
-          ),
-        ],
+        const EmptyState(
+          icon: Icons.visibility_outlined,
+          title: "You're not in this week's finals",
+          message:
+              'Watch the Main Stage live — the crowd is half the show. Climb '
+              'the ladder this week for a shot next time.',
+        ),
+      ],
     };
     return [
       ...base,
@@ -402,17 +444,24 @@ class _MainStageScreenState extends State<MainStageScreen> {
     if (!open) {
       return [
         const SizedBox(height: 24),
-        _statusPill(Icons.forum_outlined, "Judges' green room",
-            'Opens when the panel locks at 4pm PT — you\'ll meet the other '
-                'judges and chat here before the show.', gold),
+        _statusPill(
+          Icons.forum_outlined,
+          "Judges' green room",
+          'Opens when the panel locks at 4pm PT — you\'ll meet the other '
+              'judges and chat here before the show.',
+          gold,
+        ),
       ];
     }
     return [
       const SizedBox(height: 24),
       _headline("Judges' green room", gold),
       const SizedBox(height: 8),
-      Text('Your private panel chat — hang with the other judges before '
-          'the show and between battles.', style: _muted()),
+      Text(
+        'Your private panel chat — hang with the other judges before '
+        'the show and between battles.',
+        style: _muted(),
+      ),
       const SizedBox(height: 12),
       SizedBox(height: 380, child: JudgeChat(tournamentId: v.tournamentId)),
     ];
@@ -428,16 +477,18 @@ class _MainStageScreenState extends State<MainStageScreen> {
 
   /// Into the viewers' lobby - the crowd's holding room (live count + chat).
   Widget _joinCrowdBtn(MainStageView v) => Padding(
-        padding: const EdgeInsets.only(top: 10),
-        child: OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
-          icon: const Icon(Icons.forum),
-          label: const Text('Join the crowd'),
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) =>
-                  MainStageLobbyScreen(tournamentId: v.tournamentId))),
+    padding: const EdgeInsets.only(top: 10),
+    child: OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+      icon: const Icon(Icons.forum),
+      label: const Text('Join the crowd'),
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MainStageLobbyScreen(tournamentId: v.tournamentId),
         ),
-      );
+      ),
+    ),
+  );
 
   /// A volunteer judge sitting in the pool: nothing to confirm. The five seats
   /// fill from the qualified volunteer pool when the panel locks at 4pm, so
@@ -464,17 +515,24 @@ class _MainStageScreenState extends State<MainStageScreen> {
         const SizedBox(height: 8),
         Text(blurb, style: _muted()),
         const SizedBox(height: 20),
-        _statusPill(Icons.check_circle, "You're confirmed",
-            'Field locks Thursday 4pm. See you on stage.', gold),
+        _statusPill(
+          Icons.check_circle,
+          "You're confirmed",
+          'Field locks Thursday 4pm. See you on stage.',
+          gold,
+        ),
       ];
     }
     if (v.invite == InviteStatus.declined) {
       return [
         _headline(title, gold),
         const SizedBox(height: 20),
-        _statusPill(Icons.cancel_outlined, 'You declined',
-            'Changed your mind? Tap Accept before Thursday 4pm.',
-            Theme.of(context).colorScheme.onSurfaceVariant),
+        _statusPill(
+          Icons.cancel_outlined,
+          'You declined',
+          'Changed your mind? Tap Accept before Thursday 4pm.',
+          Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
         const SizedBox(height: 16),
         _acceptButton(v, gold, label: 'Actually, I\'m in'),
       ];
@@ -492,8 +550,7 @@ class _MainStageScreenState extends State<MainStageScreen> {
       _acceptButton(v, gold),
       const SizedBox(height: 10),
       OutlinedButton(
-        onPressed:
-            _submitting ? null : () => _respond(v.tournamentId, false),
+        onPressed: _submitting ? null : () => _respond(v.tournamentId, false),
         style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
         child: const Text("Can't make it"),
       ),
@@ -512,7 +569,8 @@ class _MainStageScreenState extends State<MainStageScreen> {
           ? const SizedBox(
               height: 20,
               width: 20,
-              child: CircularProgressIndicator(strokeWidth: 2))
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
           : Text(label),
     );
   }
@@ -533,8 +591,10 @@ class _MainStageScreenState extends State<MainStageScreen> {
     final widgets = <Widget>[
       _headline('The Main Stage is live', gold),
       const SizedBox(height: 8),
-      Text('Four finalists. Single elimination. One battle at a time.',
-          style: _muted()),
+      Text(
+        'Four finalists. Single elimination. One battle at a time.',
+        style: _muted(),
+      ),
       const SizedBox(height: 12),
       // The scheduled start - the stage opens at 6pm PT whether or not the #1
       // has made the callout (the backstop auto-starts it).
@@ -550,12 +610,15 @@ class _MainStageScreenState extends State<MainStageScreen> {
     ];
     if (v.calloutOpen) {
       widgets.addAll([
-        _statusPill(Icons.campaign, "You're the #1 seed",
-            isShowtime
-                ? "It's showtime - call out your opponent NOW, or the show "
+        _statusPill(
+          Icons.campaign,
+          "You're the #1 seed",
+          isShowtime
+              ? "It's showtime - call out your opponent NOW, or the show "
                     'starts with a default matchup.'
-                : 'You pick who you want in your semifinal. Make the call.',
-            isShowtime ? context.palette.live : gold),
+              : 'You pick who you want in your semifinal. Make the call.',
+          isShowtime ? context.palette.live : gold,
+        ),
         const SizedBox(height: 16),
         FilledButton.icon(
           style: FilledButton.styleFrom(
@@ -576,47 +639,61 @@ class _MainStageScreenState extends State<MainStageScreen> {
         ),
       ]);
     } else if (v.role == MainStageRole.finalist) {
-      widgets.add(_statusPill(Icons.hourglass_top, "You're in the bracket",
+      widgets.add(
+        _statusPill(
+          Icons.hourglass_top,
+          "You're in the bracket",
           'The #1 seed makes their callout on stage, then the battles begin.',
-          gold));
+          gold,
+        ),
+      );
       widgets.add(const SizedBox(height: 8));
-      widgets.add(Center(
-          child: _rulesLink('Know the rules before you step up')));
+      widgets.add(
+        Center(child: _rulesLink('Know the rules before you step up')),
+      );
     } else if (v.role == MainStageRole.judge) {
-      widgets.add(_statusPill(Icons.gavel, "You're judging",
-          'Five of you decide the finals. The show starts at 6pm.', gold));
+      widgets.add(
+        _statusPill(
+          Icons.gavel,
+          "You're judging",
+          'Five of you decide the finals. The show starts at 6pm.',
+          gold,
+        ),
+      );
       widgets.add(const SizedBox(height: 16));
       widgets.add(JudgeChat(tournamentId: v.tournamentId));
     } else {
-      widgets.add(_statusPill(Icons.visibility, 'Field set',
+      widgets.add(
+        _statusPill(
+          Icons.visibility,
+          'Field set',
           'Come watch the finals live at 6pm.',
-          Theme.of(context).colorScheme.onSurfaceVariant));
+          Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      );
     }
     return widgets;
   }
 
   Widget _rulesLink(String label) => TextButton.icon(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => const MainStageRulesScreen(),
-          ),
-        ),
-        icon: const Icon(Icons.help_outline, size: 18),
-        label: Text(label),
-      );
+    onPressed: () => Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const MainStageRulesScreen()),
+    ),
+    icon: const Icon(Icons.help_outline, size: 18),
+    label: Text(label),
+  );
 
   Widget _headline(String s, Color color) => Text(
-        s,
-        style: Theme.of(context)
-            .textTheme
-            .headlineSmall
-            ?.copyWith(fontWeight: FontWeight.w800, color: color),
-      );
+    s,
+    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+      fontWeight: FontWeight.w800,
+      color: color,
+    ),
+  );
 
-  TextStyle? _muted() => Theme.of(context)
-      .textTheme
-      .bodyMedium
-      ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant);
+  TextStyle? _muted() => Theme.of(context).textTheme.bodyMedium?.copyWith(
+    color: Theme.of(context).colorScheme.onSurfaceVariant,
+  );
 
   Widget _statusPill(IconData icon, String title, String sub, Color color) {
     return Container(
@@ -635,11 +712,12 @@ class _MainStageScreenState extends State<MainStageScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 2),
                 Text(sub, style: _muted()),
               ],
@@ -704,8 +782,8 @@ class _FieldRosterState extends State<_FieldRoster> {
     final reveal = iAmWild
         ? "\u{1F3B2} You drew the wild card — you're in the finals."
         : (wc != null
-            ? 'Top 3 locked in by skill. The 4th is the wild-card draw.'
-            : 'The finals field.');
+              ? 'Top 3 locked in by skill. The 4th is the wild-card draw.'
+              : 'The finals field.');
 
     return Container(
       margin: const EdgeInsets.only(top: 22),
@@ -718,17 +796,29 @@ class _FieldRosterState extends State<_FieldRoster> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('THE FIELD',
-              style: text.labelMedium?.copyWith(
-                  color: gold, fontWeight: FontWeight.w900, letterSpacing: 1)),
+          Text(
+            'THE FIELD',
+            style: text.labelMedium?.copyWith(
+              color: gold,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(reveal,
-              style: text.bodySmall
-                  ?.copyWith(color: Colors.white.withValues(alpha: 0.78))),
+          Text(
+            reveal,
+            style: text.bodySmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.78),
+            ),
+          ),
           const SizedBox(height: 4),
-          Text('Tap a name to study them — their intro and their ammo.',
-              style: text.bodySmall?.copyWith(
-                  color: Colors.white38, fontStyle: FontStyle.italic)),
+          Text(
+            'Tap a name to study them — their intro and their ammo.',
+            style: text.bodySmall?.copyWith(
+              color: Colors.white38,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
           const SizedBox(height: 8),
           ...List.generate(widget.uids.length, (i) {
             final uid = widget.uids[i];
@@ -740,8 +830,11 @@ class _FieldRosterState extends State<_FieldRoster> {
             return InkWell(
               onTap: isMe
                   ? null
-                  : () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => PerformerProfileScreen(uid: uid))),
+                  : () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => PerformerProfileScreen(uid: uid),
+                      ),
+                    ),
               borderRadius: BorderRadius.circular(8),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 7),
@@ -750,11 +843,17 @@ class _FieldRosterState extends State<_FieldRoster> {
                     SizedBox(
                       width: 30,
                       child: isWild
-                          ? const Text('\u{1F3B2}',
-                              style: TextStyle(fontSize: 17))
-                          : Text('${i + 1}',
+                          ? const Text(
+                              '\u{1F3B2}',
+                              style: TextStyle(fontSize: 17),
+                            )
+                          : Text(
+                              '${i + 1}',
                               style: text.titleMedium?.copyWith(
-                                  color: gold, fontWeight: FontWeight.w900)),
+                                color: gold,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -763,33 +862,42 @@ class _FieldRosterState extends State<_FieldRoster> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            color: Colors.white,
-                            fontWeight:
-                                isMe ? FontWeight.w800 : FontWeight.w600),
+                          color: Colors.white,
+                          fontWeight: isMe ? FontWeight.w800 : FontWeight.w600,
+                        ),
                       ),
                     ),
                     if (isWild)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
                           color: gold.withValues(alpha: 0.18),
-                          border:
-                              Border.all(color: gold.withValues(alpha: 0.6)),
+                          border: Border.all(
+                            color: gold.withValues(alpha: 0.6),
+                          ),
                         ),
-                        child: Text('WILD CARD',
-                            style: TextStyle(
-                                color: gold,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5)),
+                        child: Text(
+                          'WILD CARD',
+                          style: TextStyle(
+                            color: gold,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                       ),
                     if (!isMe)
                       const Padding(
                         padding: EdgeInsets.only(left: 6),
-                        child: Icon(Icons.chevron_right,
-                            size: 18, color: Colors.white38),
+                        child: Icon(
+                          Icons.chevron_right,
+                          size: 18,
+                          color: Colors.white38,
+                        ),
                       ),
                   ],
                 ),

@@ -52,8 +52,10 @@ class _MainStageAlertBarState extends State<MainStageAlertBar> {
             child: SafeArea(
               bottom: false,
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
                     Icon(cue.icon, color: Colors.white, size: 22),
@@ -80,7 +82,8 @@ class _MainStageAlertBarState extends State<MainStageAlertBar> {
   }
 
   ({String text, String action, IconData icon, String? judgeMatchId})? _cue(
-      MainStageView v) {
+    MainStageView v,
+  ) {
     if (v.status != 'live') return null;
     if (v.liveStage == MainStageLiveStage.playNow) {
       return (
@@ -115,18 +118,18 @@ class _MainStageAlertBarState extends State<MainStageAlertBar> {
   }
 
   Widget _pill(String label) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: context.palette.live,
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        color: context.palette.live,
+        fontWeight: FontWeight.bold,
+        fontSize: 13,
+      ),
+    ),
+  );
 }

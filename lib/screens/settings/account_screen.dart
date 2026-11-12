@@ -32,10 +32,7 @@ class AccountScreen extends StatelessWidget {
           if (email != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Text(
-                email,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              child: Text(email, style: Theme.of(context).textTheme.bodySmall),
             ),
           // "How it works" moved here from Home (developer's call, 2026-09-14):
           // it sits under the account, one level in, rather than taking a slot
@@ -74,10 +71,12 @@ class AccountScreen extends StatelessWidget {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   }
 
-  Widget _tile(BuildContext context,
-      {required IconData icon,
-      required String label,
-      required VoidCallback onTap}) {
+  Widget _tile(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
     return ListTile(
       leading: Icon(icon),
       title: Text(label),

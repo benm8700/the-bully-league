@@ -12,6 +12,7 @@ import '../../core/services/video_call_service.dart';
 import '../../core/services/visual_moderation_service.dart';
 import '../../core/services/yuv_to_jpeg.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// IMPROV STATION match flow (2026-10-16: SIMULTANEOUS).
 ///
@@ -395,7 +396,7 @@ class _ImprovMatchScreenState extends State<ImprovMatchScreen> {
         final navigator = Navigator.of(context);
         final leave = await showDialog<bool>(
           context: context,
-          builder: (c) => AlertDialog(
+          builder: (c) => NeonDialog(
             title: const Text('Leave the match?'),
             content: const Text(
               "You're in the middle of an Improv battle. Leaving now ends "

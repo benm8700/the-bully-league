@@ -11,6 +11,7 @@ import '../battles/marketing_consent_sheet.dart';
 import '../profile/performer_profile_screen.dart';
 import '../settings/blocked_players_screen.dart';
 import '../moderation/clip_takedown_sheet.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// Your own battles, over the battle-themed stage background, with a career
 /// summary, filters, and one compact matchup card per completed battle.
@@ -1064,7 +1065,7 @@ class _BattleCard extends StatelessWidget {
     String oppId,
     String oppName,
   ) {
-    showModalBottomSheet<void>(
+    showNeonSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (sheetCtx) => SafeArea(
@@ -1189,4 +1190,126 @@ String _relativeDate(Object? ts) {
     'Dec',
   ];
   return '${months[then.month - 1]} ${then.day}, ${then.year}';
+}
+
+/// MY BATTLES, condensed, for the top of Profile (2026-11-11 swipe layout,
+/// developer's call): your last 3 battles as the same cards, then
+/// "See all N ›" to the full My Battles screen.
+class RecentBattlesSection extends StatefulWidget {
+  const RecentBattlesSection({super.key, required this.uid});
+
+  final String uid;
+
+  @override
+  State<RecentBattlesSection> createState() => _RecentBattlesSectionState();
+}
+
+class _RecentBattlesSectionState extends State<RecentBattlesSection> {
+  late Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _future =
+      _load();
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _load() async {
+    final matches = FirebaseFirestore.instance.collection('matches');
+    final results = await Future.wait([
+      matches
+          .where('player1Id', isEqualTo: widget.uid)
+          .orderBy('createdAt', descending: true)
+          .limit(20)
+          .get(),
+      matches
+          .where('player2Id', isEqualTo: widget.uid)
+          .orderBy('createdAt', descending: true)
+          .limit(20)
+          .get(),
+    ]);
+    return [...results[0].docs, ...results[1].docs]..sort((a, b) {
+      final aTime = a.data()['createdAt'];
+      final bTime = b.data()['createdAt'];
+      if (aTime is! Timestamp || bTime is! Timestamp) return 0;
+      return bTime.compareTo(aTime);
+    });
+  }
+
+  void _refresh() {
+    if (!mounted) return;
+    setState(() {
+      _future = _load();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = context.palette.accent;
+    return FutureBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+      future: _future,
+      builder: (context, snap) {
+        final all = snap.data ?? const [];
+        final total = all.length;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'MY BATTLES',
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const Spacer(),
+                if (total > 0)
+                  TextButton(
+                    onPressed: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const MyBattlesScreen(),
+                        ),
+                      );
+                      _refresh();
+                    },
+                    child: Text(
+                      total >= 20 ? 'See all ›' : 'See all $total ›',
+                      style: TextStyle(
+                        color: accent,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            if (snap.connectionState == ConnectionState.waiting &&
+                !snap.hasData)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (total == 0)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'No battles yet. Your latest one shows up here.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              )
+            else
+              // Just the LATEST battle (2026-11-11, developer: three took
+              // too much room on Profile). "See all" opens the full list.
+              for (final d in all.take(1)) ...[
+                _BattleCard(
+                  uid: widget.uid,
+                  matchId: d.id,
+                  match: d.data(),
+                  onChanged: _refresh,
+                ),
+                const SizedBox(height: 10),
+              ],
+          ],
+        );
+      },
+    );
+  }
 }

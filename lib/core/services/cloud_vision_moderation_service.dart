@@ -14,13 +14,17 @@ class CloudVisionModerationService implements VisualModerationService {
   @override
   Future<String?> checkImage(String storagePath) async {
     final callable = FirebaseFunctions.instance.httpsCallable('moderatePhoto');
-    final result = await callable.call<Map<String, dynamic>>({'storagePath': storagePath});
+    final result = await callable.call<Map<String, dynamic>>({
+      'storagePath': storagePath,
+    });
     return _reasonFromResult(result.data);
   }
 
   @override
   Future<String?> checkImageBytes(Uint8List jpegBytes) async {
-    final callable = FirebaseFunctions.instance.httpsCallable('moderateMatchFrame');
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'moderateMatchFrame',
+    );
     final result = await callable.call<Map<String, dynamic>>({
       'imageBase64': base64Encode(jpegBytes),
     });
@@ -29,10 +33,12 @@ class CloudVisionModerationService implements VisualModerationService {
 
   @override
   Future<String?> checkVideo(String storagePath) async {
-    final callable =
-        FirebaseFunctions.instance.httpsCallable('moderateIntroVideo');
-    final result = await callable.call<Map<String, dynamic>>(
-        {'storagePath': storagePath});
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'moderateIntroVideo',
+    );
+    final result = await callable.call<Map<String, dynamic>>({
+      'storagePath': storagePath,
+    });
     return _reasonFromResult(result.data);
   }
 

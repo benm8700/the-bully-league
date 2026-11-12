@@ -51,6 +51,8 @@ service cloud.firestore {
           'takedowns', 'lastNotifiedRankTitle', 'lastSeenRankTitle',
           'dailyReward', 'followerCount', 'lastSeenFameMilestone',
           'emojiCounts', 'votesCast', 'emojiTopAwards', 'emojiScrub',
+          // The judging (daily) and ranked (weekly) streaks - server-only.
+          'voteStreak', 'rankedStreak',
           'tournamentWins', 'tournamentRunnerUps', 'pendingTournamentFinale',
           'editorsChoicePicks', 'mainStagePanelsServed', 'firstWinReward',
           // Written only by finalizePhoneSignup from the verified token claim,
@@ -193,6 +195,12 @@ service cloud.firestore {
         // others, but it is a public identity number, so it stays server-only.
         request.resource.data.get('votesCast', null) ==
           resource.data.get('votesCast', null) &&
+        // The judging and ranked streaks (voteStreak.js / rankedStreak.js).
+        // A client able to write them could fake a streak and its badges.
+        request.resource.data.get('voteStreak', null) ==
+          resource.data.get('voteStreak', null) &&
+        request.resource.data.get('rankedStreak', null) ==
+          resource.data.get('rankedStreak', null) &&
         // The $5 first ranked win marker (firstWinReward.js, Admin SDK only).
         // A client able to clear it could try to be paid twice.
         request.resource.data.get('firstWinReward', null) ==

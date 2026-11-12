@@ -5,6 +5,10 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/streaks.dart';
+import '../../widgets/challenge_popup.dart';
+import '../../widgets/incoming_challenge_card.dart';
+
 import 'package:provider/provider.dart';
 
 import '../../theme/app_theme.dart';
@@ -23,8 +27,9 @@ import '../../widgets/home/home_action_card.dart';
 import '../../widgets/home/player_status_card.dart';
 import '../../widgets/home/home_quick_actions.dart';
 import '../../widgets/home/home_featured.dart';
-import '../../widgets/home/main_stage_card.dart';
+import '../../widgets/home/main_stage_marquee.dart';
 import '../../widgets/home/daily_window_strip.dart';
+import '../../widgets/player_avatar.dart';
 import '../tournament/tournament_hub_screen.dart';
 import 'main_shell.dart';
 import '../match/bio_reveal_screen.dart';
@@ -33,12 +38,11 @@ import '../match/matchmaking_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
 import '../profile/profile_screen.dart';
-import '../directory/player_search_screen.dart';
 import '../friends/challenge_screen.dart';
 import '../practice/solo_practice_screen.dart';
-import '../settings/account_screen.dart';
 import '../settings/notification_settings_screen.dart';
 import '../vote/finalize_test_screen.dart';
+import '../../widgets/neon_dialog.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -47,7 +51,6 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = context.read<AuthService>();
 
-    final scheme = Theme.of(context).colorScheme;
     // The cinematic stage background runs behind the WHOLE screen (app bar
     // included), matching the other tabs (Vote / My Battles / Ranks / Profile),
     // which each use their own assets/home/<screen>_background.png. Same recipe:
@@ -102,17 +105,15 @@ class HomeScreen extends StatelessWidget {
             // sliding down 20pt.
             toolbarHeight: 92,
             centerTitle: true,
-            // Find a player by name (beta tester, 2026-11-09: "I want to be
-            // able to search people, but there's no way" - the search screen
-            // existed but nothing opened it). Left side, so the crown stays
-            // visually centred between it and the bell/avatar.
-            leading: IconButton(
-              icon: const Icon(Icons.search),
-              tooltip: 'Find a player',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PlayerSearchScreen()),
-              ),
-            ),
+            // Player search moved to the top of the Ranks tab (2026-11-11,
+            // developer: the small magnifier here went unnoticed). An empty
+            // leading keeps the crown centred between nothing and the
+            // bell/avatar exactly as before.
+            // YOUR PHOTO, top left (2026-11-11 swipe layout): opens your
+            // Profile, which also sits one swipe to the right.
+            // PHOTO-IN-CARD trial (2026-11-11): your photo moved into the
+            // rank card, so the top-left button is off. Restore with
+            // `leadingWidth: 64, leading: const _MyPhotoButton()`.
             title: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -140,32 +141,24 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              // The profile avatar opens ACCOUNT & SETTINGS - deliberately NOT
-              // the public Profile tab, which is the player's public identity.
-              // (Sign out used to be a top-right one-tap button that a real user
-              // hit by accident; it now lives one level in, inside Account.)
-              Padding(
-                padding: const EdgeInsets.only(right: 12, left: 4),
-                child: Tooltip(
-                  message: 'Account',
-                  child: InkResponse(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const AccountScreen()),
-                    ),
-                    child: CircleAvatar(
-                      radius: 16,
-                      backgroundColor: scheme.surfaceContainerHighest,
-                      child: Icon(
-                        Icons.person,
-                        size: 18,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              // Account & settings moved to the gear on Profile (2026-11-11
+              // swipe layout); your photo now sits top left.
+              const SizedBox(width: 8),
             ],
           ),
+          // The rank card, docked at the bottom (2026-11-11 swipe layout).
+          // Its streak + points ride on the XP line; a tap opens the
+          // Leaderboard page. The page dots sit just under it (MainShell).
+          bottomNavigationBar: FirebaseAuth.instance.currentUser == null
+              ? null
+              : Padding(
+                  padding: EdgeInsets.only(
+                    bottom: 22 + MediaQuery.of(context).viewPadding.bottom,
+                  ),
+                  child: _RankBadge(
+                    uid: FirebaseAuth.instance.currentUser!.uid,
+                  ),
+                ),
           // Listens rather than reading currentUser once: right after sign-up,
           // the account is created (and this screen shown) before the
           // displayName update lands, so this needs to pick up that follow-up
@@ -201,14 +194,27 @@ class HomeScreen extends StatelessWidget {
                         // (the name is on the card's trophy context and the
                         // header carries the brand), so it was removed in the
                         // 2026-09-14 Home overhaul to match the reference.
-                        if (uid != null) _RankBadge(uid: uid),
+                        // The rank card moved into the bottom bar as the CREST
+                        // (2026-11-11, developer's call - see CrestNavBar). Kept,
+                        // not deleted, so this line can come straight back.
+                        // The rank card is DOCKED at the bottom now
+                        // (bottomNavigationBar below, 2026-11-11 swipe layout).
                         // Tightened so the compact HUD sits closer to the Tournament
                         // hero, leaving a little more of Roast a Stranger visible.
                         const SizedBox(height: 12),
                         // Anything urgent stays at the very top: a match
                         // waiting, or somebody challenging you.
-                        const _ActiveMatchBanner(),
-                        const _IncomingChallengeBanner(),
+                        // Side margins so the neon strips line up with the
+                        // doors instead of running edge to edge.
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 20),
+                          child: Column(
+                            children: [
+                              _ActiveMatchBanner(),
+                              _IncomingChallengeBanner(),
+                            ],
+                          ),
+                        ),
                         // The $5 first ranked win offer (firstWinReward.js) -
                         // only while the switch is on and the 7 days aren't up.
                         if (uid != null)
@@ -244,6 +250,9 @@ class HomeScreen extends StatelessWidget {
                         // everyday Basement battle), WATCH -> the Vote feed. The
                         // modes and their wiring are untouched - this is just the
                         // front door.
+                        // Show day / show night: the big Main Stage card takes
+                        // the top (renders nothing the rest of the week).
+                        const MainStageHomeSlot.top(),
                         const _PlayWatchDoors(),
                         const SizedBox(height: 18),
                         // The WEEKLY Main Stage tournament stays its own distinct
@@ -253,10 +262,10 @@ class HomeScreen extends StatelessWidget {
                         // Slim row now (2026-11-09): three big doors above, and a
                         // full card for something still "coming soon" was a lot of
                         // prime space. Face-Off moved inside Ranked.
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: MainStageCard(slim: true),
-                        ),
+                        // The compact gold marquee most of the week (2026-11-10):
+                        // bulbs, foil title, countdown - without pushing the
+                        // XP/rewards rows down. Moves to the top on show day.
+                        const MainStageHomeSlot.bottom(),
                         const SizedBox(height: 18),
                         // Ranked-only setup nudge, BELOW the play doors
                         // (2026-11-09): friend battles need no intro or selfie,
@@ -266,12 +275,19 @@ class HomeScreen extends StatelessWidget {
                         // Free Rewards / Current Streak. The Daily Challenges card
                         // opens the full quests in a sheet, so the tall inline
                         // quest list is no longer shown here (one route, not two).
-                        if (uid != null) HomeQuickActions(uid: uid),
+                        if (uid != null)
+                          HomeQuickActions(
+                            uid: uid,
+                            onLeaderboard: () =>
+                                MainShell.goPage(MainShell.pageLeaderboard),
+                          ),
                         const SizedBox(height: 18),
                         // Slim wallet line: "N Points" + Rewards ->. The old
                         // milestone bar moved into the Rewards screen; Home keeps
                         // only the glanceable balance and a way in.
-                        if (uid != null) _WalletBarForUser(uid: uid),
+                        // Points moved into the bottom bar (2026-11-11). Kept so
+                        // it can come straight back:
+                        // if (uid != null) _WalletBarForUser(uid: uid),
                         // Featured spotlight - the founder's Editor's Choice picks,
                         // streamed live from the `featured` collection. Renders
                         // NOTHING when there are no picks (empty/loading/error), so
@@ -350,15 +366,24 @@ class HomeScreen extends StatelessWidget {
 /// (possibly cold) Cloud Function call gives immediate feedback and can't be
 /// double-fired while it's in flight. Pops the spinner when done.
 Future<T?> _withSpinner<T>(BuildContext context, Future<T> future) async {
+  // Grab the navigator NOW. The old version only popped "if context.mounted",
+  // so if Home was rebuilt while the call ran (e.g. the user doc changed after
+  // saving an intro/selfie) the pop was skipped and the non-dismissible
+  // spinner stayed up forever, freezing the app (iPhone, 2026-11-10).
+  final nav = Navigator.of(context, rootNavigator: true);
+  var showing = true;
   showDialog<void>(
     context: context,
     barrierDismissible: false,
     builder: (_) => const Center(child: CircularProgressIndicator()),
-  );
+  ).whenComplete(() => showing = false);
   try {
-    return await future;
+    // Belt and braces: never block the screen longer than this.
+    return await future.timeout(const Duration(seconds: 15));
+  } on TimeoutException {
+    return null;
   } finally {
-    if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+    if (showing && nav.mounted) nav.pop();
   }
 }
 
@@ -484,7 +509,7 @@ Future<void> _showBlockedSheet(
 ) {
   final windowName = entitlement.windowName ?? 'the daily window';
   final practiceDuringWindow = mode != 'ranked' && entitlement.inWindow;
-  return showModalBottomSheet<void>(
+  return showNeonSheet<void>(
     context: context,
     showDragHandle: true,
     builder: (sheetContext) => Padding(
@@ -594,7 +619,7 @@ Future<bool> _ensureBattleReady(BuildContext context, String mode) async {
   // then take them to their profile (hoisted to those cards) to set it up.
   final go = await showDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => NeonDialog(
       title: const Text('Before your first battle'),
       content: const Text(
         'Record a 60-second intro (your opponent watches it for roast '
@@ -846,6 +871,11 @@ class _IncomingChallengeBannerState extends State<_IncomingChallengeBanner>
             ? null
             : (incoming.first as Map).cast<String, dynamic>(),
       );
+      // A challenge this session hasn't popped for yet: ask the shell to run
+      // its pop-up queue (it only shows anything while Home is on screen).
+      if (ChallengePopup.isNew(_challenge?['challengeId'] as String?)) {
+        MainShell.requestPopups();
+      }
     } catch (_) {
       // Nothing rather than an error: a failed check must not make Home
       // look broken.
@@ -883,67 +913,18 @@ class _IncomingChallengeBannerState extends State<_IncomingChallengeBanner>
     }
   }
 
-  Future<void> _decline() async {
-    final id = _challenge?['challengeId'] as String?;
-    if (id == null || _busy) return;
-    setState(() => _busy = true);
-    try {
-      await FirebaseFunctions.instance
-          .httpsCallable('respondToChallenge')
-          .call<Map<String, dynamic>>({'challengeId': id, 'accept': false});
-    } catch (_) {
-      // Best-effort; the reload below reflects the real state either way.
-    }
-    if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _challenge = null;
-    });
-    _load();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final challenge = _challenge;
     if (challenge == null) return const SizedBox.shrink();
-    return Card(
-      color: scheme.surfaceContainerHigh,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.sports_mma, size: 18, color: scheme.secondary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${challenge['fromUsername']} challenged you',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _busy ? null : _accept,
-                    child: Text(_busy ? 'Starting…' : 'Accept challenge'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: _busy ? null : _decline,
-                  child: const Text('Decline'),
-                ),
-              ],
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: IncomingChallengeStrip(
+        fromUsername: '${challenge['fromUsername']}',
+        expiresAtMs: challenge['expiresAtMs'],
+        busy: _busy,
+        onAccept: _accept,
+        onOpen: () => ChallengePopup.show(context, challenge),
       ),
     );
   }
@@ -1064,56 +1045,21 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
   /// shown when there's no opponent yet (a rejoinable match takes priority).
   Widget _queueBanner(BuildContext context) {
     final q = _queued!;
-    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Material(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: _resumeQueue,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: scheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'In the ${_modeLabel(q.mode)} queue · ${_elapsed(q.joinedAtMs)}',
-                        style: TextStyle(
-                          color: scheme.onSurface,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        "Waiting for an opponent — we'll notify you.",
-                        style: TextStyle(
-                          color: scheme.onSurfaceVariant,
-                          fontSize: 12.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
-              ],
-            ),
+      child: NeonAlertStrip(
+        colors: const [Color(0xFFB45CFF), Color(0xFF3D7BFF)],
+        leading: const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.4,
+            color: Color(0xFFB45CFF),
           ),
         ),
+        title: 'In the ${_modeLabel(q.mode)} queue · ${_elapsed(q.joinedAtMs)}',
+        subtitle: "Waiting for an opponent - we'll notify you.",
+        onTap: _resumeQueue,
       ),
     );
   }
@@ -1122,83 +1068,36 @@ class _ActiveMatchBannerState extends State<_ActiveMatchBanner>
   Widget build(BuildContext context) {
     if (_pending == null && _queued != null) return _queueBanner(context);
     if (_pending == null) return const SizedBox.shrink();
-    final scheme = Theme.of(context).colorScheme;
-    // Deliberately LOUD and distinct from the neutral Home cards around it -
-    // "you have a battle waiting RIGHT NOW" is the most time-sensitive thing
-    // on the screen, and the old primaryContainer tint blended in. A solid
-    // primary (brand pink) card with an icon and a high-contrast button reads
-    // as an alert, not another option.
+    // The most time-sensitive thing on Home - a battle waiting RIGHT NOW - so
+    // it is the neon strip with the stronger glow and a lit pill
+    // (2026-11-11 neon pass; was a solid pink GlossyShine card).
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Material(
-        color: scheme.primary,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: _rejoin,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-            child: Row(
-              children: [
-                Icon(Icons.sports_mma, color: scheme.onPrimary, size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Someone who left a standing challenge may have queued
-                      // hours ago and forgotten, so name what happened rather
-                      // than announcing a generic match.
-                      Text(
-                        switch (_pending?.origin) {
-                          'standing' => 'Someone took up your challenge',
-                          'friend' => 'Your friend battle is ready',
-                          _ => 'You have a match waiting',
-                        },
-                        style: TextStyle(
-                          color: scheme.onPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Tap to jump in',
-                        style: TextStyle(
-                          color: scheme.onPrimary.withValues(alpha: 0.85),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _rejoin,
-                  // A deep warm-charcoal button with a warm-white label - dark
-                  // on hot pink reads sharp and modern and meshes with the
-                  // warm pink far better than white or gold (both rejected).
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF221015),
-                    foregroundColor: const Color(0xFFFFF2F4),
-                  ),
-                  child: Text(switch (_pending?.origin) {
-                    'standing' => 'Battle now',
-                    'friend' => 'Battle now',
-                    _ => 'Rejoin',
-                  }),
-                ),
-              ],
-            ),
-          ),
+      child: NeonAlertStrip(
+        pulse: true,
+        leading: const Icon(
+          Icons.sports_mma_rounded,
+          color: Color(0xFFFF2E7E),
+          size: 24,
+          shadows: [Shadow(color: Color(0xFFFF2E7E), blurRadius: 10)],
         ),
+        title: switch (_pending?.origin) {
+          'standing' => 'Someone took up your challenge',
+          'friend' => 'Your friend battle is ready',
+          _ => 'You have a match waiting',
+        },
+        subtitle: 'Tap to jump in',
+        pillLabel: switch (_pending?.origin) {
+          'standing' || 'friend' => 'Battle now',
+          _ => 'Rejoin',
+        },
+        onTap: _rejoin,
       ),
     );
   }
 }
 
-/// One-click return to a live gauntlet you backed out of or crashed during.
-///
+/// The rank card, docked at the bottom of Home (2026-11-11 swipe layout).
 class _RankBadge extends StatelessWidget {
   const _RankBadge({required this.uid});
 
@@ -1226,10 +1125,27 @@ class _RankBadge extends StatelessWidget {
         // softening of the hidden-criteria rule - the developer's call to
         // match the reference. The card degrades to the fallback title if
         // the meter/rank queries fail, so the identity never disappears.
+        final profile = data['profile'] as Map?;
+        final photos = profile?['photoUrls'];
+        final face = profile?['facePhotoUrl'];
+        final photo = face is String && face.isNotEmpty
+            ? face
+            : (photos is List && photos.isNotEmpty && photos.first is String
+                  ? photos.first as String
+                  : null);
         return PlayerStatusCard(
           uid: uid,
           fallbackTitle: rankTitle,
           fallbackPoints: points,
+          compact: true,
+          // The judging streak - the one streak Home shows (2026-11-11).
+          extra: liveJudgeStreakDays(data['voteStreak']) > 0
+              ? '🔥 ${liveJudgeStreakDays(data['voteStreak'])}'
+              : null,
+          name: (data['username'] as String?) ?? '?',
+          photoUrl: photo,
+          onTap: () => MainShell.goPage(MainShell.pageProfile),
+          onRankTap: () => MainShell.goPage(MainShell.pageLeaderboard),
         );
       },
     );
@@ -1237,6 +1153,7 @@ class _RankBadge extends StatelessWidget {
 }
 
 /// Streams the user's spendable balance for the Home wallet line.
+// ignore: unused_element
 class _WalletBarForUser extends StatelessWidget {
   const _WalletBarForUser({required this.uid});
 
@@ -1359,8 +1276,8 @@ class _PlayWatchDoors extends StatelessWidget {
           // sits under it as the "play for real" step.
           HomeActionCard(
             label: 'ROAST A FRIEND',
-            icon: HomeActionCard.neonIcon(Icons.group, _kFriendGreen),
-            accent: _kFriendGreen,
+            icon: HomeActionCard.neonIcon(Icons.group, _kPlayPink),
+            accent: _kPlayPink,
             accentEnd: _kNeonBlue,
             subtitle: 'Challenge someone you know',
             onTap: () => Navigator.of(
@@ -1376,18 +1293,18 @@ class _PlayWatchDoors extends StatelessWidget {
               highlight:
                   'Strangers judge it and settle who won. It never touches '
                   'your rank - want it to count? Play ranked.',
-              accent: _kFriendGreen,
+              accent: _kPlayPink,
             ),
           ),
           const SizedBox(height: 18),
           HomeActionCard(
             label: 'RANKED',
-            icon: HomeActionCard.neonIcon(Icons.mic, _kPlayPink),
-            accent: _kPlayPink,
+            icon: HomeActionCard.neonIcon(Icons.mic, _kWatchPurple),
+            accent: _kWatchPurple,
             accentEnd: _kNeonBlue,
             subtitle: 'Roast a stranger',
             // The 2x "power hour" line, condensed, lives inside Play.
-            footer: const DailyWindowStrip(compact: true),
+            footer: const DailyWindowStrip(compact: true, color: _kWatchPurple),
             // Face-Off lives INSIDE Ranked (2026-11-09): while it's switched on
             // this asks which; while it's off it goes straight to a roast.
             onTap: () => _chooseRanked(context),
@@ -1401,7 +1318,7 @@ class _PlayWatchDoors extends StatelessWidget {
               highlight:
                   'Top performers earn a spot on the Main Stage for a chance to '
                   'win prizes and fame.',
-              accent: _kPlayPink,
+              accent: _kWatchPurple,
             ),
           ),
           const SizedBox(height: 18),
@@ -1410,8 +1327,8 @@ class _PlayWatchDoors extends StatelessWidget {
             // runs on, and an active "you decide the winner" framing pulls far
             // harder than a passive "watch". They watch anyway to judge.
             label: 'JUDGE',
-            icon: HomeActionCard.neonIcon(Icons.gavel, _kWatchPurple),
-            accent: _kWatchPurple,
+            icon: HomeActionCard.neonIcon(Icons.gavel, _kFriendGreen),
+            accent: _kFriendGreen,
             accentEnd: _kNeonBlue,
             subtitle: 'Your vote decides the winner',
             onTap: () => MainShell.go(MainShell.tabWatch),
@@ -1423,18 +1340,18 @@ class _PlayWatchDoors extends StatelessWidget {
                   'votes decide the winners, and you earn points every time you '
                   'judge.',
               highlight: "Top judges earn a spot at the judges' table.",
-              // Brighter than the Judge purple so the hook stands out, with the
+              // Brighter than the Judge green so the hook stands out, with the
               // "judges' table" as a link into the Main Stage judges' lobby
               // (where people volunteer to judge). The hub handles its own
               // coming-soon state while the tournament is switched off.
-              highlightColor: const Color(0xFFCE8BFF),
+              highlightColor: const Color(0xFF8FF5C9),
               highlightLinkText: "judges' table",
               onHighlightTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const TournamentHubScreen(initialTab: 2),
                 ),
               ),
-              accent: _kWatchPurple,
+              accent: _kFriendGreen,
             ),
           ),
         ],
@@ -1472,7 +1389,7 @@ Future<void> _chooseRanked(BuildContext context) async {
     await _startMatch(context, 'ranked');
     return;
   }
-  final mode = await showModalBottomSheet<String>(
+  final mode = await showNeonSheet<String>(
     context: context,
     showDragHandle: true,
     builder: (ctx) => SafeArea(
@@ -1488,7 +1405,7 @@ Future<void> _chooseRanked(BuildContext context) async {
               icon: Icons.mic,
               label: 'Roast battle',
               subtitle: 'Take turns roasting each other',
-              iconColor: _kPlayPink,
+              iconColor: _kWatchPurple,
               onTap: () => Navigator.pop(ctx, 'ranked'),
             ),
             const SizedBox(height: 10),
@@ -1632,6 +1549,57 @@ class _BattleReadyBanner extends StatelessWidget {
                     const Icon(Icons.chevron_right),
                   ],
                 ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Your photo, top left of Home: opens the Profile page (one swipe right of
+/// Home). Falls back to your initial until you have a photo.
+// ignore: unused_element
+class _MyPhotoButton extends StatelessWidget {
+  const _MyPhotoButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const SizedBox.shrink();
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots(),
+      builder: (context, snap) {
+        final data = snap.data?.data();
+        final profile = data?['profile'] as Map?;
+        final photos = profile?['photoUrls'];
+        final face = profile?['facePhotoUrl'];
+        final photo = face is String && face.isNotEmpty
+            ? face
+            : (photos is List && photos.isNotEmpty && photos.first is String
+                  ? photos.first as String
+                  : null);
+        final name = (data?['username'] as String?) ?? '?';
+        return Center(
+          child: Semantics(
+            button: true,
+            label: 'Your profile',
+            child: GestureDetector(
+              onTap: () => MainShell.goPage(MainShell.pageProfile),
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFFF3B8D), width: 2),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x80FF3B8D), blurRadius: 10),
+                  ],
+                ),
+                child: PlayerAvatar(name: name, photoUrl: photo, size: 36),
               ),
             ),
           ),

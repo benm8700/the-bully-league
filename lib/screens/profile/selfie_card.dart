@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/visual_moderation_service.dart';
+import '../../widgets/neon_dialog.dart';
 
 /// The outcome of a selfie capture attempt.
 typedef SelfieResult = ({bool ok, bool cancelled, String? reason});
@@ -70,14 +71,33 @@ class SelfieCard extends StatefulWidget {
         try {
           await ref.delete();
         } catch (_) {}
+        // Say it LOUDLY. A small status line under the card was easy to miss
+        // (or sat behind the next prompt), so a rejected selfie looked like it
+        // had saved and the app then asked for it again.
+        if (context.mounted) {
+          await showDialog<void>(
+            context: context,
+            builder: (ctx) => NeonDialog(
+              title: const Text("That selfie didn't go through"),
+              content: Text('$rejection\n\nNothing was saved. Try again.'),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
         return (ok: false, cancelled: false, reason: rejection);
       }
 
       final url = await ref.getDownloadURL();
-      final userRef =
-          FirebaseFirestore.instance.collection('users').doc(uid);
-      final oldUrl = ((await userRef.get()).data()?['profile']
-          as Map<String, dynamic>?)?['facePhotoUrl'] as String?;
+      final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+      final oldUrl =
+          ((await userRef.get()).data()?['profile']
+                  as Map<String, dynamic>?)?['facePhotoUrl']
+              as String?;
       // facePhotoUrl drives the battle gate; photoUrls keeps the existing
       // avatar/directory readers working with no change.
       await userRef.set({
@@ -118,16 +138,19 @@ class _SelfieCardState extends State<SelfieCard> {
   @override
   void initState() {
     super.initState();
-    _sub = _userRef.snapshots().listen((snap) {
-      if (!mounted) return;
-      final profile = snap.data()?['profile'] as Map<String, dynamic>? ?? {};
-      setState(() {
-        _photoUrl = profile['facePhotoUrl'] as String?;
-        _loading = false;
-      });
-    }, onError: (_) {
-      if (mounted) setState(() => _loading = false);
-    });
+    _sub = _userRef.snapshots().listen(
+      (snap) {
+        if (!mounted) return;
+        final profile = snap.data()?['profile'] as Map<String, dynamic>? ?? {};
+        setState(() {
+          _photoUrl = profile['facePhotoUrl'] as String?;
+          _loading = false;
+        });
+      },
+      onError: (_) {
+        if (mounted) setState(() => _loading = false);
+      },
+    );
   }
 
   @override
@@ -146,7 +169,11 @@ class _SelfieCardState extends State<SelfieCard> {
       result = await SelfieCard.capture(context);
     } catch (e) {
       // Belt and braces: whatever goes wrong, never leave the button disabled.
-      result = (ok: false, cancelled: false, reason: 'Could not take selfie: $e');
+      result = (
+        ok: false,
+        cancelled: false,
+        reason: 'Could not take selfie: $e',
+      );
     }
     if (!mounted) return;
     setState(() {
@@ -176,14 +203,15 @@ class _SelfieCardState extends State<SelfieCard> {
             const SizedBox(width: 8),
             if (!hasPhoto)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: scheme.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text('Required',
-                    style: text.labelSmall?.copyWith(color: scheme.primary)),
+                child: Text(
+                  'Required',
+                  style: text.labelSmall?.copyWith(color: scheme.primary),
+                ),
               ),
           ],
         ),
@@ -191,9 +219,9 @@ class _SelfieCardState extends State<SelfieCard> {
         Text(
           hasPhoto
               ? 'This is the face your opponent sees before a battle. Tap '
-                  'Retake for a new one.'
+                    'Retake for a new one.'
               : 'Take a quick selfie. Your opponent sees who they\'re facing - '
-                  'you cannot battle without it.',
+                    'you cannot battle without it.',
           style: text.bodySmall,
         ),
         const SizedBox(height: 12),
@@ -238,9 +266,10 @@ class _SelfieCardState extends State<SelfieCard> {
             child: Row(
               children: [
                 SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
                 SizedBox(width: 12),
                 Expanded(child: Text('Checking your selfie...')),
               ],

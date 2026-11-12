@@ -1,6 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
-
+import '../../widgets/neon_dialog.dart';
 
 /// Lets a player object to their own battle footage being public.
 ///
@@ -22,7 +22,7 @@ class ClipTakedownSheet extends StatefulWidget {
   final String matchId;
 
   static Future<void> show(BuildContext context, String matchId) {
-    return showModalBottomSheet<void>(
+    return showNeonSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (_) => ClipTakedownSheet(matchId: matchId),
@@ -166,8 +166,10 @@ class _ClipTakedownSheetState extends State<ClipTakedownSheet> {
         step,
         if (_error != null) ...[
           const SizedBox(height: 12),
-          Text(_error!,
-              style: const TextStyle(color: Color(0xFFE05252), fontSize: 12)),
+          Text(
+            _error!,
+            style: const TextStyle(color: Color(0xFFE05252), fontSize: 12),
+          ),
         ],
       ],
     );
@@ -175,14 +177,15 @@ class _ClipTakedownSheetState extends State<ClipTakedownSheet> {
 
   /// Step 1 - the gate. Nothing about the harm channel shows until they say
   /// yes, so a casual "delete my loss" impulse stops here.
-  Widget _gateStep(
-      BuildContext context, bool preferenceOpen, int remaining) {
+  Widget _gateStep(BuildContext context, bool preferenceOpen, int remaining) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Is this clip causing you harm?',
-            style: Theme.of(context).textTheme.titleLarge),
+        Text(
+          'Is this clip causing you harm?',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
         const SizedBox(height: 10),
         // The line that does the real work: most delete requests are really
         // about a loss, and this removes the motive without obstruction.
@@ -197,17 +200,26 @@ class _ClipTakedownSheetState extends State<ClipTakedownSheet> {
         // All buttons in this flow are PLAIN and neutral, never a highlighted
         // CTA - a prominent pink "report" button reads as the app inviting
         // reports, which is the opposite of the intent here.
-        _plainAction(context, 'Yes, it is causing me harm',
-            _working ? null : () => setState(() => _step = 'reminder')),
+        _plainAction(
+          context,
+          'Yes, it is causing me harm',
+          _working ? null : () => setState(() => _step = 'reminder'),
+        ),
         const SizedBox(height: 8),
-        _plainCancel(context, 'No, never mind',
-            () => Navigator.of(context).pop()),
+        _plainCancel(
+          context,
+          'No, never mind',
+          () => Navigator.of(context).pop(),
+        ),
         // The pre-publication opt-out survives, but quietly - a small
         // secondary link, only while the clip has not gone public and the
         // monthly allowance is left. Not promoted (clips are distribution).
         if (preferenceOpen && remaining > 0)
-          _plainCancel(context, "I'd just rather it wasn't posted",
-              _working ? null : () => _request('preference')),
+          _plainCancel(
+            context,
+            "I'd just rather it wasn't posted",
+            _working ? null : () => _request('preference'),
+          ),
       ],
     );
   }
@@ -215,7 +227,10 @@ class _ClipTakedownSheetState extends State<ClipTakedownSheet> {
   /// A plain, un-highlighted action button (outlined, neutral colour) - not a
   /// filled brand CTA, so the reporting flow never looks like an invitation.
   Widget _plainAction(
-      BuildContext context, String label, VoidCallback? onPressed) {
+    BuildContext context,
+    String label,
+    VoidCallback? onPressed,
+  ) {
     final scheme = Theme.of(context).colorScheme;
     return OutlinedButton(
       style: OutlinedButton.styleFrom(
@@ -232,7 +247,10 @@ class _ClipTakedownSheetState extends State<ClipTakedownSheet> {
 
   /// A muted text button for cancel / secondary actions.
   Widget _plainCancel(
-      BuildContext context, String label, VoidCallback? onPressed) {
+    BuildContext context,
+    String label,
+    VoidCallback? onPressed,
+  ) {
     return TextButton(
       style: TextButton.styleFrom(
         foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -259,8 +277,11 @@ class _ClipTakedownSheetState extends State<ClipTakedownSheet> {
           style: TextStyle(fontSize: 13),
         ),
         const SizedBox(height: 20),
-        _plainAction(context, 'I understand - continue',
-            _working ? null : () => setState(() => _step = 'grounds')),
+        _plainAction(
+          context,
+          'I understand - continue',
+          _working ? null : () => setState(() => _step = 'grounds'),
+        ),
         const SizedBox(height: 8),
         _plainCancel(context, 'Never mind', () => Navigator.of(context).pop()),
       ],
@@ -274,8 +295,10 @@ class _ClipTakedownSheetState extends State<ClipTakedownSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Does the clip do one of these?',
-            style: Theme.of(context).textTheme.titleLarge),
+        Text(
+          'Does the clip do one of these?',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
         const SizedBox(height: 6),
         const Text(
           'Pick the one that fits. The clip comes down straight away and a '
@@ -286,8 +309,11 @@ class _ClipTakedownSheetState extends State<ClipTakedownSheet> {
         for (final entry in _harmGrounds.entries)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: _plainAction(context, entry.value,
-                _working ? null : () => _request('harm', reason: entry.key)),
+            child: _plainAction(
+              context,
+              entry.value,
+              _working ? null : () => _request('harm', reason: entry.key),
+            ),
           ),
         const SizedBox(height: 4),
         _plainCancel(context, 'Back', () => setState(() => _step = 'gate')),

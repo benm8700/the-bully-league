@@ -34,7 +34,10 @@ class TournamentFinalePopup {
         pageBuilder: (_, _, _) => const SizedBox.shrink(),
         transitionBuilder: (dialogContext, anim, _, _) {
           // Scale + fade entrance; a tiny overshoot so it lands with a pop.
-          final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutBack);
+          final curved = CurvedAnimation(
+            parent: anim,
+            curve: Curves.easeOutBack,
+          );
           return Opacity(
             opacity: anim.value.clamp(0.0, 1.0),
             child: Transform.scale(
@@ -49,7 +52,12 @@ class TournamentFinalePopup {
     }
   }
 
-  static _FinaleLook _lookFor(int place, int total, String name, String? label) {
+  static _FinaleLook _lookFor(
+    int place,
+    int total,
+    String name,
+    String? label,
+  ) {
     switch (place) {
       case 1:
         return _FinaleLook(
@@ -58,7 +66,8 @@ class TournamentFinalePopup {
           eyebrow: name.toUpperCase(),
           headline: 'CHAMPION',
           badge: '1st Place',
-          body: 'You ran the whole Main Stage and left nothing standing. '
+          body:
+              'You ran the whole Main Stage and left nothing standing. '
               '$name is yours. Soak it in — someone is already practising '
               'their callout for you.',
           button: 'Take a bow',
@@ -70,7 +79,8 @@ class TournamentFinalePopup {
           eyebrow: name.toUpperCase(),
           headline: 'FINALIST',
           badge: '2nd Place',
-          body: 'You made the final of $name and went down swinging. One '
+          body:
+              'You made the final of $name and went down swinging. One '
               'roaster beat you tonight — everyone else lost to you. Come '
               'back for the belt.',
           button: 'Run it back',
@@ -82,7 +92,8 @@ class TournamentFinalePopup {
           eyebrow: name.toUpperCase(),
           headline: 'SEMIFINALIST',
           badge: 'Top $total',
-          body: 'Top $total at $name. You outlasted the field and came up one '
+          body:
+              'Top $total at $name. You outlasted the field and came up one '
               'win short of the final. The belt is still out there.',
           button: 'Run it back',
         );
@@ -93,7 +104,8 @@ class TournamentFinalePopup {
           eyebrow: name.toUpperCase(),
           headline: (label ?? 'MAIN STAGE').toUpperCase(),
           badge: 'Top $total',
-          body: 'You made the Main Stage at $name — further than most ever '
+          body:
+              'You made the Main Stage at $name — further than most ever '
               'get. Back for more next week.',
           button: 'Run it back',
         );
@@ -139,7 +151,10 @@ class _FinaleCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFF17131A),
                 borderRadius: BorderRadius.circular(26),
-                border: Border.all(color: accent.withValues(alpha: 0.65), width: 1.5),
+                border: Border.all(
+                  color: accent.withValues(alpha: 0.65),
+                  width: 1.5,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: accent.withValues(alpha: 0.35),
@@ -167,7 +182,10 @@ class _FinaleCard extends StatelessWidget {
                       ),
                     ),
                     child: Center(
-                      child: Text(look.emoji, style: const TextStyle(fontSize: 64)),
+                      child: Text(
+                        look.emoji,
+                        style: const TextStyle(fontSize: 64),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -199,7 +217,10 @@ class _FinaleCard extends StatelessWidget {
                   const SizedBox(height: 12),
                   // Placement pill.
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 7,
+                    ),
                     decoration: BoxDecoration(
                       color: accent.withValues(alpha: 0.16),
                       borderRadius: BorderRadius.circular(999),

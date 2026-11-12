@@ -69,8 +69,12 @@ class EventWindowConfig {
 
     final name = data['name'];
     return EventWindowConfig(
-      enabled: data['enabled'] is bool ? data['enabled'] as bool : fallback.enabled,
-      name: (name is String && name.trim().isNotEmpty) ? name.trim() : fallback.name,
+      enabled: data['enabled'] is bool
+          ? data['enabled'] as bool
+          : fallback.enabled,
+      name: (name is String && name.trim().isNotEmpty)
+          ? name.trim()
+          : fallback.name,
       startHourPacific: start,
       endHourPacific: end > start ? end : fallback.endHourPacific,
     );
@@ -86,15 +90,24 @@ class EventWindowConfig {
 /// Sunday of November at 2am local daylight (09:00 UTC).
 bool isPacificDaylightTime(DateTime instant) {
   final utc = instant.toUtc();
-  final start = _nthWeekdayOfMonth(utc.year, DateTime.march, DateTime.sunday, 2)
-      .add(const Duration(hours: 10));
-  final end = _nthWeekdayOfMonth(utc.year, DateTime.november, DateTime.sunday, 1)
-      .add(const Duration(hours: 9));
+  final start = _nthWeekdayOfMonth(
+    utc.year,
+    DateTime.march,
+    DateTime.sunday,
+    2,
+  ).add(const Duration(hours: 10));
+  final end = _nthWeekdayOfMonth(
+    utc.year,
+    DateTime.november,
+    DateTime.sunday,
+    1,
+  ).add(const Duration(hours: 9));
   return !utc.isBefore(start) && utc.isBefore(end);
 }
 
-Duration pacificOffset(DateTime instant) =>
-    isPacificDaylightTime(instant) ? _pacificDaylightOffset : _pacificStandardOffset;
+Duration pacificOffset(DateTime instant) => isPacificDaylightTime(instant)
+    ? _pacificDaylightOffset
+    : _pacificStandardOffset;
 
 /// Midnight UTC on the [n]th [weekday] of [month]. A calendar date's
 /// weekday is the same in every timezone, so computing this in UTC gives
@@ -124,7 +137,10 @@ class EventWindowOccurrence {
 /// Callers get an absolute UTC instant and format it in the viewer's own
 /// timezone, which is what lets the UI show "6pm PT — 9pm your time"
 /// without anyone doing timezone arithmetic by hand.
-EventWindowOccurrence currentOrNextWindow(DateTime now, EventWindowConfig config) {
+EventWindowOccurrence currentOrNextWindow(
+  DateTime now,
+  EventWindowConfig config,
+) {
   final utc = now.toUtc();
 
   // Today's window, then tomorrow's, taking the first that hasn't ended.
@@ -165,15 +181,22 @@ String upcomingWindowDayKey(DateTime now, EventWindowConfig config) {
 /// the server's qualifyingWeek (Thursday cutoff) + SHOW_HOUR_PACIFIC (18), so
 /// Home can show a live countdown even before the tournament sweep publishes a
 /// cutoff. The day/hour are placeholders like the rest of the event config.
-DateTime nextMainStageFinals(DateTime now,
-    {int showHour = 18, int weekday = DateTime.thursday}) {
+DateTime nextMainStageFinals(
+  DateTime now, {
+  int showHour = 18,
+  int weekday = DateTime.thursday,
+}) {
   final utc = now.toUtc();
   // Resolve a Pacific wall-clock (year/month/day at showHour) to UTC, settling
   // the offset at the instant itself (two passes), exactly like the daily
   // window math above so a DST-transition day is never an hour out.
   DateTime pacificWallToUtc(DateTime approxPacific) {
     final wall = DateTime.utc(
-        approxPacific.year, approxPacific.month, approxPacific.day, showHour);
+      approxPacific.year,
+      approxPacific.month,
+      approxPacific.day,
+      showHour,
+    );
     var guess = wall.subtract(pacificOffset(utc));
     guess = wall.subtract(pacificOffset(guess));
     return guess;
@@ -182,25 +205,36 @@ DateTime nextMainStageFinals(DateTime now,
   // Scan the next 8 Pacific days for the first Thursday whose 6pm is still
   // ahead of now.
   for (var dayOffset = 0; dayOffset <= 7; dayOffset++) {
-    final approxPacific =
-        utc.add(pacificOffset(utc)).add(Duration(days: dayOffset));
+    final approxPacific = utc
+        .add(pacificOffset(utc))
+        .add(Duration(days: dayOffset));
     if (approxPacific.weekday != weekday) continue;
     final instant = pacificWallToUtc(approxPacific);
     if (utc.isBefore(instant)) return instant;
   }
   // Unreachable for a sane clock; a week out is safer than throwing in a build.
-  return pacificWallToUtc(utc.add(pacificOffset(utc)).add(
-      const Duration(days: 7)));
+  return pacificWallToUtc(
+    utc.add(pacificOffset(utc)).add(const Duration(days: 7)),
+  );
 }
 
 EventWindowOccurrence _windowOnPacificDay(
-    DateTime utc, int dayOffset, EventWindowConfig config) {
+  DateTime utc,
+  int dayOffset,
+  EventWindowConfig config,
+) {
   // Pacific wall-clock date for the day in question.
-  final approxPacific = utc.add(pacificOffset(utc)).add(Duration(days: dayOffset));
+  final approxPacific = utc
+      .add(pacificOffset(utc))
+      .add(Duration(days: dayOffset));
 
   DateTime toUtcFromPacificWallClock(int hour) {
     final wall = DateTime.utc(
-        approxPacific.year, approxPacific.month, approxPacific.day, hour);
+      approxPacific.year,
+      approxPacific.month,
+      approxPacific.day,
+      hour,
+    );
     // Resolve the offset at the instant itself rather than at `now`: on a
     // DST-transition day those differ, and using `now`'s offset would put
     // the window an hour out for the whole day. One correction pass is

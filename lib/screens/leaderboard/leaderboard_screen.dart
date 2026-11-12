@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../directory/player_search_screen.dart';
+
 import '../../core/emoji_ratings.dart';
 import '../../core/services/belt_service.dart';
 import '../../theme/app_theme.dart';
@@ -113,8 +115,14 @@ class LeaderboardScreen extends StatelessWidget {
           // jammed against the top edge (the full 56px band pushed the whole
           // list too far down). The SafeArea below clears whatever height this
           // is, so the list stays snug under the tabs either way.
-          toolbarHeight: embedded ? 18 : kToolbarHeight,
+          // FIND A PLAYER lives here, top-centre (2026-11-11, developer's
+          // call): it was a small magnifier on Home that nobody noticed.
+          toolbarHeight: embedded
+              ? 56
+              : null, // null = theme (64, fits the back badge)
           automaticallyImplyLeading: !embedded,
+          centerTitle: true,
+          title: const _FindPlayerButton(),
           bottom: TabBar(
             // Ranks keeps the neutral accent; Fame the pink so the selected
             // tab colour itself signals which axis you're on.
@@ -124,7 +132,10 @@ class LeaderboardScreen extends StatelessWidget {
             // Tighter than before: 3 equal-width tabs, and the longest label
             // ("FUNNIEST") was clipped at letterSpacing 2 / size 15.
             labelStyle: const TextStyle(
-                fontWeight: FontWeight.w900, letterSpacing: 0.5, fontSize: 13),
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+              fontSize: 13,
+            ),
             labelPadding: const EdgeInsets.symmetric(horizontal: 4),
             tabs: const [
               Tab(text: 'RANKS'),
@@ -154,7 +165,7 @@ class LeaderboardScreen extends StatelessWidget {
                   colors: [
                     Color(0x3D000000),
                     Color(0x0A000000),
-                    Color(0x59000000)
+                    Color(0x59000000),
                   ],
                 ),
               ),
@@ -162,17 +173,29 @@ class LeaderboardScreen extends StatelessWidget {
             SafeArea(
               child: Column(
                 children: [
-                  // The reigning Main Stage champion - the belt is the top
-                  // prize of the whole competition, so it sits above all three
-                  // boards. Renders nothing until someone holds it.
-                  const _BeltBanner(),
+                  // The reigning champion is now a 🏆 beside their name on
+                  // every row (_BeltMark), not a banner over the boards.
                   Expanded(
                     child: TabBarView(
+                      // In the swipe layout (embedded) a sideways swipe moves
+                      // between Home and this page, so the RANKS / FAME /
+                      // APPLAUSE tabs switch by tap only (2026-11-11).
+                      physics: embedded
+                          ? const NeverScrollableScrollPhysics()
+                          : null,
                       children: [
-                        _buildPlayers(context, skillQuery,
-                            fame: false, topPad: topPad),
-                        _buildPlayers(context, fameQuery,
-                            fame: true, topPad: topPad),
+                        _buildPlayers(
+                          context,
+                          skillQuery,
+                          fame: false,
+                          topPad: topPad,
+                        ),
+                        _buildPlayers(
+                          context,
+                          fameQuery,
+                          fame: true,
+                          topPad: topPad,
+                        ),
                         _EmojiBoard(topPad: topPad),
                       ],
                     ),
@@ -210,9 +233,9 @@ class LeaderboardScreen extends StatelessWidget {
             title: fame ? 'No fans yet' : 'No one on the board yet',
             message: fame
                 ? 'Get funny in front of a crowd and people will follow '
-                    'you. The most-followed comedians show up here.'
+                      'you. The most-followed comedians show up here.'
                 : 'Play a battle and you could be the first name '
-                    'on the board.',
+                      'on the board.',
           );
         }
         final me = FirebaseAuth.instance.currentUser?.uid;
@@ -231,8 +254,8 @@ class LeaderboardScreen extends StatelessWidget {
             fame ? (d['followerCount'] as num? ?? 0) : d['rating'] as num?;
         final positions = List<int>.filled(docs.length, 0);
         for (var i = 0; i < docs.length; i++) {
-          positions[i] = (i > 0 &&
-                  sortKey(docs[i].data()) == sortKey(docs[i - 1].data()))
+          positions[i] =
+              (i > 0 && sortKey(docs[i].data()) == sortKey(docs[i - 1].data()))
               ? positions[i - 1]
               : i + 1;
         }
@@ -274,86 +297,27 @@ class LeaderboardScreen extends StatelessWidget {
 /// the Daily Gauntlet. A single scarce, losable title (the belt changes hands
 /// the next time someone wins a gauntlet). Public, like the GOAT flame. Renders
 /// nothing until a champion exists, and taps through to the holder's profile.
-class _BeltBanner extends StatelessWidget {
-  const _BeltBanner();
-
-  static const _gold = Color(0xFFF4C838);
+/// A name with a 🏆 after it when that player holds the belt (the reigning
+/// champion). One shared stream - BeltService.watch() is a single doc listener.
+class _NameWithBelt extends StatelessWidget {
+  const _NameWithBelt({required this.uid, required this.child});
+  final String? uid;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    if (uid == null) return child;
     return StreamBuilder<BeltHolder>(
       stream: BeltService.watch(),
       builder: (context, snap) {
         final belt = snap.data;
-        if (belt == null || !belt.hasHolder) return const SizedBox.shrink();
-        final name = belt.holderName ?? 'Champion';
-        final uid = belt.holderUid;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: uid == null
-                  ? null
-                  : () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => PerformerProfileScreen(
-                          uid: uid, seedUsername: belt.holderName))),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF3A2F14), Color(0xFF1A1508)],
-                  ),
-                  border: Border.all(color: _gold.withValues(alpha: 0.6)),
-                ),
-                child: Row(
-                  children: [
-                    const Text('🏆', style: TextStyle(fontSize: 22)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'REIGNING CHAMPION',
-                            style: TextStyle(
-                              color: _gold,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                          const SizedBox(height: 1),
-                          Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (belt.defenseCount > 0)
-                      Text(
-                        'Defended ×${belt.defenseCount}',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+        if (belt == null || belt.holderUid != uid) return child;
+        return Row(
+          children: [
+            Flexible(child: child),
+            const SizedBox(width: 6),
+            const Text('🏆', style: TextStyle(fontSize: 15)),
+          ],
         );
       },
     );
@@ -422,11 +386,9 @@ class _EmojiToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(
-            child: _seg('fire', '\u{1F525}', 'On Fire', _hotAccent)),
+        Expanded(child: _seg('fire', '\u{1F525}', 'On Fire', _hotAccent)),
         const SizedBox(width: 8),
-        Expanded(
-            child: _seg('clever', '\u{1F9E0}', 'Clever', _cleverAccent)),
+        Expanded(child: _seg('clever', '\u{1F9E0}', 'Clever', _cleverAccent)),
       ],
     );
   }
@@ -456,8 +418,7 @@ class _EmojiToggle extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color:
-                    on ? Colors.white : Colors.white.withValues(alpha: 0.6),
+                color: on ? Colors.white : Colors.white.withValues(alpha: 0.6),
                 fontWeight: FontWeight.w800,
                 fontSize: 13,
               ),
@@ -509,9 +470,9 @@ class _EmojiList extends StatelessWidget {
             title: isFire ? 'No fire yet' : 'No clever picks yet',
             message: isFire
                 ? 'The crowd hands out \u{1F525} to the funniest performances. '
-                    'Rack them up and you top this board.'
+                      'Rack them up and you top this board.'
                 : 'The crowd hands out \u{1F9E0} for the smartest, most original '
-                    'material. Earn them and you top this board.',
+                      'material. Earn them and you top this board.',
           );
         }
         final me = FirebaseAuth.instance.currentUser?.uid;
@@ -608,14 +569,14 @@ class _Row extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(emojiGlyph ?? '\u{1F525}',
-              style: const TextStyle(fontSize: 13)),
+          Text(emojiGlyph ?? '\u{1F525}', style: const TextStyle(fontSize: 13)),
           const SizedBox(width: 4),
           Text(
             '$emojiCount',
             style: text.bodyMedium?.copyWith(
-                color: emojiColor ?? _hotAccent,
-                fontWeight: FontWeight.w800),
+              color: emojiColor ?? _hotAccent,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       );
@@ -628,14 +589,18 @@ class _Row extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             '$fameCount',
-            style: text.bodyMedium
-                ?.copyWith(color: _fameAccent, fontWeight: FontWeight.w800),
+            style: text.bodyMedium?.copyWith(
+              color: _fameAccent,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       );
     }
-    return Text('$wins-$losses',
-        style: text.bodyMedium?.copyWith(color: recordColor));
+    return Text(
+      '$wins-$losses',
+      style: text.bodyMedium?.copyWith(color: recordColor),
+    );
   }
 
   @override
@@ -682,18 +647,25 @@ class _Row extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   '$position',
-                  style: text.titleMedium
-                      ?.copyWith(color: gold, fontWeight: FontWeight.w900),
+                  style: text.titleMedium?.copyWith(
+                    color: gold,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ],
             ),
           ),
-          title: Text(
-            '$username (you)',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: text.bodyLarge
-                ?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+          title: _NameWithBelt(
+            uid: uid,
+            child: Text(
+              '$username (you)',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: text.bodyLarge?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
           trailing: _trailing(text, recordColor: Colors.white),
         ),
@@ -703,9 +675,44 @@ class _Row extends StatelessWidget {
     // EVERY other row shows its position number (a real ranking). An actual
     // GOAT additionally carries the 🐐. Understated over the art: a dark glass
     // tile, white name, muted-grey number and record.
-    final marker = isGoat ? '$position 🐐' : '$position';
+    // Icons sit LEFT of the number, same as the 👑 on your own row.
+    final marker = isGoat ? '🐐 $position' : '$position';
     // DENSE single-line rows so the top ~25 fit without scrolling - the
     // board's job is a scoreboard you can scan, not a few oversized cards.
+    return StreamBuilder<BeltHolder>(
+      stream: uid == null ? null : BeltService.watch(),
+      builder: (context, snap) {
+        final isChamp = uid != null && snap.data?.holderUid == uid;
+        final tile = _plainTile(context, text, marker, isChamp: isChamp);
+        if (!isChamp) return tile;
+        // THE REIGNING CHAMPION: a gold stripe on the left edge with a gold
+        // wash that fades out to the right. Deliberately unlike your own row
+        // (full gold border + glow), so the two never read as the same thing.
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFFF4C838).withValues(alpha: 0.32),
+                Colors.black.withValues(alpha: 0.36),
+              ],
+              stops: const [0.0, 0.75],
+            ),
+            border: const Border(
+              left: BorderSide(color: Color(0xFFF4C838), width: 4),
+            ),
+          ),
+          child: tile,
+        );
+      },
+    );
+  }
+
+  Widget _plainTile(
+    BuildContext context,
+    TextTheme text,
+    String marker, {
+    required bool isChamp,
+  }) {
     return ListTile(
       dense: true,
       onTap: _tap(context),
@@ -713,16 +720,17 @@ class _Row extends StatelessWidget {
       minVerticalPadding: 4,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       // Dark GLASS, not opaque black, so the artwork stays subtly visible.
-      tileColor: Colors.black.withValues(alpha: 0.36),
+      tileColor: isChamp
+          ? Colors.transparent
+          : Colors.black.withValues(alpha: 0.36),
       leading: SizedBox(
-        width: 46,
+        width: 52,
         child: Text(
           marker,
           textAlign: TextAlign.center,
           style: text.titleMedium?.copyWith(
-              color: isGoat
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.6)),
+            color: isGoat ? Colors.white : Colors.white.withValues(alpha: 0.6),
+          ),
         ),
       ),
       // A pure skill ladder: position, name, record. No Elo number (hidden)
@@ -730,14 +738,22 @@ class _Row extends StatelessWidget {
       // an Elo-ranked board). The win-loss record is the one honest,
       // Elo-free signal that belongs on a competitive board - kept on the
       // trailing edge so each row is a single scannable line.
-      title: Text(
-        username,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: text.bodyLarge
-            ?.copyWith(color: Colors.white, fontWeight: FontWeight.w500),
+      title: _NameWithBelt(
+        uid: uid,
+        child: Text(
+          username,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: text.bodyLarge?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
-      trailing: _trailing(text, recordColor: Colors.white.withValues(alpha: 0.6)),
+      trailing: _trailing(
+        text,
+        recordColor: Colors.white.withValues(alpha: 0.6),
+      ),
     );
   }
 }
@@ -821,8 +837,10 @@ class _YourPositionState extends State<_YourPosition> {
               const Expanded(child: Divider()),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Text('YOU',
-                    style: Theme.of(context).textTheme.labelSmall),
+                child: Text(
+                  'YOU',
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
               ),
               const Expanded(child: Divider()),
             ],
@@ -837,6 +855,32 @@ class _YourPositionState extends State<_YourPosition> {
           isGoat: me['rankTitle'] == 'GOAT',
         ),
       ],
+    );
+  }
+}
+
+/// The "Find a player" pill at the top of Ranks - opens player search.
+class _FindPlayerButton extends StatelessWidget {
+  const _FindPlayerButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const PlayerSearchScreen())),
+      icon: const Icon(Icons.person_search_rounded, size: 20),
+      label: const Text(
+        'Find a player',
+        style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.3),
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white,
+        backgroundColor: Colors.black.withValues(alpha: 0.45),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      ),
     );
   }
 }

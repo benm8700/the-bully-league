@@ -27,8 +27,10 @@ class BeltHolder {
 }
 
 class BeltService {
-  static final DocumentReference<Map<String, dynamic>> _doc =
-      FirebaseFirestore.instance.collection('stats').doc('belt');
+  static final DocumentReference<Map<String, dynamic>> _doc = FirebaseFirestore
+      .instance
+      .collection('stats')
+      .doc('belt');
 
   /// Live stream of the belt holder (empty holder until someone wins one).
   static Stream<BeltHolder> watch() =>

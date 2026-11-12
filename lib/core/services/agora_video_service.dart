@@ -26,7 +26,12 @@ class AgoraVideoCallService implements VideoCallService {
   final ValueNotifier<int?> _remoteUid = ValueNotifier(null);
   final ValueNotifier<bool> _isJoined = ValueNotifier(false);
   final ValueNotifier<int> _localAudioLevel = ValueNotifier(0);
+  final ValueNotifier<bool> _localVoiceActive = ValueNotifier(false);
   final ValueNotifier<int?> _localUid = ValueNotifier(null);
+  final ValueNotifier<bool> _micFailed = ValueNotifier(false);
+  // Retries the mic while it is failed. See _onMicFailed.
+  Timer? _micRetryTimer;
+  bool _disposed = false;
   final StreamController<Map<String, dynamic>> _matchMessages =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<RawVideoFrame> _remoteFrameSamples =
@@ -45,7 +50,48 @@ class AgoraVideoCallService implements VideoCallService {
   ValueListenable<int> get localAudioLevel => _localAudioLevel;
 
   @override
+  ValueListenable<bool> get localVoiceActive => _localVoiceActive;
+
+  @override
   ValueListenable<int?> get localUid => _localUid;
+
+  @override
+  ValueListenable<bool> get micFailed => _micFailed;
+
+  /// MIC RECOVERY (2026-11-10). Found on a real iPhone battle: a Bluetooth
+  /// headset took the audio session 4s into the warm-up, Agora reported the
+  /// local mic FAILED (reason: interrupted), iOS never sent the matching
+  /// interruption-end, and the player spent their whole turn publishing
+  /// silence - nobody heard them and the clip was mute, with nothing on
+  /// screen to say so. Agora only self-heals on interruption-END, so we
+  /// restart capture ourselves (enableLocalAudio off/on re-acquires the
+  /// session) every few seconds until it comes back, and expose [micFailed]
+  /// so the battle screen can warn the player meanwhile.
+  void _onMicFailed() {
+    _micFailed.value = true;
+    if (_micRetryTimer != null) return;
+    _micRetryTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _restartMic();
+    });
+    _restartMic();
+  }
+
+  void _onMicRecovered() {
+    _micRetryTimer?.cancel();
+    _micRetryTimer = null;
+    if (!_disposed) _micFailed.value = false;
+  }
+
+  Future<void> _restartMic() async {
+    if (_disposed || !_isJoined.value) return;
+    try {
+      await _engine.enableLocalAudio(false);
+      await _engine.enableLocalAudio(true);
+      debugPrint('Agora mic restart requested');
+    } catch (e) {
+      debugPrint('Agora mic restart failed: $e');
+    }
+  }
 
   @override
   Stream<Map<String, dynamic>> get matchMessages => _matchMessages.stream;
@@ -212,6 +258,9 @@ class AgoraVideoCallService implements VideoCallService {
             (connection, speakers, speakerNumber, totalVolume) {
               final local = speakers.where((s) => s.uid == 0);
               if (local.isNotEmpty) {
+                // VAD first, so a listener reacting to the level change
+                // sees the matching voice flag for the same report.
+                _localVoiceActive.value = local.first.vad == 1;
                 _localAudioLevel.value = local.first.volume ?? 0;
               }
             },
@@ -225,6 +274,16 @@ class AgoraVideoCallService implements VideoCallService {
                 debugPrint('Agora onStreamMessage decode failed: $e');
               }
             },
+        onLocalAudioStateChanged: (connection, state, reason) {
+          debugPrint('Agora local audio: $state, reason: $reason');
+          if (state == LocalAudioStreamState.localAudioStreamStateFailed) {
+            _onMicFailed();
+          } else if (state ==
+                  LocalAudioStreamState.localAudioStreamStateRecording ||
+              state == LocalAudioStreamState.localAudioStreamStateEncoding) {
+            _onMicRecovered();
+          }
+        },
         onError: (err, msg) => debugPrint('Agora error: $err $msg'),
         onConnectionStateChanged: (connection, state, reason) =>
             debugPrint('Agora connection state: $state, reason: $reason'),
@@ -319,6 +378,9 @@ class AgoraVideoCallService implements VideoCallService {
 
   @override
   Future<void> dispose() async {
+    _disposed = true;
+    _micRetryTimer?.cancel();
+    _micRetryTimer = null;
     // Must leave the channel before releasing the engine - otherwise the
     // server can briefly still consider this uid joined, and a new engine
     // instance rejoining the same channel moments later (e.g. navigating
@@ -342,7 +404,9 @@ class AgoraVideoCallService implements VideoCallService {
     _remoteUid.dispose();
     _isJoined.dispose();
     _localAudioLevel.dispose();
+    _localVoiceActive.dispose();
     _localUid.dispose();
+    _micFailed.dispose();
     await _matchMessages.close();
     await _remoteFrameSamples.close();
     await _localFrameSamples.close();

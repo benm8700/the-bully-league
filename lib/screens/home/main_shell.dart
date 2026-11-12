@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../core/route_observer.dart';
 import '../../widgets/badges/badge_popup.dart';
+import '../../widgets/challenge_popup.dart';
 import '../../widgets/fame_milestone_popup.dart';
 import '../../widgets/feedback_popup.dart';
 import '../../widgets/main_stage_alert_bar.dart';
@@ -40,144 +42,172 @@ class MainShell extends StatefulWidget {
   static void Function(int index)? _selector;
   static void go(int index) => _selector?.call(index);
 
-  /// Watch = the Vote feed tab (index 1).
+  /// Watch = the Judge feed. Since the 2026-11-11 swipe layout it is a pushed
+  /// screen, not a tab; go(tabWatch) still opens it.
   static const int tabWatch = 1;
+
+  /// The three swipe pages (2026-11-11, developer's call):
+  /// Profile <- Home -> Leaderboard.
+  static const int pageProfile = 0;
+  static const int pageHome = 1;
+  static const int pageLeaderboard = 2;
+  static void Function(int page)? _pager;
+  static void goPage(int page) => _pager?.call(page);
+
+  /// Ask the shell to run its pop-up queue now (e.g. Home's banner just saw a
+  /// new challenge). Safe to call any time: it only shows anything while Home
+  /// is the visible screen.
+  static VoidCallback? _popupRequest;
+  static void requestPopups() => _popupRequest?.call();
 
   @override
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
-  int _index = 0;
-
+class _MainShellState extends State<MainShell>
+    with RouteAware, WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     MainShell._selector = (i) {
-      if (mounted) setState(() => _index = i);
-    };
-    // Checked here rather than on Home so it fires once per app launch,
-    // not every time someone taps back to the first tab. Deferred past the
-    // first frame because it shows a dialog and needs a mounted route to
-    // put one on.
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      // Sequential so the popups never stack on top of each other. The
-      // tournament finale leads - winning (or losing) the weekly Main Stage is
-      // the biggest moment the app has, so it is shown before the routine
-      // rank/badge/fame updates. Then rank, badges, fame.
-      await TournamentFinalePopup.maybeShow(context);
-      if (mounted) await RankChangePopup.maybeShow(context);
-      if (mounted) await BadgePopup.maybeShow(context);
-      if (mounted) await FameMilestonePopup.maybeShow(context);
-      // Last, and only once ever: after a few real battles, ask how we can
-      // make it more fun. Lowest priority so it never pre-empts a celebration.
-      if (mounted) await FeedbackPopup.maybeShow(context);
+      if (i == MainShell.tabWatch) {
+        _push(const WatchFeedScreen());
+      } else if (i == 2) {
+        _push(const MyBattlesScreen());
+      } else if (i == 3) {
+        _goPage(MainShell.pageLeaderboard);
+      } else if (i == 4) {
+        _goPage(MainShell.pageProfile);
+      }
+    };
+    MainShell._pager = _goPage;
+    MainShell._popupRequest = _runPopups;
+    WidgetsBinding.instance.addObserver(this);
+    // First run after the first frame (a dialog needs a mounted route).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runPopups());
+  }
+
+  // ---------------------------------------------------------------------
+  // THE POP-UP QUEUE (2026-11-11, developer's call).
+  //
+  // One place decides when pop-ups appear, so they never stack and never
+  // land on top of a battle. It runs:
+  //  - on launch,
+  //  - every time Home becomes visible again (back from a battle, Judge,
+  //    Profile... - RouteAware.didPopNext),
+  //  - when the app comes back to the foreground on Home,
+  //  - when Home's banner sees a new challenge (MainShell.requestPopups).
+  // It only shows anything while Home is the TOP screen, and re-checks that
+  // before every pop-up. The other pop-ups each mark themselves "seen" on
+  // the server when asked, so asking only while Home is on screen is what
+  // stops one being claimed and then lost behind a battle. Anything not yet
+  // shown simply waits for the next time Home is on screen.
+  //
+  // Order: the CHALLENGE first (the only one that expires; accepting it
+  // goes into a battle, so the queue stops there and resumes when they come
+  // back to Home), then the tournament finale, rank, badges, fame, feedback.
+  // ---------------------------------------------------------------------
+  bool _popupsRunning = false;
+  bool _popupsAgain = false;
+  ModalRoute<dynamic>? _route;
+
+  bool get _homeOnTop => mounted && (_route?.isCurrent ?? false);
+
+  Future<void> _runPopups() async {
+    if (_popupsRunning) {
+      _popupsAgain = true;
+      return;
+    }
+    _popupsRunning = true;
+    try {
+      do {
+        _popupsAgain = false;
+        if (!mounted || !_homeOnTop) return;
+        final accepted = await ChallengePopup.maybeShow(context);
+        if (accepted) return; // heading into a battle; resume on return
+        if (!mounted || !_homeOnTop) return;
+        await TournamentFinalePopup.maybeShow(context);
+        if (!mounted || !_homeOnTop) return;
+        await RankChangePopup.maybeShow(context);
+        if (!mounted || !_homeOnTop) return;
+        await BadgePopup.maybeShow(context);
+        if (!mounted || !_homeOnTop) return;
+        await FameMilestonePopup.maybeShow(context);
+        if (!mounted || !_homeOnTop) return;
+        // Last, and only once ever: after a few real battles, ask how we can
+        // make it more fun. Lowest priority so it never pre-empts anything.
+        await FeedbackPopup.maybeShow(context);
+      } while (_popupsAgain && mounted);
+    } finally {
+      _popupsRunning = false;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null && route != _route) {
+      if (_route != null) appRouteObserver.unsubscribe(this);
+      _route = route;
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  /// Back on Home after a pushed screen (a battle, Judge, Profile...).
+  @override
+  void didPopNext() {
+    // A beat after the pop animation, so the pop-up doesn't fight it.
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted) _runPopups();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _runPopups();
+  }
+
+  void _push(Widget screen) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+  }
+
+  /// TAP-ONLY (2026-11-11): the swipe pager was tried and rejected by the
+  /// developer (too easy to trigger by accident, made Home feel skittish).
+  /// Profile and the Leaderboard are now ordinary pushed screens with a back
+  /// arrow. Home is the only page.
+  void _goPage(int page) {
+    if (!mounted) return;
+    if (page == MainShell.pageProfile) {
+      _push(const ProfileScreen());
+    } else if (page == MainShell.pageLeaderboard) {
+      _push(const LeaderboardScreen());
+    }
   }
 
   @override
   void dispose() {
     MainShell._selector = null;
+    MainShell._pager = null;
+    MainShell._popupRequest = null;
+    appRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  /// The Vote tab, whose feed autoplays a clip WITH SOUND. Named so the shell
-  /// can tell that tab when it is not the one on screen.
-  static const _voteTabIndex = 1;
-
-  /// My Battles. Told when it becomes active so it refetches - the tab stays
-  /// mounted in the IndexedStack, so a battle finished mid-session would
-  /// otherwise never appear until an app restart.
-  static const _myBattlesTabIndex = 2;
-
-  /// Profile. Told when it is hidden so its intro video pauses.
-  static const _profileTabIndex = 4;
-
   @override
   Widget build(BuildContext context) {
-    // Kept alive across tab switches via IndexedStack rather than rebuilt,
-    // so the vote queue doesn't refetch and the live tallies don't drop
-    // their listeners every time someone glances at another tab.
-    //
-    // Built here (not a `const` field) so `WatchFeedScreen` learns whether
-    // its tab is currently visible: because IndexedStack keeps every tab
-    // MOUNTED, a feed clip would otherwise keep playing its audio while you
-    // are on another tab. It pauses when isActiveTab is false.
-    final screens = [
-      const HomeScreen(),
-      WatchFeedScreen(embedded: true, isActiveTab: _index == _voteTabIndex),
-      MyBattlesScreen(
-        embedded: true,
-        isActiveTab: _index == _myBattlesTabIndex,
-      ),
-      const LeaderboardScreen(embedded: true),
-      ProfileScreen(embedded: true, isActiveTab: _index == _profileTabIndex),
-    ];
-    // ANDROID BACK (developer, 2026-11-09): with no handler, Back on any tab
-    // closed the whole app - it looked like a crash right after closing the
-    // clip sheet on My Battles. Now Back on another tab returns to Home, and
-    // only Back on Home leaves the app. (iPhone has no Back button.)
-    return PopScope(
-      canPop: _index == 0,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _index != 0) setState(() => _index = 0);
-      },
-      child: Scaffold(
-        // Above the tabs rather than on Home, deliberately: an outage
-        // affects every screen, and someone stuck on the Judge tab watching
-        // nothing load is exactly who needs to be told it is us and not
-        // them. It renders nothing at all when there is no notice, so it
-        // costs a zero-height widget the rest of the time.
-        body: Column(
-          children: [
-            const ServiceStatusBanner(),
-            // Pulls key Main Stage people (a finalist whose battle is up, a judge
-            // while a battle is on stage) in from any tab - the in-app half of
-            // the Main Stage pushes. Renders nothing for everyone else.
-            const MainStageAlertBar(),
-            // The Sixes and Sevens live cue (WindowLiveBar) is REMOVED for now
-            // (developer's call, 2026-09-14) - the red top bar during the window
-            // was getting in the way of Home design review. The widget still
-            // exists; re-add `const WindowLiveBar(),` here to restore it.
-            Expanded(
-              child: IndexedStack(index: _index, children: screens),
-            ),
-          ],
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
-              label: 'Home',
-            ),
-            NavigationDestination(
-              // "Judge", matching the Home door that leads here (beta tester,
-              // 2026-11-09: one page should have one name). Gavel = judging.
-              icon: Icon(Icons.gavel_outlined),
-              selectedIcon: Icon(Icons.gavel),
-              label: 'Judge',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.emoji_events_outlined),
-              selectedIcon: Icon(Icons.emoji_events),
-              label: 'My Battles',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.leaderboard_outlined),
-              selectedIcon: Icon(Icons.leaderboard),
-              label: 'Ranks',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-          ],
-        ),
+    return const Scaffold(
+      body: Column(
+        children: [
+          // Above Home: an outage affects every screen. Renders nothing when
+          // there is no notice.
+          ServiceStatusBanner(),
+          // Pulls key Main Stage people in. Renders nothing for everyone else.
+          MainStageAlertBar(),
+          Expanded(child: HomeScreen()),
+        ],
       ),
     );
   }

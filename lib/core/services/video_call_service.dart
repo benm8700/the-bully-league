@@ -39,7 +39,11 @@ abstract class VideoCallService {
   /// initialize the underlying engine.
   Future<void> initialize();
 
-  Future<void> joinChannel({required String channelName, required int uid, String token = ''});
+  Future<void> joinChannel({
+    required String channelName,
+    required int uid,
+    String token = '',
+  });
 
   Future<void> leaveChannel();
 
@@ -63,6 +67,18 @@ abstract class VideoCallService {
   /// user) - see CLAUDE.md's Agora notes on this. Used for the pre-match
   /// mic check (Build Order step 3), not a general-purpose meter.
   ValueListenable<int> get localAudioLevel;
+
+  /// Whether the provider's voice-activity detector thinks the latest local
+  /// audio is a HUMAN VOICE (vs music, clatter, claps). Updated alongside
+  /// [localAudioLevel]. Used by the pre-match "Say I'M READY!" check.
+  ValueListenable<bool> get localVoiceActive;
+
+  /// True while this device's microphone capture has FAILED - most often an
+  /// iOS audio interruption (a Bluetooth headset grabbing the audio session,
+  /// a phone call, Siri) that never hands the mic back. While true the player
+  /// is publishing silence, so the UI must say so. The service retries the
+  /// mic on its own and flips this back to false once capture resumes.
+  ValueListenable<bool> get micFailed;
 
   /// This device's own uid as assigned by the provider on join. Null until
   /// onJoinChannelSuccess fires. Used by MatchScreen for host election

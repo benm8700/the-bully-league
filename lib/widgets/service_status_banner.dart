@@ -51,12 +51,21 @@ class ServiceStatusBanner extends StatelessWidget {
         }
         final scheme = Theme.of(context).colorScheme;
         final (bg, fg, icon) = switch (status.severity) {
-          'outage' => (scheme.errorContainer, scheme.onErrorContainer,
-            Icons.cloud_off_outlined),
-          'warning' => (scheme.tertiaryContainer, scheme.onTertiaryContainer,
-            Icons.warning_amber_outlined),
-          _ => (scheme.secondaryContainer, scheme.onSecondaryContainer,
-            Icons.info_outline),
+          'outage' => (
+            scheme.errorContainer,
+            scheme.onErrorContainer,
+            Icons.cloud_off_outlined,
+          ),
+          'warning' => (
+            scheme.tertiaryContainer,
+            scheme.onTertiaryContainer,
+            Icons.warning_amber_outlined,
+          ),
+          _ => (
+            scheme.secondaryContainer,
+            scheme.onSecondaryContainer,
+            Icons.info_outline,
+          ),
         };
         return Material(
           color: bg,
@@ -72,10 +81,9 @@ class ServiceStatusBanner extends StatelessWidget {
                   Expanded(
                     child: Text(
                       status.message,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: fg),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: fg),
                     ),
                   ),
                 ],
@@ -125,8 +133,7 @@ class ServiceStatus {
     if (message.isEmpty) return null;
 
     final severityRaw = (data['severity'] as String? ?? 'info').toLowerCase();
-    final severity =
-        _severities.contains(severityRaw) ? severityRaw : 'info';
+    final severity = _severities.contains(severityRaw) ? severityRaw : 'info';
 
     // An explicit expiry wins; otherwise the notice expires a fixed time
     // after it was last edited, so forgetting to switch it off cannot

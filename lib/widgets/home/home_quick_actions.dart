@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/daily_reward_service.dart';
 import '../../screens/rewards/daily_reward_sheet.dart';
 import '../daily_quests.dart';
+import '../neon_dialog.dart';
 
 /// The Home "Quick Actions" row - three compact cards: Daily Challenges,
 /// Free Rewards, Current Streak.
@@ -23,9 +24,13 @@ import '../daily_quests.dart';
 ///    unclaimed. See lib/screens/rewards/daily_reward_sheet.dart and
 ///    functions/dailyReward.js.
 class HomeQuickActions extends StatelessWidget {
-  const HomeQuickActions({super.key, required this.uid});
+  const HomeQuickActions({super.key, required this.uid, this.onLeaderboard});
 
   final String uid;
+
+  /// When set, the third card is LEADERBOARD instead of the streak
+  /// (2026-11-11 swipe layout: the streak moved onto the docked rank card).
+  final VoidCallback? onLeaderboard;
 
   // Accent palette straight from the reference PNG's spec panel.
   static const Color _pink = Color(0xFFFF3B6B); // Challenges
@@ -52,14 +57,18 @@ class HomeQuickActions extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            const Expanded(
-              flex: 31,
-              child: _FreeRewardsCard(),
-            ),
+            const Expanded(flex: 31, child: _FreeRewardsCard()),
             const SizedBox(width: 8),
             Expanded(
               flex: 35,
-              child: _StreakCard(uid: uid),
+              child: onLeaderboard != null
+                  ? _QuickCard(
+                      icon: Icons.leaderboard_rounded,
+                      accent: const Color(0xFF2FE0A8),
+                      label: 'Leader-\nboard',
+                      onTap: onLeaderboard!,
+                    )
+                  : _StreakCard(uid: uid),
             ),
           ],
         ),
@@ -68,7 +77,7 @@ class HomeQuickActions extends StatelessWidget {
   }
 
   void _openQuests(BuildContext context) {
-    showModalBottomSheet<void>(
+    showNeonSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (_) => const Padding(
@@ -179,9 +188,11 @@ class _StreakCard extends StatelessWidget {
           value: days > 0 ? '$days ${days == 1 ? 'DAY' : 'DAYS'}' : null,
           onTap: () => ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(days > 0
-                  ? 'A $days-day streak. Vote today to keep it alive.'
-                  : 'Vote on a battle today to start a streak.'),
+              content: Text(
+                days > 0
+                    ? 'A $days-day streak. Vote today to keep it alive.'
+                    : 'Vote on a battle today to start a streak.',
+              ),
             ),
           ),
         );

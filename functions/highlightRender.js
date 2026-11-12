@@ -266,7 +266,7 @@ const VIDEO_GAP_THRESHOLD_MS = 500;
  * what allow truncated fragments to be filtered out, so callers that have
  * them should pass them.
  */
-function buildTimeline(files) {
+function buildTimeline(files, {audioLeadMsByUid = {}} = {}) {
   const segments = [];
   const dropped = [];
   for (const entry of files) {
@@ -280,7 +280,10 @@ function buildTimeline(files) {
       dropped.push({path: p, sizeBytes});
       continue;
     }
-    segments.push({path: p, uid, kind, startMs});
+    // Lip-sync: a device whose audio lands late (iPhone, see clipSync.js)
+    // has its audio placed earlier on the shared timeline.
+    const lead = kind === "audio" ? Number(audioLeadMsByUid[uid]) || 0 : 0;
+    segments.push({path: p, uid, kind, startMs: startMs - lead});
   }
 
   if (segments.length === 0) return {t0: null, uids: [], segments: [], dropped};
@@ -587,7 +590,7 @@ const IMPROV_BORDER_RATIO = 0.012;
  * Pure, like buildTimeline, so the whole Face-Off layout can be exercised
  * without ffmpeg or Storage.
  */
-function buildImprovTimelines(files) {
+function buildImprovTimelines(files, {audioLeadMsByUid = {}} = {}) {
   const byUid = new Map();
   const dropped = [];
   for (const entry of files) {
@@ -602,7 +605,9 @@ function buildImprovTimelines(files) {
       continue;
     }
     if (!byUid.has(uid)) byUid.set(uid, []);
-    byUid.get(uid).push({path: p, uid, kind, startMs});
+    // Lip-sync, same as buildTimeline (see clipSync.js).
+    const lead = kind === "audio" ? Number(audioLeadMsByUid[uid]) || 0 : 0;
+    byUid.get(uid).push({path: p, uid, kind, startMs: startMs - lead});
   }
 
   const performers = [];
@@ -966,8 +971,16 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
   const [objects] = await bucket.getFiles({prefix: `match_recordings/${matchId}/`});
   if (objects.length === 0) throw new Error("No recording found for this match.");
 
+  const {audioLeadByUid, loadClipSync} = require("./clipSync");
+  const audioLeadMsByUid = audioLeadByUid(snap.data(),
+      await loadClipSync(db));
+  if (Object.keys(audioLeadMsByUid).length) {
+    console.log("clip lip-sync audio lead (ms by uid):", matchId,
+        JSON.stringify(audioLeadMsByUid));
+  }
   const timeline = buildTimeline(
       objects.map((o) => ({path: o.name, sizeBytes: Number(o.metadata?.size ?? 0)})),
+      {audioLeadMsByUid},
   );
   if (timeline.segments.length === 0) throw new Error("No usable segments in the recording.");
 
@@ -1288,8 +1301,12 @@ async function renderImprovHighlight(matchId, matchRef, bucket, {captions = fals
   const [objects] = await bucket.getFiles({prefix: `match_recordings/${matchId}/`});
   if (objects.length === 0) throw new Error("No recording found for this match.");
 
+  const {audioLeadByUid, loadClipSync} = require("./clipSync");
+  const matchData = (await matchRef.get()).data();
   const {performers, dropped} = buildImprovTimelines(
       objects.map((o) => ({path: o.name, sizeBytes: Number(o.metadata?.size ?? 0)})),
+      {audioLeadMsByUid: audioLeadByUid(matchData,
+          await loadClipSync(getFirestore()))},
   );
   const withVideo = performers.filter((p) =>
     p.segments.some((s) => s.kind === "video"));

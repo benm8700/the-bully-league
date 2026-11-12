@@ -71,7 +71,11 @@ class _SupportScreenState extends State<SupportScreen> {
         // Best-effort: gathering this must never stop a report being filed.
         'diagnostics': await _diagnostics(),
       });
-      if (mounted) setState(() => _resultMessage = 'Request submitted. We\'ll get back to you.');
+      if (mounted) {
+        setState(
+          () => _resultMessage = 'Request submitted. We\'ll get back to you.',
+        );
+      }
     } catch (e) {
       if (mounted) setState(() => _resultMessage = 'Failed to submit: $e');
     } finally {
@@ -86,24 +90,34 @@ class _SupportScreenState extends State<SupportScreen> {
     try {
       out['platform'] = Platform.operatingSystem;
       out['osVersion'] = Platform.operatingSystemVersion;
-    } catch (_) {/* non-mobile / unavailable */}
+    } catch (_) {
+      /* non-mobile / unavailable */
+    }
     try {
       final info = await PackageInfo.fromPlatform();
       out['appVersion'] = info.version;
       out['buildNumber'] = info.buildNumber;
-    } catch (_) {/* plugin unavailable */}
+    } catch (_) {
+      /* plugin unavailable */
+    }
     return out;
   }
 
   @override
   Widget build(BuildContext context) {
-    final submitted = _resultMessage != null && _resultMessage!.startsWith('Request submitted');
+    final submitted =
+        _resultMessage != null &&
+        _resultMessage!.startsWith('Request submitted');
     return Scaffold(
       appBar: AppBar(title: const Text('Support & Feedback')),
       body: Padding(
         // Bottom inset clears the gesture bar (S22 gesture-nav, 2026-09-01).
         padding: EdgeInsets.fromLTRB(
-            24, 24, 24, 24 + MediaQuery.of(context).padding.bottom),
+          24,
+          24,
+          24,
+          24 + MediaQuery.of(context).padding.bottom,
+        ),
         child: submitted
             ? Center(child: Text(_resultMessage!, textAlign: TextAlign.center))
             : SingleChildScrollView(
@@ -119,7 +133,12 @@ class _SupportScreenState extends State<SupportScreen> {
                       initialValue: _category,
                       decoration: const InputDecoration(labelText: 'Category'),
                       items: _SupportCategory.values
-                          .map((c) => DropdownMenuItem(value: c, child: Text(c.label)))
+                          .map(
+                            (c) => DropdownMenuItem(
+                              value: c,
+                              child: Text(c.label),
+                            ),
+                          )
                           .toList(),
                       onChanged: (value) {
                         if (value != null) setState(() => _category = value);
@@ -133,9 +152,12 @@ class _SupportScreenState extends State<SupportScreen> {
                     ),
                     const SizedBox(height: 24),
                     if (_resultMessage != null) ...[
-                      Text(_resultMessage!,
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.error)),
+                      Text(
+                        _resultMessage!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
                       const SizedBox(height: 16),
                     ],
                     FilledButton(
