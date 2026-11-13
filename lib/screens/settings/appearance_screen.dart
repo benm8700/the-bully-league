@@ -195,11 +195,15 @@ class _SkinTile extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          skin.name,
-                          style: text.titleMedium?.copyWith(
-                            color: scheme.onSurface,
-                            fontWeight: FontWeight.bold,
+                        Flexible(
+                          child: Text(
+                            skin.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.titleMedium?.copyWith(
+                              color: scheme.onSurface,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),

@@ -169,7 +169,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Watching live'),
+        title: const Text('Live'),
         // The crowd count - social proof that this is where the action is.
         // Shown once at least one heartbeat is in (always includes you).
         actions: [

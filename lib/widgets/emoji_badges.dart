@@ -110,14 +110,18 @@ class _EmojiMedalTile extends StatelessWidget {
             size: 62,
           ),
           const SizedBox(height: 6),
-          Text(
-            tier.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: text.labelMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: slot.earned ? Colors.white : const Color(0xFF7C7887),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.center,
+            child: Text(
+              tier.title,
+              maxLines: 1,
+              softWrap: false,
+              textAlign: TextAlign.center,
+              style: text.labelMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: slot.earned ? Colors.white : const Color(0xFF7C7887),
+              ),
             ),
           ),
           const SizedBox(height: 2),

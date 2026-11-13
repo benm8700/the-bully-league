@@ -309,11 +309,15 @@ class _WildcardBidSheetState extends State<_WildcardBidSheet> {
             color: Colors.white.withValues(alpha: 0.6),
           ),
         ),
-        Text(
-          value,
-          style: text.bodyMedium?.copyWith(
-            color: accent,
-            fontWeight: FontWeight.w800,
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: text.bodyMedium?.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ],

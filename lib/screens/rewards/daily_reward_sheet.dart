@@ -214,11 +214,14 @@ class _DailyRewardSheetState extends State<DailyRewardSheet> {
           children: [
             Icon(Icons.check_circle, color: _goldDeep, size: 18),
             SizedBox(width: 8),
-            Text(
-              'Claimed today — come back tomorrow',
-              style: TextStyle(
-                color: Color(0xFFCFCFCF),
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                'Claimed today — come back tomorrow',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFFCFCFCF),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],

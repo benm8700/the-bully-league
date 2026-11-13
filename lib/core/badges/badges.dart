@@ -296,7 +296,7 @@ const List<BadgeDef> kBadges = [
     id: 'editors_choice',
     title: "Editor's Choice",
     earnedDesc: 'The house featured one of your battles',
-    lockedHint: 'Get a battle featured by the house',
+    lockedHint: 'Get featured by the house',
     metric: BadgeMetric.editorsChoicePicks,
     threshold: 1,
     prestige: 72,

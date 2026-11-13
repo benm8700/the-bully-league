@@ -591,10 +591,17 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                Text(
-                  username,
-                  style: Theme.of(context).textTheme.headlineMedium,
-                  textAlign: TextAlign.center,
+                // Shrinks a long, space-less username instead of breaking
+                // it mid-word.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    username,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                    textAlign: TextAlign.center,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(

@@ -295,7 +295,12 @@ class _RewardTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                // Wrap, not Row: "Highlight Reel  500 pts" beside the
+                // button overflowed a 360px phone; the price now drops to
+                // its own line when there's no room.
+                Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
                       title,
@@ -303,7 +308,6 @@ class _RewardTile extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(width: 8),
                     Text(
                       '$price pts',
                       style: text.labelMedium?.copyWith(

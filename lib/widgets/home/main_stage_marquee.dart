@@ -392,18 +392,28 @@ class _MainStageMarqueeState extends State<MainStageMarquee>
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _foil(context, 'MAIN STAGE', 25),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: _foil(context, 'MAIN STAGE', 25),
+              ),
               const SizedBox(height: 4),
-              Text(
-                widget.sponsor != null
-                    ? 'Win the Belt · presented by ${widget.sponsor}'
-                    : 'Win the Belt · Thursdays 6PM PT',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+              // Shrinks rather than cutting off the show time when the
+              // SHOWTIME countdown pill takes room on show week.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  widget.sponsor != null
+                      ? 'Win the Belt · presented by ${widget.sponsor}'
+                      : 'Win the Belt · Thursdays 6PM PT',
+                  maxLines: 1,
+                  softWrap: false,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -486,7 +496,10 @@ class _MainStageMarqueeState extends State<MainStageMarquee>
           ],
         ),
         const SizedBox(height: 10),
-        _foil(context, 'MAIN STAGE', 42),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: _foil(context, 'MAIN STAGE', 42),
+        ),
         const SizedBox(height: 6),
         Text(
           _live ? 'The Belt is on the line' : 'Win the Belt',

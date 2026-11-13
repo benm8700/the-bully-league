@@ -119,6 +119,7 @@ class _TournamentHubScreenState extends State<TournamentHubScreen> {
                   const _JoinBar(),
                   TabBar(
                     isScrollable: false,
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 4),
                     indicatorColor: gold,
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white.withValues(alpha: 0.55),

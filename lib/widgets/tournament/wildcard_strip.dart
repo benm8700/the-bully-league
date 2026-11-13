@@ -162,7 +162,9 @@ class _WildcardSpendTileState extends _WildcardEntryState<WildcardSpendTile> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
                         'Main Stage wildcard',
@@ -170,7 +172,6 @@ class _WildcardSpendTileState extends _WildcardEntryState<WildcardSpendTile> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(width: 8),
                       Text(
                         s.hasBid ? 'bid ${s.yourBid}' : 'bid',
                         style: text.labelMedium?.copyWith(

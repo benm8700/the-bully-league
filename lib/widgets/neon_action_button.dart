@@ -63,27 +63,31 @@ class _NeonActionButtonState extends State<NeonActionButton> {
         ),
         const SizedBox(width: 10),
         Flexible(
-          child: Text(
-            widget.label.toUpperCase(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: p.display,
-              color: Colors.white,
-              fontSize: widget.compact ? 18 : 22,
-              letterSpacing: widget.compact ? 1.2 : 1.6,
-              height: 1,
-              fontVariations: [
-                const FontVariation('wght', 800),
-                FontVariation('wdth', p.displayWidth),
-              ],
-              shadows: const [
-                Shadow(
-                  color: Color(0x66000000),
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.center,
+            child: Text(
+              widget.label.toUpperCase(),
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                fontFamily: p.display,
+                color: Colors.white,
+                fontSize: widget.compact ? 18 : 22,
+                letterSpacing: widget.compact ? 1.2 : 1.6,
+                height: 1,
+                fontVariations: [
+                  const FontVariation('wght', 800),
+                  FontVariation('wdth', p.displayWidth),
+                ],
+                shadows: const [
+                  Shadow(
+                    color: Color(0x66000000),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

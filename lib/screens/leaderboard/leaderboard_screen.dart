@@ -645,11 +645,18 @@ class _Row extends StatelessWidget {
               children: [
                 const Text('👑', style: TextStyle(fontSize: 16)),
                 const SizedBox(width: 4),
-                Text(
-                  '$position',
-                  style: text.titleMedium?.copyWith(
-                    color: gold,
-                    fontWeight: FontWeight.w900,
+                // Shrinks for 3-4 digit positions (your row below the top
+                // 100 is always #101+) instead of overflowing the 52px slot.
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '$position',
+                      style: text.titleMedium?.copyWith(
+                        color: gold,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
                 ),
               ],

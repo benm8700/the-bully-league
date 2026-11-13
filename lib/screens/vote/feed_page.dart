@@ -509,7 +509,7 @@ class _FeedPageState extends State<FeedPage> {
         children: [
           Expanded(
             child: Text(
-              'Rating for $name',
+              name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(

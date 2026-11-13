@@ -571,13 +571,18 @@ class _BattleCard extends StatelessWidget {
                           const SizedBox(width: 6),
                           _dqPill(context),
                         ],
-                        const Spacer(),
-                        Text(
-                          when,
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.55),
-                              ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            when,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.55),
+                                ),
+                          ),
                         ),
                       ],
                     ),
@@ -840,6 +845,7 @@ class _BattleCard extends StatelessWidget {
           border: Colors.white.withValues(alpha: 0.22),
           child: Text(
             'DRAW',
+            softWrap: false,
             style: text.labelMedium?.copyWith(
               color: Colors.white70,
               fontWeight: FontWeight.w800,
@@ -852,12 +858,20 @@ class _BattleCard extends StatelessWidget {
         badge = _badge(
           bg: Colors.white.withValues(alpha: 0.06),
           border: Colors.white.withValues(alpha: 0.22),
-          child: Text(
-            'NO CONTEST',
-            textAlign: TextAlign.center,
-            style: text.labelSmall?.copyWith(
-              color: Colors.white70,
-              fontWeight: FontWeight.w800,
+          // Two fixed lines that never break mid-word ("NO / CONT / EST" on
+          // the Moto, 2026-11-12); shrinks a touch instead if still too wide.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              'NO\nCONTEST',
+              textAlign: TextAlign.center,
+              softWrap: false,
+              style: text.labelSmall?.copyWith(
+                color: Colors.white70,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+                height: 1.15,
+              ),
             ),
           ),
         );
@@ -868,6 +882,7 @@ class _BattleCard extends StatelessWidget {
           border: Colors.white.withValues(alpha: 0.22),
           child: Text(
             'PLAYED',
+            softWrap: false,
             style: text.labelSmall?.copyWith(
               color: Colors.white70,
               fontWeight: FontWeight.w800,
@@ -880,6 +895,7 @@ class _BattleCard extends StatelessWidget {
           border: Colors.white.withValues(alpha: 0.22),
           child: Text(
             'JUDGING',
+            softWrap: false,
             style: text.labelSmall?.copyWith(
               color: Colors.white70,
               fontWeight: FontWeight.w800,
@@ -944,7 +960,10 @@ class _BattleCard extends StatelessWidget {
             ? [BoxShadow(color: glow, blurRadius: 10, spreadRadius: -2)]
             : null,
       ),
-      child: child,
+      // Every result word stays whole and shrinks a touch if needed: the
+      // centre column is only ~66px, so JUDGING/PLAYED broke mid-word and
+      // LOSS overflowed (2026-11-12 audit).
+      child: FittedBox(fit: BoxFit.scaleDown, child: child),
     );
   }
 

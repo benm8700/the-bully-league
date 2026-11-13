@@ -552,22 +552,29 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
       ),
       child: Column(
         children: [
-          Text(
-            done
-                ? 'MIC CHECK ✓'
-                : switch (_mic.phase) {
-                    MicPhase.room => 'Checking the room...',
-                    MicPhase.tooNoisy => 'Too noisy',
-                    _ => 'Say "THE BULLY LEAGUE"',
-                  },
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _mic.phase == MicPhase.tooNoisy && !done
-                  ? const Color(0xFFE0A030)
-                  : color,
-              fontSize: 26,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1,
+          // One line, shrunk to fit: wrapping split the exact phrase the
+          // player has to say ('Say "THE BULLY' / 'LEAGUE"').
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              done
+                  ? 'MIC CHECK ✓'
+                  : switch (_mic.phase) {
+                      MicPhase.room => 'Checking the room...',
+                      MicPhase.tooNoisy => 'Too noisy',
+                      _ => 'Say "THE BULLY LEAGUE"',
+                    },
+              maxLines: 1,
+              softWrap: false,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: _mic.phase == MicPhase.tooNoisy && !done
+                    ? const Color(0xFFE0A030)
+                    : color,
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
+              ),
             ),
           ),
           const SizedBox(height: 4),
@@ -709,26 +716,33 @@ class _StatusChip extends StatelessWidget {
       _ChipState.pending => scheme.outline,
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      // Icon ABOVE the label (2026-11-12): three chips share a 360px phone,
+      // and side-by-side left ~54px for text, so "Face the light" showed as
+      // "Face...". Stacked, the full label fits on up to two lines.
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             state == _ChipState.good ? Icons.check_circle : icon,
             size: 18,
             color: color,
           ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            maxLines: 2,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              height: 1.15,
             ),
           ),
         ],

@@ -141,14 +141,18 @@ class _BadgeTile extends StatelessWidget {
         children: [
           BadgeArt(def: def, earned: slot.earned, size: 58),
           const SizedBox(height: 6),
-          Text(
-            def.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: text.labelMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: slot.earned ? Colors.white : const Color(0xFF7C7887),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.center,
+            child: Text(
+              def.title,
+              maxLines: 1,
+              softWrap: false,
+              textAlign: TextAlign.center,
+              style: text.labelMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: slot.earned ? Colors.white : const Color(0xFF7C7887),
+              ),
             ),
           ),
           const SizedBox(height: 2),

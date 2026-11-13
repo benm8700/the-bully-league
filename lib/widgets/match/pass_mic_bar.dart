@@ -167,25 +167,31 @@ class _PassMicBarState extends State<PassMicBar>
                                     letterSpacing: 1.6,
                                   ),
                                 ),
-                              Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontFamily: p.display,
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  height: 1.1,
-                                  fontVariations: [
-                                    const FontVariation('wght', 700),
-                                    FontVariation('wdth', p.displayWidth),
-                                  ],
-                                  shadows: [
-                                    Shadow(
-                                      color: live.withValues(alpha: 0.7),
-                                      blurRadius: 10,
-                                    ),
-                                  ],
+                              // Shrinks instead of "Put the mic d..." next
+                              // to the TAP TO END pill.
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  title,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    fontFamily: p.display,
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    height: 1.1,
+                                    fontVariations: [
+                                      const FontVariation('wght', 700),
+                                      FontVariation('wdth', p.displayWidth),
+                                    ],
+                                    shadows: [
+                                      Shadow(
+                                        color: live.withValues(alpha: 0.7),
+                                        blurRadius: 10,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],

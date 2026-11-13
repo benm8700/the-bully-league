@@ -71,18 +71,25 @@ class IncomingChallengeCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                _pill(
-                  child: const Text(
-                    '🔥 INCOMING CHALLENGE',
-                    style: TextStyle(
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: _pill(
+                      child: const Text(
+                        '🔥 INCOMING CHALLENGE',
+                        style: TextStyle(
+                          color: _pink,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
                       color: _pink,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
                     ),
                   ),
-                  color: _pink,
                 ),
+                const SizedBox(width: 8),
                 const Spacer(),
                 _pill(
                   color: Colors.white,
@@ -358,12 +365,15 @@ class NeonAlertStrip extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Two lines allowed: "Someone took up your challenge"
+                      // was cut to "Someone took..." beside the pill.
                       Text(
                         title,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
+                          height: 1.15,
                           fontSize: 14.5,
                           fontWeight: FontWeight.w800,
                         ),
@@ -371,7 +381,7 @@ class NeonAlertStrip extends StatelessWidget {
                       if (subtitle != null)
                         Text(
                           subtitle!,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Colors.white60,

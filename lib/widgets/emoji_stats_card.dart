@@ -129,19 +129,23 @@ class _EmojiColumn extends StatelessWidget {
         const SizedBox(height: 4),
         // The earned tier name (Spark / Bright / ...), or a muted dash while
         // still locked - keeps the four columns aligned.
-        Text(
-          earned ? slot.earnedTier!.title : '—',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: text.labelSmall?.copyWith(
-            fontSize: 11,
-            fontWeight: earned ? FontWeight.w700 : FontWeight.w400,
-            color: earned
-                ? (accent == EmojiStatsCard.gold
-                      ? EmojiStatsCard.gold
-                      : Colors.white.withValues(alpha: 0.72))
-                : Colors.white.withValues(alpha: 0.28),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.center,
+          child: Text(
+            earned ? slot.earnedTier!.title : '—',
+            maxLines: 1,
+            softWrap: false,
+            textAlign: TextAlign.center,
+            style: text.labelSmall?.copyWith(
+              fontSize: 11,
+              fontWeight: earned ? FontWeight.w700 : FontWeight.w400,
+              color: earned
+                  ? (accent == EmojiStatsCard.gold
+                        ? EmojiStatsCard.gold
+                        : Colors.white.withValues(alpha: 0.72))
+                  : Colors.white.withValues(alpha: 0.28),
+            ),
           ),
         ),
       ],
