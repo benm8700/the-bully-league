@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/neon_action_button.dart';
+
 /// Explicit, separate consent step required before recording a match -
 /// several states (incl. California) require ALL-PARTY consent to record
 /// video calls, and this must be its own affirmative action, not buried in
@@ -167,29 +169,25 @@ class _RecordingConsentScreenState extends State<RecordingConsentScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(context).pop(false),
-                          child: const Text('Decline'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: _consentChecked
-                              ? () async {
-                                  await _savePref();
-                                  if (context.mounted) {
-                                    Navigator.of(context).pop(true);
-                                  }
-                                }
-                              : null,
-                          child: const Text('I Agree'),
-                        ),
-                      ),
-                    ],
+                  // The one main action as the neon pill; Decline sits
+                  // quietly under it (2026-11-12 button overhaul).
+                  NeonActionButton(
+                    label: 'I agree',
+                    icon: Icons.check_circle_rounded,
+                    compact: true,
+                    onPressed: _consentChecked
+                        ? () async {
+                            await _savePref();
+                            if (context.mounted) {
+                              Navigator.of(context).pop(true);
+                            }
+                          }
+                        : null,
+                  ),
+                  const SizedBox(height: 4),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Decline'),
                   ),
                 ],
               ),

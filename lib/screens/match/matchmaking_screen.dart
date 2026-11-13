@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/neon_action_button.dart';
 import '../../core/friendly_error.dart';
 
 import '../../core/services/event_window.dart';
@@ -135,9 +136,11 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
         const SizedBox(height: 16),
         Text(_error!, textAlign: TextAlign.center),
         const SizedBox(height: 24),
-        FilledButton(
+        NeonActionButton(
+          label: 'Back to home',
+          icon: Icons.home_rounded,
+          compact: true,
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Back to Home'),
         ),
       ],
     );
@@ -241,7 +244,10 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 32),
-        FilledButton(
+        NeonActionButton(
+          label: 'Done - notify me',
+          icon: Icons.notifications_active_rounded,
+          compact: true,
           // Leaves the SCREEN, not the queue - the entry is the challenge.
           onPressed: _leaving
               ? null
@@ -249,7 +255,6 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
                   if (!_standDown.isCompleted) _standDown.complete();
                   Navigator.of(context).pop();
                 },
-          child: const Text('Done - notify me'),
         ),
         const SizedBox(height: 8),
         // The best moment in the app to offer this: they have just been

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,8 @@ import '../../core/services/main_stage_service.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../core/services/video_call_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/match/battle_scorebug.dart';
+import '../../widgets/neon_action_button.dart';
 import 'watch_judges_screen.dart';
 
 /// The Main Stage finals battle: the chess-clock + interrupt format, driving
@@ -45,6 +48,27 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
   late final String _oppUid = widget.pairing.opponentId;
   bool get _isHost => widget.pairing.isHost;
 
+  // The same broadcast layout as a ranked battle (2026-11-12 show overhaul):
+  // scorebug hugging the top, self-view tight under it on the right, one
+  // contextual action pill beside the self-view.
+  static const double _kSelfViewW = 92;
+  static const double _kSelfViewH = 128;
+  static const double _kSelfViewTop = 2 + 78 + 4;
+  String? _oppName;
+
+  Future<void> _loadOppName() async {
+    try {
+      final d = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_oppUid)
+          .get();
+      final n = d.data()?['username'] as String?;
+      if (n != null && mounted) setState(() => _oppName = n);
+    } catch (_) {
+      // Quiet: the scorebug just says "Them".
+    }
+  }
+
   MainStageBattleState? _battle;
   bool _initialized = false;
   bool _engineStarted = false;
@@ -71,6 +95,7 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
   @override
   void initState() {
     super.initState();
+    _loadOppName();
     _pulse = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 450),
@@ -316,23 +341,8 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
             ),
           ),
           const SizedBox(height: 12),
-          TweenAnimationBuilder<double>(
-            key: ValueKey(n),
-            tween: Tween(begin: 0.6, end: 1.0),
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutBack,
-            builder: (context, s, child) =>
-                Transform.scale(scale: s, child: child),
-            child: Text(
-              '$n',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 120,
-                height: 1,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
+          // Same draining ring as a ranked warm-up (one timer language).
+          WarmupRing(seconds: n, total: _kCountdownMs ~/ 1000),
           const SizedBox(height: 8),
           Text(
             n > 0 ? 'Battle starts…' : 'Here we go.',
@@ -401,134 +411,84 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
               ),
             ),
         Positioned(
-          right: 12,
-          // Self-view at the VERY top-right, just below the status bar: the
-          // performer looks UP toward the lens (top of the phone) instead of
-          // down at a bottom inset - the TV-presenter eye line, which reads far
-          // better on the recording. The timers moved to the top-LEFT (see
-          // _clocks) to clear this corner (developer's call, 2026-11-01).
-          top: MediaQuery.of(context).padding.top + 6,
-          width: 100,
-          height: 140,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: _video.localVideoView(),
+          // Tight under the scorebug on the right, glowing while you hold
+          // the mic (camera eye line: the lens is at the top of the phone).
+          right: 4,
+          top: _kSelfViewTop,
+          width: _kSelfViewW,
+          height: _kSelfViewH,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: b.floor == _myUid
+                    ? const Color(0xFFFF2E7E)
+                    : Colors.white.withValues(alpha: 0.25),
+                width: b.floor == _myUid ? 2 : 1,
+              ),
+              boxShadow: b.floor == _myUid
+                  ? const [BoxShadow(color: Color(0x8CFF2E7E), blurRadius: 18)]
+                  : null,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: _video.localVideoView(),
+            ),
           ),
         ),
         _clocks(b),
-        if (b.isOver) _endOverlay() else _controls(b),
+        if (b.isOver) ...[
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: Center(child: EndStamp(text: 'TIME!')),
+            ),
+          ),
+          _endOverlay(),
+        ] else
+          _controls(b),
       ],
     );
   }
 
-  String _fmt(int ms) {
-    final s = (ms / 1000).ceil();
-    final m = s ~/ 60;
-    final r = s % 60;
-    return '$m:${r.toString().padLeft(2, '0')}';
-  }
-
   Widget _clocks(MainStageBattleState b) {
-    // The clock of whoever is being cut into flashes red (shown on both
-    // screens). target == the holder the pending interrupt is aimed at.
+    // The scorebug (same as a ranked battle). The clock of whoever is being
+    // cut into flashes red on both screens.
     final target = b.pendingBy == null
         ? null
         : (b.pendingBy == _myUid ? _oppUid : _myUid);
+    final iHold = b.floor == _myUid;
+    final oppOut = (b.remaining[_oppUid] ?? 0) == 0;
     return Positioned(
-      // Both clocks STACKED on the top-LEFT, freeing the top-right for the
-      // self-view camera (developer's call, 2026-11-01). Just below the status
-      // bar, to line up with the camera's top.
-      top: MediaQuery.of(context).padding.top + 6,
-      left: 12,
+      top: 2,
+      left: 4,
+      right: 4,
       child: AnimatedBuilder(
         animation: _pulse,
-        builder: (context, _) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _clockChip(
-              'You',
-              b.remaining[_myUid] ?? 0,
-              b.floor == _myUid,
-              b.steals[_myUid] ?? 0,
-              flash: target == _myUid,
-            ),
-            const SizedBox(height: 8),
-            _clockChip(
-              'Them',
-              b.remaining[_oppUid] ?? 0,
-              b.floor == _oppUid,
-              b.steals[_oppUid] ?? 0,
-              flash: target == _oppUid,
-            ),
-          ],
-        ),
+        builder: (context, _) {
+          final t = Curves.easeInOut.transform(_pulse.value);
+          return BattleScorebug(
+            oppName: _oppName ?? 'Them',
+            myMs: b.remaining[_myUid] ?? 0,
+            oppMs: b.remaining[_oppUid] ?? 0,
+            totalMs: b.config.turnMs,
+            myMood: !iHold
+                ? PlateMood.idle
+                : (oppOut ? PlateMood.finalWord : PlateMood.live),
+            oppLive: b.floor == _oppUid,
+            mySteals: b.steals[_myUid] ?? 0,
+            oppSteals: b.steals[_oppUid] ?? 0,
+            totalSteals: widget.pairing.interrupts,
+            flashMine: target == _myUid ? t : 0,
+            flashOpp: target == _oppUid ? t : 0,
+          );
+        },
       ),
     );
   }
 
-  Widget _clockChip(
-    String label,
-    int ms,
-    bool onFloor,
-    int steals, {
-    bool flash = false,
-  }) {
-    final gold = context.palette.reward;
-    const hotRed = Color(0xFFFF2D3A);
-    final t = flash ? Curves.easeInOut.transform(_pulse.value) : 0.0;
-    final baseBorder = onFloor ? gold : Colors.white24;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: onFloor ? gold.withValues(alpha: 0.9) : Colors.black54,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: flash
-              ? Color.lerp(baseBorder, hotRed, 0.4 + 0.6 * t)!
-              : baseBorder,
-          width: flash ? 2.5 : (onFloor ? 2 : 1),
-        ),
-        boxShadow: flash
-            ? [
-                BoxShadow(
-                  color: hotRed.withValues(alpha: 0.25 + 0.45 * t),
-                  blurRadius: 8 + 12 * t,
-                  spreadRadius: 1 + 2 * t,
-                ),
-              ]
-            : null,
-      ),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: onFloor ? Colors.black : Colors.white70,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Text(
-            _fmt(ms),
-            style: TextStyle(
-              color: onFloor ? Colors.black : Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          Text(
-            '${'●' * steals}${'○' * ((widget.pairing.interrupts) - steals)}',
-            style: TextStyle(
-              color: onFloor ? Colors.black87 : Colors.white54,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
+  /// ONE contextual action beside the self-view: Pass the mic while you hold
+  /// it, Interrupt while they do, Drop the mic once they're out of time.
   Widget _controls(MainStageBattleState b) {
     final iHoldFloor = b.floor == _myUid;
     final oppHoldsFloor = b.floor == _oppUid;
@@ -540,81 +500,42 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
         (b.remaining[_myUid] ?? 0) > 0 &&
         b.pendingBy == null; // one interrupt in flight at a time
 
-    // Dead-air escape: you hold the floor, your opponent is spent, and you have
-    // nothing left to say. End it now rather than draining a banked clock in
-    // silence — nothing is forfeited, the battle would end when your clock ran
-    // out anyway. (Keep talking by simply not pressing it.)
+    final Widget pill;
     if (iHoldFloor && oppOutOfTime) {
-      return Positioned(
-        left: 16,
-        right: 16,
-        bottom: 24,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              "They're out of time — the stage is yours. Land one more, or "
-              'end it.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white60, fontSize: 13),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => _intent(MsEvent.endEarly),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 54),
-                  backgroundColor: context.palette.reward,
-                  foregroundColor: Colors.black,
-                ),
-                child: const Text("I'm done — end the battle"),
-              ),
-            ),
-          ],
-        ),
+      // Dead-air escape: nothing is forfeited, the battle would end when
+      // your clock ran out anyway.
+      pill = NeonActionButton(
+        label: 'Drop the mic',
+        icon: Icons.mic_external_off_rounded,
+        compact: true,
+        colors: const [Color(0xFFF6D66B), Color(0xFFD9A21E)],
+        glow: const Color(0xFFF4C838),
+        onPressed: () => _intent(MsEvent.endEarly),
+      );
+    } else if (iHoldFloor) {
+      pill = NeonActionButton(
+        label: 'Pass the mic',
+        icon: Icons.mic_external_off_rounded,
+        compact: true,
+        onPressed: () => _intent(MsEvent.yield),
+      );
+    } else {
+      final left = b.steals[_myUid] ?? 0;
+      pill = NeonActionButton(
+        label: iAmInterrupting ? 'Cutting in' : 'Interrupt ($left)',
+        icon: Icons.bolt_rounded,
+        compact: true,
+        busy: iAmInterrupting,
+        colors: const [Color(0xFFFF7A1A), Color(0xFFFF2D3A)],
+        glow: const Color(0xFFFF7A1A),
+        onPressed: canInterrupt ? () => _intent(MsEvent.interrupt) : null,
       );
     }
     return Positioned(
-      left: 16,
-      right: 16,
-      bottom: 24,
-      child: Row(
-        children: [
-          Expanded(
-            child: FilledButton(
-              onPressed: iHoldFloor ? () => _intent(MsEvent.yield) : null,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(0, 54),
-                backgroundColor: Colors.white24,
-              ),
-              child: const Text('Pass the mic'),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: FilledButton(
-              onPressed: canInterrupt ? () => _intent(MsEvent.interrupt) : null,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(0, 54),
-                backgroundColor: iAmInterrupting
-                    ? context.palette.reward
-                    : context.palette.live,
-                foregroundColor: iAmInterrupting ? Colors.black : null,
-                disabledBackgroundColor: iAmInterrupting
-                    ? context.palette.reward.withValues(alpha: 0.9)
-                    : null,
-                disabledForegroundColor: iAmInterrupting ? Colors.black : null,
-              ),
-              child: Text(
-                iAmInterrupting
-                    ? 'Cutting in…'
-                    : 'Interrupt (${b.steals[_myUid] ?? 0})',
-              ),
-            ),
-          ),
-        ],
-      ),
+      left: 4,
+      right: 4 + _kSelfViewW + 6,
+      top: _kSelfViewTop,
+      child: pill,
     );
   }
 
@@ -645,21 +566,16 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
               style: TextStyle(color: Colors.white70),
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: context.palette.live,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(0, 52),
-                ),
-                icon: const Icon(Icons.gavel),
-                label: const Text('Watch the judges decide'),
-                onPressed: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        WatchJudgesScreen(matchId: widget.pairing.matchId),
-                  ),
+            NeonActionButton(
+              label: 'Watch the judges decide',
+              icon: Icons.gavel_rounded,
+              compact: true,
+              colors: const [Color(0xFF22C58B), Color(0xFF0E8F6A)],
+              glow: const Color(0xFF22C58B),
+              onPressed: () => Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      WatchJudgesScreen(matchId: widget.pairing.matchId),
                 ),
               ),
             ),

@@ -37,6 +37,10 @@ const int kMainStageGraceDefaultMs = 1500;
 /// mainStageBattle.js's EXTEND_MS.
 const int kMainStageExtendMs = 5 * 1000;
 
+/// Silent passes in a row that end a battle as dead air (see
+/// [MainStageBattleState.silentPasses]).
+const int kDeadAirSilences = 3;
+
 enum MsEvent { open, startTalking, yield, interrupt, extend, endEarly, tick }
 
 enum MsStatus { pending, live, ended }
@@ -108,6 +112,11 @@ class MainStageBattleState {
   MsStatus status = MsStatus.pending;
   String? endReason;
 
+  /// Passes in a row by a holder who never said a word (regular battles'
+  /// silence auto-pass). Any pass with speech, or an interrupt, resets it;
+  /// [kDeadAirSilences] in a row ends the battle as dead air.
+  int silentPasses = 0;
+
   String _other(String p) => players[0] == p ? players[1] : players[0];
 
   MainStageBattleState _clone() {
@@ -124,6 +133,7 @@ class MainStageBattleState {
     s.pendingAtMs = pendingAtMs;
     s.status = status;
     s.endReason = endReason;
+    s.silentPasses = silentPasses;
     return s;
   }
 
@@ -182,6 +192,7 @@ class MainStageBattleState {
     'pendingAtMs': pendingAtMs,
     'status': status.name,
     'endReason': endReason,
+    'silentPasses': silentPasses,
   };
 
   /// Rebuild a state a host broadcast. Tolerant of the JSON round-trip
@@ -221,6 +232,7 @@ class MainStageBattleState {
     s.pendingAtMs = (m['pendingAtMs'] as num?)?.toInt();
     s.status = MsStatus.values.byName((m['status'] as String?) ?? 'pending');
     s.endReason = m['endReason'] as String?;
+    s.silentPasses = (m['silentPasses'] as num?)?.toInt() ?? 0;
     return s;
   }
 
@@ -238,6 +250,7 @@ class MainStageBattleState {
     String? by,
     required int atMs,
     bool instant = false,
+    bool silent = false,
   }) {
     final s = _clone();
     if (s.status == MsStatus.live) s._settle(atMs);
@@ -284,6 +297,19 @@ class MainStageBattleState {
             atMs - s.floorTakenMs! < s.config.minHoldMs) {
           return s; // too soon - hold the floor a beat first
         }
+        // DEAD AIR (2026-11-12, developer's rule): A silent, B silent, A
+        // silent again = the battle ends. Any pass with speech resets it.
+        if (silent) {
+          s.silentPasses++;
+          if (s.silentPasses >= kDeadAirSilences) {
+            s.status = MsStatus.ended;
+            s.endReason = 'dead_air';
+            s.floor = null;
+            return s;
+          }
+        } else {
+          s.silentPasses = 0;
+        }
         final opp = s._other(by);
         if (s.remaining[opp]! > 0) {
           s._takeFloor(opp, atMs);
@@ -300,6 +326,7 @@ class MainStageBattleState {
         if (s.floor != opp) return s; // can only cut in on the holder
         if ((s.remaining[by] ?? 0) <= 0) return s; // no time to take the floor
         if (s.pendingBy != null) return s; // an interrupt is already winding up
+        s.silentPasses = 0; // someone wanted the mic - not dead air
         if (instant) {
           // The "Instant Interrupt" ability: no grace, separate token pool.
           if ((s.instantSteals[by] ?? 0) <= 0) return s;

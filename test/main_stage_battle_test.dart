@@ -296,4 +296,44 @@ void main() {
       expect(s.steals['b'], 2, reason: 'graced pool not touched by instant');
     });
   });
+
+  group('dead air (three silent passes in a row)', () {
+    // Each pass is 1s after the last; talking flags keep the shot clock out.
+    MainStageBattleState pass(MainStageBattleState s, int at, bool silent) {
+      final by = s.floor!;
+      s = s.reduce(MsEvent.startTalking, by: by, atMs: at - 500);
+      return s.reduce(MsEvent.yield, by: by, atMs: at, silent: silent);
+    }
+
+    test('A silent, B silent, A silent ends the battle', () {
+      var s = open();
+      s = pass(s, 1000, true); // A
+      expect(s.isOver, false);
+      s = pass(s, 2000, true); // B
+      expect(s.isOver, false);
+      expect(s.floor, 'a');
+      s = pass(s, 3000, true); // A again
+      expect(s.isOver, true);
+      expect(s.endReason, 'dead_air');
+    });
+
+    test('a pass with speech resets the count', () {
+      var s = open();
+      s = pass(s, 1000, true);
+      s = pass(s, 2000, true);
+      s = pass(s, 3000, false); // A says something
+      s = pass(s, 4000, true);
+      s = pass(s, 5000, true);
+      expect(s.isOver, false);
+      expect(s.silentPasses, 2);
+    });
+
+    test('the count survives the host broadcast', () {
+      var s = open();
+      s = pass(s, 1000, true);
+      s = pass(s, 2000, true);
+      final copy = MainStageBattleState.fromMap(s.toMap());
+      expect(copy.silentPasses, 2);
+    });
+  });
 }

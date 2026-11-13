@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/neon_action_button.dart';
 import '../../core/services/matchmaking_service.dart';
 import '../../widgets/belt_flair.dart';
 import '../../widgets/looping_video.dart';
@@ -513,13 +514,15 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
             const SizedBox(height: 16),
             Text(_endedReason!, textAlign: TextAlign.center),
             const SizedBox(height: 24),
-            FilledButton(
-              // Land on Home, not whatever stale screen pushed this one. A
-              // single pop() returned to the dead PreMatchScreen/challenge
-              // route the player came through, which is the "I can only press
-              // Back and it goes nowhere useful" dead end.
+            // Land on Home, not whatever stale screen pushed this one. A
+            // single pop() returned to the dead PreMatchScreen/challenge
+            // route the player came through, which is the "I can only press
+            // Back and it goes nowhere useful" dead end.
+            NeonActionButton(
+              label: 'Back to home',
+              icon: Icons.home_rounded,
+              compact: true,
               onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
-              child: const Text('Back to home'),
             ),
           ],
         ),
@@ -774,11 +777,12 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          FilledButton(
+          NeonActionButton(
+            label: _iAmReady ? 'Waiting for opponent' : "I'm ready",
+            icon: _iAmReady
+                ? Icons.hourglass_top_rounded
+                : Icons.local_fire_department_rounded,
             onPressed: (_busy || _iAmReady || !_readyArmed) ? null : _onReady,
-            child: Text(
-              _iAmReady ? 'Ready - waiting for opponent' : "I'm Ready",
-            ),
           ),
           // Only ever offered once the opponent has genuinely gone quiet,
           // and it costs no skip - they declined nobody, they were stood up.
