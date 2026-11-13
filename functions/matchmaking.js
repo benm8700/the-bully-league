@@ -944,6 +944,10 @@ async function pollMatchmaking(auth, data) {
  * match; losing the footage is bad, but blocking the match on a recording
  * vendor being unreachable is much worse.
  */
+/** How long a "starting" recording claim holds before another request may
+ * retake it (Agora's start normally answers in a few seconds). */
+const STARTING_CLAIM_MS = 45 * 1000;
+
 async function startMatchRecording(auth, data, creds) {
   const {matchRef, match} = await loadPendingMatch(auth, data?.matchId);
   const matchId = data.matchId;
@@ -955,6 +959,24 @@ async function startMatchRecording(auth, data, creds) {
     // The other device raced us, or this is a retry. Not an error.
     return {started: false, reason: "already-recording"};
   }
+  // ATOMIC CLAIM (2026-11-12): both phones now ask (a locked host phone used
+  // to lose the whole recording), so two requests can arrive together. Only
+  // the one that claims "starting" goes on to start a recorder; a claim older
+  // than STARTING_CLAIM_MS is treated as a crashed start and can be retaken.
+  const claimed = await getFirestore().runTransaction(async (tx) => {
+    const fresh = (await tx.get(matchRef)).data() ?? {};
+    const rec = fresh.recording ?? {};
+    if (rec.status === "recording") return false;
+    if (rec.status === "starting" &&
+        Date.now() - (rec.claimedAt ?? 0) < STARTING_CLAIM_MS) {
+      return false;
+    }
+    tx.set(matchRef, {
+      recording: {status: "starting", claimedAt: Date.now()},
+    }, {merge: true});
+    return true;
+  });
+  if (!claimed) return {started: false, reason: "already-recording"};
   const {startRecording, isRecordingConfigured} = require("./cloudRecording");
   if (!isRecordingConfigured(creds)) {
     // Expected while the Agora RESTful credentials are still being set

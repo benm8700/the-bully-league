@@ -374,11 +374,23 @@ class MatchmakingService {
   /// matches, so an exhibition match or an unconfigured backend both come
   /// back as "not started" — neither is something to interrupt two players
   /// mid-match about.
+  ///
+  /// RETRIES (2026-11-12): a single fire-and-forget call lost a whole battle's
+  /// recording when the host phone was locked at that moment - the request
+  /// never reached the server. Now it tries up to 4 times with backoff, and
+  /// both phones call it (the server claims the start atomically, so only one
+  /// recorder ever starts).
   Future<void> startRecording(String matchId) async {
-    try {
-      await _call('startMatchRecording', {'matchId': matchId});
-    } catch (e) {
-      debugPrint('Could not start match recording: $e');
+    for (var attempt = 0; attempt < 4; attempt++) {
+      try {
+        await _call('startMatchRecording', {'matchId': matchId});
+        return;
+      } catch (e) {
+        debugPrint('Could not start match recording (try ${attempt + 1}): $e');
+        if (attempt < 3) {
+          await Future<void>.delayed(Duration(seconds: 1 << attempt));
+        }
+      }
     }
   }
 

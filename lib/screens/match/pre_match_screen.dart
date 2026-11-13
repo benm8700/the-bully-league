@@ -124,6 +124,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
   Timer? _advanceTimer;
   // After this long with no voice, explain why (covered mic is the usual cause).
   Timer? _cantHearTimer;
+  Timer? _micSampler;
   bool _cantHear = false;
 
   // --- Steadiness (non-blocking indicator) ---
@@ -235,7 +236,15 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     if (!mounted) return;
     debugPrint('PRECHECK: joined, camera check ready');
     setState(() => _initialized = true);
-    _videoCallService.localAudioLevel.addListener(_onAudioLevel);
+    // SAMPLED ON A CLOCK, not on change (2026-11-12): a listener only fires
+    // when the level CHANGES, so a silent room (level stuck at 0) gave the
+    // room check almost no samples - only the blips (a tap, a breath) - and
+    // a quiet room measured as "too noisy". Five readings a second, silence
+    // included.
+    _micSampler = Timer.periodic(
+      const Duration(milliseconds: 200),
+      (_) => _onAudioLevel(),
+    );
     _cantHearTimer = Timer(const Duration(seconds: 8), () {
       if (mounted && !_micVerified) setState(() => _cantHear = true);
     });
@@ -312,7 +321,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     _cantHearTimer?.cancel();
     _accelSub?.cancel();
     _frameSub?.cancel();
-    _videoCallService.localAudioLevel.removeListener(_onAudioLevel);
+    _micSampler?.cancel();
     // Only dispose here if _onReady() didn't already do it - see there for
     // why: State.dispose() can't be async/awaited, so relying on it to
     // leave the channel before MatchScreen's own engine tries to join the
@@ -332,7 +341,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     _cantHearTimer?.cancel();
     _accelSub?.cancel();
     _frameSub?.cancel();
-    _videoCallService.localAudioLevel.removeListener(_onAudioLevel);
+    _micSampler?.cancel();
     _serviceDisposed = true;
     await _videoCallService.dispose();
     if (!mounted) return;

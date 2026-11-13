@@ -279,6 +279,7 @@ class _MatchScreenState extends State<MatchScreen>
   void initState() {
     super.initState();
     _loadOppName();
+    _lifecycle; // start listening for the app coming back mid-battle
     _pulse = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 450),
@@ -557,7 +558,29 @@ class _MatchScreenState extends State<MatchScreen>
   /// Ranked only: tell the server the first round has begun, so a departure
   /// from here is a forfeit rather than a warm-up no-contest. Once only;
   /// idempotent server-side too.
+  /// BOTH phones make sure the battle is being recorded once it opens, and
+  /// again whenever the app comes back to the foreground mid-battle (a locked
+  /// host phone used to lose the whole recording). The server ignores
+  /// duplicates. Throttled so a flurry of resumes is one request.
+  int _recordAskMs = 0;
+  void _ensureRecording() {
+    if (_violationEnded || _phase == _Phase.verdict) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _recordAskMs < 10000) return;
+    _recordAskMs = now;
+    unawaited(_matchmakingService.startRecording(widget.pairing.matchId));
+  }
+
+  late final AppLifecycleListener _lifecycle = AppLifecycleListener(
+    onResume: () {
+      if (_phase == _Phase.battle && !(_battle?.isOver ?? true)) {
+        _ensureRecording();
+      }
+    },
+  );
+
   void _markBattleStartedOnce() {
+    _ensureRecording();
     if (_battleStartSent || widget.pairing.mode != 'ranked') return;
     _battleStartSent = true;
     unawaited(_matchmakingService.markBattleStarted(widget.pairing.matchId));
@@ -1299,6 +1322,7 @@ class _MatchScreenState extends State<MatchScreen>
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     _ticker?.cancel();
     _silenceTimer?.cancel();
     _battleTick?.cancel();
