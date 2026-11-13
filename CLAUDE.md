@@ -26,7 +26,7 @@ This file gives Claude Code full context on this project. Read this before start
 - **No tab bar.** Home is the only root page (`lib/screens/home/main_shell.dart`). Everything else is a pushed screen with a back arrow: Profile (tap the Home rank card), the Leaderboard (the Leaderboard tile or the card's #rank side), Judge (the JUDGE door; `WatchFeedScreen` draws its own back button), My Battles (inside Profile, "See all").
 - A **swipe pager** (Profile <- Home -> Leaderboard) and a **crest bottom bar** were both built and rejected the same day ("too easy to accidentally swipe", "skittish"). The crest bar widget (`lib/widgets/nav/crest_nav_bar.dart`) and `_MyPhotoButton` are kept unmounted. Do not bring back swiping without asking.
 - `MainShell.go(i)` / `MainShell.goPage(p)` still exist so old call sites work: they push the screen.
-- **The app is NOT locked to portrait** (it rotates on the Moto). Open question for the developer (phones vs the tablet-support decision).
+- **The app is locked to portrait (2026-11-12, developer: "no reason to have it go sideways")**: `SystemChrome.setPreferredOrientations` in `lib/main.dart`, `screenOrientation="portrait"` in AndroidManifest, portrait-only in Info.plist (iPad too, with `UIRequiresFullScreen` so Apple accepts a portrait-only iPad app).
 
 ### Home, top to bottom (`lib/screens/home/home_screen.dart`, as of 2026-11-11)
 1. App bar: centred crown + wordmark, bell (notification settings). No avatar (moved into the rank card).
