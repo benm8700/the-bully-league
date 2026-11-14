@@ -372,9 +372,9 @@ class RoastHero extends StatelessWidget {
               const SizedBox(height: 16),
               heading('How it works'),
               Text(
-                'You each get about 30 seconds of clock that only ticks while '
-                'you hold the floor; roast, then pass the mic (or get cut off when it '
-                'runs out). Before the bell you watch their intro video, so you '
+                'Three rounds, taking turns - up to 15 seconds a turn. Land '
+                'your line, then tap Done or just stop talking and the mic '
+                'passes. Before the bell you watch their intro video, so you '
                 'walk in with ammo instead of winging it. The whole thing is '
                 'recorded.',
                 style: body,

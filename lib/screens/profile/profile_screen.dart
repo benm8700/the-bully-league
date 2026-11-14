@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -70,15 +69,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // the profile collects now - the intro video is the real ammo. (The old
   // profession/education/interests/relationship/pets/favoriteFood controllers
   // were removed 2026-10-17.)
-  final _nameController = TextEditingController();
-  final _hometownController = TextEditingController();
-  final _ammoTextController = TextEditingController();
 
   bool _loading = true;
   bool _saving = false;
-  // Brief "Saved ✓" confirmation after a successful save (reverts to "Save").
-  bool _justSaved = false;
-  Timer? _savedTimer;
   bool _signingOut = false;
 
   /// Listed unless explicitly opted out, mirroring the server's rule that
@@ -113,9 +106,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final snapshot = await _userRef.get();
     final data = snapshot.data();
     final profile = data?['profile'] as Map<String, dynamic>? ?? {};
-    _nameController.text = profile['name'] as String? ?? '';
-    _hometownController.text = profile['hometown'] as String? ?? '';
-    _ammoTextController.text = profile['ammoText'] as String? ?? '';
     final photoUrls =
         (profile['photoUrls'] as List<dynamic>?)?.cast<String>() ?? [];
     final listed = data?['directoryListed'];
@@ -176,91 +166,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _saving = true;
-      _statusMessage = null;
-    });
-    try {
-      // photoUrls is handled separately (each photo writes itself via
-      // arrayUnion as soon as it's approved - see _addPhoto) rather than
-      // through this batched save, since photo moderation has its own
-      // async, per-photo success/failure flow that doesn't map cleanly
-      // onto a single "Save" button. Firestore rules only pin rating/
-      // rankTitle/rankedMatchesPlayed/wins/losses/accountStatus, so this
-      // update is otherwise unrestricted for the owning user.
-      final fields = {
-        'name': _nameController.text.trim(),
-        'hometown': _hometownController.text.trim(),
-        'ammoText': _ammoTextController.text.trim(),
-      };
-      // Asked first so the player gets a clear message; the server also
-      // wipes anything that fails after the fact (profileModeration.js).
-      final check = await FirebaseFunctions.instance
-          .httpsCallable('checkProfileText')
-          .call<Map<String, dynamic>>({'fields': fields});
-      final blocked = ((check.data['blocked'] as List?) ?? const [])
-          .cast<String>();
-      if (blocked.isNotEmpty) {
-        const labels = {
-          'name': 'Name',
-          'hometown': 'Hometown',
-          'ammoText': 'Your line',
-        };
-        if (mounted) {
-          setState(
-            () => _statusMessage =
-                '${blocked.map((f) => labels[f] ?? f).join(', ')}: '
-                "that isn't allowed. Roasts are fine, but no hate speech "
-                'and nothing sexual involving kids.',
-          );
-        }
-        return;
-      }
-      await _userRef.update({
-        for (final e in fields.entries) 'profile.${e.key}': e.value,
-      });
-      if (mounted) {
-        setState(() {
-          _statusMessage = 'Profile saved.';
-          _justSaved = true;
-        });
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(
-            const SnackBar(
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: Color(0xFF2E7D4F),
-              duration: Duration(seconds: 2),
-              content: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.white, size: 20),
-                  SizedBox(width: 10),
-                  Text(
-                    'Profile saved',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        // Settle back to the normal button after a beat.
-        _savedTimer?.cancel();
-        _savedTimer = Timer(const Duration(seconds: 2), () {
-          if (mounted) setState(() => _justSaved = false);
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _statusMessage = 'Failed to save: $e');
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
   bool _retakingSelfie = false;
 
   Future<void> _retakeSelfie() async {
@@ -282,10 +187,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
-    _savedTimer?.cancel();
-    _nameController.dispose();
-    _hometownController.dispose();
-    _ammoTextController.dispose();
     super.dispose();
   }
 
@@ -592,64 +493,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               },
                             ),
                           ],
-                          // The structured questions (profession, education,
-                          // interests, relationship, pets, favorite food) were cut
-                          // (2026-10-17): self-reported blanks make weak ammo and add
-                          // friction. The INTRO VIDEO is the real ammo; this leaves
-                          // just where you live (opponent-only) and an open "about
-                          // you" box people can volunteer. Nothing is labelled
-                          // "optional" even though only the intro gates ranked -
-                          // labels suppress fill-in.
-                          Text(
-                            'Name',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _nameController,
-                            textCapitalization: TextCapitalization.words,
-                            textInputAction: TextInputAction.done,
-                            onTapOutside: (_) =>
-                                FocusManager.instance.primaryFocus?.unfocus(),
-                            decoration: const InputDecoration(
-                              hintText: 'What should we call you? e.g. Mike',
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            'City & State',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _hometownController,
-                            textInputAction: TextInputAction.done,
-                            onTapOutside: (_) =>
-                                FocusManager.instance.primaryFocus?.unfocus(),
-                            decoration: const InputDecoration(
-                              hintText: 'e.g. San Diego, CA',
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            'About me',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _ammoTextController,
-                            maxLines: 4,
-                            // Multi-line, so Return makes a new line; a tap
-                            // anywhere else or a drag closes the keyboard.
-                            onTapOutside: (_) =>
-                                FocusManager.instance.primaryFocus?.unfocus(),
-                            decoration: const InputDecoration(
-                              hintText:
-                                  'Who you are, what you do, something '
-                                  'embarrassing - whatever you want them to have.',
-                            ),
-                          ),
-                          const SizedBox(height: 24),
+                          // The battle card (name, where you're from, about me)
+                          // moved OUT of the profile (2026-11-14): it's set once in
+                          // the ranked setup flow and edited in Settings > Battle
+                          // card, so the profile is your stats and identity.
                           if (_statusMessage != null) ...[
                             Text(
                               _statusMessage!,
@@ -657,36 +504,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                             const SizedBox(height: 16),
                           ],
-                          FilledButton(
-                            onPressed: (_saving || _justSaved) ? null : _save,
-                            style: _justSaved
-                                ? FilledButton.styleFrom(
-                                    backgroundColor: const Color(0xFF2E7D4F),
-                                    disabledBackgroundColor: const Color(
-                                      0xFF2E7D4F,
-                                    ),
-                                    disabledForegroundColor: Colors.white,
-                                  )
-                                : null,
-                            child: _saving
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : _justSaved
-                                ? const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.check, size: 18),
-                                      SizedBox(width: 6),
-                                      Text('Saved'),
-                                    ],
-                                  )
-                                : const Text('Save'),
-                          ),
                           const SizedBox(height: 28),
                           const Divider(),
                           const SizedBox(height: 8),
@@ -1103,3 +920,5 @@ class _StreakChip extends StatelessWidget {
     );
   }
 }
+
+

@@ -52,7 +52,17 @@ class MainStageBattleConfig {
     this.shotClockMs = kMainStageShotClockMs,
     this.graceMs = kMainStageGraceMs,
     this.minHoldMs = 0,
+    this.turnCount = 0,
   });
+
+  /// RAPID ROUNDS (2026-11-14, regular/friend battles): when > 0 the battle
+  /// is this many alternating TURNS (3 rounds = 6), each a fresh [turnMs]
+  /// clock. Unused time never carries over; a turn ends on a yield ("Done" /
+  /// silence) or when its clock runs out, and the battle ends after the last
+  /// turn. No shot clock (the holder's phone handles silence). 0 = the Main
+  /// Stage chess clock (banked time, interrupts, shot clock).
+  final int turnCount;
+  bool get isRounds => turnCount > 0;
   final int turnMs;
   final int interrupts;
   final int shotClockMs;
@@ -117,6 +127,16 @@ class MainStageBattleState {
   /// [kDeadAirSilences] in a row ends the battle as dead air.
   int silentPasses = 0;
 
+  /// Rapid rounds: how many turns have started (1-based; 0 before open).
+  int turn = 0;
+
+  /// The round the current turn belongs to (1, 1, 2, 2, 3, 3).
+  int get round => turn <= 0 ? 0 : (turn + 1) ~/ 2;
+  int get roundCount => config.turnCount ~/ 2;
+
+  /// Rapid rounds: this is the battle's final turn (the closer).
+  bool get isLastTurn => config.isRounds && turn >= config.turnCount;
+
   String _other(String p) => players[0] == p ? players[1] : players[0];
 
   MainStageBattleState _clone() {
@@ -134,7 +154,22 @@ class MainStageBattleState {
     s.status = status;
     s.endReason = endReason;
     s.silentPasses = silentPasses;
+    s.turn = turn;
     return s;
+  }
+
+  /// Rapid rounds: hand [p] the next turn with a fresh clock, or end the
+  /// battle if every turn has been taken.
+  void _nextTurn(String p, int atMs) {
+    if (turn >= config.turnCount) {
+      status = MsStatus.ended;
+      endReason = 'time';
+      floor = null;
+      return;
+    }
+    turn++;
+    remaining[p] = config.turnMs;
+    _takeFloor(p, atMs);
   }
 
   // Any floor change cancels/consumes a pending interrupt - the universal rule
@@ -157,6 +192,10 @@ class MainStageBattleState {
     lastMs = atMs;
     if (remaining[f] == 0) {
       final opp = _other(f);
+      if (config.isRounds) {
+        _nextTurn(opp, atMs); // turn over: their go (or the battle ends)
+        return;
+      }
       if (remaining[opp]! > 0) {
         _takeFloor(opp, atMs);
       } else {
@@ -179,6 +218,7 @@ class MainStageBattleState {
       'shotClockMs': config.shotClockMs,
       'graceMs': config.graceMs,
       'minHoldMs': config.minHoldMs,
+      'turnCount': config.turnCount,
     },
     'remaining': remaining,
     'steals': steals,
@@ -193,6 +233,7 @@ class MainStageBattleState {
     'status': status.name,
     'endReason': endReason,
     'silentPasses': silentPasses,
+    'turn': turn,
   };
 
   /// Rebuild a state a host broadcast. Tolerant of the JSON round-trip
@@ -210,6 +251,7 @@ class MainStageBattleState {
             (cfg['shotClockMs'] as num?)?.toInt() ?? kMainStageShotClockMs,
         graceMs: (cfg['graceMs'] as num?)?.toInt() ?? kMainStageGraceMs,
         minHoldMs: (cfg['minHoldMs'] as num?)?.toInt() ?? 0,
+        turnCount: (cfg['turnCount'] as num?)?.toInt() ?? 0,
       ),
     );
     (m['remaining'] as Map).forEach((k, v) {
@@ -233,6 +275,7 @@ class MainStageBattleState {
     s.status = MsStatus.values.byName((m['status'] as String?) ?? 'pending');
     s.endReason = m['endReason'] as String?;
     s.silentPasses = (m['silentPasses'] as num?)?.toInt() ?? 0;
+    s.turn = (m['turn'] as num?)?.toInt() ?? 0;
     return s;
   }
 
@@ -283,7 +326,11 @@ class MainStageBattleState {
           return s;
         }
         s.status = MsStatus.live;
-        s._takeFloor(by, atMs);
+        if (s.config.isRounds) {
+          s._nextTurn(by, atMs);
+        } else {
+          s._takeFloor(by, atMs);
+        }
         return s;
 
       case MsEvent.startTalking:
@@ -311,6 +358,10 @@ class MainStageBattleState {
           s.silentPasses = 0;
         }
         final opp = s._other(by);
+        if (s.config.isRounds) {
+          s._nextTurn(opp, atMs); // "Done": their turn, or the battle ends
+          return s;
+        }
         if (s.remaining[opp]! > 0) {
           s._takeFloor(opp, atMs);
         } else {
@@ -321,7 +372,8 @@ class MainStageBattleState {
         return s;
 
       case MsEvent.interrupt:
-        if (by == null) return s;
+        // Rapid rounds have no interrupts (turns are fixed).
+        if (by == null || s.config.isRounds) return s;
         final opp = s._other(by);
         if (s.floor != opp) return s; // can only cut in on the holder
         if ((s.remaining[by] ?? 0) <= 0) return s; // no time to take the floor
@@ -369,13 +421,18 @@ class MainStageBattleState {
         // up" escape: nothing is conceded, since the holder's clock would drain
         // to zero and end the battle anyway.
         if (by == null || s.floor != by) return s;
-        if (s.remaining[s._other(by)]! > 0) return s;
+        if (s.config.isRounds
+            ? !s.isLastTurn
+            : s.remaining[s._other(by)]! > 0) {
+          return s;
+        }
         s.status = MsStatus.ended;
         s.endReason = 'done';
         s.floor = null;
         return s;
 
       case MsEvent.tick:
+        if (s.config.isRounds) return s; // turn time-outs settle above
         if (s.floor != null &&
             !s.talking &&
             s.floorTakenMs != null &&

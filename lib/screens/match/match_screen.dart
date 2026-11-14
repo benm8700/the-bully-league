@@ -24,6 +24,8 @@ import '../../theme/app_theme.dart';
 import '../../widgets/match/ability_deploy_bar.dart';
 import '../../widgets/match/battle_scorebug.dart';
 import '../../widgets/match/tomato_splat.dart';
+import '../../widgets/match/turn_plate.dart';
+import '../../core/countries.dart';
 import '../home/main_shell.dart';
 import '../vote/my_battles_screen.dart';
 import 'pre_match_screen.dart';
@@ -72,7 +74,7 @@ class MatchScreen extends StatefulWidget {
 enum _Phase { waitingForOpponent, warmup, battle, verdict }
 
 class _MatchScreenState extends State<MatchScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   // Timings come from the pairing, which carries what the server resolved
   // and stamped onto the match document at pairing time - so both players
   // run identical numbers and the developer can retune the format live
@@ -80,20 +82,33 @@ class _MatchScreenState extends State<MatchScreen>
   MatchSettings get _settings => widget.pairing.settings;
   int get _warmupSeconds => _settings.warmupSeconds;
 
-  /// The chess-clock config, from the stamped settings so both devices agree.
+  /// RAPID ROUNDS (2026-11-14, developer's call after a real test showed
+  /// the 30s chess clock wasn't intuitive): [roundCount] rounds of
+  /// alternating turns, each a fresh [roundLengthSeconds] clock, unused time
+  /// never carries over. From the stamped settings so both devices agree.
+  /// The Main Stage keeps its chess clock (its own screen).
   MainStageBattleConfig get _battleConfig => MainStageBattleConfig(
-    turnMs: _settings.turnSeconds * 1000,
-    interrupts: _settings.interrupts,
+    turnMs: _settings.roundLengthSeconds * 1000,
+    interrupts: 0,
     shotClockMs: _settings.shotClockSeconds * 1000,
     graceMs: _settings.graceMs,
     minHoldMs: _kMinHoldMs,
+    turnCount: _kRapidRounds * 2,
   );
+
+  /// NOT `_settings.roundCount`: the server forces that to 1 for every
+  /// battle because the voting reads it as "one overall winner vote"
+  /// (functions/matchSettings.js). Using it here gave a 1-round battle
+  /// (found in the first real test, 2026-11-14).
+  static const int _kRapidRounds = 3;
 
   /// Anti ping-pong: after you take the floor, Yield stays locked this long
   /// (the host's engine refuses an early yield too). Every pass now costs the
   /// passer real clock time, so back-to-back yielding drains both clocks and
   /// ends the battle instead of stalling it.
-  static const int _kMinHoldMs = 3000;
+  // Off for rapid rounds: turns are capped and silent passes end the battle,
+  // so there is no ping-pong to guard against, and Done must be instant.
+  static const int _kMinHoldMs = 0;
   int? _holdKey; // floorTakenMs of the hold we're timing
   int _holdStartLocalMs = 0;
   int? _yieldLockSeconds; // non-null while Yield is still locked
@@ -235,8 +250,32 @@ class _MatchScreenState extends State<MatchScreen>
   // Self-view under the scorebug (top-right); the pass pill sits beside it.
   static const double _kSelfViewW = 92;
   static const double _kSelfViewH = 128;
-  static const double _kSelfViewTop = 2 + 78 + 4; // hugs the scorebug
+  static const double _kSelfViewTop = 2; // top-right corner, hugging the top
   String? _oppName; // the opponent's username for the scorebug
+  // Shown beside the clock: first name over city/state over country. Any
+  // blank is dropped; no first name falls back to the username.
+  String? _oppFirst;
+  String? _oppHome;
+  String? _oppCountry;
+  // After you've spoken: quiet this long shows "TALK TO KEEP IT", and this
+  // long passes the mic (2s/3.5s - one hidden extra second before the
+  // warning, developer's call after testing; 2026-11-14 rapid rounds - finish a line and the mic
+  // moves on its own, no dead air).
+  static const int _kAfterSpeechWarnMs = 2000;
+  static const int _kAfterSpeechPassMs = 3500;
+  static const int _kTurnSettleMs = 800;
+  double _warnFill = 0; // 1..0 while the passing warning drains
+  // The handoff flash ("YOUR MIC" / "THEIR MIC") and the last-3-seconds
+  // squeeze.
+  bool? _flashMine;
+  String? _flashSub;
+  Timer? _flashTimer;
+  String? _lastFloorKey;
+  int? _lastTickSec;
+  late final AnimationController _squeeze = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 450),
+  );
   String? _endStamp; // "TIME!" / "DEAD AIR" while the end stamp shows
 
   Future<void> _loadOppName() async {
@@ -245,8 +284,22 @@ class _MatchScreenState extends State<MatchScreen>
           .collection('users')
           .doc(widget.pairing.opponentId)
           .get();
-      final n = d.data()?['username'] as String?;
-      if (n != null && mounted) setState(() => _oppName = n);
+      final data = d.data();
+      final n = data?['username'] as String?;
+      final profile = (data?['profile'] as Map?) ?? const {};
+      String? clean(Object? v) {
+        final t = (v is String) ? v.trim() : '';
+        return t.isEmpty ? null : t;
+      }
+
+      if (mounted) {
+        setState(() {
+          _oppName = n;
+          _oppFirst = clean(profile['name']);
+          _oppHome = clean(profile['hometown']);
+          _oppCountry = countryName(clean(profile['country']));
+        });
+      }
     } catch (_) {
       // Quiet: the scorebug just says "Them".
     }
@@ -673,7 +726,8 @@ class _MatchScreenState extends State<MatchScreen>
         _onRemotePresence();
       }
       if (_isHost != false) return;
-      final stalled = _battleLive &&
+      final stalled =
+          _battleLive &&
           ((_phase == _Phase.battle &&
                   _lastHostStateMs > 0 &&
                   now - _lastHostStateMs > 5000) ||
@@ -1090,6 +1144,32 @@ class _MatchScreenState extends State<MatchScreen>
       _videoCallService.sendMatchMessage({'t': 'ms_state', 's': b.toMap()});
     }
     _driveInterruptCue(b);
+    _driveSqueeze(b);
+    // THE HANDOFF (2026-11-14): every time the mic changes hands, flash
+    // "YOUR MIC" / "THEIR MIC" across the screen with a buzz (on
+    // the phone that just got it - local only, never in the recording).
+    final floorKey = b.floor == null ? null : '${b.turn}:${b.floor}';
+    if (floorKey != null && floorKey != _lastFloorKey) {
+      _lastFloorKey = floorKey;
+      final mine = b.floor == _myFirebaseUid;
+      _flashMine = mine;
+      _flashSub = mine
+          ? (b.isLastTurn
+                ? 'LAST WORD · CLOSE IT OUT'
+                : 'ROUND ${b.round} · GO')
+          : null;
+      // A buzz only - an audible click would be heard by the mic that just
+      // opened and counted as speech.
+      if (mine) {
+        HapticFeedback.heavyImpact();
+      } else {
+        HapticFeedback.lightImpact();
+      }
+      _flashTimer?.cancel();
+      _flashTimer = Timer(const Duration(milliseconds: 750), () {
+        if (mounted) setState(() => _flashMine = null);
+      });
+    }
     if (mounted) setState(() {});
     if (b.isOver) {
       _battleTick?.cancel();
@@ -1414,11 +1494,17 @@ class _MatchScreenState extends State<MatchScreen>
     final voice = _videoCallService.localVoiceActive.value;
     final voiced = (level >= _kVoiceLevel && voice) || level >= _kLoudLevel;
     bool barely = false;
-    if (voiced) {
-      _silenceSpoke = true;
+    // The first beat of a turn is ignored: the handoff buzz and the tail of
+    // the opponent's last line through the speaker used to count as "you
+    // spoke", arming the quick 2.5s pass before the player said a word
+    // (2026-11-14 test: a turn ended ~2s in).
+    final settling = now - _holdStartLocalMs < _kTurnSettleMs;
+    if (voiced && !settling) {
       _silenceQuietSinceMs = now;
       _faintSinceMs = 0;
       _voicedMs += 200; // one tick of the 200ms timer
+      // Only real talking (not a blip) switches to the quick pass.
+      if (_voicedMs >= _kSpokeMs) _silenceSpoke = true;
     } else if (level >= _kFaintLevel && voice) {
       // Muffled talking: keeps the turn alive, and after a moment of nothing
       // but faint sound, tells the player their mic sounds covered.
@@ -1431,29 +1517,70 @@ class _MatchScreenState extends State<MatchScreen>
     if (barely != _barelyHear && mounted) {
       setState(() => _barelyHear = barely);
     }
-    final limitSec = _silenceSpoke
-        ? _settings.silenceYieldSeconds
-        : _settings.firstWordsSeconds;
-    // On the last turn (opponent out of time) the countdown ends the battle
-    // instead of passing - see the trigger below.
-    final oppHasTime = (b.remaining[_oppFirebaseUid] ?? 0) > 0;
-    if (limitSec <= 0 || _silenceYieldSent) {
+    // Rapid rounds: after you've spoken, a short quiet passes the mic (the
+    // warning shows after [_kAfterSpeechWarnMs]); if you never start, the
+    // longer first-words window applies. Either config value at 0 = off.
+    final int passAtMs;
+    final int warnFromMs;
+    if (_silenceSpoke) {
+      if (_settings.silenceYieldSeconds <= 0) {
+        clearWarning();
+        return;
+      }
+      passAtMs = _kAfterSpeechPassMs;
+      warnFromMs = _kAfterSpeechWarnMs;
+    } else {
+      if (_settings.firstWordsSeconds <= 0) {
+        clearWarning();
+        return;
+      }
+      passAtMs = _settings.firstWordsSeconds * 1000;
+      warnFromMs = passAtMs - _kPassWarningMs;
+    }
+    if (_silenceYieldSent) {
       clearWarning();
       return;
     }
-    final leftMs = limitSec * 1000 - (now - _silenceQuietSinceMs);
+    final quietMs = now - _silenceQuietSinceMs;
+    final leftMs = passAtMs - quietMs;
     if (leftMs <= 0) {
       _silenceYieldSent = true;
       clearWarning();
-      // Last turn (opponent out of time): silence puts the mic down and ends
-      // the battle, instead of draining the clock in dead air.
-      _intent(oppHasTime ? MsEvent.yield : MsEvent.endEarly);
+      // On the last turn the engine ends the battle on this pass.
+      _intent(MsEvent.yield);
       return;
     }
-    final passIn = leftMs <= _kPassWarningMs ? (leftMs / 1000).ceil() : null;
-    if (passIn != _passInSeconds && mounted) {
-      setState(() => _passInSeconds = passIn);
+    if (quietMs >= warnFromMs) {
+      final passIn = (leftMs / 1000).ceil();
+      final fill = leftMs / (passAtMs - warnFromMs);
+      if (mounted &&
+          (passIn != _passInSeconds || (fill - _warnFill).abs() > 0.04)) {
+        setState(() {
+          _passInSeconds = passIn;
+          _warnFill = fill;
+        });
+      }
+    } else {
+      clearWarning();
     }
+  }
+
+  /// Last 3 seconds of MY turn: pulse the plate edge and tick the phone once
+  /// a second, so the end is felt without looking down.
+  void _driveSqueeze(MainStageBattleState b) {
+    final myMs = b.floor == _myFirebaseUid && !b.isOver
+        ? (b.remaining[_myFirebaseUid] ?? 0)
+        : 0;
+    final on = myMs > 0 && myMs <= 3000 && _passInSeconds == null;
+    if (on && !_squeeze.isAnimating) {
+      _squeeze.repeat(reverse: true);
+    } else if (!on && _squeeze.isAnimating) {
+      _squeeze.stop();
+      _squeeze.value = 0;
+    }
+    final sec = on ? (myMs / 1000).ceil() : null;
+    if (sec != null && sec != _lastTickSec) HapticFeedback.selectionClick();
+    _lastTickSec = sec;
   }
 
   @override
@@ -1461,6 +1588,8 @@ class _MatchScreenState extends State<MatchScreen>
     _lifecycle.dispose();
     _ticker?.cancel();
     _silenceTimer?.cancel();
+    _flashTimer?.cancel();
+    _squeeze.dispose();
     _battleTick?.cancel();
     _skipResend?.cancel();
     _splatTimer?.cancel();
@@ -1651,9 +1780,7 @@ class _MatchScreenState extends State<MatchScreen>
           // Under the scorebug once the battle is on (2026-11-12 show
           // overhaul); glows pink while you hold the mic.
           right: 4,
-          top:
-              MediaQuery.of(context).padding.top +
-              (inBattle ? _kSelfViewTop : 2),
+          top: MediaQuery.of(context).padding.top + _kSelfViewTop,
           width: _kSelfViewW,
           height: _kSelfViewH,
           child: AnimatedContainer(
@@ -1661,13 +1788,16 @@ class _MatchScreenState extends State<MatchScreen>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: inBattle && _battle?.floor == _myFirebaseUid
-                    ? const Color(0xFFFF2E7E)
-                    : Colors.white.withValues(alpha: 0.25),
-                width: inBattle && _battle?.floor == _myFirebaseUid ? 2 : 1,
+                color: _selfGlow ?? Colors.white.withValues(alpha: 0.25),
+                width: _selfGlow != null ? 2 : 1,
               ),
-              boxShadow: inBattle && _battle?.floor == _myFirebaseUid
-                  ? const [BoxShadow(color: Color(0x8CFF2E7E), blurRadius: 18)]
+              boxShadow: _selfGlow != null
+                  ? [
+                      BoxShadow(
+                        color: _selfGlow!.withValues(alpha: 0.55),
+                        blurRadius: 18,
+                      ),
+                    ]
                   : null,
             ),
             child: ClipRRect(
@@ -1724,6 +1854,10 @@ class _MatchScreenState extends State<MatchScreen>
             ),
           ),
         if (_stealFlash) Positioned.fill(child: _buildStealFlash()),
+        if (_flashMine != null && inBattle && !_battle!.isOver)
+          Positioned.fill(
+            child: MicFlash(mine: _flashMine!, sub: _flashSub),
+          ),
         if (_endStamp != null && _phase == _Phase.battle)
           Positioned.fill(
             child: ColoredBox(
@@ -1864,18 +1998,6 @@ class _MatchScreenState extends State<MatchScreen>
   }
 
   /// Show the tomato splat briefly (I'm the target). Client-only overlay.
-  /// Deploy the Instant Interrupt: snap the floor with no grace, flash the cue
-  /// locally, and tell the opponent so their screen flashes too.
-  void _deployInstant() {
-    _intent(MsEvent.interrupt, instant: true);
-    _showStealFlash();
-    _videoCallService.sendMatchMessage({
-      't': 'fx',
-      'id': 'instantSteal',
-      'by': _myFirebaseUid,
-    });
-  }
-
   void _showStealFlash() {
     if (!mounted) return;
     HapticFeedback.heavyImpact();
@@ -1984,10 +2106,27 @@ class _MatchScreenState extends State<MatchScreen>
                   fontVariations: const [FontVariation('wght', 800)],
                 ),
               ),
-            const SizedBox(height: 4),
-            const Text(
-              'Mics open when the first turn starts',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
+            // The rules, read while you wait (2026-11-14, developer's call).
+            const SizedBox(height: 14),
+            Container(
+              width: 260,
+              padding: const EdgeInsets.only(top: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                ),
+              ),
+              child: Column(
+                children: [
+                  _ruleLine(1, '$_kRapidRounds rounds. Take turns roasting.'),
+                  _ruleLine(
+                    2,
+                    '${_settings.roundLengthSeconds} seconds a turn. Stop '
+                    'talking and the mic passes.',
+                  ),
+                  _ruleLine(3, 'The crowd picks the winner.'),
+                ],
+              ),
             ),
             const SizedBox(height: 10),
             _buildWarmupSkipAbility(),
@@ -2053,200 +2192,155 @@ class _MatchScreenState extends State<MatchScreen>
     );
   }
 
-  /// The chess-clock battle overlay: two clock chips at the top, the
-  /// yield/interrupt controls at the bottom. Adapted from
-  /// MainStageBattleScreen; "You"/"Them" keyed by Firebase uid.
-  List<Widget> _buildBattleOverlay(MainStageBattleState b) {
-    return [_clocks(b), if (!b.isOver) _controls(b)];
-  }
-
-  Widget _clocks(MainStageBattleState b) {
-    // THE SCOREBUG (2026-11-12, concept A of the show overhaul): one
-    // broadcast bar across the top replaces the two corner clock boxes.
-    // The clock of whoever is being cut into flashes red (on both screens).
-    final target = b.pendingBy == null
-        ? null
-        : (b.pendingBy == _myFirebaseUid ? _oppFirebaseUid : _myFirebaseUid);
-    final iHold = b.floor == _myFirebaseUid;
-    final oppOut = (b.remaining[_oppFirebaseUid] ?? 0) == 0;
-    final PlateMood mood;
-    if (!iHold) {
-      mood = PlateMood.idle;
-    } else if (_passInSeconds != null) {
-      mood = PlateMood.warning;
-    } else if (oppOut) {
-      mood = PlateMood.finalWord;
-    } else {
-      mood = PlateMood.live;
-    }
-    return Positioned(
-      // Hugs the top of the phone to leave the most room for video.
-      top: MediaQuery.of(context).padding.top + 2,
-      left: 4,
-      right: 4,
-      child: AnimatedBuilder(
-        animation: _pulse,
-        builder: (context, _) {
-          final t = Curves.easeInOut.transform(_pulse.value);
-          return BattleScorebug(
-            oppName: _oppName ?? 'Them',
-            myMs: b.remaining[_myFirebaseUid] ?? 0,
-            oppMs: b.remaining[_oppFirebaseUid] ?? 0,
-            totalMs: _settings.turnSeconds * 1000,
-            myMood: mood,
-            oppLive: b.floor == _oppFirebaseUid,
-            warningValue: _passInSeconds == null
-                ? null
-                : '${oppOut ? 'ENDING' : 'PASSING'} IN $_passInSeconds',
-            mySteals: b.steals[_myFirebaseUid] ?? 0,
-            oppSteals: b.steals[_oppFirebaseUid] ?? 0,
-            totalSteals: _settings.interrupts,
-            flashMine: target == _myFirebaseUid ? t : 0,
-            flashOpp: target == _oppFirebaseUid ? t : 0,
-          );
-        },
-      ),
-    );
-  }
-
-  /// Prompts the floor-holder acts on sit at the top, under the self-view,
-  /// so their eyes stay up near the lens.
-  Widget _topBar(Widget child) => Positioned(
-    // Beside the self-view, right under the scorebug: the lens is at the
-    // top of the phone, so the pass control stays up here where the eyes are.
-    left: 4,
-    right: 4 + _kSelfViewW + 6,
-    top: MediaQuery.of(context).padding.top + _kSelfViewTop,
-    child: child,
-  );
-
-  /// The pass control in the show's style: the neon pill. Red while the
-  /// dead-air countdown runs (the scorebug plate shows the number).
-  Widget _passPill({
-    required String label,
-    required VoidCallback? onTap,
-    bool busy = false,
-  }) {
-    final warn = _passInSeconds != null;
-    return NeonActionButton(
-      label: label,
-      icon: Icons.mic_external_off_rounded,
-      compact: true,
-      busy: busy,
-      colors: warn
-          ? const [Color(0xFFFF2D3A), Color(0xFFB3122A)]
-          : const [Color(0xFFFF2E7E), Color(0xFFC21FD8)],
-      glow: warn ? const Color(0xFFFF2D3A) : const Color(0xFF3D7BFF),
-      onPressed: onTap,
-    );
-  }
-
-  Widget _controls(MainStageBattleState b) {
-    final iHoldFloor = b.floor == _myFirebaseUid;
-    final oppHoldsFloor = b.floor == _oppFirebaseUid;
-    final oppOutOfTime = (b.remaining[_oppFirebaseUid] ?? 0) == 0;
-    final iAmInterrupting = b.pendingBy == _myFirebaseUid;
-    final canInterrupt =
-        oppHoldsFloor &&
-        (b.steals[_myFirebaseUid] ?? 0) > 0 &&
-        (b.remaining[_myFirebaseUid] ?? 0) > 0 &&
-        b.pendingBy == null;
-
-    // Dead-air escape: you hold the floor, your opponent is spent, nothing left
-    // to say. End it rather than draining a banked clock in silence - nothing
-    // is forfeited, the battle would end when your clock ran out anyway.
-    if (iHoldFloor && oppOutOfTime) {
-      // LAST TURN: the opponent is out of time, so handing over would end the
-      // battle. Same bar as "Pass the mic", worded for the finish. Always
-      // tappable; going quiet runs the same drain and ends it for you.
-      return _topBar(
-        _passPill(
-          label: 'Drop the mic',
-          onTap: () => _intent(MsEvent.endEarly),
-        ),
-      );
-    }
-    // Interrupt only appears when the player actually has steals (loadout);
-    // the amateur base is yield-only, so most battles show Yield alone.
-    final showInterrupt =
-        (b.steals[_myFirebaseUid] ?? 0) > 0 || iAmInterrupting;
-    final silenceOff =
-        _settings.silenceYieldSeconds <= 0 || _settings.firstWordsSeconds <= 0;
-    final showPass =
-        iHoldFloor && (_passInSeconds != null || _yieldQueued || silenceOff);
-    final instantN = b.instantSteals[_myFirebaseUid] ?? 0;
-    final canInstant =
-        oppHoldsFloor &&
-        instantN > 0 &&
-        (b.remaining[_myFirebaseUid] ?? 0) > 0 &&
-        b.pendingBy == null;
-    // PASS THE MIC sits at the TOP, just under the self-view (2026-11-10,
-    // developer's call): the lens is at the top of the phone, so a prompt down
-    // here made people look down, away from the camera.
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          if (showPass)
-            _topBar(
-              _passPill(
-                label: _yieldQueued ? 'Passing' : 'Pass the mic',
-                busy: _yieldQueued,
-                onTap: (_passInSeconds != null || _yieldLockSeconds == null)
-                    ? () {
-                        if (_yieldLockSeconds != null) {
-                          setState(() => _yieldQueued = true);
-                        } else {
-                          _intent(MsEvent.yield);
-                        }
-                      }
-                    : null,
-              ),
-            ),
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 24 + MediaQuery.of(context).padding.bottom,
-            child: Row(
-              children: [
-                if (showInterrupt) ...[
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: canInterrupt
-                          ? () => _intent(MsEvent.interrupt)
-                          : null,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 54),
-                        backgroundColor: iAmInterrupting
-                            ? context.palette.reward
-                            : context.palette.live,
-                        foregroundColor: iAmInterrupting ? Colors.black : null,
-                      ),
-                      child: Text(
-                        iAmInterrupting
-                            ? 'Cutting in...'
-                            : 'Interrupt (${b.steals[_myFirebaseUid] ?? 0})',
-                      ),
-                    ),
-                  ),
-                ],
-                if (instantN > 0) ...[
-                  if (showInterrupt) const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: canInstant ? _deployInstant : null,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 54),
-                        backgroundColor: context.palette.reward,
-                        foregroundColor: Colors.black,
-                      ),
-                      child: Text('Instant ($instantN)'),
-                    ),
-                  ),
-                ],
-              ],
+  Widget _ruleLine(int n, String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0x2EFF2E7E),
+            border: Border.all(color: const Color(0x99FF2E7E)),
+          ),
+          child: Text(
+            '$n',
+            style: const TextStyle(
+              color: Color(0xFFFF6FA5),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
             ),
           ),
-        ],
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              height: 1.3,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  /// The self-view's edge: pink on your turn, red while the mic is about to
+  /// pass, gold on the last word; none while it isn't your turn.
+  Color? get _selfGlow {
+    final b = _battle;
+    if (_phase != _Phase.battle || b == null || b.isOver) return null;
+    if (b.floor != _myFirebaseUid) return null;
+    if (_passInSeconds != null) return BattleScorebug.red;
+    if (b.isLastTurn) return BattleScorebug.gold;
+    return BattleScorebug.pink;
+  }
+
+  /// RAPID ROUNDS HUD (2026-11-14, the approved "Final" mockup): ONE plate in
+  /// the top-left (who's on the mic, the turn clock, who you're up against,
+  /// the round), your selfie in the top-right corner, and the action right
+  /// under the plate - all hugging the top for the most video.
+  List<Widget> _buildBattleOverlay(MainStageBattleState b) {
+    final top = MediaQuery.of(context).padding.top + _kSelfViewTop;
+    final plateW = MediaQuery.sizeOf(context).width - 4 - _kSelfViewW - 6 - 4;
+    final mine = b.floor == _myFirebaseUid;
+    final TurnMood mood;
+    if (!mine) {
+      mood = TurnMood.theirs;
+    } else if (_passInSeconds != null) {
+      mood = TurnMood.warning;
+    } else if (b.isLastTurn) {
+      mood = TurnMood.lastWord;
+    } else {
+      mood = TurnMood.mine;
+    }
+    final holderMs = b.floor == null ? 0 : (b.remaining[b.floor] ?? 0);
+    final squeeze =
+        mine && mood != TurnMood.warning && holderMs > 0 && holderMs <= 3000;
+    final oppUser = _oppName ?? 'Them';
+    final what = b.isLastTurn ? 'LAST WORD' : 'ON THE MIC';
+    final label = mine ? 'YOU · $what' : '${oppUser.toUpperCase()} · $what';
+    final place = [?_oppHome, ?_oppCountry];
+    // Your turn: "vs" their first name (or username). Their turn: their
+    // username is already in the label, so only a first name is added.
+    final lines = mine
+        ? ['vs ${_oppFirst ?? oppUser}', ...place]
+        : [?_oppFirst, ...place];
+    return [
+      Positioned(
+        left: 4,
+        top: top,
+        width: plateW,
+        child: AnimatedBuilder(
+          animation: _squeeze,
+          builder: (context, _) => TurnPlate(
+            label: label,
+            clockMs: holderMs,
+            totalMs: b.config.turnMs,
+            round: b.round,
+            roundCount: b.roundCount,
+            mood: mood,
+            lines: lines,
+            squeeze: squeeze,
+            pulse: _squeeze.value,
+            warnFill: _warnFill,
+          ),
+        ),
+      ),
+      if (!b.isOver)
+        Positioned(
+          left: 4,
+          top: top + TurnPlate.height + 6,
+          width: plateW,
+          child: mine ? _doneButton(b) : _upNext(b),
+        ),
+    ];
+  }
+
+  Widget _doneButton(MainStageBattleState b) {
+    final warn = _passInSeconds != null;
+    final last = b.isLastTurn;
+    return NeonActionButton(
+      label: last ? 'Drop the mic' : 'Done',
+      icon: Icons.mic_external_off_rounded,
+      compact: true,
+      colors: warn
+          ? const [Color(0xFFFF2D3A), Color(0xFFB3122A)]
+          : last
+          ? const [Color(0xFFF6D66B), Color(0xFFD9A21E)]
+          : const [Color(0xFFFF2E7E), Color(0xFFC21FD8)],
+      glow: warn
+          ? BattleScorebug.red
+          : last
+          ? BattleScorebug.gold
+          : BattleScorebug.pink,
+      // On the last turn a yield ends the battle (rapid-rounds engine).
+      onPressed: () => _intent(MsEvent.yield),
+    );
+  }
+
+  Widget _upNext(MainStageBattleState b) {
+    return Container(
+      height: 48,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0x8C0C0812),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        b.isLastTurn ? 'THEIR LAST WORD' : "YOU'RE UP NEXT",
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.75),
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.4,
+        ),
       ),
     );
   }

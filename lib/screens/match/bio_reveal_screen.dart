@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../core/countries.dart';
 
 import '../../widgets/neon_action_button.dart';
 import '../../core/services/matchmaking_service.dart';
@@ -692,6 +693,8 @@ class _BioRevealScreenState extends State<BioRevealScreen> {
       if (value == null || value.trim().isEmpty) continue;
       rows.add(_BioRow(label: entry.value, value: value));
     }
+    final country = countryName(profile?['country'] as String?);
+    if (country != null) rows.add(_BioRow(label: 'Country', value: country));
 
     final ammo = profile?['ammoText'] as String?;
     if (ammo != null && ammo.trim().isNotEmpty) {

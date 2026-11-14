@@ -336,4 +336,95 @@ void main() {
       expect(copy.silentPasses, 2);
     });
   });
+
+  group('rapid rounds (3 rounds x 15s, 2026-11-14)', () {
+    const cfg = MainStageBattleConfig(turnMs: 15000, turnCount: 6);
+    MainStageBattleState start() =>
+        MainStageBattleState.create(['a', 'b'], config: cfg)
+            .reduce(MsEvent.open, by: 'a', atMs: 0);
+
+    test('opens on turn 1, round 1, with a fresh 15s clock', () {
+      final s = start();
+      expect(s.turn, 1);
+      expect(s.round, 1);
+      expect(s.roundCount, 3);
+      expect(s.floor, 'a');
+      expect(s.remaining['a'], 15000);
+    });
+
+    test('Done passes the mic with a FRESH clock - no carry-over', () {
+      var s = start().reduce(MsEvent.yield, by: 'a', atMs: 4000);
+      expect(s.floor, 'b');
+      expect(s.turn, 2);
+      expect(s.remaining['b'], 15000);
+      s = s.reduce(MsEvent.yield, by: 'b', atMs: 6000);
+      expect(s.floor, 'a');
+      expect(s.round, 2);
+      expect(s.remaining['a'], 15000, reason: 'unused 11s did not carry');
+    });
+
+    test('a turn that runs out of time passes the mic by itself', () {
+      final s = start().reduce(MsEvent.tick, atMs: 15000);
+      expect(s.floor, 'b');
+      expect(s.turn, 2);
+      expect(s.remaining['b'], 15000);
+    });
+
+    test('the battle ends after the sixth turn, and that turn is the last', () {
+      var s = start();
+      for (var i = 1; i < 6; i++) {
+        s = s.reduce(MsEvent.yield, by: s.floor, atMs: i * 1000);
+      }
+      expect(s.turn, 6);
+      expect(s.isLastTurn, isTrue);
+      expect(s.floor, 'b');
+      s = s.reduce(MsEvent.yield, by: 'b', atMs: 9000);
+      expect(s.isOver, isTrue);
+      expect(s.endReason, 'time');
+    });
+
+    test('the last turn timing out ends the battle', () {
+      var s = start();
+      for (var i = 1; i < 6; i++) {
+        s = s.reduce(MsEvent.yield, by: s.floor, atMs: i * 1000);
+      }
+      s = s.reduce(MsEvent.tick, atMs: 5000 + 15000);
+      expect(s.isOver, isTrue);
+    });
+
+    test('Drop the mic only works on the last turn', () {
+      var s = start().reduce(MsEvent.endEarly, by: 'a', atMs: 1000);
+      expect(s.isOver, isFalse);
+      for (var i = 1; i < 6; i++) {
+        s = s.reduce(MsEvent.yield, by: s.floor, atMs: i * 1000);
+      }
+      s = s.reduce(MsEvent.endEarly, by: s.floor, atMs: 7000);
+      expect(s.isOver, isTrue);
+      expect(s.endReason, 'done');
+    });
+
+    test('no shot clock and no interrupts', () {
+      var s = start().reduce(MsEvent.tick, atMs: 9000);
+      expect(s.floor, 'a', reason: 'silence is handled by the phone');
+      s = s.reduce(MsEvent.interrupt, by: 'b', atMs: 9500);
+      expect(s.floor, 'a');
+    });
+
+    test('three silent passes still end it as dead air', () {
+      var s = start();
+      s = s.reduce(MsEvent.yield, by: 'a', atMs: 5000, silent: true);
+      s = s.reduce(MsEvent.yield, by: 'b', atMs: 10000, silent: true);
+      s = s.reduce(MsEvent.yield, by: 'a', atMs: 15000, silent: true);
+      expect(s.isOver, isTrue);
+      expect(s.endReason, 'dead_air');
+    });
+
+    test('turn and turnCount survive the data-stream round trip', () {
+      final s = start().reduce(MsEvent.yield, by: 'a', atMs: 1000);
+      final copy = MainStageBattleState.fromMap(s.toMap());
+      expect(copy.turn, 2);
+      expect(copy.config.turnCount, 6);
+      expect(copy.round, 1);
+    });
+  });
 }

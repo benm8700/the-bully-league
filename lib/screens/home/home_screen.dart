@@ -37,12 +37,13 @@ import '../match/improv_match_screen.dart';
 import '../match/matchmaking_screen.dart';
 import '../match/pre_match_screen.dart';
 import '../match/recording_consent_screen.dart';
-import '../profile/profile_screen.dart';
 import '../friends/challenge_screen.dart';
 import '../practice/solo_practice_screen.dart';
 import '../settings/notification_settings_screen.dart';
 import '../vote/finalize_test_screen.dart';
 import '../../widgets/neon_dialog.dart';
+import '../onboarding/ranked_setup_screen.dart';
+import '../../core/battle_card.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -595,54 +596,10 @@ Future<bool> _ensureBattleReady(BuildContext context, String mode) async {
   // Exhibition and IMPROV are exempt: improv riffs a prompt, not the opponent,
   // so there's no ammo to study (matches enterQueue's server-side exemption).
   if (mode == 'exhibition' || mode == 'improv') return true;
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return true;
-  try {
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .get();
-    final profile = snap.data()?['profile'] as Map<String, dynamic>?;
-    final introUrl = profile?['introVideoUrl'] as String?;
-    final faceUrl = profile?['facePhotoUrl'] as String?;
-    final hasIntro = introUrl != null && introUrl.isNotEmpty;
-    final hasSelfie = faceUrl != null && faceUrl.isNotEmpty;
-    // Both are required for a public battle (intro = the ammo + gate; selfie =
-    // so the opponent sees who they're facing). Matches the enterQueue gates.
-    if (hasIntro && hasSelfie) return true;
-  } catch (_) {
-    return true; // fail open - the server still enforces either way
-  }
-  if (!context.mounted) return false;
-  // Missing the intro and/or the selfie: pop up RIGHT HERE (the moment they tap
-  // play) so the requirement is clear before any consent/camera/queue effort,
-  // then take them to their profile (hoisted to those cards) to set it up.
-  final go = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => NeonDialog(
-      title: const Text('Before your first battle'),
-      content: const Text(
-        'Record a 60-second intro (your opponent watches it for roast '
-        'material) and take a selfie. It takes about two minutes, once.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('Not now'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('Do it now'),
-        ),
-      ],
-    ),
-  );
-  if (go == true && context.mounted) {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ProfileScreen(promptIntro: true)),
-    );
-  }
-  return false;
+  // RANKED SETUP (2026-11-14): one question per screen - name, where you're
+  // from, selfie, intro, about me - only the steps still missing. Finishing
+  // carries straight on into the battle flow.
+  return RankedSetupScreen.runIfNeeded(context);
 }
 
 /// Shows the Laugh Meter (rank title + XP climb) and the win/loss record.
@@ -1509,15 +1466,12 @@ class _BattleReadyBanner extends StatelessWidget {
       builder: (context, snap) {
         final profile = snap.data?.data()?['profile'] as Map<String, dynamic>?;
         if (snap.data == null) return const SizedBox.shrink();
-        final hasIntro =
-            (profile?['introVideoUrl'] as String?)?.isNotEmpty ?? false;
-        final hasSelfie =
-            (profile?['facePhotoUrl'] as String?)?.isNotEmpty ?? false;
-        if (hasIntro && hasSelfie) return const SizedBox.shrink();
-        final missing = [
-          if (!hasIntro) 'your 60-second intro',
-          if (!hasSelfie) 'a selfie',
-        ].join(' and ');
+        if (profile == null && snap.data!.data() == null) {
+          return const SizedBox.shrink();
+        }
+        if (setupStepsNeeded(snap.data!.data()).isEmpty) {
+          return const SizedBox.shrink();
+        }
         final scheme = Theme.of(context).colorScheme;
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -1529,11 +1483,7 @@ class _BattleReadyBanner extends StatelessWidget {
             ),
             child: InkWell(
               borderRadius: BorderRadius.circular(14),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const ProfileScreen(promptIntro: true),
-                ),
-              ),
+              onTap: () => RankedSetupScreen.runIfNeeded(context),
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Row(
@@ -1542,7 +1492,7 @@ class _BattleReadyBanner extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Want to play ranked? Add $missing.',
+                        'Want to play ranked? Finish setting up.',
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),

@@ -48,12 +48,12 @@ class SoloPracticeScreen extends StatefulWidget {
 enum _Phase { setup, countdown, yourTurn, theirTurn, done }
 
 class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
-  /// A chess-clock battle is ONE continuous turn on a banked clock, not rounds,
-  /// so solo practice drills a single turn of [_turnSeconds]. Defaults mirror
-  /// functions/matchSettings.js - an unreadable config must never stop someone
-  /// practising.
-  static const _roundCount = 1;
-  int _turnSeconds = 30;
+  /// Rapid rounds (2026-11-14): practice drills the real format - [_roundCount]
+  /// turns of [_turnSeconds] each, with the opponent's gap between. Defaults
+  /// mirror functions/matchSettings.js - an unreadable config must never stop
+  /// someone practising.
+  int _roundCount = 3;
+  int _turnSeconds = 15;
   int _countdownSeconds = 5;
 
   late final VideoCallService _videoCallService;
@@ -97,8 +97,9 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
 
       if (!mounted) return;
       setState(() {
-        // The chess-clock battle's banked clock per player.
-        _turnSeconds = pick('turnSeconds', 30, 10, 180);
+        // Rapid rounds: the same round count and turn length as a battle.
+        _roundCount = pick('roundCount', 3, 1, 10);
+        _turnSeconds = pick('roundLengthSeconds', 15, 5, 120);
         _countdownSeconds = pick('countdownSeconds', 5, 1, 30);
       });
     } catch (_) {
@@ -243,8 +244,8 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
           const SizedBox(height: 12),
           Text(
             'No opponent, no votes, nothing recorded or saved. Just you and '
-            'your $_turnSeconds-second clock - the same as a real battle. Hold '
-            'the floor and roast; tap Pass the mic when you\'re done.',
+            'the real format: $_roundCount turns of $_turnSeconds seconds. '
+            'Roast, then tap Done when you\'ve landed it.',
             style: text.bodyMedium,
             textAlign: TextAlign.center,
           ),
@@ -339,7 +340,7 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
               if (isYourTurn)
                 FilledButton(
                   onPressed: _endTurn,
-                  child: const Text('Pass the mic'),
+                  child: const Text('Done'),
                 )
               else
                 const SizedBox(height: 48),
@@ -386,10 +387,10 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
             // The only honest read available from a stopwatch, and it
             // happens to be the useful one for this format.
             ranOut == _secondsUsed.length
-                ? 'You ran your whole clock down. In a real battle that just '
-                      'hands the floor to your opponent, so land the joke '
-                      'earlier than feels natural.'
-                : 'You passed the mic with time to spare - the right instinct. Short '
+                ? 'You ran every turn down to zero. In a real battle the '
+                      'mic just moves on, so land the joke earlier than feels '
+                      'natural.'
+                : 'You finished with time to spare - the right instinct. Short '
                       'and landed beats long and lost.',
             style: text.bodySmall,
             textAlign: TextAlign.center,

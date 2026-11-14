@@ -324,11 +324,10 @@ class _TutorialScreenState extends State<TutorialScreen> {
       icon: Icons.gavel_outlined,
       title: 'Three rules',
       body: const [
-        'You battle on a clock. You each get about 30 seconds that only ticks '
-            'down while YOU are talking — so hold the floor and go.',
-        'Done talking? Go quiet and a Pass the mic button counts down and '
-            'hands the floor over (so does running out of time). While your opponent has the floor, your mic is muted — you '
-            'cannot talk over them, and they cannot talk over you.',
+        'Three rounds. You take turns, and each turn is up to 15 seconds.',
+        'Landed your line? Tap Done, or just stop talking and the mic '
+            'passes on its own (so does running out of time). While it is '
+            'their turn your mic is muted - nobody talks over anybody.',
         'Your battles are recorded, and the best moments may be posted '
             '(practice is the exception - those are never recorded). You '
             'confirm that before every match.',
@@ -360,7 +359,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Text(
-                          'You get the floor first',
+                          'You go first',
                           style: TextStyle(color: Colors.white, fontSize: 22),
                         ),
                         const SizedBox(height: 16),
@@ -441,9 +440,9 @@ class _TutorialScreenState extends State<TutorialScreen> {
                 isCountdown
                     ? 'Get ready...'
                     : isYourTurn
-                    ? 'You\'ve got the floor. Say anything — nobody is '
-                          'listening. Tap Pass the mic when you\'re done.'
-                    : 'Now they have the floor. Your mic is muted.',
+                    ? 'Your turn. Say anything - nobody is listening. Tap '
+                          'Done when you\'re done.'
+                    : 'Now it\'s their turn. Your mic is muted.',
                 style: Theme.of(context).textTheme.titleMedium,
                 textAlign: TextAlign.center,
               ),
@@ -451,7 +450,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
               if (isYourTurn)
                 FilledButton(
                   onPressed: _endYourTurn,
-                  child: const Text('Pass the mic'),
+                  child: const Text('Done'),
                 )
               else
                 const SizedBox(height: 48),
@@ -467,7 +466,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
       icon: Icons.check_circle_outline,
       title: 'That\'s the whole format',
       body: [
-        'Hold the floor, land your jokes, and pass the mic when you\'re done. The '
+        'Take your turn, land your line, tap Done. Three rounds, and the '
             'crowd decides the rest.',
         // The two parts of the league, framed as the climb (see the
         // Basement/Main Stage naming decision).

@@ -34,13 +34,12 @@ class RulesScreen extends StatelessWidget {
             title: 'The battle',
             body:
                 "You're randomly paired with a stranger close to your skill "
-                'level for a one-on-one roast battle. You each get 30 seconds '
-                'to roast your opponent, and your clock only runs during your '
-                'turn. When you run out of material, just stop talking - a '
-                'Pass the mic button counts down and hands the floor to them '
-                "(tap it to pass right away). While it's their turn, your mic "
-                'is muted. '
-                'The battle ends when both clocks hit zero.',
+                'level for a one-on-one roast battle (or you challenge a '
+                'friend - same format). It runs 3 rounds and you take turns: '
+                'each turn is up to 15 seconds. Landed your line? Tap Done, or '
+                'just stop talking and the mic passes to them on its own. '
+                "Unused time doesn't carry over. While it's their turn, your "
+                'mic is muted. Whoever goes second gets the last word.',
           ),
           const _Rule(
             icon: Icons.how_to_vote_outlined,
@@ -119,7 +118,7 @@ class RulesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Walk through a real battle - holding the floor, the clock, '
+            'Walk through a real battle - taking your turn, the clock, '
             'passing the mic - against a simulated opponent. No one else is there and '
             'nothing is recorded.',
             style: text.bodyMedium?.copyWith(height: 1.4),

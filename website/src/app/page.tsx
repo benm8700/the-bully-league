@@ -82,7 +82,7 @@ function HowItWorks() {
   const steps = [
     ["Get paired", "Jump into the queue and get matched 1-on-1 with a random stranger who's online right now."],
     ["Study the target", "Watch their 60-second intro and read their card. That's your ammo — use it."],
-    ["Battle live", "Hold the floor and roast while your 30-second clock runs — you're live, they're muted. Hand it over when you've landed your shot, then it's their clock."],
+    ["Battle live", "Three rounds, taking turns — up to 15 seconds a turn. You're live, they're muted. Land your line, stop talking, and the mic passes to them."],
     ["Crowd decides", "The battle goes to the community. Judges have 24 hours to vote. Win, and your rank climbs."],
   ];
   return (
