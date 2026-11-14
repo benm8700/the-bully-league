@@ -31,6 +31,9 @@ class BattleScorebug extends StatelessWidget {
     this.totalSteals = 0,
     this.flashMine = 0,
     this.flashOpp = 0,
+    this.mainStage = false,
+    this.mySeed,
+    this.oppSeed,
   });
 
   final String oppName;
@@ -55,11 +58,21 @@ class BattleScorebug extends StatelessWidget {
   final double flashMine;
   final double flashOpp;
 
+  /// MAIN STAGE skin (2026-11-13, developer approved the mockup): the SAME
+  /// plates and timer colours, in gold chrome - a gold edge and glow, a crown
+  /// and "MAIN STAGE" in place of VS, and each player's seed. Gold stays out
+  /// of the plates themselves so "final word" still reads at a glance.
+  final bool mainStage;
+  final int? mySeed;
+  final int? oppSeed;
+
   static const pink = Color(0xFFFF2E7E);
   static const magenta = Color(0xFFC21FD8);
   static const red = Color(0xFFFF2D3A);
   static const redDeep = Color(0xFFB3122A);
   static const gold = Color(0xFFF4C838);
+  static const goldLight = Color(0xFFF6D66B);
+  static const goldDark = Color(0xFF8A6414);
 
   static String fmt(int ms) {
     final s = (ms / 1000).ceil();
@@ -68,19 +81,51 @@ class BattleScorebug extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bar = _bar();
+    if (!mainStage) return bar;
+    // Gold chrome: a 1.5px gradient edge with a soft gold glow.
     return Container(
       height: 78,
+      padding: const EdgeInsets.all(1.5),
       decoration: BoxDecoration(
-        color: const Color(0xD10C0812),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [goldLight, goldDark, gold, goldDark, goldLight],
+          stops: [0, 0.3, 0.55, 0.8, 1],
+        ),
         boxShadow: const [
+          BoxShadow(color: Color(0x59F4C838), blurRadius: 22),
           BoxShadow(
             color: Color(0x80000000),
             blurRadius: 30,
             offset: Offset(0, 10),
           ),
         ],
+      ),
+      child: bar,
+    );
+  }
+
+  Widget _bar() {
+    return Container(
+      height: mainStage ? 75 : 78,
+      decoration: BoxDecoration(
+        color: mainStage ? const Color(0xEB0E0A08) : const Color(0xD10C0812),
+        borderRadius: BorderRadius.circular(mainStage ? 16.5 : 18),
+        border: mainStage
+            ? null
+            : Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        boxShadow: mainStage
+            ? null
+            : const [
+                BoxShadow(
+                  color: Color(0x80000000),
+                  blurRadius: 30,
+                  offset: Offset(0, 10),
+                ),
+              ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Row(
@@ -103,9 +148,10 @@ class BattleScorebug extends StatelessWidget {
               steals: mySteals,
               totalSteals: totalSteals,
               flash: flashMine,
+              seed: mySeed,
             ),
           ),
-          _Middle(),
+          _Middle(mainStage: mainStage),
           Expanded(
             child: _Plate(
               label: oppName.toUpperCase(),
@@ -116,6 +162,7 @@ class BattleScorebug extends StatelessWidget {
               steals: oppSteals,
               totalSteals: totalSteals,
               flash: flashOpp,
+              seed: oppSeed,
             ),
           ),
         ],
@@ -125,9 +172,67 @@ class BattleScorebug extends StatelessWidget {
 }
 
 class _Middle extends StatelessWidget {
+  const _Middle({this.mainStage = false});
+  final bool mainStage;
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    if (mainStage) {
+      return Container(
+        width: 60,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF1A130A), Color(0xFF0E0A08)],
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              'assets/branding/bully_league_crown.png',
+              height: 18,
+              errorBuilder: (_, _, _) => const Icon(
+                Icons.emoji_events_rounded,
+                size: 18,
+                color: BattleScorebug.gold,
+              ),
+            ),
+            const SizedBox(height: 2),
+            const Text(
+              'MAIN\nSTAGE',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: BattleScorebug.goldLight,
+                fontSize: 8,
+                height: 1.1,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 3),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _LiveDot(),
+                SizedBox(width: 3),
+                Text(
+                  'LIVE',
+                  style: TextStyle(
+                    color: BattleScorebug.pink,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       width: 50,
       color: const Color(0xFF0C0812),
@@ -213,8 +318,10 @@ class _Plate extends StatelessWidget {
     required this.steals,
     required this.totalSteals,
     required this.flash,
+    this.seed,
   });
 
+  final int? seed;
   final String label;
   final String value;
   final double fill;
@@ -280,7 +387,9 @@ class _Plate extends StatelessWidget {
               ),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+            padding: seed != null
+                ? const EdgeInsets.fromLTRB(11, 5, 11, 7)
+                : const EdgeInsets.fromLTRB(12, 8, 12, 10),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: cross,
@@ -325,6 +434,35 @@ class _Plate extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (seed != null) ...[
+                  const SizedBox(height: 2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: lit
+                          ? Colors.black.withValues(alpha: 0.28)
+                          : BattleScorebug.gold.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'SEED $seed',
+                      style: TextStyle(
+                        color: onGold
+                            ? ink
+                            : (lit
+                                  ? const Color(0xFFFFE7A3)
+                                  : BattleScorebug.goldLight),
+                        fontSize: 8,
+                        height: 1.2,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 2),
                 FittedBox(
                   fit: BoxFit.scaleDown,
@@ -335,7 +473,7 @@ class _Plate extends StatelessWidget {
                     style: TextStyle(
                       fontFamily: p.display,
                       color: lit ? ink : Colors.white.withValues(alpha: 0.78),
-                      fontSize: 32,
+                      fontSize: seed != null ? 26 : 32,
                       height: 1,
                       fontVariations: const [FontVariation('wght', 900)],
                       fontFeatures: const [FontFeature.tabularFigures()],
@@ -474,8 +612,20 @@ class _RingPainter extends CustomPainter {
 /// The end-of-battle stamp ("TIME!" / "DEAD AIR") that slams in before the
 /// verdict screen.
 class EndStamp extends StatelessWidget {
-  const EndStamp({super.key, required this.text});
+  const EndStamp({
+    super.key,
+    required this.text,
+    this.gold = false,
+    this.kicker,
+    this.footer,
+  });
   final String text;
+
+  /// Main Stage: a gold title card naming the round instead of the white
+  /// stamp.
+  final bool gold;
+  final String? kicker;
+  final String? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -493,26 +643,60 @@ class EndStamp extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.55),
-            border: Border.all(color: Colors.white, width: 4),
+            color: gold
+                ? const Color(0xF2120D07)
+                : Colors.black.withValues(alpha: 0.55),
+            border: Border.all(
+              color: gold ? BattleScorebug.gold : Colors.white,
+              width: gold ? 3 : 4,
+            ),
             borderRadius: BorderRadius.circular(10),
             boxShadow: [
               BoxShadow(
-                color: Colors.white.withValues(alpha: 0.35),
+                color: gold
+                    ? BattleScorebug.gold.withValues(alpha: 0.45)
+                    : Colors.white.withValues(alpha: 0.35),
                 blurRadius: 30,
               ),
             ],
           ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontFamily: p.display,
-              color: Colors.white,
-              fontSize: 48,
-              letterSpacing: 3,
-              height: 1,
-              fontVariations: const [FontVariation('wght', 900)],
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (kicker != null)
+                Text(
+                  kicker!,
+                  style: const TextStyle(
+                    color: BattleScorebug.goldLight,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2,
+                  ),
+                ),
+              Text(
+                text,
+                style: TextStyle(
+                  fontFamily: p.display,
+                  color: gold ? BattleScorebug.goldLight : Colors.white,
+                  fontSize: 48,
+                  letterSpacing: 3,
+                  height: 1,
+                  fontVariations: const [FontVariation('wght', 900)],
+                ),
+              ),
+              if (footer != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  footer!,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.75),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),

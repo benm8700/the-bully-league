@@ -31,6 +31,32 @@ function pairingFor(match, matchId, uid) {
     settings: match.settings,
     mainStageConfig: match.mainStageConfig,
     agoraUid: match.player1Id === uid ? 1 : 2,
+    // Broadcast dressing for the battle screen (round name, seeds). Absent on
+    // matches created before 2026-11-13; the screen just leaves them off.
+    show: match.mainStageShow ?? null,
+  };
+}
+
+/** "FINAL", "SEMI-FINAL", ... by distance from the last round. PURE. */
+function roundLabel(roundIdx, totalRounds) {
+  const fromFinal = totalRounds - 1 - roundIdx;
+  if (fromFinal === 0) return "FINAL";
+  if (fromFinal === 1) return "SEMI-FINAL";
+  if (fromFinal === 2) return "QUARTER-FINAL";
+  return `ROUND ${roundIdx + 1}`;
+}
+
+/** {round, seeds: {uid: 1-based seed}} for the scorebug. PURE. */
+function showFor(bracket, roundIdx, a, b) {
+  const seeds = Array.isArray(bracket?.seeds) ? bracket.seeds : [];
+  const seedOf = (u) => {
+    const i = seeds.indexOf(u);
+    return i >= 0 ? i + 1 : null;
+  };
+  const total = Array.isArray(bracket?.rounds) ? bracket.rounds.length : 0;
+  return {
+    round: total > 0 ? roundLabel(roundIdx, total) : null,
+    seeds: {[a]: seedOf(a), [b]: seedOf(b)},
   };
 }
 
@@ -103,6 +129,7 @@ async function startMainStageBattle(auth, data) {
       mode: "tournament", // ratable + enters finalize's tournament routing...
       mainStage: {tournamentId, roundIdx, matchIdx}, // ...which routes HERE
       mainStageConfig: {...BATTLE_DEFAULTS, graceMs}, // chess-clock timings for the UI
+      mainStageShow: showFor(t.bracket, roundIdx, m.a, m.b), // round + seeds for the scorebug
       settings,
       status: "pending",
       // Whoever tapped "Play your match" first. If the battle is abandoned
@@ -363,4 +390,6 @@ module.exports = {
   stalledJudgingVerdict,
   SETTLE_BUFFER_MS,
   STALL_MS,
+  roundLabel,
+  showFor,
 };

@@ -439,9 +439,16 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
         ),
         _clocks(b),
         if (b.isOver) ...[
-          const Positioned.fill(
+          Positioned.fill(
             child: IgnorePointer(
-              child: Center(child: EndStamp(text: 'TIME!')),
+              child: Center(
+                child: EndStamp(
+                  text: 'TIME!',
+                  gold: true,
+                  kicker: widget.pairing.roundLabel,
+                  footer: 'THE JUDGES DECIDE',
+                ),
+              ),
             ),
           ),
           _endOverlay(),
@@ -481,6 +488,9 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
             totalSteals: widget.pairing.interrupts,
             flashMine: target == _myUid ? t : 0,
             flashOpp: target == _oppUid ? t : 0,
+            mainStage: true,
+            mySeed: widget.pairing.seeds[_myUid],
+            oppSeed: widget.pairing.seeds[_oppUid],
           );
         },
       ),
@@ -531,11 +541,40 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
         onPressed: canInterrupt ? () => _intent(MsEvent.interrupt) : null,
       );
     }
+    final round = widget.pairing.roundLabel;
     return Positioned(
       left: 4,
       right: 4 + _kSelfViewW + 6,
       top: _kSelfViewTop,
-      child: pill,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          pill,
+          if (round != null) ...[
+            const SizedBox(height: 8),
+            // Which round this is, and who is deciding it.
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: BattleScorebug.gold.withValues(alpha: 0.45),
+                ),
+              ),
+              child: Text(
+                '$round · THE JUDGES DECIDE',
+                style: const TextStyle(
+                  color: BattleScorebug.goldLight,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.4,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

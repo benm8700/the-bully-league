@@ -356,6 +356,11 @@ class MainStageService {
         });
     final d = Map<String, dynamic>.from(res.data as Map);
     final cfg = Map<String, dynamic>.from(d['mainStageConfig'] as Map? ?? {});
+    final show = Map<String, dynamic>.from(d['show'] as Map? ?? {});
+    final seeds = <String, int>{};
+    (show['seeds'] as Map? ?? {}).forEach((k, v) {
+      if (v is num) seeds['$k'] = v.toInt();
+    });
     return MainStageBattlePairing(
       matchId: d['matchId'] as String,
       channelName: d['channelName'] as String,
@@ -365,6 +370,8 @@ class MainStageService {
       interrupts: (cfg['interrupts'] as num?)?.toInt() ?? 2,
       shotClockMs: (cfg['shotClockMs'] as num?)?.toInt() ?? 7000,
       graceMs: (cfg['graceMs'] as num?)?.toInt() ?? kMainStageGraceDefaultMs,
+      roundLabel: show['round'] as String?,
+      seeds: seeds,
     );
   }
 
@@ -418,6 +425,8 @@ class MainStageBattlePairing {
     required this.interrupts,
     required this.shotClockMs,
     required this.graceMs,
+    this.roundLabel,
+    this.seeds = const {},
   });
 
   final String matchId;
@@ -428,6 +437,11 @@ class MainStageBattlePairing {
   final int interrupts;
   final int shotClockMs;
   final int graceMs; // interrupt grace window (ms); 0 = instant
+
+  /// Broadcast dressing from the server ("SEMI-FINAL", uid -> seed). Missing
+  /// on older matches; the screen just leaves them off.
+  final String? roundLabel;
+  final Map<String, int> seeds;
 
   bool get isHost => agoraUid == 1;
 }
