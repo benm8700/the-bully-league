@@ -419,6 +419,18 @@ void main() {
       expect(s.endReason, 'dead_air');
     });
 
+    test('a turn run to zero breaks a dead-air streak (review fix)', () {
+      var s = start();
+      s = s.reduce(MsEvent.yield, by: 'a', atMs: 5000, silent: true); // 1
+      s = s.reduce(MsEvent.tick, atMs: 20000); // b talks the full 15s
+      expect(s.silentPasses, 0);
+      s = s.reduce(MsEvent.yield, by: 'a', atMs: 25000, silent: true); // 1
+      s = s.reduce(MsEvent.tick, atMs: 40000); // b talks the full 15s
+      s = s.reduce(MsEvent.yield, by: 'a', atMs: 45000, silent: true); // 1
+      expect(s.isOver, isFalse, reason: 'b was talking - not dead air');
+      expect(s.isLastTurn, isTrue);
+    });
+
     test('turn and turnCount survive the data-stream round trip', () {
       final s = start().reduce(MsEvent.yield, by: 'a', atMs: 1000);
       final copy = MainStageBattleState.fromMap(s.toMap());

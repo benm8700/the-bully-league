@@ -61,6 +61,7 @@ class _RankedSetupScreenState extends State<RankedSetupScreen> {
   final _about = TextEditingController();
   String? _country = deviceCountryCode();
 
+  bool _prefilled = false;
   bool _hasSelfie = false;
   bool _hasIntro = false;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _sub;
@@ -80,11 +81,15 @@ class _RankedSetupScreenState extends State<RankedSetupScreen> {
       setState(() {
         _hasSelfie = s(p['facePhotoUrl']).isNotEmpty;
         _hasIntro = s(p['introVideoUrl']).isNotEmpty;
-        // Pre-fill anything already there (e.g. typed on an older build).
-        if (_name.text.isEmpty) _name.text = s(p['name']);
-        if (_city.text.isEmpty) _city.text = s(p['hometown']);
-        if (s(p['country']).isNotEmpty) _country = s(p['country']);
-        if (_about.text.isEmpty) _about.text = s(p['ammoText']);
+        // Pre-fill anything already there, ONCE - later snapshots (the
+        // selfie/intro saving) must not overwrite what the player re-picked.
+        if (!_prefilled) {
+          _prefilled = true;
+          _name.text = s(p['name']);
+          _city.text = s(p['hometown']);
+          if (s(p['country']).isNotEmpty) _country = s(p['country']);
+          _about.text = s(p['ammoText']);
+        }
       });
     });
   }

@@ -1334,10 +1334,11 @@ function battleForfeitDecision({match, uid, nowMs, staleMs = BATTLE_FORFEIT_STAL
   // (leaveOutcome); exhibition/improv/mainstage are out of scope for v1.
   if (match.mode !== "ranked") return {ok: false, reason: "mode"};
   const ready = Array.isArray(match.readyPlayerIds) ? match.readyPlayerIds : [];
-  // In the battle screen = both tapped ready, OR the bio-reveal timer ran out
-  // and both phones moved on anyway. The battle screen is the only place that
-  // heartbeats, so a heartbeat from BOTH players proves it (found 2026-11-13:
-  // a player who never tapped ready left the other stuck, unable to settle).
+  // Reached = both tapped ready, OR the bio-reveal timer ran out and both
+  // phones moved on anyway (found 2026-11-13: a player who never tapped ready
+  // left the other stuck, unable to settle). Both players heartbeating shows
+  // both got at least as far as the bio reveal; without battleStartedAt the
+  // outcome below is still only a no-contest, never a loss.
   const seenAll = match.lastSeenAt || {};
   const beat = (id) => Number(seenAll[id]) > 0;
   const inBattle = ready.length >= 2 || (beat(match.player1Id) && beat(match.player2Id));

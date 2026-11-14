@@ -925,5 +925,3 @@ class _StreakChip extends StatelessWidget {
     );
   }
 }
-
-

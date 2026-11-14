@@ -88,6 +88,10 @@ class _BattleCardScreenState extends State<BattleCardScreen> {
         isLockedChange(_savedName, name) ||
         isLockedChange(_savedCity, city) ||
         isLockedChange(_savedCountry, country);
+    final cleared =
+        isClearing(_savedName, name) ||
+        isClearing(_savedCity, city) ||
+        isClearing(_savedCountry, country);
     if (changed && _lockedUntil != null) {
       setState(
         () => _message =
@@ -114,7 +118,8 @@ class _BattleCardScreenState extends State<BattleCardScreen> {
       }
       await saveProfileFields(_userRef, {
         ...fields,
-        if (changed) 'battleCardChangedAt': FieldValue.serverTimestamp(),
+        if (changed || cleared)
+          'battleCardChangedAt': FieldValue.serverTimestamp(),
       });
       await _load();
       if (mounted) setState(() => _message = 'Saved.');

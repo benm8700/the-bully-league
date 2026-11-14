@@ -193,6 +193,10 @@ class MainStageBattleState {
     if (remaining[f] == 0) {
       final opp = _other(f);
       if (config.isRounds) {
+        // Running a turn to zero means the holder kept talking (a silent
+        // holder is passed by their phone after 5s) - so it breaks a dead-air
+        // streak, exactly like a pass with speech (review fix 2026-11-14).
+        silentPasses = 0;
         _nextTurn(opp, atMs); // turn over: their go (or the battle ends)
         return;
       }

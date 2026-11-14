@@ -448,10 +448,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
               ),
               const SizedBox(height: 12),
               if (isYourTurn)
-                FilledButton(
-                  onPressed: _endYourTurn,
-                  child: const Text('Done'),
-                )
+                FilledButton(onPressed: _endYourTurn, child: const Text('Done'))
               else
                 const SizedBox(height: 48),
             ],

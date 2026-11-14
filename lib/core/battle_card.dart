@@ -70,9 +70,13 @@ DateTime? battleCardLockedUntil(Map<String, dynamic>? user) {
   return until.isAfter(DateTime.now()) ? until : null;
 }
 
-/// True when going from [before] to [after] is a CHANGE that the cooldown
-/// covers: both non-empty and different. Filling a blank or clearing isn't.
+/// True when going from [before] to [after] is something the cooldown
+/// covers: a new non-empty value (a change, or filling a blank). Clearing is
+/// never covered - removing your info is always allowed.
 bool isLockedChange(String before, String after) =>
-    before.trim().isNotEmpty &&
-    after.trim().isNotEmpty &&
-    before.trim() != after.trim();
+    after.trim().isNotEmpty && before.trim() != after.trim();
+
+/// True when a field is being cleared (always allowed, but it starts the
+/// cooldown, so clear-then-refill can't dodge the 30 days).
+bool isClearing(String before, String after) =>
+    before.trim().isNotEmpty && after.trim().isEmpty;

@@ -338,10 +338,7 @@ class _SoloPracticeScreenState extends State<SoloPracticeScreen> {
               ),
               const SizedBox(height: 12),
               if (isYourTurn)
-                FilledButton(
-                  onPressed: _endTurn,
-                  child: const Text('Done'),
-                )
+                FilledButton(onPressed: _endTurn, child: const Text('Done'))
               else
                 const SizedBox(height: 48),
             ],

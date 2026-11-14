@@ -829,6 +829,18 @@ class _MatchScreenState extends State<MatchScreen>
       return;
     }
     if (message['type'] == 'away') {
+      // Left during the COUNTDOWN: end it here too, right away, so this
+      // (present) phone never opens the battle and stamps it started - which
+      // turned the leaver's "no contest" into a forfeit loss (review fix).
+      if (_phase == _Phase.warmup && !_violationEnded) {
+        unawaited(
+          _matchmakingService.cancelPendingMatch(widget.pairing.matchId),
+        );
+        _completeRequested = true;
+        _noContest = true;
+        _goToVerdict();
+        return;
+      }
       _opponentAway = true;
       _onRemotePresence();
       return;
@@ -900,7 +912,15 @@ class _MatchScreenState extends State<MatchScreen>
       }
     } else if (t == 'ms_intent' && _isHost == true) {
       final ev = _eventFromName(message['ev'] as String?);
-      if (ev != null) {
+      // A yield sent for a turn that has already ended (it timed out and came
+      // back round) must not cut the sender's NEXT turn short.
+      final sentTurn = (message['turn'] as num?)?.toInt();
+      final stale =
+          ev == MsEvent.yield &&
+          sentTurn != null &&
+          _battle != null &&
+          sentTurn != _battle!.turn;
+      if (ev != null && !stale) {
         _hostApply(
           ev,
           by: message['by'] as String?,
@@ -976,7 +996,8 @@ class _MatchScreenState extends State<MatchScreen>
       // _maybeEndWarmupEarly - so the engine still opens through THIS one path.
       _warmupSkip = Completer<void>();
       final leadIn = _warmupSeconds - _kRecordLeadSeconds;
-      final recordTimer = Timer(
+      _recordLeadTimer?.cancel();
+      final recordTimer = _recordLeadTimer = Timer(
         Duration(seconds: leadIn > 0 ? leadIn : 0),
         startRecordingOnce,
       );
@@ -1126,6 +1147,7 @@ class _MatchScreenState extends State<MatchScreen>
         'by': _myFirebaseUid,
         'instant': instant,
         'silent': silent,
+        'turn': cur.turn,
       });
     }
   }
@@ -1195,6 +1217,7 @@ class _MatchScreenState extends State<MatchScreen>
   /// The haptic fires once, only on MY device, only when I'm the one being
   /// cut into. No-op when interrupts are off (nothing ever pends).
   void _driveInterruptCue(MainStageBattleState b) {
+    if (!mounted) return;
     final pending = b.pendingBy != null && b.status == MsStatus.live;
     if (pending && !_pulse.isAnimating) {
       _pulse.repeat(reverse: true);
@@ -1379,7 +1402,13 @@ class _MatchScreenState extends State<MatchScreen>
   /// final state reaches both, and the match-doc backstop covers a dropped
   /// message - and it is idempotent (guarded by the phase, and completeMatch
   /// is a server-side no-op the second time).
+  // The recording lead-in near the end of the countdown. Cancelled when the
+  // match ends early, so a countdown no-contest never starts a recorder on a
+  // dead match (review fix 2026-11-14).
+  Timer? _recordLeadTimer;
+
   void _goToVerdict() {
+    _recordLeadTimer?.cancel();
     if (_phase == _Phase.verdict || _violationEnded) return;
     _ticker?.cancel();
     _battleTick?.cancel();
@@ -1568,6 +1597,7 @@ class _MatchScreenState extends State<MatchScreen>
   /// Last 3 seconds of MY turn: pulse the plate edge and tick the phone once
   /// a second, so the end is felt without looking down.
   void _driveSqueeze(MainStageBattleState b) {
+    if (!mounted) return;
     final myMs = b.floor == _myFirebaseUid && !b.isOver
         ? (b.remaining[_myFirebaseUid] ?? 0)
         : 0;
