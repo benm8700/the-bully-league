@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/auth_service.dart';
+import '../../widgets/neon_action_button.dart';
 import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -198,15 +199,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
               ],
-              FilledButton(
+              NeonActionButton(
+                label: 'Log in',
+                compact: true,
+                busy: _isSubmitting,
                 onPressed: _isSubmitting ? null : _submit,
-                child: _isSubmitting
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Log in'),
               ),
               const SizedBox(height: 16),
               TextButton(

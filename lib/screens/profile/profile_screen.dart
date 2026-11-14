@@ -592,13 +592,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _signingOut = true);
     final push = context.read<PushNotificationService>();
     final auth = context.read<AuthService>();
+    // Grab the navigator before any gap: AuthGate swaps the root to the
+    // sign-up screen, but this Profile route was PUSHED on top of it, so it
+    // stayed on screen with a greyed button until Back was pressed
+    // (2026-11-14). Clear the pushed routes so the welcome screen shows.
+    final nav = Navigator.of(context);
     try {
       await push.unregister();
     } catch (_) {
       // Intentionally ignored - see above.
     }
     await auth.signOut();
-    // No setState after: signing out swaps this whole tree out via AuthGate.
+    nav.popUntil((r) => r.isFirst);
   }
 }
 

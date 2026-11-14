@@ -354,25 +354,51 @@ ThemeData _build({
       titleTextStyle: disp(18, w: palette.displayWeight - 80, ls: 0.5),
       iconTheme: IconThemeData(color: scheme.onSurfaceVariant),
     ),
+    // NEON EVERYWHERE (2026-11-14, developer: no stock buttons left). Every
+    // plain FilledButton gets the neon pill shape, a glow and a glass gloss
+    // across the top, while keeping any colour a screen sets (gold rewards,
+    // green judging). A screen's ONE main action still uses NeonActionButton
+    // for the full pink gradient.
     filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary,
-        minimumSize: const Size(0, 52),
-        elevation: palette.signature == 'glow' ? 10 : 0,
-        shadowColor: palette.signature == 'glow'
-            ? scheme.primary
-            : Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(r)),
-        textStyle: disp(16, ls: 0.8),
-      ),
+      style:
+          FilledButton.styleFrom(
+            backgroundColor: scheme.primary,
+            foregroundColor: scheme.onPrimary,
+            minimumSize: const Size(0, 52),
+            elevation: 8,
+            shadowColor: scheme.primary.withValues(alpha: 0.7),
+            shape: const StadiumBorder(),
+            textStyle: disp(16, ls: 0.8),
+          ).copyWith(
+            backgroundBuilder: (context, states, child) {
+              if (states.contains(WidgetState.disabled) || child == null) {
+                return child ?? const SizedBox.shrink();
+              }
+              return DecoratedBox(
+                decoration: ShapeDecoration(
+                  shape: const StadiumBorder(),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.center,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.22),
+                      Colors.white.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+                child: child,
+              );
+            },
+          ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
+      // Secondary actions: the same pill shape as the neon buttons, with a
+      // soft pink edge instead of a plain grey box.
       style: OutlinedButton.styleFrom(
         foregroundColor: scheme.onSurface,
-        side: BorderSide(color: scheme.outline),
+        side: BorderSide(color: scheme.primary.withValues(alpha: 0.55)),
         minimumSize: const Size(0, 48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(r)),
+        shape: const StadiumBorder(),
         textStyle: TextStyle(
           fontFamily: bodyFont,
           fontWeight: FontWeight.w600,

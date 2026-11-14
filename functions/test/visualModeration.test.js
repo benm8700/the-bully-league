@@ -10,7 +10,7 @@
  * gate, so the two can never be confused for each other.
  */
 const assert = require("assert");
-const {liveFrameVerdict, prepublishVerdict} =
+const {liveFrameVerdict, prepublishVerdict, introFrameVerdict} =
     require("../visualModeration");
 
 let passed = 0;
@@ -106,5 +106,26 @@ test("the live and pre-publish policies genuinely differ", () => {
 if (process.exitCode) {
   console.error("\nvisualModeration: some checks FAILED");
 } else {
-  console.log(`visualModeration: ${passed} checks passed`);
+  test("INTRO: a close-up face scored racy LIKELY is APPROVED (the false positive)", () => {
+  assert.strictEqual(introFrameVerdict(ss({racy: "LIKELY"})).approved, true);
+});
+
+test("INTRO: racy VERY_LIKELY is still rejected", () => {
+  assert.strictEqual(introFrameVerdict(ss({racy: "VERY_LIKELY"})).approved, false);
+});
+
+test("INTRO: nudity stays strict - adult LIKELY is rejected", () => {
+  assert.strictEqual(introFrameVerdict(ss({adult: "LIKELY"})).approved, false);
+});
+
+test("INTRO: violence LIKELY approved, VERY_LIKELY rejected", () => {
+  assert.strictEqual(introFrameVerdict(ss({violence: "LIKELY"})).approved, true);
+  assert.strictEqual(introFrameVerdict(ss({violence: "VERY_LIKELY"})).approved, false);
+});
+
+test("INTRO: an unreadable frame FAILS CLOSED", () => {
+  assert.strictEqual(introFrameVerdict(null).approved, false);
+});
+
+console.log(`visualModeration: ${passed} checks passed`);
 }

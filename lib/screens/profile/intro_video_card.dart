@@ -23,7 +23,12 @@ import '../../widgets/neon_dialog.dart';
 /// frame by frame at upload, before anyone sees it, rather than a live
 /// stranger feed sampled every few seconds.
 class IntroVideoCard extends StatefulWidget {
-  const IntroVideoCard({super.key, this.active = true});
+  const IntroVideoCard({super.key, this.active = true, this.bare = false});
+
+  /// Inside the ranked setup flow the screen already has its own title and
+  /// explanation, so the card's heading and text are left off (they said the
+  /// same thing twice).
+  final bool bare;
 
   /// False while the Profile tab is hidden behind another tab. See
   /// [LoopingVideo.active].
@@ -218,45 +223,40 @@ class _IntroVideoCardState extends State<IntroVideoCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text('Intro video', style: text.titleMedium),
-            const SizedBox(width: 8),
-            if (!hasVideo)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: scheme.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
+        if (!widget.bare) ...[
+          Row(
+            children: [
+              Text('Intro video', style: text.titleMedium),
+              const SizedBox(width: 8),
+              if (!hasVideo)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Required',
+                    style: text.labelSmall?.copyWith(color: scheme.primary),
+                  ),
                 ),
-                child: Text(
-                  'Required',
-                  style: text.labelSmall?.copyWith(color: scheme.primary),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          hasVideo
-              ? 'Your 60-second "tell me about yourself". Opponents watch it '
-                    'before your battle to find their angle. It is saved - you '
-                    'can leave and come back.'
-              : 'Record a 60-second "tell me about yourself". This is what '
-                    'your opponent studies for ammo - you cannot battle without '
-                    'it. Funnier if it is honest.',
-          style: text.bodySmall,
-        ),
-        if (!hasVideo) ...[
-          const SizedBox(height: 6),
-          Text(
-            'Tip: in the camera, tap "Use"/the ✓ to keep your take - backing '
-            'out there throws it away. Once it is here, it is saved on its '
-            'own, even if you have not filled in the rest yet.',
-            style: text.labelSmall?.copyWith(color: scheme.primary),
+            ],
           ),
+          const SizedBox(height: 4),
+          Text(
+            hasVideo
+                ? 'Your 60-second "tell me about yourself". Opponents watch it '
+                      'before your battle to find their angle. It is saved - you '
+                      'can leave and come back.'
+                : 'Tell us about yourself in 60 seconds. Be serious and honest - '
+                      'it makes the battle more entertaining and fun to watch.',
+            style: text.bodySmall,
+          ),
+          const SizedBox(height: 12),
         ],
-        const SizedBox(height: 12),
         if (_loading)
           const Center(child: CircularProgressIndicator())
         else if (hasVideo)

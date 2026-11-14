@@ -150,15 +150,32 @@ class _RankedSetupScreenState extends State<RankedSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: _done
-            ? null
-            : Text('Step ${_i + 1} of ${widget.steps.length}'),
-        automaticallyImplyLeading: !_done,
-      ),
-      body: SafeArea(
-        child: _done ? _buildDone(context) : _buildStep(context, _step!),
+    // Back steps back through the flow (2026-11-14, developer's report: it
+    // used to drop you on Home from any step). Only step 1 leaves; on the
+    // final screen it leaves as "set up" since everything is saved.
+    return PopScope(
+      canPop: _i == 0 && !_done,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || _busy) return;
+        if (_done) {
+          Navigator.of(context).pop(true);
+        } else if (_i > 0) {
+          setState(() {
+            _i--;
+            _error = null;
+          });
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: _done
+              ? null
+              : Text('Step ${_i + 1} of ${widget.steps.length}'),
+          automaticallyImplyLeading: !_done,
+        ),
+        body: SafeArea(
+          child: _done ? _buildDone(context) : _buildStep(context, _step!),
+        ),
       ),
     );
   }
@@ -179,13 +196,11 @@ class _RankedSetupScreenState extends State<RankedSetupScreen> {
       ),
       SetupStep.intro => (
         'Your intro video',
-        '60 seconds about you. Your opponent watches it before the battle - '
-            "it's their ammo, so give them something.",
+        'Required. Tell us about yourself in 60 seconds. Be serious and '
+            'honest - it makes the battle more entertaining and fun to watch. '
+            'Your opponent watches it before you battle.',
       ),
-      SetupStep.about => (
-        'About me',
-        'Anything else you want them to have. Optional.',
-      ),
+      SetupStep.about => ('About me', ''),
     };
     final text = Theme.of(context).textTheme;
     return Column(
@@ -202,8 +217,10 @@ class _RankedSetupScreenState extends State<RankedSetupScreen> {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(sub, style: text.bodyMedium?.copyWith(height: 1.4)),
+              if (sub.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(sub, style: text.bodyMedium?.copyWith(height: 1.4)),
+              ],
               const SizedBox(height: 24),
               ..._stepBody(context, step),
               if (_error != null) ...[
@@ -277,9 +294,9 @@ class _RankedSetupScreenState extends State<RankedSetupScreen> {
           ),
         ];
       case SetupStep.selfie:
-        return const [SelfieCard()];
+        return const [SelfieCard(bare: true)];
       case SetupStep.intro:
-        return const [IntroVideoCard()];
+        return const [IntroVideoCard(bare: true)];
       case SetupStep.about:
         return [
           TextField(
@@ -290,7 +307,7 @@ class _RankedSetupScreenState extends State<RankedSetupScreen> {
             decoration: const InputDecoration(
               hintText:
                   'Who you are, what you do, something embarrassing - '
-                  'whatever you want them to have.',
+                  'whatever you want to share.',
             ),
           ),
         ];

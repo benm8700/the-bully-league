@@ -200,7 +200,7 @@ class _BattleCardScreenState extends State<BattleCardScreen> {
                   decoration: const InputDecoration(
                     hintText:
                         'Who you are, what you do, something embarrassing - '
-                        'whatever you want them to have.',
+                        'whatever you want to share.',
                   ),
                 ),
                 const SizedBox(height: 16),

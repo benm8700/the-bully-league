@@ -84,6 +84,29 @@ function prepublishVerdict(safeSearch, failureReason) {
   return verdictFromSafeSearch(safeSearch, {failureReason});
 }
 
+/**
+ * The INTRO VIDEO policy (2026-11-14): nudity stays strict (adult at LIKELY+),
+ * but "racy" and "violence" only reject at VERY_LIKELY. A talking-head intro
+ * is a close-up of a face - mostly skin - which is exactly what SafeSearch
+ * scores "racy LIKELY" (the developer's ordinary intro was rejected as
+ * "suggestive"; selfies hit the same false positive and were loosened
+ * earlier). Fails CLOSED on an unreadable frame.
+ */
+function introFrameVerdict(safeSearch) {
+  if (!safeSearch) {
+    return {approved: false, reason: "Could not analyze this video."};
+  }
+  if (REJECT_LEVELS.has(safeSearch.adult)) {
+    return {approved: false, reason: CATEGORY_REASON.adult};
+  }
+  for (const category of ["racy", "violence"]) {
+    if (safeSearch[category] === "VERY_LIKELY") {
+      return {approved: false, reason: CATEGORY_REASON[category]};
+    }
+  }
+  return {approved: true};
+}
+
 /** The profile-selfie policy: blatant nudity only, fails CLOSED. */
 function selfieVerdict(safeSearch) {
   return verdictFromSafeSearch(safeSearch, {
@@ -232,8 +255,11 @@ async function moderateVideo(storagePath) {
     for (const f of frames) {
       const content = fs.readFileSync(path.join(workDir, f));
       const [result] = await client.safeSearchDetection({image: {content}});
-      const verdict = prepublishVerdict(result.safeSearchAnnotation,
-          "Could not analyze this video.");
+      const a = result.safeSearchAnnotation;
+      // Logged so a false positive can be tuned from real numbers.
+      console.log("intro frame", f,
+          JSON.stringify({adult: a?.adult, racy: a?.racy, violence: a?.violence}));
+      const verdict = introFrameVerdict(a);
       if (!verdict.approved) return verdict;
     }
     return {approved: true};
@@ -251,5 +277,5 @@ module.exports = {
   moderateImage, moderateFacePhoto, moderateImageContent, moderateVideo,
   moderateFrameStrict,
   // Exported for the pure regression test (functions/test/visualModeration.test.js).
-  verdictFromSafeSearch, liveFrameVerdict, prepublishVerdict,
+  verdictFromSafeSearch, liveFrameVerdict, prepublishVerdict, introFrameVerdict,
 };

@@ -28,7 +28,10 @@ const kCameraOffMessage =
 /// stored only after approval - its presence IS the approved flag the battle
 /// gate reads (same pattern as the intro video).
 class SelfieCard extends StatefulWidget {
-  const SelfieCard({super.key});
+  const SelfieCard({super.key, this.bare = false});
+
+  /// Inside the ranked setup flow: no heading or text (the screen has its own).
+  final bool bare;
 
   /// Opens the front camera, uploads + moderates the selfie, and on approval
   /// writes profile.facePhotoUrl (and profile.photoUrls so existing avatars
@@ -197,34 +200,39 @@ class _SelfieCardState extends State<SelfieCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text('Profile selfie', style: text.titleMedium),
-            const SizedBox(width: 8),
-            if (!hasPhoto)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: scheme.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
+        if (!widget.bare) ...[
+          Row(
+            children: [
+              Text('Profile selfie', style: text.titleMedium),
+              const SizedBox(width: 8),
+              if (!hasPhoto)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Required',
+                    style: text.labelSmall?.copyWith(color: scheme.primary),
+                  ),
                 ),
-                child: Text(
-                  'Required',
-                  style: text.labelSmall?.copyWith(color: scheme.primary),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          hasPhoto
-              ? 'This is the face your opponent sees before a battle. Tap '
-                    'Retake for a new one.'
-              : 'Take a quick selfie. Your opponent sees who they\'re facing - '
-                    'you cannot battle without it.',
-          style: text.bodySmall,
-        ),
-        const SizedBox(height: 12),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            hasPhoto
+                ? 'This is the face your opponent sees before a battle. Tap '
+                      'Retake for a new one.'
+                : 'Take a quick selfie. Your opponent sees who they\'re facing - '
+                      'you cannot battle without it.',
+            style: text.bodySmall,
+          ),
+          const SizedBox(height: 12),
+        ],
         if (_loading)
           const Center(child: CircularProgressIndicator())
         else if (hasPhoto)

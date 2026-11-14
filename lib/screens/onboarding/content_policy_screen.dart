@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/services/auth_service.dart';
 import '../../core/services/push_notification_service.dart';
+import '../../widgets/neon_action_button.dart';
 import '../info/rules_screen.dart';
 
 /// A one-time content-policy + age acknowledgement, shown the first time an
@@ -139,16 +140,11 @@ class _ContentPolicyScreenState extends State<ContentPolicyScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              FilledButton(
+              NeonActionButton(
+                label: "I'm in",
+                compact: true,
+                busy: _submitting,
                 onPressed: _submitting ? null : _accept,
-                style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
-                child: _submitting
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text("I'm in"),
               ),
               const SizedBox(height: 10),
               // "Not for me" simply signs out - one exit that doesn't require

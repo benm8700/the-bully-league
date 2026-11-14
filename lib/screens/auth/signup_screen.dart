@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/services/age_verification_service.dart';
 import '../../core/services/auth_service.dart';
 import 'login_screen.dart';
+import '../../widgets/neon_action_button.dart';
 import '../../widgets/neon_dialog.dart';
 
 /// Signup is a short sequence of screens - username, then email + password,
@@ -532,15 +533,11 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Widget _nextButton(VoidCallback onPressed, {String label = 'Next'}) {
-    return FilledButton(
+    return NeonActionButton(
+      label: label,
+      compact: true,
+      busy: _isSubmitting,
       onPressed: _isSubmitting ? null : onPressed,
-      child: _isSubmitting
-          ? const SizedBox(
-              height: 20,
-              width: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Text(label),
     );
   }
 
@@ -789,15 +786,11 @@ class _SignupScreenState extends State<SignupScreen> {
           ),
           const SizedBox(height: 16),
         ],
-        FilledButton(
+        NeonActionButton(
+          label: 'Verify & create account',
+          compact: true,
+          busy: _isSubmitting,
           onPressed: _isSubmitting ? null : _verify,
-          child: _isSubmitting
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Verify & create account'),
         ),
         const SizedBox(height: 8),
         TextButton(
