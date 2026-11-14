@@ -176,6 +176,25 @@ class _MatchScreenState extends State<MatchScreen>
   // True while waiting out the grace after the opponent's video dropped, so the
   // frozen battle shows an "opponent disconnected - settling…" overlay.
   bool _opponentDisconnecting = false;
+  // LOCKED / BACKGROUNDED PHONE (2026-11-13). Locking the phone keeps the
+  // player in the Agora channel, so their video never "drops" and the old
+  // presence check never fired: a locked HOST froze the battle at 0 for the
+  // other player until they unlocked. Now leaving the app counts as leaving:
+  // the phone says 'away' as it goes (and stops its heartbeat), the opponent
+  // starts the usual 15s grace, and the server settles it (no contest in the
+  // warm-up, forfeit once the battle began). A guest also watches for the
+  // host's clock going quiet, in case the 'away' message never got out.
+  bool _appAway = false;
+  bool _opponentAway = false;
+  bool _hostStalled = false;
+  int _lastHostStateMs = 0;
+  int _warmupEndsAtMs = 0;
+  Timer? _hostWatchdog;
+  // Each phone says 'here' every 2s while it is in the app. A single 'back'
+  // message got lost in testing and left "Opponent disconnected" up for the
+  // whole battle; a steady ping heals itself.
+  Timer? _herePing;
+  int _lastHereMs = 0;
   // Stamped once when the first round begins (ranked), so the server knows a
   // departure from here on is a forfeit rather than a warm-up no-contest.
   bool _battleStartSent = false;
@@ -526,7 +545,10 @@ class _MatchScreenState extends State<MatchScreen>
     // Both devices heartbeat through the ranked battle so the server can tell
     // a crash/force-quit (heartbeat stops) from a brief RTC blip (app alive,
     // heartbeat continues). Friend battles don't forfeit, so they don't need it.
-    if (widget.pairing.mode == 'ranked') _startBattleHeartbeat();
+    if (widget.pairing.mode == 'ranked') {
+      _startBattleHeartbeat();
+      _startHostWatchdog();
+    }
     if (_isHost!) {
       // Started here rather than at pairing because host election is the
       // first moment both players are provably in the channel - starting
@@ -551,6 +573,9 @@ class _MatchScreenState extends State<MatchScreen>
     _matchmakingService.sendPresence(widget.pairing.matchId);
     _battleHeartbeat = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted || _phase == _Phase.verdict || _violationEnded) return;
+      // A phone that has left the app is not present, even if its timers
+      // still run (Android keeps them going while locked).
+      if (_appAway) return;
       _matchmakingService.sendPresence(widget.pairing.matchId);
     });
   }
@@ -572,12 +597,100 @@ class _MatchScreenState extends State<MatchScreen>
   }
 
   late final AppLifecycleListener _lifecycle = AppLifecycleListener(
+    onHide: _onAppHidden,
+    onShow: _onAppShown,
     onResume: () {
+      _onAppShown();
       if (_phase == _Phase.battle && !(_battle?.isOver ?? true)) {
         _ensureRecording();
       }
     },
   );
+
+  bool get _battleLive =>
+      (_phase == _Phase.warmup || _phase == _Phase.battle) &&
+      !_violationEnded &&
+      !(_battle?.isOver ?? false);
+
+  /// The phone was locked or the player switched apps mid-battle.
+  ///
+  /// DURING THE COUNTDOWN (developer's call, 2026-11-13): leaving ends the
+  /// match at once as a no contest for both - nothing is at stake yet, and
+  /// waiting on a player who may come back only created half-states (a
+  /// battle starting with one player gone). In the battle itself the 15s
+  /// grace stays, so an accidental lock doesn't throw away a live battle.
+  void _onAppHidden() {
+    if (_appAway) return;
+    if (_phase == _Phase.warmup && !_violationEnded) {
+      _appAway = true;
+      _endCountdownNoContest();
+      return;
+    }
+    if (!_battleLive || widget.pairing.mode != 'ranked') return;
+    _appAway = true;
+    unawaited(_videoCallService.sendMatchMessage({'type': 'away'}));
+  }
+
+  void _endCountdownNoContest() {
+    unawaited(_videoCallService.sendMatchMessage({'type': 'away'}));
+    unawaited(_matchmakingService.cancelPendingMatch(widget.pairing.matchId));
+    // Nothing to settle: the server ends it as a no contest (the other phone
+    // hears it through the match document).
+    _completeRequested = true;
+    _noContest = true;
+    _goToVerdict();
+  }
+
+  /// Back in the app: tell the opponent and beat the heartbeat at once, so a
+  /// return inside the grace never costs the battle.
+  void _onAppShown() {
+    if (!_appAway) return;
+    _appAway = false;
+    if (!_battleLive) return;
+    unawaited(_videoCallService.sendMatchMessage({'type': 'back'}));
+    _matchmakingService.sendPresence(widget.pairing.matchId);
+  }
+
+  /// Ranked: say 'here' every 2s, and watch for the opponent going quiet.
+  /// A missing 'here' for 6s means they left the app even if their 'away'
+  /// never arrived. GUEST also watches the host's clock: it broadcasts every
+  /// 300ms, so quiet for 5s in the battle, or a warm-up 5s overdue with no
+  /// battle, means the host is gone.
+  void _startHostWatchdog() {
+    if (_hostWatchdog != null) return;
+    _herePing = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!mounted || _appAway || !_battleLive) return;
+      unawaited(_videoCallService.sendMatchMessage({'type': 'here'}));
+    });
+    _hostWatchdog = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final now = _nowMs;
+      if (!_opponentAway &&
+          _battleLive &&
+          _lastHereMs > 0 &&
+          now - _lastHereMs > 6000) {
+        _opponentAway = true;
+        _onRemotePresence();
+      }
+      if (_isHost != false) return;
+      final stalled = _battleLive &&
+          ((_phase == _Phase.battle &&
+                  _lastHostStateMs > 0 &&
+                  now - _lastHostStateMs > 5000) ||
+              (_phase == _Phase.warmup &&
+                  _warmupEndsAtMs > 0 &&
+                  now - _warmupEndsAtMs > 5000));
+      if (stalled != _hostStalled) {
+        _hostStalled = stalled;
+        _onRemotePresence();
+      }
+    });
+  }
+
+  bool get _opponentGone =>
+      _videoCallService.remoteUid.value == null ||
+      _opponentAway ||
+      _hostStalled;
 
   void _markBattleStartedOnce() {
     _ensureRecording();
@@ -597,7 +710,7 @@ class _MatchScreenState extends State<MatchScreen>
       _forfeitTimer = null;
       return;
     }
-    final remoteGone = _videoCallService.remoteUid.value == null;
+    final remoteGone = _opponentGone;
     final inBattle = _phase == _Phase.warmup || _phase == _Phase.battle;
     if (remoteGone && inBattle) {
       if (_forfeitTimer == null) {
@@ -618,7 +731,7 @@ class _MatchScreenState extends State<MatchScreen>
     _forfeitTimer = null;
     if (!mounted || _phase == _Phase.verdict || _violationEnded) return;
     // Came back in the meantime - no forfeit.
-    if (_videoCallService.remoteUid.value != null) {
+    if (!_opponentGone) {
       if (_opponentDisconnecting) {
         setState(() => _opponentDisconnecting = false);
       }
@@ -637,7 +750,7 @@ class _MatchScreenState extends State<MatchScreen>
         _opponentDisconnecting = false;
       });
       _goToVerdict();
-    } else if (_videoCallService.remoteUid.value == null &&
+    } else if (_opponentGone &&
         (_phase == _Phase.warmup || _phase == _Phase.battle)) {
       // Refused (their app is still alive / heartbeat fresh), but their video
       // is still gone - check again shortly in case they then crash out.
@@ -659,6 +772,19 @@ class _MatchScreenState extends State<MatchScreen>
           iAmReporter: false,
         ),
       );
+      return;
+    }
+    if (message['type'] == 'away') {
+      _opponentAway = true;
+      _onRemotePresence();
+      return;
+    }
+    if (message['type'] == 'here' || message['type'] == 'back') {
+      _lastHereMs = _nowMs;
+      if (_opponentAway) {
+        _opponentAway = false;
+        _onRemotePresence();
+      }
       return;
     }
     if (message['type'] == 'warmup') {
@@ -710,6 +836,7 @@ class _MatchScreenState extends State<MatchScreen>
     if (t == 'ms_state' && _isHost != true) {
       final s = message['s'];
       if (s is Map) {
+        _lastHostStateMs = _nowMs;
         _battle = MainStageBattleState.fromMap(Map<String, dynamic>.from(s));
         if (_phase != _Phase.battle && !_battle!.isOver) {
           setState(() => _phase = _Phase.battle);
@@ -805,7 +932,7 @@ class _MatchScreenState extends State<MatchScreen>
       ]);
       recordTimer.cancel();
     }
-    if (_violationEnded || !mounted) return;
+    if (_violationEnded || !mounted || _phase == _Phase.verdict) return;
     final hadStarted = recordingStarted;
     startRecordingOnce();
     if (skippedEarly && !hadStarted) {
@@ -826,7 +953,7 @@ class _MatchScreenState extends State<MatchScreen>
   /// battle starting. With abilities off every count is 0, so this is exactly
   /// the amateur base: 30s each, yield-only, coin-flip first.
   Future<void> _openEngine() async {
-    if (_engineStarted) return;
+    if (_engineStarted || _phase == _Phase.verdict) return;
     _engineStarted = true;
 
     Map<String, int>? steals;
@@ -1018,6 +1145,7 @@ class _MatchScreenState extends State<MatchScreen>
       _phase = _Phase.warmup;
       _secondsRemaining = seconds;
     });
+    _warmupEndsAtMs = _nowMs + seconds * 1000;
     _videoCallService.muteLocalAudio(true);
     _startWarmupTicker(seconds);
     // Load both players' ability counts now so the Skip Warm-Up button can
@@ -1157,6 +1285,10 @@ class _MatchScreenState extends State<MatchScreen>
     // other person bailed.
     if (status == 'abandoned' && data?['abandonedReason'] == 'opponent-left') {
       _opponentLeft = true;
+    } else if (status == 'abandoned') {
+      // e.g. a player left during the countdown: nobody played, no result.
+      _noContest = true;
+      _completeRequested = true;
     }
     _goToVerdict();
   }
@@ -1173,6 +1305,8 @@ class _MatchScreenState extends State<MatchScreen>
     _battleTick?.cancel();
     _battleHeartbeat?.cancel();
     _forfeitTimer?.cancel();
+    _hostWatchdog?.cancel();
+    _herePing?.cancel();
     if (mounted) setState(() => _phase = _Phase.verdict);
     _videoCallService.muteLocalAudio(true);
     unawaited(_videoCallService.leaveChannel());
@@ -1205,6 +1339,8 @@ class _MatchScreenState extends State<MatchScreen>
     _videoTornDown = true;
     _battleHeartbeat?.cancel();
     _forfeitTimer?.cancel();
+    _hostWatchdog?.cancel();
+    _herePing?.cancel();
     _frameSampleSub?.cancel();
     _localFrameSub?.cancel();
     _videoCallService.localAudioLevel.removeListener(_onLocalAudioLevel);

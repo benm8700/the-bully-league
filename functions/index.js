@@ -1061,7 +1061,8 @@ exports.getActiveMatch = onCall((request) => getActiveMatch(request.auth));
  * leaving cancels it as a no-contest so it stops lingering as pending. See
  * leaveMatch in matchmaking.js.
  */
-exports.leaveMatch = onCall((request) => leaveMatch(request.auth, request.data));
+exports.leaveMatch = onCall({secrets: recordingSecrets}, (request) =>
+  leaveMatch(request.auth, request.data, recordingCreds(null)));
 
 /**
  * The present player claims a ranked battle whose opponent abandoned it (Leave

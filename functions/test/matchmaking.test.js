@@ -695,10 +695,21 @@ test("forfeit: a caller cannot fake it - opponent's own fresh heartbeat blocks i
 
 test("forfeit: only applies to a STARTED battle", () => {
   const d = battleForfeitDecision({
-    match: rankedBattle({readyPlayerIds: ["a"], leftPlayerIds: ["b"]}),
+    match: rankedBattle({readyPlayerIds: ["a"], leftPlayerIds: ["b"],
+      lastSeenAt: {a: T0}, battleStartedAt: undefined}),
     uid: "a", nowMs: T0 + 1000});
   assert.strictEqual(d.ok, false);
   assert.strictEqual(d.reason, "not-started");
+});
+
+test("forfeit: bio-reveal timer ran out (one ready) but both reached the battle -> settles", () => {
+  const d = battleForfeitDecision({
+    match: rankedBattle({readyPlayerIds: ["a"], battleStartedAt: undefined,
+      lastSeenAt: {a: T0 + STALE, b: T0}}),
+    uid: "a", nowMs: T0 + STALE});
+  assert.strictEqual(d.ok, true);
+  assert.strictEqual(d.winnerId, null);
+  assert.strictEqual(d.reason, "warmup-noncontest");
 });
 
 test("forfeit: never fires in a friend battle (no rating to forfeit)", () => {

@@ -1228,7 +1228,7 @@ function leaveOutcome(match, uid) {
  * empties the channel) and the runaway-recording watchdog - no explicit stop,
  * so a slow vendor call can never wedge the leave.
  */
-async function leaveMatch(auth, data) {
+async function leaveMatch(auth, data, creds = null) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
   const matchId = typeof data?.matchId === "string" ? data.matchId : "";
   if (!matchId) {
@@ -1237,10 +1237,12 @@ async function leaveMatch(auth, data) {
   const db = getFirestore();
   const ref = db.collection("matches").doc(matchId);
   let abandoned = false;
+  let ended = null;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) return;
     const m = snap.data();
+    ended = m;
     if (m.player1Id !== auth.uid && m.player2Id !== auth.uid) {
       throw new HttpsError("permission-denied", "That isn't your match.");
     }
@@ -1279,6 +1281,23 @@ async function leaveMatch(auth, data) {
       tx.update(ref, {leftPlayerIds});
     }
   });
+  // An abandoned match (e.g. a player left during the countdown) may already
+  // have its recorder running - it starts a few seconds before the countdown
+  // ends. Stop it now, as completeMatch does, rather than leave the record
+  // saying "recording" until Agora idles out. After the status write, and a
+  // failure never blocks the leave.
+  const handle = ended?.recording;
+  if (abandoned && creds && handle?.resourceId && handle?.sid &&
+      handle.status === "recording") {
+    try {
+      const result = await stopRecording(matchId, ended.channelName, handle, creds);
+      await writeRecordingState(matchId, result.ok ?
+        {status: "recorded", files: result.files, stoppedAt: Date.now()} :
+        {status: "stop_failed", error: result.error});
+    } catch (e) {
+      console.error(`leaveMatch: stopping recording for ${matchId} failed:`, e.message);
+    }
+  }
   return {abandoned};
 }
 
@@ -1315,7 +1334,14 @@ function battleForfeitDecision({match, uid, nowMs, staleMs = BATTLE_FORFEIT_STAL
   // (leaveOutcome); exhibition/improv/mainstage are out of scope for v1.
   if (match.mode !== "ranked") return {ok: false, reason: "mode"};
   const ready = Array.isArray(match.readyPlayerIds) ? match.readyPlayerIds : [];
-  if (ready.length < 2) return {ok: false, reason: "not-started"};
+  // In the battle screen = both tapped ready, OR the bio-reveal timer ran out
+  // and both phones moved on anyway. The battle screen is the only place that
+  // heartbeats, so a heartbeat from BOTH players proves it (found 2026-11-13:
+  // a player who never tapped ready left the other stuck, unable to settle).
+  const seenAll = match.lastSeenAt || {};
+  const beat = (id) => Number(seenAll[id]) > 0;
+  const inBattle = ready.length >= 2 || (beat(match.player1Id) && beat(match.player2Id));
+  if (!inBattle) return {ok: false, reason: "not-started"};
   const oppId = match.player1Id === uid ? match.player2Id :
     match.player2Id === uid ? match.player1Id : null;
   if (!oppId) return {ok: false, reason: "not-participant"};
