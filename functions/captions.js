@@ -232,12 +232,16 @@ function escapeAssText(text) {
 // drawtext font-availability risk that made the ASS approach attractive.
 // CLAUDE.md's "watermark everything" decision still holds; only the form changed.
 
-function buildAssFile(cues, canvas, style = STYLE) {
+// [strip] (optional) is the clip strip from clipStrip.js buildStripAss: its
+// style and Dialogue lines are appended, and the captions move from the
+// centre (where the strip now sits) to just under the bottom player's name.
+function buildAssFile(cues, canvas, style = STYLE, strip = null) {
   const fontSize = Math.round(canvas.height * style.fontHeightRatio);
   const outline = Math.max(2, Math.round(canvas.height * style.outlineRatio));
   const shadow = Math.max(1, Math.round(canvas.height * style.shadowRatio));
   const marginH = Math.round(canvas.width * 0.055);
-  const marginV = Math.round(canvas.height * 0.02);
+  const marginV = strip ? strip.captionTop : Math.round(canvas.height * 0.02);
+  const alignment = strip ? 8 : style.alignment;
 
   const header = [
     "[Script Info]",
@@ -251,9 +255,10 @@ function buildAssFile(cues, canvas, style = STYLE) {
     "Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, " +
       "Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
     `Style: P1,${style.fontName},${fontSize},${style.player1Colour},&H00000000,` +
-      `&H00000000,-1,0,1,${outline},${shadow},${style.alignment},${marginH},${marginH},${marginV},1`,
+      `&H00000000,-1,0,1,${outline},${shadow},${alignment},${marginH},${marginH},${marginV},1`,
     `Style: P2,${style.fontName},${fontSize},${style.player2Colour},&H00000000,` +
-      `&H00000000,-1,0,1,${outline},${shadow},${style.alignment},${marginH},${marginH},${marginV},1`,
+      `&H00000000,-1,0,1,${outline},${shadow},${alignment},${marginH},${marginH},${marginV},1`,
+    ...(strip ? [strip.style] : []),
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -264,7 +269,7 @@ function buildAssFile(cues, canvas, style = STYLE) {
     `${c.uid === "2" ? "P2" : "P1"},,0,0,0,,${escapeAssText(c.text)}`,
   );
 
-  return [...header, ...events].join("\n") + "\n";
+  return [...header, ...(strip ? strip.lines : []), ...events].join("\n") + "\n";
 }
 
 /**

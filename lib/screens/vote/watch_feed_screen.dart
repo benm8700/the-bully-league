@@ -496,10 +496,12 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
           if (_liveNow.isNotEmpty)
             SafeArea(
               child: Align(
-                alignment: Alignment.topCenter,
+                alignment: Alignment.topLeft,
                 child: Padding(
-                  // Leaves room for the back button on the left.
-                  padding: EdgeInsets.fromLTRB(showBack ? 66 : 12, 8, 12, 0),
+                  // Under the battle-type chip, beside the back button - on
+                  // the LEFT, clear of the clip's top-right logo and the
+                  // button rail.
+                  padding: EdgeInsets.fromLTRB(showBack ? 64 : 12, 46, 12, 0),
                   child: _liveNowBanner(context),
                 ),
               ),
@@ -521,80 +523,57 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
 
   Widget _liveNowBanner(BuildContext context) {
     final n = _liveNow.length;
-    // A full-width, loud LIVE bar - this is the ONLY link to a live battle, so
-    // it has to actually advertise itself rather than be a tiny pill that's
-    // easy to miss. Only shown when a battle is genuinely live (an empty "watch
-    // live" affordance would just lead to an empty room).
-    return Material(
-      color: const Color(0xFFE11D2A),
-      borderRadius: BorderRadius.circular(16),
-      elevation: 6,
-      shadowColor: const Color(0x66E11D2A),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+    // A slim neon pill (2026-11-15, developer: the old full-width red bar
+    // didn't match the app and covered the clip). Pink edge + glow like the
+    // Home alert strips; floats over the clip, so the video keeps its size.
+    const pink = Color(0xFFFF2E7E);
+    return Semantics(
+      button: true,
+      label: n == 1 ? 'A battle is live. Watch it.' : '$n battles are live.',
+      child: GestureDetector(
         onTap: _openLiveSheet,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
+          decoration: BoxDecoration(
+            color: const Color(0xF2140D1C),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: pink, width: 1.5),
+            boxShadow: [
+              BoxShadow(color: pink.withValues(alpha: 0.6), blurRadius: 14),
+            ],
+          ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // White LIVE badge with a red dot - the universal "we're on air" cue.
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                decoration: BoxDecoration(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: pink,
+                  shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(color: pink, blurRadius: 8)],
+                ),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                '$n LIVE',
+                style: const TextStyle(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    SizedBox(
-                      width: 7,
-                      height: 7,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Color(0xFFE11D2A),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 5),
-                    Text(
-                      'LIVE',
-                      style: TextStyle(
-                        color: Color(0xFFE11D2A),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      n == 1
-                          ? 'A battle is happening right now'
-                          : '$n battles happening right now',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    const Text(
-                      'Tap to watch it live',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  ],
+              const SizedBox(width: 7),
+              const Text(
+                'WATCH \u203A',
+                style: TextStyle(
+                  color: Color(0xFFFF6FA5),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1,
                 ),
               ),
-              const Icon(Icons.play_circle_fill, color: Colors.white, size: 30),
             ],
           ),
         ),

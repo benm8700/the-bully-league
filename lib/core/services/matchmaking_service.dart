@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
@@ -195,6 +196,28 @@ class MatchmakingProgress {
 /// makes that the same mechanism instead of a second one. It also keeps
 /// firebase_database off the Flutter side entirely, avoiding another
 /// Android dependency in a toolchain CLAUDE.md documents as fragile.
+/// Thrown by [MatchmakingService.findMatch] when the same account started
+/// searching on another device, which now owns the search (2026-11-15:
+/// one account on the emulator and the iPhone shared one queue spot and
+/// neither could ever be paired).
+class SearchMovedException implements Exception {
+  const SearchMovedException();
+  @override
+  String toString() =>
+      'You started searching on another device, so this one stopped.';
+}
+
+/// Identifies THIS app run to the queue, so a second device on the same
+/// account can take the search over. Lasting only as long as the process
+/// is enough: a restarted app simply takes over its own old search.
+final String kSearchDeviceId = () {
+  final r = Random.secure();
+  return List.generate(
+    16,
+    (_) => r.nextInt(256),
+  ).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+}();
+
 class MatchmakingService {
   MatchmakingService({FirebaseFunctions? functions})
     : _functions = functions ?? FirebaseFunctions.instance;
@@ -246,7 +269,10 @@ class MatchmakingService {
       // Any head start today's judging earned. Read once at entry - it
       // is fixed for the life of this queue entry, so re-reading it on
       // every poll would cost a round trip to learn nothing.
-      final entered = await _call('enterMatchmakingQueue', {'mode': mode});
+      final entered = await _call('enterMatchmakingQueue', {
+        'mode': mode,
+        'device': kSearchDeviceId,
+      });
       final judgePriorityMs =
           (entered['judgePriorityMs'] as num?)?.toInt() ?? 0;
 
@@ -265,7 +291,10 @@ class MatchmakingService {
         try {
           final result = await _functions
               .httpsCallable('pollMatchmaking')
-              .call<Map<String, dynamic>>({'mode': mode});
+              .call<Map<String, dynamic>>({
+                'mode': mode,
+                'device': kSearchDeviceId,
+              });
           data = result.data;
           consecutiveErrors = 0;
         } catch (e) {
@@ -294,11 +323,19 @@ class MatchmakingService {
             // it does not leak.
             keepEntry = true;
             return MatchPairing.fromMap(data, fallbackMode: mode);
+          case 'other_device':
+            // The other device owns the search now - stop, and DON'T leave
+            // the queue on the way out (that would cancel its search).
+            keepEntry = true;
+            throw const SearchMovedException();
           case 'not_queued':
             // The entry was pruned as stale (a long background suspend, a
             // slow network) - re-enter rather than polling forever against
             // a queue we're no longer in.
-            await _call('enterMatchmakingQueue', {'mode': mode});
+            await _call('enterMatchmakingQueue', {
+              'mode': mode,
+              'device': kSearchDeviceId,
+            });
           default:
             onProgress?.call(
               MatchmakingProgress(
@@ -330,7 +367,10 @@ class MatchmakingService {
         // it goes stale, so a dropped call delays cleanup rather than
         // corrupting the queue.
         try {
-          await _call('leaveMatchmakingQueue', {'mode': mode});
+          await _call('leaveMatchmakingQueue', {
+            'mode': mode,
+            'device': kSearchDeviceId,
+          });
         } catch (_) {}
       }
     }
@@ -542,6 +582,9 @@ class MatchmakingService {
     // Best Rounds board can play just the voted-best round. Null from the
     // guest, and for any match the host couldn't capture.
     List<Map<String, int>>? roundBoundaries,
+    // Host-only log of every turn change (lib/core/turn_log.dart), for the
+    // clock burned into the highlight clip. Null from the guest.
+    Map<String, Object?>? turnLog,
     // Set when the LIVE visual-moderation ended the match: the server records
     // who was disqualified (the caller's opponent) + flags the match so no
     // clip of it can be delivered. See functions/matchmaking.js completeMatch.
@@ -552,6 +595,7 @@ class MatchmakingService {
       'outcome': outcome,
       'quality': ?quality,
       'roundBoundaries': ?roundBoundaries,
+      'turnLog': ?turnLog,
       // For the clip renderer's lip-sync correction (functions/clipSync.js):
       // an iPhone's recorded audio lands ~200ms behind its video.
       'platform': defaultTargetPlatform == TargetPlatform.iOS

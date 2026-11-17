@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/main_stage_battle.dart';
+import '../../core/turn_log.dart';
 import '../../core/services/agora_video_service.dart';
 import '../../core/services/agora_token_service.dart';
 import '../../core/services/main_stage_service.dart';
@@ -47,6 +48,9 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
   final String _myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
   late final String _oppUid = widget.pairing.opponentId;
   bool get _isHost => widget.pairing.isHost;
+
+  /// HOST only: every turn change, for the clock in the highlight clip.
+  final _turnLog = TurnLog();
 
   // The same broadcast layout as a ranked battle (2026-11-12 show overhaul):
   // scorebug hugging the top, self-view tight under it on the right, one
@@ -271,12 +275,18 @@ class _MainStageBattleScreenState extends State<MainStageBattleScreen>
     _video.muteLocalAudio(b.mutedPlayer == _myUid);
     if (broadcast && _isHost) {
       _video.sendMatchMessage({'t': 'ms_state', 's': b.toMap()});
+      _turnLog.record(b, _nowMs);
     }
     if (b.isOver && _isHost && !_completeSent) {
       _completeSent = true;
       _tick?.cancel();
       // Mark the battle complete so the judge panel can settle it.
-      _matchmaking.completeMatch(widget.pairing.matchId).catchError((_) {});
+      _matchmaking
+          .completeMatch(
+            widget.pairing.matchId,
+            turnLog: _turnLog.toReport(_nowMs),
+          )
+          .catchError((_) {});
     }
     _driveInterruptCue(b);
     if (mounted) setState(() {});

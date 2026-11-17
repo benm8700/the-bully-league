@@ -78,6 +78,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
   }
 
   String _friendlyError(Object e) {
+    if (e is SearchMovedException) return e.toString();
     // The server's own refusal messages are written for a player and
     // say WHICH rule was hit, so friendlyError keeps them. What it drops
     // is the raw exception, which used to be appended here in full.
@@ -363,7 +364,7 @@ class _QuietQueueHint extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       '${config.name} is the busiest hour of the day - '
-                      '6pm-7pm Pacific. That\'s when everyone is here.',
+                      '6pm-7pm Pacific.',
                       style: Theme.of(context).textTheme.bodySmall,
                       textAlign: TextAlign.center,
                     ),

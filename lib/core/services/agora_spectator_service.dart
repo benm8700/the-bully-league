@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'agora_render.dart';
 import 'package:flutter/foundation.dart';
@@ -34,6 +37,10 @@ class AgoraSpectatorService implements SpectatorService {
   final _watching = ValueNotifier<bool>(false);
   final _failure = ValueNotifier<String?>(null);
   final _activeUid = ValueNotifier<int?>(null);
+  final _messages = StreamController<Map<String, dynamic>>.broadcast();
+
+  @override
+  Stream<Map<String, dynamic>> get messages => _messages.stream;
 
   /// The remote uid currently speaking loudest, for the judges'-table spotlight
   /// (audience hears everyone but publishes nothing). Sticky through pauses.
@@ -108,6 +115,19 @@ class AgoraSpectatorService implements SpectatorService {
           // means something is wrong rather than merely stale.
           _failure.value = 'This stream expired. Reopen it to keep watching.';
         },
+        // The host's battle state and the warm-up start, for the watcher
+        // strip. Audience members receive the performers' data stream.
+        onStreamMessage:
+            (connection, remoteUid, streamId, data, length, sentTs) {
+              try {
+                final decoded = jsonDecode(utf8.decode(data));
+                if (decoded is Map<String, dynamic> && !_messages.isClosed) {
+                  _messages.add(decoded);
+                }
+              } catch (_) {
+                // Not ours to fix - a watcher just skips a garbled message.
+              }
+            },
         onUserJoined: (connection, remoteUid, elapsed) {
           debugPrint('Spectator: performer $remoteUid joined');
           _present.value = {..._present.value, remoteUid};
@@ -179,6 +199,7 @@ class AgoraSpectatorService implements SpectatorService {
     _watching.dispose();
     _failure.dispose();
     _activeUid.dispose();
+    unawaited(_messages.close());
   }
 
   @override

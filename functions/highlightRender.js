@@ -110,7 +110,12 @@ const WATERMARK_LOGO_WIDTH_RATIO = 0.25;
 // the logo PNG's own right-edge padding keeps most of the wordmark inside the
 // in-app feed's ~9-12% side-crop. Prioritises the posted/downloaded clip (no
 // crop) over the in-app feed look, per the developer.
-const WATERMARK_LOGO_MARGIN_X_RATIO = 0.05;
+// 0.05 -> 0.12 (developer, 2026-11-15: in the Judge feed the logo was cut
+// off at "THE BULLY LEAGU"). The in-app player cover-fits the 9:16 clip to a
+// taller phone, cropping ~9-10% off each side on a 9:20 screen, so a 5%
+// inset put the logo's right end inside the crop. 12% clears it with room
+// to spare; the posted clip's mark sits a little further from the corner.
+const WATERMARK_LOGO_MARGIN_X_RATIO = 0.12;
 const WATERMARK_LOGO_MARGIN_Y_RATIO = 0.02;
 // TOP-RIGHT now (developer's call, 2026-11-08), replacing bottom-right: on
 // TikTok / Reels / Shorts the platform's like-comment-share column and the
@@ -138,8 +143,17 @@ const AUDIO_LEVELLER = "dynaudnorm=f=200:g=11:p=0.9:m=12,alimiter=limit=0.95";
 // Resolved once at load. If the asset ever fails to deploy, this is null and
 // renders proceed WITHOUT a watermark rather than failing outright - a missing
 // ffmpeg `-i` input would otherwise break every single render.
-const WATERMARK_LOGO = fssync.existsSync(WATERMARK_LOGO_PATH) ?
+//
+// SWITCHED OFF 2026-11-15 (developer: "remove the watermark"). The corner
+// logo is being replaced by the watcher strip (clock + logo + round) burned
+// into the seam between the two videos. The overlay code below is kept so
+// turning it back on is this one flag.
+const WATERMARK_ENABLED = false;
+// The same crown + wordmark, placed in the CENTRE of the clip strip instead.
+const STRIP_LOGO = fssync.existsSync(WATERMARK_LOGO_PATH) ?
   WATERMARK_LOGO_PATH : null;
+const WATERMARK_LOGO = WATERMARK_ENABLED &&
+  fssync.existsSync(WATERMARK_LOGO_PATH) ? WATERMARK_LOGO_PATH : null;
 
 /**
  * REACTION-CAM PiP (Layer A of the tournament notable-panelist feature). A
@@ -439,7 +453,7 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
   // [vout]. So a clip with no reaction cams is byte-identical to before.
   const hasReactionPip = reactionLabels.length > 0;
   const mainOut = hasReactionPip ? "[vmain]" : "[vout]";
-  const applyLogo = !!options.logoPath;
+  const applyLogo = !!(options.stripLogo || options.logoPath);
   const vLast = applyLogo ? "[vbeforelogo]" : mainOut;
   const trim = options.trimFilters ?? null;
   const stacked = trim ? "[vstacked]" :
@@ -476,7 +490,16 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
 
   // Brand watermark: the home-page logo, small and slightly transparent, in
   // the bottom-left of every clip. Overlaid LAST so it sits above captions.
-  if (applyLogo) {
+  if (options.stripLogo) {
+    // The logo in the centre of the clip strip (clipStrip.js), opaque, over
+    // the strip that the subtitle pass painted.
+    const logoIndex = inputIndex++;
+    inputs.push("-i", options.stripLogo.path);
+    const w = options.stripLogo.width;
+    const cy = options.stripLogo.centreY;
+    filters.push(`[${logoIndex}:v]scale=${w}:-1,format=rgba[wm]`);
+    filters.push(`[vbeforelogo][wm]overlay=(W-w)/2:${cy}-h/2${mainOut}`);
+  } else if (applyLogo) {
     const logoIndex = inputIndex++;
     inputs.push("-i", options.logoPath);
     const logoW = Math.round(canvas.width * WATERMARK_LOGO_WIDTH_RATIO);
@@ -950,6 +973,44 @@ async function enforceContentBlock(db, bucket, matchId, match, scan) {
   }
 }
 
+/**
+ * Builds the clip strip for a stacked render, or null when it doesn't apply
+ * (a player never published video). Reads the two usernames; everything else
+ * comes from the match document (`turnLog`, `mainStageShow`).
+ */
+async function buildClipStrip(match, db, timeline, opts) {
+  const battlers = ["1", "2"].filter((u) => timeline.segments.some(
+      (s) => s.uid === u && s.kind === "video"));
+  if (battlers.length !== 2 || timeline.t0 == null) return null;
+  const p1Id = match.player1Id;
+  const p2Id = match.player2Id;
+  const [u1, u2] = await Promise.all([p1Id, p2Id].map((id) =>
+    id ? db.collection("users").doc(id).get().catch(() => null) : null));
+  const nameOf = (snap) => {
+    const n = snap?.data?.()?.username;
+    return typeof n === "string" && n.trim() ? n.trim() : null;
+  };
+  const show = match.mainStageShow;
+  const mainStage = match.mode === "tournament" ? {
+    label: typeof show?.round === "string" ? show.round : null,
+    seeds: {1: show?.seeds?.[p1Id] ?? null, 2: show?.seeds?.[p2Id] ?? null},
+  } : null;
+  const {buildStripAss} = require("./clipStrip");
+  return buildStripAss({
+    canvas: opts.canvas,
+    durationSec: opts.durationSec,
+    t0Ms: timeline.t0,
+    log: match.turnLog ?? null,
+    p1Id,
+    p2Id,
+    names: {1: nameOf(u1), 2: nameOf(u2)},
+    // A player who asked to be blurred isn't named either.
+    hidden: {1: opts.blurUids.includes("1"), 2: opts.blurUids.includes("2")},
+    mainStage,
+    keeps: opts.keeps,
+  });
+}
+
 async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = {}) {
   // A BLUR render is a separate, post-only output: it blurs the opted-out
   // player(s)' panel and is stored under highlight.blurRenditions, never
@@ -1106,33 +1167,35 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
     // to play, and cutting them would mean trusting an audio-level
     // heuristic to decide what footage to destroy.
     let trimFilters = null;
+    let trimKeeps = null;
     let trimmedSeconds = 0;
+    // Duration from the playlists themselves, which are already
+    // downloaded - the longest player's track, measured from its own
+    // offset into the composite timeline. Used by the dead-air trim and
+    // by the clip strip (which spans the whole clip).
+    let duration = 0;
+    for (const uid of timeline.uids) {
+      const seg = timeline.segments.find(
+          (x) => x.uid === uid && x.kind === "video");
+      if (!seg) continue;
+      const playlist = objects.find((o) =>
+        o.name.endsWith(".m3u8") && o.name.includes(`__uid_s_${uid}__uid_e`) &&
+        o.name.includes("_video"));
+      if (!playlist) continue;
+      const text = await fs.readFile(
+          path.join(workDir, playlist.name.split("/").pop()), "utf8")
+          .catch(() => "");
+      duration = Math.max(duration,
+          seg.offsetMs / 1000 + sumExtinfSeconds(text));
+    }
     if (captions && transcript.words.length > 0) {
       const {planKeeps, remapCues, removedSeconds, buildTrimFilters} =
         require("./trimSilence");
-      // Duration from the playlists themselves, which are already
-      // downloaded - the longest player's track, measured from its own
-      // offset into the composite timeline.
-      let duration = 0;
-      for (const uid of timeline.uids) {
-        const seg = timeline.segments.find(
-            (x) => x.uid === uid && x.kind === "video");
-        if (!seg) continue;
-        const playlist = objects.find((o) =>
-          o.name.endsWith(".m3u8") && o.name.includes(`__uid_s_${uid}__uid_e`) &&
-          o.name.includes("_video"));
-        if (!playlist) continue;
-        const text = await fs.readFile(
-            path.join(workDir, playlist.name.split("/").pop()), "utf8")
-            .catch(() => "");
-        duration = Math.max(duration,
-            seg.offsetMs / 1000 + sumExtinfSeconds(text));
-      }
-
       const keeps = planKeeps(transcript.words,
           {duration, failures: transcript.failures});
       trimFilters = buildTrimFilters(keeps, duration);
       if (trimFilters) {
+        trimKeeps = keeps;
         trimmedSeconds = removedSeconds(keeps, duration);
         // THE CUES MUST MOVE WITH THE CUTS. Burning captions at their
         // original times onto shortened video drifts them further out
@@ -1161,8 +1224,23 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
       // that make up the large majority. `captioned` below stays keyed to
       // real cues rather than to this file existing, or every clip would
       // claim captions it does not have.
+      // THE CLIP STRIP (clipStrip.js): vertical only, and only when both
+      // players are on screen - it sits on the seam between them. Never
+      // fatal: a strip that can't be built just leaves the clip without it.
+      let strip = null;
+      if (rendition === RENDITIONS.vertical && duration > 0) {
+        try {
+          strip = await buildClipStrip(snap.data(), db, timeline, {
+            canvas: rendition.canvas, durationSec: duration, keeps: trimKeeps,
+            blurUids: isBlur ? blurUids : [],
+          });
+        } catch (e) {
+          warnings.push(`clip strip skipped: ${e.message}`);
+        }
+      }
       const subtitlePath = path.join(workDir, `captions-${name}.ass`);
-      await fs.writeFile(subtitlePath, buildAssFile(cues, rendition.canvas), "utf8");
+      await fs.writeFile(subtitlePath,
+          buildAssFile(cues, rendition.canvas, undefined, strip), "utf8");
 
       // A captioned render is written to a SEPARATE file rather than
       // overwriting the uncaptioned stage-1 output. Captions are
@@ -1179,6 +1257,8 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
       const outputPath = path.join(workDir, outFileName);
       await runFfmpeg(ffmpegPath, buildFfmpegArgs(timeline, workDir, outputPath, {
         subtitlePath, rendition, trimFilters, logoPath: WATERMARK_LOGO,
+        stripLogo: strip && STRIP_LOGO ?
+          {path: STRIP_LOGO, ...strip.logo} : undefined,
         blurUids: isBlur ? blurUids : undefined,
         reactionUids,
       }));

@@ -387,6 +387,8 @@ async function enterQueue(auth, data) {
     // pairing - a match is only live-watchable if BOTH players opted in. Two
     // random strangers don't get a live audience unless they both chose it.
     liveWatchOptIn: user.liveWatchOptIn === true,
+    // Which device owns this search (newest wins) - see sameSearchDevice.
+    deviceId: deviceIdFrom(data),
   });
 
   // Reported so the waiting screen can confirm the reward landed. A perk
@@ -402,8 +404,46 @@ async function leaveQueue(auth, data) {
   if (!auth) throw new HttpsError("unauthenticated", "Must be signed in.");
   const mode = data?.mode;
   assertMode(mode);
-  await queueRef(mode).child(auth.uid).remove();
-  return {left: true};
+  const device = deviceIdFrom(data);
+  if (device === null) {
+    await queueRef(mode).child(auth.uid).remove();
+    return {left: true};
+  }
+  // Only remove a search THIS device owns - an older device backing out
+  // must not cancel the one the player just started on a newer device.
+  let left = false;
+  await queueRef(mode).child(auth.uid).transaction((entry) => {
+    if (entry === null) return entry;
+    if (!sameSearchDevice(entry, device)) return; // abort: not ours
+    left = true;
+    return null;
+  });
+  return {left};
+}
+
+/**
+ * ONE ACCOUNT, TWO DEVICES (2026-11-15, found by the developer: the same
+ * account searching on the emulator and the iPhone). The queue is keyed by
+ * uid, so both devices shared one entry - it could never be paired with
+ * itself, both screens spun forever, and if it HAD been paired both devices
+ * would have walked into the same battle. Now each search carries the
+ * device's id and the NEWEST device takes over: its enterQueue overwrites
+ * the entry, the older device's next poll gets `other_device` and stops, and
+ * the older device's leaveQueue can no longer delete the new search.
+ *
+ * A missing id on either side (an older app build) is treated as a match, so
+ * old clients behave exactly as before. PURE.
+ */
+function sameSearchDevice(entry, device) {
+  const owner = entry && typeof entry.deviceId === "string" ?
+    entry.deviceId : null;
+  const mine = typeof device === "string" && device.length > 0 ? device : null;
+  return owner === null || mine === null || owner === mine;
+}
+
+function deviceIdFrom(data) {
+  const d = data?.device;
+  return typeof d === "string" && d.length > 0 ? d.slice(0, 64) : null;
 }
 
 function lastPlayedAgainst(entry, opponentId) {
@@ -775,6 +815,13 @@ async function pollMatchmaking(auth, data) {
 
   const snap = await queueRef(mode).child(uid).get();
   const entry = snap.val();
+
+  // The same account started searching on another device, which now owns the
+  // search. Tell this one to stop (checked first, so it can never pick up a
+  // match meant for the other device).
+  if (entry && !sameSearchDevice(entry, data?.device)) {
+    return {status: "other_device"};
+  }
 
   // SELF-HEAL (2026-11-01): if our queue entry is out of sync (waiting, or
   // gone) but we are already a participant in a live pending match, route us
@@ -1548,6 +1595,16 @@ async function completeMatch(auth, data, creds = null) {
   // like captureQuality: only the host sends them so there is no race, but
   // keeping it independent means a host that loses the settle race still
   // records them. Never fatal - a bad report must not stop a settle.
+  // THE CLIP STRIP's clock (functions/clipStrip.js): the host's log of every
+  // turn change, moved onto the server clock here. Same outside-the-claim,
+  // never-fatal reasoning as above.
+  const cleanTurnLog = require("./clipStrip").sanitiseTurnLog(
+      data?.turnLog, Date.now(), [match.player1Id, match.player2Id]);
+  if (cleanTurnLog) {
+    await matchRef.update({turnLog: cleanTurnLog})
+        .catch((e) => console.error("turn log failed:", e.message));
+  }
+
   const cleanBoundaries = sanitiseRoundBoundaries(roundBoundaries);
   if (cleanBoundaries) {
     await matchRef.update({roundBoundaries: cleanBoundaries})
@@ -1956,6 +2013,7 @@ async function getSkipAllowance(auth) {
 module.exports = {
   enterQueue,
   leaveQueue,
+  sameSearchDevice,
   pollMatchmaking,
   completeMatch,
   startMatchRecording,

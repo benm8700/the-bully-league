@@ -9,6 +9,7 @@ import '../../core/services/clip_cache.dart';
 import '../../core/services/watch_feed_service.dart';
 import '../../theme/house_theme.dart';
 import '../../widgets/follow_button.dart';
+import '../../widgets/match/watch_strip.dart';
 import '../moderation/report_screen.dart';
 import '../profile/performer_profile_screen.dart';
 import '../../widgets/live_tally.dart';
@@ -635,7 +636,7 @@ class _FeedPageState extends State<FeedPage> {
           // 2026-11-09: "I try to click add friend and it chooses the winner").
           // Same idea as _emojiSafe around the emoji bars.
           Positioned(
-            top: MediaQuery.of(context).padding.top,
+            top: _railTop(context) - 8,
             right: 0,
             width: 72,
             height: 112 + 48 + 16,
@@ -698,8 +699,8 @@ class _FeedPageState extends State<FeedPage> {
           _header(context),
           // Only while judging (canVote hides the top-left _header, so no
           // overlap); on an archive clip the vote-count chip takes that corner.
-          if (_isImprov && widget.match.canVote && _chosenPlayerId == null)
-            _improvBadge(context),
+          if (widget.match.canVote && _chosenPlayerId == null)
+            _kindBadge(context),
           _reportButton(context),
         ],
       ),
@@ -915,9 +916,13 @@ class _FeedPageState extends State<FeedPage> {
           return Stack(
             children: [
               // Player 1 (TOP half): bottom-LEFT of the top feed, above the seam.
+              // Lifted clear of the clip strip and the top player's name,
+              // which are burned into the clip on the seam (2026-11-15,
+              // functions/clipStrip.js): the strip is ~2.9% of the clip's
+              // height either side of the seam, the name ~3.5% more.
               Positioned(
                 left: 10 - _emojiSafe,
-                bottom: seam + 12 - _emojiSafe,
+                bottom: seam + c.maxHeight * 0.075 - _emojiSafe,
                 child: _emojiBar(
                   m.player1Username,
                   _emojiP1,
@@ -1032,7 +1037,7 @@ class _FeedPageState extends State<FeedPage> {
   /// report button so it never covers a face or the reactions.
   Widget _playPauseButton(BuildContext context, bool paused) {
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 60,
+      top: _railTop(context) + 52,
       right: 8,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -1126,9 +1131,20 @@ class _FeedPageState extends State<FeedPage> {
   /// invitation to report and makes people trigger-happy when they dislike a
   /// roaster. Tucking "Report" behind a ⋮ keeps it reachable and compliant
   /// while making it a deliberate two-tap action, not the first thing you see.
+  /// Where the right-hand button rail starts (2026-11-15): BELOW the clip's
+  /// burned-in logo, which sits top-right and ends ~11% down the frame. The
+  /// clip is height-fitted (cover), so a fraction of the screen height lands
+  /// in the same place on every phone.
+  double _railTop(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final belowLogo = mq.size.height * 0.13;
+    final min = mq.padding.top + 8;
+    return belowLogo > min ? belowLogo : min;
+  }
+
   Widget _reportButton(BuildContext context) {
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 8,
+      top: _railTop(context),
       right: 8,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -1156,7 +1172,7 @@ class _FeedPageState extends State<FeedPage> {
     return Positioned(
       // Corner column: report / play-pause / follow (the rewind button that
       // sat between them is gone - the bottom scrubber replaces it).
-      top: MediaQuery.of(context).padding.top + 112,
+      top: _railTop(context) + 104,
       right: 8,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -1280,22 +1296,27 @@ class _FeedPageState extends State<FeedPage> {
     }
   }
 
-  /// A small teal "FACE-OFF" chip, top-left, so a judge knows this clip is a
-  /// blind simultaneous prompt battle shown one set at a time (not a broken
-  /// one-person roast). Teal is the Face-Off accent used on the Home card.
-  Widget _improvBadge(BuildContext context) {
+  /// A small chip, top-left, naming what kind of battle this is so a judge
+  /// knows what they are judging (2026-11-15, developer's call): RANKED
+  /// (purple), ROAST A FRIEND (pink-red), FACE-OFF (teal - a blind simultaneous
+  /// prompt battle shown one set at a time, not a broken one-person roast).
+  Widget _kindBadge(BuildContext context) {
+    final mode = widget.match.mode;
+    final color = battleKindColor(mode);
+    // Beside the Judge screen's back button (drawn by WatchFeedScreen at the
+    // top-left), not under it - it used to cover the label (2026-11-15).
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 8,
-      left: 16,
+      top: MediaQuery.of(context).padding.top + 14,
+      left: 64,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: const Color(0xFF0E7C86).withValues(alpha: 0.85),
+          color: color.withValues(alpha: 0.85),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           child: Text(
-            'FACE-OFF',
+            battleKindLabel(mode),
             style: TextStyle(
               color: Colors.white,
               fontSize: 11,
@@ -1317,8 +1338,8 @@ class _FeedPageState extends State<FeedPage> {
         ? 'Your battle'
         : '${m.voteCount} ${m.voteCount == 1 ? "vote" : "votes"}';
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 8,
-      left: 16,
+      top: MediaQuery.of(context).padding.top + 14,
+      left: 64, // beside the back button, not under it
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.5),

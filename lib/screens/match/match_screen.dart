@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 
 import '../../widgets/neon_action_button.dart';
 import '../../core/main_stage_battle.dart';
+import '../../core/turn_log.dart';
 import '../../core/services/abilities_service.dart';
 import '../../core/services/agora_token_service.dart';
 import '../../core/services/agora_video_service.dart';
@@ -120,6 +121,9 @@ class _MatchScreenState extends State<MatchScreen>
   String? _error;
 
   bool? _isHost;
+
+  /// HOST only: every turn change, for the clock in the highlight clip.
+  final _turnLog = TurnLog();
 
   StreamSubscription<Map<String, dynamic>>? _msgSub;
   StreamSubscription<RawVideoFrame>? _frameSampleSub;
@@ -1164,6 +1168,7 @@ class _MatchScreenState extends State<MatchScreen>
     _videoCallService.muteLocalAudio(b.mutedPlayer == _myFirebaseUid);
     if (broadcast && _isHost == true) {
       _videoCallService.sendMatchMessage({'t': 'ms_state', 's': b.toMap()});
+      _turnLog.record(b, _nowMs);
     }
     _driveInterruptCue(b);
     _driveSqueeze(b);
@@ -1363,6 +1368,7 @@ class _MatchScreenState extends State<MatchScreen>
       await _matchmakingService.completeMatch(
         widget.pairing.matchId,
         quality: _quality.summary,
+        turnLog: _isHost == true ? _turnLog.toReport(_nowMs) : null,
       );
       if (mounted) setState(() => _matchCompleted = true);
     } catch (e) {

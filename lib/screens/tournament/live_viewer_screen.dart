@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/home_action_button.dart';
 
+import '../../core/main_stage_battle.dart';
 import '../../core/services/agora_spectator_service.dart';
 import '../../core/services/spectator_service.dart';
 import '../../theme/app_theme.dart';
@@ -15,6 +16,7 @@ import '../../widgets/crowd_judges_table.dart';
 import '../../widgets/follow_button.dart';
 import '../../widgets/live_cheer_overlay.dart';
 import '../../widgets/live_reaction_panel.dart';
+import '../../widgets/match/watch_strip.dart';
 import '../profile/performer_profile_screen.dart';
 
 /// Watching a live tournament battle.
@@ -55,6 +57,13 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
   String _player1Name = 'Player 1';
   String _player2Name = 'Player 2';
 
+  // The watcher strip (2026-11-15): the host's battle state off the data
+  // channel, plus when the opening countdown ends (if we saw it start).
+  StreamSubscription<Map<String, dynamic>>? _msgSub;
+  MainStageBattleState? _battle;
+  int? _countdownEndMs;
+  Timer? _countdownTick;
+
   // The "N watching" crowd count. A heartbeat (my own doc, refreshed) plus a
   // live count of everyone with a fresh heartbeat - social proof for
   // spectators and, later, crowd energy for performers.
@@ -91,6 +100,8 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
     WidgetsBinding.instance.removeObserver(this);
     _heartbeat?.cancel();
     _watchersSub?.cancel();
+    _msgSub?.cancel();
+    _countdownTick?.cancel();
     // Drop my heartbeat so the count falls promptly when I leave. Best-effort:
     // if it fails, the 30s freshness filter stops counting me anyway.
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -122,6 +133,42 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
     });
   }
 
+  void _onMessage(Map<String, dynamic> m) {
+    if (!mounted) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (m['t'] == 'ms_state' && m['s'] is Map) {
+      try {
+        final b = MainStageBattleState.fromMap(
+          Map<String, dynamic>.from(m['s'] as Map),
+        );
+        _countdownTick?.cancel();
+        setState(() => _battle = b);
+      } catch (_) {
+        // A state we can't read just leaves the strip as it was.
+      }
+    } else if (m['type'] == 'warmup' || m['t'] == 'ms_countdown') {
+      // Ranked sends its warm-up length; the Main Stage countdown is 15s.
+      final secs = (m['duration'] as num?)?.toInt() ?? 15;
+      _countdownEndMs = now + secs * 1000;
+      _countdownTick?.cancel();
+      _countdownTick = Timer.periodic(const Duration(milliseconds: 500), (t) {
+        if (!mounted) return t.cancel();
+        setState(() {});
+        if (DateTime.now().millisecondsSinceEpoch > (_countdownEndMs ?? 0)) {
+          t.cancel();
+        }
+      });
+      setState(() {});
+    }
+  }
+
+  int? get _startsIn {
+    final end = _countdownEndMs;
+    if (end == null) return null;
+    final left = end - DateTime.now().millisecondsSinceEpoch;
+    return left <= 0 ? 0 : (left / 1000).ceil();
+  }
+
   Future<void> _start() async {
     try {
       final result = await FirebaseFunctions.instance
@@ -129,6 +176,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
           .call<Map<String, dynamic>>({'matchId': widget.matchId});
       final data = result.data;
       await _spectator.initialize();
+      _msgSub = _spectator.messages.listen(_onMessage);
       await _spectator.watch(
         channelName: data['channelName'] as String,
         token: data['token'] as String,
@@ -169,7 +217,37 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Live'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFFFF2E7E),
+                boxShadow: [BoxShadow(color: Color(0xFFFF2E7E), blurRadius: 8)],
+              ),
+            ),
+            Flexible(
+              child: Text(
+                _kind == null ? 'LIVE' : 'LIVE · $_kind',
+                maxLines: 1,
+                overflow: TextOverflow.fade,
+                softWrap: false,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                  color: _kind == null
+                      ? null
+                      : battleKindColor(_mode, mainStage: _mainStage),
+                ),
+              ),
+            ),
+          ],
+        ),
         // The crowd count - social proof that this is where the action is.
         // Shown once at least one heartbeat is in (always includes you).
         actions: [
@@ -229,6 +307,7 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                 // shows (the force-advance backstop), so the waiting copy
                 // can promise the crowd they won't be stranded.
                 final isMainStage = snap.data?.data()?['mainStage'] != null;
+                _noteKind(snap.data?.data());
                 // The battle is over: leave the Agora channel (this is what
                 // stops the match audio - the leak the live test hit). The
                 // winner is the judge panel's call, so there is no ballot -
@@ -347,14 +426,42 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
                                     isMainStage: isMainStage,
                                   );
                                 }
+                                final b = _battle;
+                                final speaking =
+                                    b != null &&
+                                        b.status == MsStatus.live &&
+                                        b.floor != null
+                                    ? b.floor
+                                    : null;
                                 return Column(
                                   children: [
                                     Expanded(
-                                      child: _tile(1, _player1Id, _player1Name),
+                                      child: _tile(
+                                        1,
+                                        _player1Id,
+                                        _player1Name,
+                                        speaking:
+                                            speaking != null &&
+                                            speaking == _player1Id,
+                                        gold: isMainStage,
+                                      ),
                                     ),
-                                    const SizedBox(height: 2),
+                                    WatchStrip(
+                                      state: b,
+                                      topId: _player1Id,
+                                      startsInSeconds: _startsIn,
+                                      mainStage: isMainStage,
+                                    ),
                                     Expanded(
-                                      child: _tile(2, _player2Id, _player2Name),
+                                      child: _tile(
+                                        2,
+                                        _player2Id,
+                                        _player2Name,
+                                        speaking:
+                                            speaking != null &&
+                                            speaking == _player2Id,
+                                        gold: isMainStage,
+                                      ),
                                     ),
                                   ],
                                 );
@@ -380,7 +487,53 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
     );
   }
 
-  Widget _tile(int playerUid, String? playerId, String playerName) {
+  /// What kind of battle this is, shown in the title so watchers (and the
+  /// Main Stage judges) know what they are watching.
+  String? _kind;
+  bool _mainStage = false;
+  String? _mode;
+  Map<String?, int> _seeds = const {};
+
+  void _noteKind(Map<String, dynamic>? m) {
+    if (m == null) return;
+    final show = m['mainStageShow'];
+    final round = show is Map ? show['round'] as String? : null;
+    final seedsRaw = show is Map ? show['seeds'] : null;
+    if (seedsRaw is Map && _seeds.isEmpty) {
+      _seeds = {
+        for (final e in seedsRaw.entries)
+          if (e.value is num) e.key as String?: (e.value as num).toInt(),
+      };
+    }
+    final ms = m['mainStage'] != null || m['mode'] == 'tournament';
+    final kind = battleKindLabel(m['mode'] as String?, mainStageRound: round);
+    if (kind != _kind || ms != _mainStage) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _kind = kind;
+            _mainStage = ms;
+            _mode = m['mode'] as String?;
+          });
+        }
+      });
+    }
+  }
+
+  Widget _tile(
+    int playerUid,
+    String? playerId,
+    String playerName, {
+    bool speaking = false,
+    bool gold = false,
+  }) {
+    final glow = speaking
+        ? (gold ? const Color(0xFFF4C838) : const Color(0xFFFF2E7E))
+        : null;
+    // Names sit on the video right beside the strip (2026-11-15, approved
+    // mockup A): the top player's at the BOTTOM of their video, the bottom
+    // player's at the TOP of theirs, so a long name is never cut off.
+    final isTop = playerUid == 1;
     final view =
         _spectator.playerVideo(playerUid) ??
         ColoredBox(
@@ -406,9 +559,32 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
         // tag names who they are watching; the button hides itself for your
         // own battle.
         Positioned(
-          top: 8,
           left: 8,
-          child: _PerformerTag(uid: playerId, name: playerName),
+          right: 8,
+          top: isTop ? null : 8,
+          bottom: isTop ? 8 : null,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: _PerformerTag(
+                uid: playerId,
+                name: playerName,
+                glow: glow,
+                seed: _seeds[playerId],
+              ),
+            ),
+          ),
+        ),
+        // Whoever holds the mic glows (pink; gold on the Main Stage), the
+        // same cue the players get on their own screens.
+        IgnorePointer(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            decoration: BoxDecoration(
+              border: Border.all(width: 3, color: glow ?? Colors.transparent),
+            ),
+          ),
         ),
       ],
     );
@@ -418,36 +594,85 @@ class _LiveViewerScreenState extends State<LiveViewerScreen>
 /// A small overlay over a live performer's tile: their name (tap for their
 /// fame page) plus a compact Follow button.
 class _PerformerTag extends StatelessWidget {
-  const _PerformerTag({required this.uid, required this.name});
+  const _PerformerTag({
+    required this.uid,
+    required this.name,
+    this.glow,
+    this.seed,
+  });
 
   final String? uid;
   final String name;
+
+  /// Lit while this player holds the mic (pink; gold on the Main Stage).
+  final Color? glow;
+
+  /// Main Stage rank in the field, shown in gold before the name.
+  final int? seed;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Material(
-          color: Colors.black.withValues(alpha: 0.55),
-          borderRadius: BorderRadius.circular(20),
-          child: InkWell(
+        DecoratedBox(
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            onTap: uid == null
+            boxShadow: glow == null
                 ? null
-                : () => PerformerProfileScreen.open(
-                    context,
-                    uid!,
-                    username: name,
-                  ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Text(
-                name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
+                : [
+                    BoxShadow(
+                      color: glow!.withValues(alpha: 0.6),
+                      blurRadius: 12,
+                    ),
+                  ],
+          ),
+          child: Material(
+            color: Colors.black.withValues(alpha: 0.6),
+            shape: StadiumBorder(
+              side: BorderSide(
+                color: glow ?? Colors.white.withValues(alpha: 0.15),
+                width: glow == null ? 1 : 1.5,
+              ),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: uid == null
+                  ? null
+                  : () => PerformerProfileScreen.open(
+                      context,
+                      uid!,
+                      username: name,
+                    ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (seed != null) ...[
+                      Text(
+                        '#$seed',
+                        style: TextStyle(
+                          color: const Color(0xFFF6D66B),
+                          fontSize: 13,
+                          fontFamily: context.palette.display,
+                          fontVariations: const [FontVariation('wght', 900)],
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                    ],
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

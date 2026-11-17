@@ -63,4 +63,9 @@ abstract class SpectatorService {
   /// exactly that screen during a device test and being unable to tell
   /// which of the two it was.
   ValueListenable<String?> get failure;
+
+  /// The players' data-channel messages (the host's `ms_state` battle state,
+  /// the warm-up start), decoded. Lets the watcher strip show the same clock
+  /// and round the players see. Watchers only listen; they never send.
+  Stream<Map<String, dynamic>> get messages;
 }
