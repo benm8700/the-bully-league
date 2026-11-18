@@ -366,6 +366,16 @@ class _MatchClipPlayerState extends State<MatchClipPlayer>
                   _syncPlayback();
                   setState(() {});
                 },
+                onTogglePlay: () {
+                  final atEnd =
+                      controller.value.position >=
+                      controller.value.duration -
+                          const Duration(milliseconds: 80);
+                  if (!_wantPlaying && atEnd) controller.seekTo(_segStart);
+                  _wantPlaying = !_wantPlaying;
+                  _syncPlayback();
+                  setState(() {});
+                },
               ),
             ),
           ),

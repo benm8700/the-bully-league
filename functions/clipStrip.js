@@ -31,6 +31,9 @@
 
 const {formatAssTime, escapeAssText} = require("./captions");
 
+/** How long the strip is held past the measured clip end (see buildStripAss). */
+const STRIP_TAIL_PAD_SEC = 30;
+
 /** Geometry on the 1080x1920 vertical canvas. */
 const STRIP = {
   height: 110,
@@ -43,6 +46,14 @@ const STRIP = {
   nameGap: 14,
   nameFont: 32,
   namePad: 14,
+  // Player pictures (2026-11-17): a circle in each video's corner where it
+  // meets the strip (developer: "an equal corner for both"). x = 124 sits
+  // just inside the Judge feed's side crop (~108px each side on a 20:9
+  // phone); TikTok/Reels/Shorts never cover the middle of the left edge.
+  avatarD: 100,
+  avatarLeft: 124,
+  avatarGap: 10,
+  ring: 8,
   pillH: 64,
   pillR: 18,
   clockFont: 50,
@@ -121,11 +132,18 @@ function roundRect(w, h, r) {
     `l 0 ${k} b 0 0 0 0 ${k} 0`;
 }
 
-/** A circle as an ASS drawing, origin top-left of its bounding box. */
+/**
+ * A circle as an ASS drawing, origin top-left of its bounding box: four
+ * cubic beziers with the standard 0.5523 handle (corner handles drew a
+ * rounded square).
+ */
 function circle(d) {
   const r = d / 2;
-  return `m ${r} 0 b ${d} 0 ${d} 0 ${d} ${r} b ${d} ${d} ${d} ${d} ${r} ${d} ` +
-    `b 0 ${d} 0 ${d} 0 ${r} b 0 0 0 0 ${r} 0`;
+  const k = +(r * 0.5523).toFixed(2);
+  const a = +(r + k).toFixed(2);
+  const b = +(r - k).toFixed(2);
+  return `m ${r} 0 b ${a} 0 ${d} ${b} ${d} ${r} b ${d} ${a} ${a} ${d} ${r} ${d} ` +
+    `b ${b} ${d} 0 ${a} 0 ${r} b 0 ${b} ${b} 0 ${r} 0`;
 }
 
 const D = "{\\an7\\bord0\\shad0\\p1"; // drawing prefix (closed per call)
@@ -345,14 +363,23 @@ function tickSpans(stateSpans) {
   return out;
 }
 
-function nameText(name, seed, lit, mainStage) {
-  const litBox = mainStage ? C.gold : C.pink;
-  const litInk = mainStage ? C.dark : C.white;
-  const box = lit ? `\\3c${litBox}\\3a&H00&` : `\\3c&H000000&\\3a&H60&`;
-  const ink = lit ? litInk : C.white;
-  const seedPart = seed ?
-    `{\\1c${lit ? litInk : C.gold}}#${seed} {\\1c${ink}}` : "";
-  return `{\\1c${ink}${box}}${seedPart}${escapeAssText(name)}`;
+/**
+ * Where each player's picture goes (top-left of its circle), both at the far
+ * left: player 1 (top video) just above the strip, player 2 (bottom video)
+ * just below it. The app puts its tap targets on exactly these spots.
+ */
+function avatarSpots(seam) {
+  const top = seam - STRIP.height / 2;
+  const bottom = seam + STRIP.height / 2;
+  return {
+    1: {x: STRIP.avatarLeft, y: top - STRIP.avatarGap - STRIP.avatarD, d: STRIP.avatarD},
+    2: {x: STRIP.avatarLeft, y: bottom + STRIP.avatarGap, d: STRIP.avatarD},
+  };
+}
+
+function initialOf(name) {
+  const ch = typeof name === "string" ? name.trim().charAt(0) : "";
+  return ch ? ch.toUpperCase() : "?";
 }
 
 /**
@@ -363,7 +390,15 @@ function nameText(name, seed, lit, mainStage) {
  *   hidden:{1:bool,2:bool}, mainStage:{label, seeds:{1,2}}|null, keeps}
  */
 function buildStripAss(opts) {
-  const {canvas, durationSec, t0Ms, log, p1Id, p2Id, keeps} = opts;
+  const {canvas, t0Ms, log, p1Id, p2Id, keeps} = opts;
+  // The measured length comes from the VIDEO playlists, but the rendered
+  // clip runs as long as its longest stream - the audio often outlasts the
+  // video by a few seconds - and the strip vanished for that tail, leaving
+  // the crown split across the bare seam (developer, 2026-11-17). Hold the
+  // last state 30s past the measured end; subtitle events past the end of
+  // the video are simply never shown. A trimmed clip is cut to its keeps
+  // (audio and video alike), so it needs no pad.
+  const durationSec = opts.durationSec + (keeps ? 0 : STRIP_TAIL_PAD_SEC);
   const names = opts.names || {};
   const hidden = opts.hidden || {};
   const ms = opts.mainStage || null;
@@ -403,17 +438,44 @@ function buildStripAss(opts) {
 
   const states = statesFromLog(log, t0Ms, durationSec, p1Id, p2Id);
 
-  // Names: lit while that player holds the mic.
+  // PLAYER PICTURES replace the burned-in names (developer, 2026-11-17:
+  // names landed on faces, and every other spot is covered by TikTok's
+  // buttons or the app's own). The photo itself is overlaid by ffmpeg on
+  // top of everything here (highlightRender, `avatars`); this draws the
+  // ring behind it - lit pink (gold on the Main Stage) while that player
+  // holds the mic, a dim white edge otherwise - and, for a player with no
+  // photo, an initials disc. A blurred player gets nothing.
+  const spots = avatarSpots(seam);
+  const photos = opts.photos || {};
+  const ringD = STRIP.avatarD + STRIP.ring * 2;
   for (const s of remapSpans(states, keeps)) {
     const floor = s.state.phase === "live" ? s.state.floor : 0;
     for (const who of [1, 2]) {
-      if (hidden[who] || !names[who]) continue;
-      const seed = ms?.seeds?.[who] ?? null;
-      const pos = who === 1 ?
-        `\\an2\\pos(${W / 2},${topNameBottom - STRIP.namePad})` :
-        `\\an8\\pos(${W / 2},${bottom + STRIP.nameGap + STRIP.namePad})`;
-      push(5, s.start, s.end, `{${pos}}` +
-        nameText(names[who], seed, floor === who, !!ms), "StripBox");
+      if (hidden[who]) continue;
+      const {x, y} = spots[who];
+      const lit = floor === who;
+      const litColour = ms ? C.gold : C.pink;
+      if (lit) {
+        push(4, s.start, s.end, shape(x - STRIP.ring * 2, y - STRIP.ring * 2,
+            circle(ringD + STRIP.ring * 2), litColour, "\\1a&H60&\\blur12"));
+      }
+      push(5, s.start, s.end, shape(x - STRIP.ring, y - STRIP.ring,
+          circle(ringD), lit ? litColour : C.white, lit ? "" : "\\1a&H80&"));
+    }
+  }
+  for (const who of [1, 2]) {
+    if (hidden[who]) continue;
+    const {x, y, d} = spots[who];
+    if (!photos[who]) {
+      push(6, 0, fullEnd, shape(x, y, circle(d), C.purple));
+      push(7, 0, fullEnd, `{\\an5\\pos(${x + d / 2},${y + d / 2})\\b1\\fs50` +
+        `\\bord0\\shad0\\1c${C.white}}${escapeAssText(initialOf(names[who]))}`);
+    }
+    // Main Stage seed, in gold just right of the picture.
+    const seed = ms?.seeds?.[who];
+    if (seed) {
+      push(7, 0, fullEnd, `{\\an4\\pos(${x + d + 14},${y + d / 2})\\b1\\fs40` +
+        `\\bord3\\shad0\\1c${C.gold}\\3c${C.dark}}#${seed}`);
     }
   }
 
@@ -453,13 +515,20 @@ function buildStripAss(opts) {
     lines,
     // Where the captions should go so they clear the strip and the bottom
     // name: just under the bottom name, top-aligned.
-    captionTop: bottom + STRIP.nameGap + STRIP.namePad * 2 + STRIP.nameFont + 24,
+    // Captions sit just under the bottom player's picture.
+    captionTop: bottom + STRIP.avatarGap + STRIP.avatarD + 24,
+    // Where ffmpeg overlays each photo (null = none: no photo, or blurred).
+    avatars: {
+      1: !hidden[1] && photos[1] ? spots[1] : null,
+      2: !hidden[2] && photos[2] ? spots[2] : null,
+    },
     logo: {width: STRIP.logoWidth, centreY: seam},
   };
 }
 
 module.exports = {
   STRIP,
+  avatarSpots,
   sanitiseTurnLog,
   buildStripAss,
   remapSpans,

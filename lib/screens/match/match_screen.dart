@@ -2279,8 +2279,8 @@ class _MatchScreenState extends State<MatchScreen>
 
   /// RAPID ROUNDS HUD (2026-11-14, the approved "Final" mockup): ONE plate in
   /// the top-left (who's on the mic, the turn clock, who you're up against,
-  /// the round), your selfie in the top-right corner, and the action right
-  /// under the plate - all hugging the top for the most video.
+  /// the round) and your selfie in the top-right corner, hugging the top for
+  /// the most video; the action (Done) docked at the bottom under the thumb.
   List<Widget> _buildBattleOverlay(MainStageBattleState b) {
     final top = MediaQuery.of(context).padding.top + _kSelfViewTop;
     final plateW = MediaQuery.sizeOf(context).width - 4 - _kSelfViewW - 6 - 4;
@@ -2328,11 +2328,15 @@ class _MatchScreenState extends State<MatchScreen>
           ),
         ),
       ),
+      // Done sits at the BOTTOM, where the thumb already is (developer,
+      // 2026-11-17: reaching to the top to end a turn was annoying, and it
+      // took room from the video). "You're up next" holds the same slot on
+      // their turn, so the thumb always knows where the button will be.
       if (!b.isOver)
         Positioned(
-          left: 4,
-          top: top + TurnPlate.height + 6,
-          width: plateW,
+          left: 24,
+          right: 24,
+          bottom: MediaQuery.of(context).padding.bottom + 20,
           child: mine ? _doneButton(b) : _upNext(b),
         ),
     ];

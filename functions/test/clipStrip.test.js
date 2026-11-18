@@ -5,6 +5,7 @@
 const assert = require("node:assert/strict");
 const {
   sanitiseTurnLog, buildStripAss, remapSpans, statesFromLog, tickSpans, fmtClock,
+  avatarSpots,
 } = require("../clipStrip");
 const {buildAssFile} = require("../captions");
 
@@ -108,30 +109,48 @@ function strip(extra = {}) {
     hidden: {}, mainStage: null, keeps: null, ...extra});
 }
 
-check("the strip draws clock, round, names and the bar", () => {
+check("the strip draws clock, round and the bar - no names (pictures instead)", () => {
   const s = strip();
   const all = s.lines.join("\n");
   assert.ok(all.includes("0:15") && all.includes("0:09"), "clock");
   assert.ok(all.includes("ROUND"), "round");
-  assert.ok(all.includes("TheRealRoastMasterSupreme"), "name 1");
-  assert.ok(all.includes("JudgeTestB"), "name 2");
+  assert.ok(!all.includes("TheRealRoastMasterSupreme"), "names are no longer burned in");
   assert.ok(all.includes("GET READY") && all.includes("TIME!"));
   assert.ok(/\\t\(0,\d+,\\clip/.test(all), "draining bar");
   assert.ok(!all.includes("LIVE"), "no LIVE in clips");
   assert.ok(!all.includes("MAIN STAGE"), "no tag outside the Main Stage");
 });
-check("the speaker's name is lit, the other isn't", () => {
-  const lines = strip().lines.filter((l) => l.includes("TheRealRoast"));
-  // While A holds the mic (5-12s) A's name box is pink; otherwise dark.
-  const lit = lines.find((l) => l.startsWith("Dialogue: 5,0:00:05.00"));
-  assert.ok(lit.includes("\\3c&H7E2EFF&"));
-  const dark = lines.find((l) => l.startsWith("Dialogue: 5,0:00:12.00"));
-  assert.ok(dark.includes("\\3c&H000000&"));
+check("no photo: an initials disc; with a photo: an overlay spot instead", () => {
+  const none = strip();
+  const all = none.lines.join("\n");
+  assert.ok(all.includes("}T") && all.includes("}J"), "initials");
+  assert.equal(none.avatars[1], null);
+  const withPhotos = strip({photos: {1: true, 2: true}});
+  const sp = avatarSpots(960)[1];
+  const initialAt = `\\an5\\pos(${sp.x + sp.d / 2},${sp.y + sp.d / 2})`;
+  assert.ok(all.includes(initialAt), "initial drawn when there is no photo");
+  assert.ok(!withPhotos.lines.join("\n").includes(initialAt), "no initials under a photo");
+  assert.deepEqual(withPhotos.avatars[1], avatarSpots(960)[1]);
+  // Player 1 above the strip, player 2 below, both at the far left.
+  assert.ok(withPhotos.avatars[1].y + 100 <= 905);
+  assert.ok(withPhotos.avatars[2].y >= 1015);
 });
-check("a blurred player is not named", () => {
-  const all = strip({hidden: {1: true}}).lines.join("\n");
-  assert.ok(!all.includes("TheRealRoastMasterSupreme"));
-  assert.ok(all.includes("JudgeTestB"));
+check("the speaker's ring is lit, the other dim", () => {
+  const {x, y} = avatarSpots(960)[1];
+  const ring = `\\pos(${x - 8},${y - 8})`;
+  const lines = strip().lines.filter((l) => l.includes(ring));
+  // A holds the mic 5-12s: A's ring is pink; afterwards dim white.
+  const lit = lines.find((l) => l.startsWith("Dialogue: 5,0:00:05.00"));
+  assert.ok(lit.includes("\\1c&H7E2EFF&"));
+  const dim = lines.find((l) => l.startsWith("Dialogue: 5,0:00:12.00"));
+  assert.ok(dim.includes("\\1c&HFFFFFF&") && dim.includes("\\1a&H80&"));
+});
+check("a blurred player gets no picture, ring or initial", () => {
+  const s = strip({hidden: {1: true}, photos: {1: true, 2: true}});
+  const {x, y} = avatarSpots(960)[1];
+  assert.equal(s.avatars[1], null);
+  assert.ok(s.avatars[2]);
+  assert.ok(!s.lines.some((l) => l.includes(`\\pos(${x - 8},${y - 8})`)));
 });
 check("Main Stage: gold tag, seeds, both clocks", () => {
   const chess = sanitiseTurnLog({v: 1, sentAt: 1, kind: "chess", players: [A, B],
@@ -140,7 +159,7 @@ check("Main Stage: gold tag, seeds, both clocks", () => {
     p1Id: A, p2Id: B, names: {1: "Carl", 2: "Maxine"}, hidden: {},
     mainStage: {label: "FINAL", seeds: {1: 1, 2: 3}}, keeps: null}).lines.join("\n");
   assert.ok(all.includes("MAIN STAGE · FINAL"));
-  assert.ok(all.includes("#1 ") && all.includes("#3 "));
+  assert.ok(all.includes("}#1") && all.includes("}#3"));
   assert.ok(all.includes("0:41") && all.includes("0:28"));
   assert.ok(!all.includes("ROUND"), "no rounds on a chess clock");
 });
@@ -148,20 +167,30 @@ check("everything stays inside the centre column", () => {
   const all = strip().lines.join("\n");
   for (const m of all.matchAll(/\\pos\((\d+),/g)) {
     const x = Number(m[1]);
-    // Full-width bars start at 0; everything else sits in 268..812.
-    assert.ok(x === 0 || (x >= 150 && x <= 812), `x=${x} outside the safe area`);
+    // Full-width bars start at 0; the pictures (and their glow) sit in the
+    // left corners just inside the in-app crop; everything else in 150..812.
+    assert.ok(x === 0 || (x >= 100 && x <= 812), `x=${x} outside the safe area`);
   }
 });
-check("captions move under the bottom name when the strip is on", () => {
+check("captions move under the bottom picture when the strip is on", () => {
   const s = strip();
   const ass = buildAssFile([{start: 1, end: 2, text: "hi", uid: "1"}], CANVAS, undefined, s);
   assert.ok(ass.includes("Style: Strip,"));
   const p1 = ass.split("\n").find((l) => l.startsWith("Style: P1"));
   assert.ok(p1.includes(`,8,`) && p1.endsWith(`,${s.captionTop},1`));
-  assert.ok(s.captionTop > 1015 + 40);
+  assert.ok(s.captionTop > avatarSpots(960)[2].y + 100);
   // Without a strip the captions keep their centred spot.
   const plain = buildAssFile([], CANVAS);
   assert.ok(!plain.includes("Strip"));
+});
+
+check("the strip outlasts the measured length (audio runs longer than video)", () => {
+  const s = strip();
+  const ends = s.lines.map((l) => l.split(",")[2]);
+  // durationSec 30 -> held to 1:00, so a longer audio tail never shows a bare seam.
+  assert.ok(ends.includes("0:01:00.00"), "background held past the end");
+  const trimmed = strip({keeps: [{start: 0, end: 30}]});
+  assert.ok(!trimmed.lines.some((l) => l.split(",")[2] === "0:01:00.00"), "trimmed clip not padded");
 });
 
 console.log(`clipStrip: ${n} checks passed`);

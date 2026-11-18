@@ -453,7 +453,9 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
   // [vout]. So a clip with no reaction cams is byte-identical to before.
   const hasReactionPip = reactionLabels.length > 0;
   const mainOut = hasReactionPip ? "[vmain]" : "[vout]";
-  const applyLogo = !!(options.stripLogo || options.logoPath);
+  const stripAvatars = options.stripAvatars || [];
+  const applyLogo = !!(options.stripLogo || options.logoPath ||
+    stripAvatars.length);
   const vLast = applyLogo ? "[vbeforelogo]" : mainOut;
   const trim = options.trimFilters ?? null;
   const stacked = trim ? "[vstacked]" :
@@ -490,15 +492,28 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
 
   // Brand watermark: the home-page logo, small and slightly transparent, in
   // the bottom-left of every clip. Overlaid LAST so it sits above captions.
-  if (options.stripLogo) {
-    // The logo in the centre of the clip strip (clipStrip.js), opaque, over
-    // the strip that the subtitle pass painted.
-    const logoIndex = inputIndex++;
-    inputs.push("-i", options.stripLogo.path);
-    const w = options.stripLogo.width;
-    const cy = options.stripLogo.centreY;
-    filters.push(`[${logoIndex}:v]scale=${w}:-1,format=rgba[wm]`);
-    filters.push(`[vbeforelogo][wm]overlay=(W-w)/2:${cy}-h/2${mainOut}`);
+  if (options.stripLogo || stripAvatars.length) {
+    // The clip strip's overlays (clipStrip.js), over what the subtitle pass
+    // painted: the logo in the centre, then each player's circle picture
+    // on its ring. Chained so the last one produces the final output.
+    const stages = [];
+    if (options.stripLogo) stages.push({logo: options.stripLogo});
+    for (const a of stripAvatars) stages.push({avatar: a});
+    let cur = "[vbeforelogo]";
+    stages.forEach((st, i) => {
+      const out = i === stages.length - 1 ? mainOut : `[vov${i}]`;
+      const idx = inputIndex++;
+      if (st.logo) {
+        inputs.push("-i", st.logo.path);
+        filters.push(`[${idx}:v]scale=${st.logo.width}:-1,format=rgba[wm]`);
+        filters.push(`${cur}[wm]overlay=(W-w)/2:${st.logo.centreY}-h/2${out}`);
+      } else {
+        inputs.push("-i", st.avatar.path);
+        filters.push(`[${idx}:v]format=rgba[av${i}]`);
+        filters.push(`${cur}[av${i}]overlay=${st.avatar.x}:${st.avatar.y}${out}`);
+      }
+      cur = out;
+    });
   } else if (applyLogo) {
     const logoIndex = inputIndex++;
     inputs.push("-i", options.logoPath);
@@ -995,8 +1010,26 @@ async function buildClipStrip(match, db, timeline, opts) {
     label: typeof show?.round === "string" ? show.round : null,
     seeds: {1: show?.seeds?.[p1Id] ?? null, 2: show?.seeds?.[p2Id] ?? null},
   } : null;
-  const {buildStripAss} = require("./clipStrip");
-  return buildStripAss({
+  // Each player's picture (2026-11-17, replaces the burned-in names): the
+  // battle-card selfie, made into a circle PNG once here and overlaid on
+  // the strip's ring by ffmpeg. Any failure just means an initials disc.
+  const {buildStripAss, STRIP} = require("./clipStrip");
+  const hidden = {1: opts.blurUids.includes("1"), 2: opts.blurUids.includes("2")};
+  const photoPaths = {1: null, 2: null};
+  if (opts.workDir && opts.ffmpegPath) {
+    await Promise.all([[1, u1], [2, u2]].map(async ([who, snap]) => {
+      if (hidden[who]) return;
+      const url = photoUrlOf(snap);
+      if (!url) return;
+      try {
+        photoPaths[who] = await circlePhoto(url, path.join(opts.workDir,
+            `avatar_${who}`), STRIP.avatarD, opts.ffmpegPath);
+      } catch (e) {
+        console.warn(`clip strip: no picture for player ${who}: ${e.message}`);
+      }
+    }));
+  }
+  const strip = buildStripAss({
     canvas: opts.canvas,
     durationSec: opts.durationSec,
     t0Ms: timeline.t0,
@@ -1004,11 +1037,46 @@ async function buildClipStrip(match, db, timeline, opts) {
     p1Id,
     p2Id,
     names: {1: nameOf(u1), 2: nameOf(u2)},
-    // A player who asked to be blurred isn't named either.
-    hidden: {1: opts.blurUids.includes("1"), 2: opts.blurUids.includes("2")},
+    // A player who asked to be blurred gets no picture either.
+    hidden,
+    photos: {1: !!photoPaths[1], 2: !!photoPaths[2]},
     mainStage,
     keeps: opts.keeps,
   });
+  strip.avatarOverlays = [1, 2]
+      .filter((who) => strip.avatars[who] && photoPaths[who])
+      .map((who) => ({path: photoPaths[who], x: strip.avatars[who].x,
+        y: strip.avatars[who].y}));
+  return strip;
+}
+
+/** The battle-card selfie (face photo first, then the first profile photo). */
+function photoUrlOf(snap) {
+  const profile = snap?.data?.()?.profile;
+  const face = profile?.facePhotoUrl;
+  if (typeof face === "string" && face.startsWith("https://")) return face;
+  const first = Array.isArray(profile?.photoUrls) ? profile.photoUrls[0] : null;
+  return typeof first === "string" && first.startsWith("https://") ? first : null;
+}
+
+/**
+ * Downloads a photo and writes a d x d circle-cut PNG (transparent outside
+ * the circle), centre-cropped. One frame, so the per-pixel geq is cheap.
+ */
+async function circlePhoto(url, basePath, d, ffmpegPath) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`photo download ${res.status}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > 15 * 1024 * 1024) throw new Error("photo too large");
+  const src = `${basePath}_src`;
+  const out = `${basePath}.png`;
+  await fs.writeFile(src, buf);
+  const r = d / 2;
+  await runFfmpeg(ffmpegPath, ["-y", "-i", src, "-frames:v", "1", "-vf",
+    `scale=${d}:${d}:force_original_aspect_ratio=increase,crop=${d}:${d},` +
+    `format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':` +
+    `a='if(lte(hypot(X-${r - 0.5},Y-${r - 0.5}),${r}),255,0)'`, out]);
+  return out;
 }
 
 async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = {}) {
@@ -1232,7 +1300,7 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
         try {
           strip = await buildClipStrip(snap.data(), db, timeline, {
             canvas: rendition.canvas, durationSec: duration, keeps: trimKeeps,
-            blurUids: isBlur ? blurUids : [],
+            blurUids: isBlur ? blurUids : [], workDir, ffmpegPath,
           });
         } catch (e) {
           warnings.push(`clip strip skipped: ${e.message}`);
@@ -1259,6 +1327,7 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
         subtitlePath, rendition, trimFilters, logoPath: WATERMARK_LOGO,
         stripLogo: strip && STRIP_LOGO ?
           {path: STRIP_LOGO, ...strip.logo} : undefined,
+        stripAvatars: strip?.avatarOverlays ?? [],
         blurUids: isBlur ? blurUids : undefined,
         reactionUids,
       }));
@@ -1589,6 +1658,7 @@ module.exports = {
   classifyFile,
   buildTimeline,
   buildFfmpegArgs,
+  circlePhoto,
   RENDITIONS,
   CANVAS,
   TILE,

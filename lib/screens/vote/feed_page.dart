@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../../widgets/clip_scrubber.dart';
@@ -8,12 +9,12 @@ import '../../core/emoji_ratings.dart';
 import '../../core/services/clip_cache.dart';
 import '../../core/services/watch_feed_service.dart';
 import '../../theme/house_theme.dart';
-import '../../widgets/follow_button.dart';
 import '../../widgets/match/watch_strip.dart';
 import '../moderation/report_screen.dart';
 import '../profile/performer_profile_screen.dart';
 import '../../widgets/live_tally.dart';
 import '../../widgets/neon_dialog.dart';
+import '../../widgets/player_avatar.dart';
 
 /// One battle, full screen. You watch the clip, then pick the overall winner
 /// by TAPPING that roaster's half of the video - the composite is player 1 on
@@ -67,10 +68,15 @@ class FeedPage extends StatefulWidget {
 const _revealAfter = 0.65;
 
 /// Height of the bottom scrubber strip; bottom overlays sit above it.
-const _scrubH = 48.0;
+const _scrubH = 62.0;
 
 /// Invisible tap-absorbing margin around each emoji bar.
 const _emojiSafe = 14.0;
+
+/// Half the burned-in clip strip's height as a fraction of the clip height
+/// (55px of 1920), measured from the seam: the picked half's outline sits
+/// right on the video's edge where it meets the strip.
+const _stripHalfFraction = 55 / 1920;
 
 /// The green pre-selection ring / confirm accent.
 const _pickGreen = Color(0xFF3DDC84);
@@ -84,6 +90,11 @@ class _FeedPageState extends State<FeedPage> {
   /// call, 2026-09-16), so at the end it holds on the last frame and the corner
   /// button offers a replay.
   bool _ended = false;
+
+  // The emoji rating boxes only come up once the battle has been watched to
+  // the END, and step aside while it plays again (developer, 2026-11-17).
+  bool _seenEnd = false;
+  bool _playing = false;
 
   /// The single overall winner the judge picked, by tapping that player's
   /// half of the clip. Replaces per-round voting (developer's call): tap the
@@ -139,6 +150,37 @@ class _FeedPageState extends State<FeedPage> {
   void initState() {
     super.initState();
     _load();
+    _loadPhotos();
+  }
+
+  // Each roaster's battle-card selfie, for the tappable pictures on the
+  // clip (index 0 = player 1 / top, 1 = player 2 / bottom).
+  final List<String?> _photos = [null, null];
+
+  Future<void> _loadPhotos() async {
+    final m = widget.match;
+    final db = FirebaseFirestore.instance;
+    try {
+      final snaps = await Future.wait([
+        db.collection('users').doc(m.player1Id).get(),
+        db.collection('users').doc(m.player2Id).get(),
+      ]);
+      String? photo(DocumentSnapshot<Map<String, dynamic>> s) {
+        final profile = s.data()?['profile'] as Map?;
+        final face = profile?['facePhotoUrl'];
+        if (face is String && face.isNotEmpty) return face;
+        final list = profile?['photoUrls'];
+        return list is List && list.isNotEmpty ? list.first as String? : null;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _photos[0] = photo(snaps[0]);
+        _photos[1] = photo(snaps[1]);
+      });
+    } catch (_) {
+      // No pictures: the initials fallback still shows and still taps.
+    }
   }
 
   @override
@@ -159,26 +201,6 @@ class _FeedPageState extends State<FeedPage> {
         c.pause();
       }
     }
-  }
-
-  /// The corner button: pause/resume, or restart once ended. Playback is
-  /// manual now - tapping the video picks a roaster instead.
-  void _togglePlay() {
-    final c = _controller;
-    if (c == null || !c.value.isInitialized) return;
-    final atEnd =
-        c.value.position >= c.value.duration - const Duration(milliseconds: 60);
-    setState(() {
-      if (_ended || atEnd) {
-        c.seekTo(Duration.zero);
-        c.play();
-        _ended = false;
-      } else if (c.value.isPlaying) {
-        c.pause();
-      } else {
-        c.play();
-      }
-    });
   }
 
   Future<void> _load() async {
@@ -251,11 +273,17 @@ class _FeedPageState extends State<FeedPage> {
     _lastPosMs = pos;
     final next = pos / total;
     final ended = !c.value.isPlaying && pos >= total - 60;
+    final playing = c.value.isPlaying;
     // Rebuild only when it matters - this fires many times a second.
-    if ((next - _progress).abs() > 0.01 || ended != _ended) {
+    if ((next - _progress).abs() > 0.01 ||
+        ended != _ended ||
+        playing != _playing ||
+        (ended && !_seenEnd)) {
       setState(() {
         _progress = next;
         _ended = ended;
+        _playing = playing;
+        if (ended) _seenEnd = true;
       });
     }
   }
@@ -578,7 +606,6 @@ class _FeedPageState extends State<FeedPage> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    final paused = controller != null && !controller.value.isPlaying;
     return ColoredBox(
       color: Colors.black,
       child: Stack(
@@ -630,21 +657,13 @@ class _FeedPageState extends State<FeedPage> {
           // red/blue winner buttons in the panel below instead.
           if (!_isImprov && _canAct && _chosenPlayerId == null)
             _winnerSelectLayer(context),
-          // A dead zone behind the right-hand button rail (report, play/pause,
-          // follow): a tap that just misses one of those small circles used to
-          // fall through to the half underneath and PICK A WINNER (beta tester,
-          // 2026-11-09: "I try to click add friend and it chooses the winner").
-          // Same idea as _emojiSafe around the emoji bars.
-          Positioned(
-            top: _railTop(context) - 8,
-            right: 0,
-            width: 72,
-            height: 112 + 48 + 16,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {},
-            ),
-          ),
+          // The roasters' pictures, on top of the pick layer so a tap opens
+          // the name + Follow card instead of picking a winner.
+          // Only once the clip is showing - never floating on a black screen.
+          if (!_isImprov &&
+              controller != null &&
+              controller.value.isInitialized)
+            _playerPictures(context),
           // Per-player emoji bars, revealed only AFTER a winner is picked, so
           // the watching screen stays clean. Each sits on that roaster's half
           // of the stacked clip (top = P1 red, bottom = P2 blue) and is
@@ -654,13 +673,9 @@ class _FeedPageState extends State<FeedPage> {
           if (!_isImprov &&
               widget.match.canVote &&
               _chosenPlayerId == null &&
-              _selectedWinner != null)
+              _seenEnd &&
+              !_playing)
             _emojiBars(context),
-          // (Removed the big center play/replay overlay: it flashed on every
-          // rewind seek - the seek briefly pauses the clip - and duplicated the
-          // corner play/pause control. The corner buttons and tap-to-pick are
-          // the interactions now.)
-          if (controller != null) _playPauseButton(context, paused),
           // The app-wide scrubber (replaces the old rewind-10 button):
           // drag back to re-hear a line, anywhere in the clip.
           if (controller != null)
@@ -688,7 +703,6 @@ class _FeedPageState extends State<FeedPage> {
                 ),
               ),
             ),
-          _followButton(context),
           // The compact winner-confirm + Submit pill, once a half is picked.
           // Face-Off uses its own bottom panel (sequential clip, explicit
           // winner buttons) instead of the tap-the-half flow.
@@ -701,7 +715,7 @@ class _FeedPageState extends State<FeedPage> {
           // overlap); on an archive clip the vote-count chip takes that corner.
           if (widget.match.canVote && _chosenPlayerId == null)
             _kindBadge(context),
-          _reportButton(context),
+          _stripReportFlag(context),
         ],
       ),
     );
@@ -715,70 +729,129 @@ class _FeedPageState extends State<FeedPage> {
   Widget _winnerSelectLayer(BuildContext context) {
     final m = widget.match;
     return Positioned.fill(
-      child: Column(
-        children: [
-          Expanded(child: _selectHalf(top: true, playerId: m.player1Id)),
-          Expanded(child: _selectHalf(top: false, playerId: m.player2Id)),
-        ],
+      child: LayoutBuilder(
+        builder: (context, c) {
+          // The clip strip is burned into the clip on the seam (~5.7% of
+          // the height, cover-centred like the clip). The picked half's
+          // outline stops short of it, so it never draws through the
+          // clock, logo and round (developer, 2026-11-17). The whole half
+          // stays tappable - only the outline is inset.
+          final gap = c.maxHeight * _stripHalfFraction;
+          return Column(
+            children: [
+              Expanded(
+                child: _selectHalf(
+                  top: true,
+                  playerId: m.player1Id,
+                  seamGap: gap,
+                ),
+              ),
+              Expanded(
+                child: _selectHalf(
+                  top: false,
+                  playerId: m.player2Id,
+                  seamGap: gap,
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _selectHalf({required bool top, required String playerId}) {
+  Widget _selectHalf({
+    required bool top,
+    required String playerId,
+    double seamGap = 0,
+  }) {
     final selected = _selectedWinner == playerId;
     // The picked player's own stage gel (top = player 1 = red, bottom =
     // player 2 = blue), so the pick carries the same colour used on the emoji
-    // bars, tally and judges' table. The outline plus a small WINNER pill at
+    // bars, tally and judges' table. The outline plus a small "<name> WINS" pill at
     // the top-centre of the picked half (developer, 2026-11-09: while rating
     // emojis a judge must be able to SEE the pick is still the right person).
     // No fill - it must not cover the faces.
     final color = top ? House.gelRed : House.gelBlue;
+    final name = top
+        ? widget.match.player1Username
+        : widget.match.player2Username;
     final topInset = top ? MediaQuery.of(context).padding.top : 0.0;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _pickWinner(playerId),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: selected ? color : Colors.transparent,
-            width: 5,
-          ),
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: top ? seamGap : 0,
+          top: top ? 0 : seamGap,
         ),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: AnimatedOpacity(
-            opacity: selected ? 1 : 0,
-            duration: const Duration(milliseconds: 120),
-            child: Padding(
-              padding: EdgeInsets.only(top: topInset + 10),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black54, blurRadius: 6),
-                  ],
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.check_rounded, color: Colors.white, size: 16),
-                    SizedBox(width: 4),
-                    Text(
-                      'WINNER',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.2,
-                      ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: selected ? color : Colors.transparent,
+              width: 5,
+            ),
+          ),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: AnimatedOpacity(
+              opacity: selected ? 1 : 0,
+              duration: const Duration(milliseconds: 120),
+              child: Padding(
+                padding: EdgeInsets.only(top: topInset + 10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black54, blurRadius: 6),
+                    ],
+                  ),
+                  // "<name> WINS" - the only place the name shows on the
+                  // clip (developer, 2026-11-18: no names on the video; it
+                  // pops up when the judge picks).
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.sizeOf(context).width * 0.7,
                     ),
-                  ],
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        const Text(
+                          ' WINS',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -905,46 +978,34 @@ class _FeedPageState extends State<FeedPage> {
   /// clip: rate a roaster any time while watching, changeable until you submit.
   Widget _emojiBars(BuildContext context) {
     final m = widget.match;
+    // Each box in the MIDDLE of its roaster's half (developer, 2026-11-17),
+    // shown once the battle has been watched to the end and hidden again
+    // while it replays (picks are kept). Taps outside a box still fall
+    // through to the half underneath, so picking the winner works the same.
     return Positioned.fill(
-      // Measure the ACTUAL feed box, not the window: the Judge feed lives in an
-      // Expanded above the bottom nav bar, so the window centre is below the
-      // real centre. The clip is BoxFit.cover-CENTRED here, so the stacked seam
-      // (player 1 over player 2) sits at this box's vertical centre.
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final seam = c.maxHeight / 2;
-          return Stack(
-            children: [
-              // Player 1 (TOP half): bottom-LEFT of the top feed, above the seam.
-              // Lifted clear of the clip strip and the top player's name,
-              // which are burned into the clip on the seam (2026-11-15,
-              // functions/clipStrip.js): the strip is ~2.9% of the clip's
-              // height either side of the seam, the name ~3.5% more.
-              Positioned(
-                left: 10 - _emojiSafe,
-                bottom: seam + c.maxHeight * 0.075 - _emojiSafe,
-                child: _emojiBar(
-                  m.player1Username,
-                  _emojiP1,
-                  (k) => setState(() => _emojiP1 = k),
-                  House.gelRed,
-                ),
+      child: Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: _emojiBar(
+                m.player1Username,
+                _emojiP1,
+                (k) => setState(() => _emojiP1 = k),
+                House.gelRed,
               ),
-              // Player 2 (BOTTOM half): bottom-LEFT of the bottom feed, lifted
-              // to sit just above the docked submit bar.
-              Positioned(
-                left: 10 - _emojiSafe,
-                bottom: 72 + _scrubH - _emojiSafe,
-                child: _emojiBar(
-                  m.player2Username,
-                  _emojiP2,
-                  (k) => setState(() => _emojiP2 = k),
-                  House.gelBlue,
-                ),
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: _emojiBar(
+                m.player2Username,
+                _emojiP2,
+                (k) => setState(() => _emojiP2 = k),
+                House.gelBlue,
               ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1033,30 +1094,6 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
-  /// A small circular play/pause control, tucked top-right under the
-  /// report button so it never covers a face or the reactions.
-  Widget _playPauseButton(BuildContext context, bool paused) {
-    return Positioned(
-      top: _railTop(context) + 52,
-      right: 8,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.5),
-          shape: BoxShape.circle,
-        ),
-        child: IconButton(
-          icon: Icon(
-            paused || _ended ? Icons.play_arrow_rounded : Icons.pause_rounded,
-            color: Colors.white,
-            size: 22,
-          ),
-          tooltip: paused ? 'Play' : 'Pause',
-          onPressed: _togglePlay,
-        ),
-      ),
-    );
-  }
-
   /// After submitting (or, for a battle you cannot act on, once revealed): the
   /// confirmation, and where allowed the live tally / verdict.
   Widget _resultBox(BuildContext context) {
@@ -1121,107 +1158,98 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
-  /// Flagging a battle from the feed. REQUIRED for Apple's Guideline 1.2 -
-  /// this feed is the app's primary content surface, so a reviewer must be
-  /// able to report from here. Deliberately quiet: a small icon, since harsh
-  /// roasting is expected and not itself reportable.
-  /// A neutral overflow (⋮) menu rather than a standalone flag button
-  /// (developer's call, 2026-09-29). Apple 1.2 requires a flagging mechanism
-  /// to EXIST and be findable, but a prominent flag icon reads as an
-  /// invitation to report and makes people trigger-happy when they dislike a
-  /// roaster. Tucking "Report" behind a ⋮ keeps it reachable and compliant
-  /// while making it a deliberate two-tap action, not the first thing you see.
-  /// Where the right-hand button rail starts (2026-11-15): BELOW the clip's
-  /// burned-in logo, which sits top-right and ends ~11% down the frame. The
-  /// clip is height-fitted (cover), so a fraction of the screen height lands
-  /// in the same place on every phone.
-  double _railTop(BuildContext context) {
-    final mq = MediaQuery.of(context);
-    final belowLogo = mq.size.height * 0.13;
-    final min = mq.padding.top + 8;
-    return belowLogo > min ? belowLogo : min;
-  }
-
-  Widget _reportButton(BuildContext context) {
-    return Positioned(
-      top: _railTop(context),
-      right: 8,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.5),
-          shape: BoxShape.circle,
-        ),
-        child: PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
-          tooltip: 'More',
-          onSelected: (v) {
-            if (v == 'report') _openReport(context);
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'report', child: Text('Report this clip')),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Follow one of the two roasters, right from the feed - the app's primary
-  /// content surface, so the place a fan is most likely to discover someone.
-  /// A small circular button on the right rail, tucked under play/pause.
-  Widget _followButton(BuildContext context) {
-    return Positioned(
-      // Corner column: report / play-pause / follow (the rewind button that
-      // sat between them is gone - the bottom scrubber replaces it).
-      top: _railTop(context) + 104,
-      right: 8,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.5),
-          shape: BoxShape.circle,
-        ),
-        child: IconButton(
-          icon: const Icon(
-            Icons.person_add_alt_1,
-            color: Colors.white,
-            size: 20,
-          ),
-          tooltip: 'Follow',
-          onPressed: () => _openFollow(context),
-        ),
-      ),
-    );
-  }
-
-  /// A battle has two people in it, so following asks which - each row opens
-  /// their fame page, and follows inline via the Follow pill.
-  Future<void> _openFollow(BuildContext context) async {
+  /// THE ROASTERS' PICTURES (developer, 2026-11-17 - replaced the burned-in
+  /// names and the follow button). The clip has each player's selfie burned
+  /// in at the far left beside the strip, with a ring lit while they talk
+  /// (functions/clipStrip.js `avatarSpots`). The app draws the same picture
+  /// exactly over it - so older clips without one still get it - and a tap
+  /// opens their profile (Follow is at the top). The burned ring stays
+  /// visible around it.
+  Widget _playerPictures(BuildContext context) {
     final m = widget.match;
-    await showNeonSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    return Positioned.fill(
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final map = _ClipMap(c.biggest);
+          final d = _kAvatarD * map.scale;
+          Widget pic(int i, double clipY) {
+            final id = i == 0 ? m.player1Id : m.player2Id;
+            final name = i == 0 ? m.player1Username : m.player2Username;
+            // A hair larger than the burned photo so no edge of it peeks out.
+            return Positioned(
+              left: map.x(_kAvatarLeft) - 1,
+              top: map.y(clipY) - 1,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openProfile(context, id, name),
+                // A white ring and a small + badge in the player's colour
+                // (top red, bottom blue - their winner box colour), so it
+                // reads as a button (developer, 2026-11-17).
+                child: _TappablePicture(
+                  name: name,
+                  photoUrl: _photos[i],
+                  size: d + 2,
+                  color: i == 0 ? House.gelRed : House.gelBlue,
+                ),
+              ),
+            );
+          }
+
+          return Stack(
+            children: [
+              pic(0, 960 - 55 - _kAvatarGap - _kAvatarD),
+              pic(1, 960 + 55 + _kAvatarGap),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Straight to their profile (developer, 2026-11-18: the in-between card
+  /// was one menu too many - Follow is right at the top of the profile).
+  /// The clip pauses so its sound doesn't play under their intro video, and
+  /// picks up again on return if it had been playing.
+  Future<void> _openProfile(
+    BuildContext context,
+    String uid,
+    String name,
+  ) async {
+    final c = _controller;
+    final wasPlaying = c != null && c.value.isInitialized && c.value.isPlaying;
+    if (wasPlaying) await c.pause();
+    if (!context.mounted) return;
+    await PerformerProfileScreen.open(context, uid, username: name);
+    if (wasPlaying && mounted && widget.isActive) _controller?.play();
+  }
+
+  /// Report, from a small flag at the RIGHT end of the clip strip burned into
+  /// the clip (developer, 2026-11-17: the right-hand button column - report,
+  /// play/pause, follow - is gone; the scrubber covers play/rewind). REQUIRED
+  /// for Apple's Guideline 1.2: this feed is the app's main content surface,
+  /// so reporting must be findable here. Kept quiet (a dim outline flag, then
+  /// a "who are you reporting?" sheet), since harsh roasting is the point
+  /// and not itself reportable. The strip's own content starts ~18% in from
+  /// each edge, so the ends are free on every phone.
+  Widget _stripReportFlag(BuildContext context) {
+    return Positioned.fill(
+      child: LayoutBuilder(
+        builder: (context, c) => Stack(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-              child: Text(
-                'Follow a roaster',
-                style: Theme.of(sheetContext).textTheme.titleMedium,
+            Positioned(
+              right: 2,
+              top: c.maxHeight / 2 - 22,
+              child: IconButton(
+                tooltip: 'Report this clip',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  Icons.outlined_flag_rounded,
+                  size: 22,
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
+                onPressed: () => _openReport(context),
               ),
             ),
-            for (final p in [
-              (id: m.player1Id, name: m.player1Username),
-              (id: m.player2Id, name: m.player2Username),
-            ])
-              ListTile(
-                title: Text(p.name),
-                trailing: FollowButton(uid: p.id, compact: true),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  PerformerProfileScreen.open(context, p.id, username: p.name);
-                },
-              ),
           ],
         ),
       ),
@@ -1256,14 +1284,40 @@ class _FeedPageState extends State<FeedPage> {
                 style: Theme.of(sheetContext).textTheme.titleMedium,
               ),
             ),
-            ListTile(
-              title: Text(m.player1Username),
-              onTap: () => Navigator.of(sheetContext).pop(m.player1Id),
-            ),
-            ListTile(
-              title: Text(m.player2Username),
-              onTap: () => Navigator.of(sheetContext).pop(m.player2Id),
-            ),
+            // Each name in its player's colour (top red, bottom blue - the
+            // colour of their box on the clip), with their picture, so it is
+            // obvious who is who (developer, 2026-11-17).
+            for (final p in [
+              (
+                id: m.player1Id,
+                name: m.player1Username,
+                photo: _photos[0],
+                color: House.gelRed,
+                where: 'Top video',
+              ),
+              (
+                id: m.player2Id,
+                name: m.player2Username,
+                photo: _photos[1],
+                color: House.gelBlue,
+                where: 'Bottom video',
+              ),
+            ])
+              ListTile(
+                leading: _TappablePicture(
+                  name: p.name,
+                  photoUrl: p.photo,
+                  size: 40,
+                  color: p.color,
+                  badge: false,
+                ),
+                title: Text(
+                  p.name,
+                  style: TextStyle(color: p.color, fontWeight: FontWeight.w800),
+                ),
+                subtitle: Text(p.where),
+                onTap: () => Navigator.of(sheetContext).pop(p.id),
+              ),
             TextButton(
               onPressed: () => Navigator.of(sheetContext).pop(),
               child: const Text('Cancel'),
@@ -1352,6 +1406,97 @@ class _FeedPageState extends State<FeedPage> {
             style: const TextStyle(color: Colors.white, fontSize: 12),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The burned-in pictures' spot on the 1080x1920 clip (mirrors
+/// functions/clipStrip.js STRIP.avatarLeft / avatarD / avatarGap - keep in step).
+const double _kAvatarLeft = 124;
+const double _kAvatarGap = 10;
+const double _kAvatarD = 100;
+
+/// Maps 1080x1920 clip pixels onto the feed box, where the clip is shown
+/// BoxFit.cover and centred.
+class _ClipMap {
+  _ClipMap(this._box)
+    : scale = (_box.width / 1080) > (_box.height / 1920)
+          ? _box.width / 1080
+          : _box.height / 1920;
+
+  final Size _box;
+  final double scale;
+
+  double x(double clipX) => (_box.width - 1080 * scale) / 2 + clipX * scale;
+  double y(double clipY) => (_box.height - 1920 * scale) / 2 + clipY * scale;
+}
+
+/// A player's picture that looks like a button: a white ring and, on the
+/// clip, a small + badge in the player's colour (tap = name + Follow card).
+class _TappablePicture extends StatelessWidget {
+  const _TappablePicture({
+    required this.name,
+    required this.photoUrl,
+    required this.size,
+    required this.color,
+    this.badge = true,
+  });
+
+  final String name;
+  final String? photoUrl;
+  final double size;
+  final Color color;
+  final bool badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final ring = (size * 0.06).clamp(2.0, 3.5);
+    final badgeSize = (size * 0.36).clamp(16.0, 22.0);
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              // White, not the player's colour: the clip's own ring around
+              // it glows PINK while that player talks (clipStrip.js), and a
+              // red ring would blur into that. The player's colour is on
+              // the + badge.
+              border: Border.all(color: Colors.white, width: ring),
+              boxShadow: const [
+                BoxShadow(color: Colors.black54, blurRadius: 6),
+              ],
+            ),
+            child: PlayerAvatar(
+              name: name,
+              photoUrl: photoUrl,
+              size: size - ring * 2,
+            ),
+          ),
+          if (badge)
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: Container(
+                width: badgeSize,
+                height: badgeSize,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+                child: Icon(
+                  Icons.add_rounded,
+                  size: badgeSize - 6,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

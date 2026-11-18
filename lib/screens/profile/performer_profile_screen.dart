@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/follows_service.dart';
 import '../../core/social_links.dart';
+import '../../theme/house_theme.dart';
 import '../../widgets/belt_flair.dart';
 import '../../widgets/emoji_stats_card.dart';
 import '../../widgets/social_links_section.dart';
@@ -59,6 +60,7 @@ class PerformerProfileScreen extends StatelessWidget {
     final isMe = FirebaseAuth.instance.currentUser?.uid == uid;
     return Scaffold(
       backgroundColor: _bg,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -91,98 +93,177 @@ class PerformerProfileScreen extends StatelessWidget {
             ),
         ],
       ),
-      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .snapshots(),
-        builder: (context, snap) {
-          final user = snap.data?.data();
-          final username =
-              (user?['username'] as String?) ?? seedUsername ?? 'Roaster';
-          final rankTitle = user?['rankTitle'] as String?;
-          final followers = followerCountOf(user);
-          final photo = _firstPhoto(user);
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-            children: [
-              const SizedBox(height: 8),
-              Center(child: _Avatar(photoUrl: photo, size: 96)),
-              const SizedBox(height: 14),
-              Center(
-                child: Text(
-                  username,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
+      // THE NEON ROOM (developer, 2026-11-18: "spruce it up, like our
+      // theme"): the same club backdrop as your own Profile, a scrim, and
+      // the page on top.
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              'assets/home/profile_background.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
+          ),
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0x66000000),
+                    Color(0x8C0E0B14),
+                    Color(0xF20E0B14),
+                  ],
+                  stops: [0.0, 0.45, 0.8],
                 ),
               ),
-              const SizedBox(height: 8),
-              // Rank crest + title (their skill identity, the other axis).
-              if (rankTitle != null)
-                Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      RankBadge(title: rankTitle, size: 26),
-                      const SizedBox(width: 6),
-                      Text(
-                        rankTitle,
-                        // Gold for the two top tiers (matching Home/Profile) so
-                        // the most prestigious ranks read as prestige.
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: rankTitle == 'Legend' || rankTitle == 'GOAT'
-                              ? const Color(0xFFF4C838)
-                              : Colors.white.withValues(alpha: 0.75),
-                          fontWeight: FontWeight.w600,
+            ),
+          ),
+          SafeArea(
+            child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(uid)
+                  .snapshots(),
+              builder: (context, snap) {
+                final user = snap.data?.data();
+                final username =
+                    (user?['username'] as String?) ?? seedUsername ?? 'Roaster';
+                final rankTitle = user?['rankTitle'] as String?;
+                final followers = followerCountOf(user);
+                final photo = _firstPhoto(user);
+                return ListView(
+                  // Clear of the transparent app bar (the body runs behind it).
+                  padding: const EdgeInsets.fromLTRB(20, 48, 20, 32),
+                  children: [
+                    Center(
+                      child: _HeroAvatar(photoUrl: photo, name: username),
+                    ),
+                    const SizedBox(height: 10),
+                    Center(
+                      child: Text(
+                        username,
+                        textAlign: TextAlign.center,
+                        style: House.display(size: 34, color: Colors.white)
+                            .copyWith(
+                              shadows: const [
+                                Shadow(
+                                  color: Color(0xCCFF2E7E),
+                                  blurRadius: 18,
+                                ),
+                                Shadow(color: Colors.black87, blurRadius: 4),
+                              ],
+                            ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Rank crest + title (their skill identity, the other axis).
+                    if (rankTitle != null)
+                      Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            RankBadge(title: rankTitle, size: 40),
+                            const SizedBox(width: 8),
+                            Text(
+                              rankTitle,
+                              // Gold for the two top tiers (matching Home/Profile) so
+                              // the most prestigious ranks read as prestige.
+                              style: TextStyle(
+                                fontSize: 20,
+                                color:
+                                    rankTitle == 'Legend' || rankTitle == 'GOAT'
+                                    ? const Color(0xFFF4C838)
+                                    : Colors.white.withValues(alpha: 0.85),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            // The ladder rung as a Roman numeral ("· V"), matching
+                            // Home/Profile. Absent for GOAT and unknown titles.
+                            if (rankTierNumeral(rankTitle) != null) ...[
+                              Text(
+                                '  ·  ',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                ),
+                              ),
+                              Text(
+                                rankTierNumeral(rankTitle)!,
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  color:
+                                      rankTierColor(rankTitle) ??
+                                      const Color(0xFFF4C838),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                      // The ladder rung as a Roman numeral ("· V"), matching
-                      // Home/Profile. Absent for GOAT and unknown titles.
-                      if (rankTierNumeral(rankTitle) != null) ...[
-                        Text(
-                          '  ·  ',
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.4),
-                              ),
+                    const SizedBox(height: 14),
+                    Center(child: BeltFlair(uid: uid)),
+                    const SizedBox(height: 22),
+                    // Followers beside their GLOBAL RANK (developer, 2026-11-18:
+                    // the rank is public on the board anyway, so show it here).
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xCC140D1D),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(
+                            0xFFFF2E7E,
+                          ).withValues(alpha: 0.45),
+                          width: 1.2,
                         ),
-                        Text(
-                          rankTierNumeral(rankTitle)!,
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(
-                                color:
-                                    rankTierColor(rankTitle) ??
-                                    const Color(0xFFF4C838),
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                      ],
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(
+                              0xFFFF2E7E,
+                            ).withValues(alpha: 0.22),
+                            blurRadius: 24,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(child: _FollowerCount(count: followers)),
+                          Container(
+                            width: 1,
+                            height: 44,
+                            color: Colors.white12,
+                          ),
+                          Expanded(
+                            child: _GlobalRank(rating: user?['rating'] as num?),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    if (!isMe) FollowButton(uid: uid) else const _ThisIsYou(),
+                    const SizedBox(height: 26),
+                    _StudyCard(user: user),
+                    EmojiStatsCard(
+                      counts: (user?['emojiCounts'] as Map?)
+                          ?.cast<String, dynamic>(),
+                    ),
+                    if (socialLinksOf(user).isNotEmpty) ...[
+                      const SizedBox(height: 30),
+                      SocialLinksSection(links: socialLinksOf(user)),
                     ],
-                  ),
-                ),
-              const SizedBox(height: 14),
-              Center(child: BeltFlair(uid: uid)),
-              const SizedBox(height: 22),
-              _FollowerCount(count: followers),
-              const SizedBox(height: 18),
-              if (!isMe) FollowButton(uid: uid) else const _ThisIsYou(),
-              const SizedBox(height: 26),
-              _StudyCard(user: user),
-              EmojiStatsCard(
-                counts: (user?['emojiCounts'] as Map?)?.cast<String, dynamic>(),
-              ),
-              if (socialLinksOf(user).isNotEmpty) ...[
-                const SizedBox(height: 30),
-                SocialLinksSection(links: socialLinksOf(user)),
-              ],
-              const SizedBox(height: 30),
-              _ClipsSection(uid: uid),
-            ],
-          );
-        },
+                    const SizedBox(height: 30),
+                    _ClipsSection(uid: uid),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -190,6 +271,8 @@ class PerformerProfileScreen extends StatelessWidget {
   static String? _firstPhoto(Map<String, dynamic>? user) {
     final profile = user?['profile'];
     if (profile is Map) {
+      final face = profile['facePhotoUrl'];
+      if (face is String && face.isNotEmpty) return face;
       final photos = profile['photoUrls'];
       if (photos is List && photos.isNotEmpty && photos.first is String) {
         return photos.first as String;
@@ -199,9 +282,11 @@ class PerformerProfileScreen extends StatelessWidget {
   }
 }
 
-/// The study material opponents can look up: the intro video (looping, sound
-/// on - it's a performance) and the volunteered "about me". Renders nothing if
-/// the player has neither. City & State is deliberately NOT here.
+/// The intro video (looping, sound on - it's a performance) and the
+/// volunteered "about me", with no heading (developer, 2026-11-18: the
+/// "Study them" title and its explainer line are gone - just the video).
+/// Renders nothing if the player has neither. City & State is deliberately
+/// NOT here.
 class _StudyCard extends StatelessWidget {
   const _StudyCard({required this.user});
 
@@ -219,44 +304,55 @@ class _StudyCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Icon(
-              Icons.menu_book_outlined,
-              color: Colors.white70,
-              size: 18,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'Study them',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
+        if (hasIntro)
+          Align(
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 360),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: const Color(0xFFB64DFF).withValues(alpha: 0.7),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFB64DFF).withValues(alpha: 0.35),
+                    blurRadius: 26,
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(19),
+                child: LoopingVideo(url: intro),
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          "Their intro and what they want you to know - fair game before you "
-          'face off.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.white54),
-        ),
-        const SizedBox(height: 12),
-        if (hasIntro)
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 340),
-            child: Align(child: LoopingVideo(url: intro)),
           ),
         if (hasAbout) ...[
           if (hasIntro) const SizedBox(height: 14),
-          Card(
-            color: Colors.white.withValues(alpha: 0.06),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Text(about, style: const TextStyle(color: Colors.white)),
+          // Rounded corners + a one-sided border can't share a decoration,
+          // so the clip rounds it.
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              decoration: const BoxDecoration(
+                color: Color(0xCC140D1D),
+                border: Border(
+                  left: BorderSide(color: Color(0xFFFF2E7E), width: 4),
+                ),
+              ),
+              child: Padding(
+                padding: EdgeInsets.zero,
+                child: Text(
+                  about,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    height: 1.35,
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -287,6 +383,84 @@ class _FollowerCount extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           count == 1 ? 'Follower' : 'Followers',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.6),
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.5,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Their position on the Ranks board: players out-rating them, +1 - the same
+/// count the Home card's GLOBAL RANK and the board use. Shows only the
+/// position, never the hidden rating. Nothing for an unplaced account.
+class _GlobalRank extends StatefulWidget {
+  const _GlobalRank({required this.rating});
+
+  final num? rating;
+
+  @override
+  State<_GlobalRank> createState() => _GlobalRankState();
+}
+
+class _GlobalRankState extends State<_GlobalRank> {
+  int? _rank;
+  num? _for;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_GlobalRank old) {
+    super.didUpdateWidget(old);
+    if (old.rating != widget.rating) _load();
+  }
+
+  Future<void> _load() async {
+    final rating = widget.rating;
+    if (rating == null || rating == _for) return;
+    _for = rating;
+    // The count() aggregation is server-only, so a cold start can fail it
+    // once; retry a few times (same as the Home card).
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final ahead = await FirebaseFirestore.instance
+            .collection('users')
+            .where('rating', isGreaterThan: rating)
+            .count()
+            .get();
+        if (mounted) setState(() => _rank = (ahead.count ?? 0) + 1);
+        return;
+      } catch (_) {
+        if (!mounted) return;
+        await Future.delayed(Duration(milliseconds: 600 * (1 << attempt)));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          _rank == null ? '-' : '#$_rank',
+          style: const TextStyle(
+            color: Color(0xFFF4C838),
+            fontSize: 40,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Global rank',
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.6),
             fontSize: 13,
@@ -528,4 +702,69 @@ String _formatCount(int n) {
   }
   final m = n / 1000000;
   return '${m.toStringAsFixed(m >= 10 ? 0 : 1)}M';
+}
+
+/// The profile's hero: their selfie in a neon ring (pink -> purple -> gold)
+/// with a pink glow, under a soft spotlight - the "star of the show" look.
+class _HeroAvatar extends StatelessWidget {
+  const _HeroAvatar({required this.photoUrl, required this.name});
+
+  final String? photoUrl;
+  final String name;
+
+  static const double _size = 148;
+  static const double _ring = 5;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 260,
+      height: _size + 40,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Spotlight.
+          Container(
+            width: 260,
+            height: _size + 40,
+            decoration: const BoxDecoration(
+              gradient: RadialGradient(
+                colors: [Color(0x40FFFFFF), Color(0x00FFFFFF)],
+                stops: [0.0, 0.7],
+              ),
+            ),
+          ),
+          // Ring + glow.
+          Container(
+            width: _size,
+            height: _size,
+            padding: const EdgeInsets.all(_ring),
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: SweepGradient(
+                colors: [
+                  Color(0xFFFF2E7E),
+                  Color(0xFFB64DFF),
+                  Color(0xFFF4C838),
+                  Color(0xFFFF2E7E),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(color: Color(0x99FF2E7E), blurRadius: 28),
+                BoxShadow(color: Color(0x66B64DFF), blurRadius: 50),
+              ],
+            ),
+            child: Container(
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFF0E0B14),
+              ),
+              padding: const EdgeInsets.all(3),
+              child: _Avatar(photoUrl: photoUrl, size: _size - _ring * 2 - 6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

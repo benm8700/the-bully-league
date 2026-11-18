@@ -7,8 +7,10 @@ import 'package:video_player/video_player.dart';
 /// LoopingVideo (intros). There is deliberately NO restart / rewind-10 button
 /// anywhere - tapping the start of this bar does that.
 ///
-/// Thin to look at, ~44px tall to touch; tap or drag anywhere on it. Put it on
-/// a dark scrim - it is white.
+/// The handle is a round PLAY/PAUSE button (developer, 2026-11-17: the
+/// separate pause button went away, and the little dot did not look
+/// pressable): tap the handle to pause or play, tap the track to jump, drag
+/// anything to scrub. Put it on a dark scrim - it is white.
 ///
 /// Covers [start, end] of the video (end <= 0 means the whole video).
 class ClipScrubber extends StatefulWidget {
@@ -18,6 +20,7 @@ class ClipScrubber extends StatefulWidget {
     this.start = Duration.zero,
     this.end = Duration.zero,
     this.onSeekEnd,
+    this.onTogglePlay,
   });
 
   final VideoPlayerController controller;
@@ -26,6 +29,10 @@ class ClipScrubber extends StatefulWidget {
 
   /// Called when a tap or drag finishes (e.g. to resume playback).
   final VoidCallback? onSeekEnd;
+
+  /// The handle's play/pause tap, for a host that keeps its own play state
+  /// (MatchClipPlayer). Without it the handle drives the controller directly.
+  final VoidCallback? onTogglePlay;
 
   @override
   State<ClipScrubber> createState() => ClipScrubberState();
@@ -51,6 +58,24 @@ class ClipScrubberState extends State<ClipScrubber> {
     final pos = widget.controller.value.position - widget.start;
     return (pos.inMilliseconds / len).clamp(0.0, 1.0);
   }
+
+  /// The handle's tap: pause, play, or start over once the clip has ended.
+  void _togglePlay() {
+    final c = widget.controller;
+    if (!c.value.isInitialized) return;
+    if (c.value.isPlaying) {
+      c.pause();
+      return;
+    }
+    final atEnd =
+        c.value.position >= _rangeEnd - const Duration(milliseconds: 80);
+    if (atEnd) c.seekTo(widget.start);
+    c.play();
+  }
+
+  static const double _knob = 32;
+  static const double _knobDrag = 38;
+  static const double _trackY = 20; // the track's centre line
 
   void _seekTo(double fraction) {
     final ms = (fraction * _length.inMilliseconds).round();
@@ -86,6 +111,14 @@ class ClipScrubberState extends State<ClipScrubber> {
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapUp: (d) {
+                // On the handle (generous radius): play / pause.
+                final knobX = w * f;
+                final dx = d.localPosition.dx - knobX;
+                final dy = d.localPosition.dy - _trackY;
+                if (dx * dx + dy * dy <= 26 * 26) {
+                  (widget.onTogglePlay ?? _togglePlay)();
+                  return;
+                }
                 _seekTo(_fractionFor(d.localPosition, w));
                 widget.onSeekEnd?.call();
               },
@@ -106,42 +139,62 @@ class ClipScrubberState extends State<ClipScrubber> {
               onHorizontalDragCancel: () =>
                   setState(() => _dragFraction = null),
               child: SizedBox(
-                height: 44,
+                height: 58,
                 child: Stack(
-                  alignment: Alignment.centerLeft,
+                  clipBehavior: Clip.none,
                   children: [
                     // Track
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 120),
-                      height: dragging ? 8 : 5,
-                      decoration: BoxDecoration(
-                        color: Colors.white30,
-                        borderRadius: BorderRadius.circular(4),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: _trackY - (dragging ? 4 : 2.5),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 120),
+                        height: dragging ? 8 : 5,
+                        decoration: BoxDecoration(
+                          color: Colors.white30,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
                     ),
                     // Played
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 120),
-                      height: dragging ? 8 : 5,
-                      width: w * f,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    // Thumb
                     Positioned(
-                      left: (w * f - (dragging ? 10 : 7)).clamp(0.0, w),
+                      left: 0,
+                      top: _trackY - (dragging ? 4 : 2.5),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 120),
-                        width: dragging ? 20 : 14,
-                        height: dragging ? 20 : 14,
+                        height: dragging ? 8 : 5,
+                        width: w * f,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                    // The handle: a round play/pause button riding the track.
+                    Positioned(
+                      left: (w * f - (dragging ? _knobDrag : _knob) / 2).clamp(
+                        0.0,
+                        w - (dragging ? _knobDrag : _knob),
+                      ),
+                      top: _trackY - (dragging ? _knobDrag : _knob) / 2,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 120),
+                        width: dragging ? _knobDrag : _knob,
+                        height: dragging ? _knobDrag : _knob,
                         decoration: const BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
                           boxShadow: [
-                            BoxShadow(color: Colors.black45, blurRadius: 4),
+                            BoxShadow(color: Colors.black54, blurRadius: 6),
                           ],
+                        ),
+                        child: Icon(
+                          value.isPlaying
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                          color: Colors.black,
+                          size: 22,
                         ),
                       ),
                     ),
