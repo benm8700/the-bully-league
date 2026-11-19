@@ -174,6 +174,8 @@ async function deleteAccount(auth) {
   // tying a name to this uid, which is exactly the kind of thing that
   // must not survive an erasure request.
   const preDelete = await db.collection("users").doc(userId).get();
+  // 4a. Their private phone number and its lookup entry.
+  await require("./contactMatch").forgetPhone(db, userId).catch(() => {});
   const claimKey = (preDelete.data()?.usernameLower ??
     preDelete.data()?.username ?? "").trim().toLowerCase();
   if (claimKey) {

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -208,6 +209,16 @@ class _AccountStatusGateState extends State<_AccountStatusGate> {
   void _registerPushOnce() {
     if (_pushRegistered) return;
     _pushRegistered = true;
+    // Once per account load: the server files this account's verified phone
+    // number privately and indexes it for "friends from contacts", and
+    // attaches any invite waiting for that number (2026-11-19). Idempotent
+    // and best-effort; older accounts migrate themselves this way.
+    unawaited(
+      FirebaseFunctions.instance
+          .httpsCallable('finalizePhoneSignup')
+          .call<Map<String, dynamic>>()
+          .then((_) {}, onError: (_) {}),
+    );
     // Fire-and-forget on purpose: it's entirely best-effort (see
     // PushNotificationService), and nothing should wait on a notification
     // permission prompt resolving.

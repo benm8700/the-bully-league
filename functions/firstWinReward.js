@@ -142,7 +142,10 @@ async function maybeAwardFirstWin(matchId, match, winnerId, {db = getFirestore()
     db.collection("users").doc(winnerId).get(),
     db.collection("users").doc(opponentId).get(),
   ]);
-  const winner = winnerSnap.data() ?? {};
+  const winner = {...(winnerSnap.data() ?? {})};
+  // The number lives in userPrivate now (contactMatch.js), not the profile.
+  const {phoneForUid} = require("./contactMatch");
+  winner.phoneNumber = await phoneForUid(db, winnerId, winner);
   const opponent = opponentSnap.data() ?? {};
 
   // Account creation time from Firebase Auth, NOT the user doc - the client

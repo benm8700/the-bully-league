@@ -41,6 +41,8 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSContactsUsageDescription</key>
+	<string>To show which of your friends are already on The Bully League and let you invite the rest. Numbers are scrambled on your phone before anything is sent, and we never keep your contact list.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>The Bully League uses your camera for live roast battles and to record your intro video.</string>
 	<key>NSMicrophoneUsageDescription</key>

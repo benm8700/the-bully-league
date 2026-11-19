@@ -6,6 +6,7 @@ import '../info/rules_screen.dart';
 import 'appearance_screen.dart';
 import 'blocked_players_screen.dart';
 import 'notification_settings_screen.dart';
+import 'privacy_screen.dart';
 import 'battle_card_screen.dart';
 
 /// Account & settings, reached from the profile avatar in the Home header.
@@ -62,6 +63,12 @@ class AccountScreen extends StatelessWidget {
             icon: Icons.palette_outlined,
             label: 'Appearance',
             onTap: () => _push(context, const AppearanceScreen()),
+          ),
+          _tile(
+            context,
+            icon: Icons.lock_outline,
+            label: 'Privacy',
+            onTap: () => _push(context, const PrivacyScreen()),
           ),
           _tile(
             context,

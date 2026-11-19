@@ -1,4 +1,4 @@
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getFirestore} = require("firebase-admin/firestore");
 const {HttpsError} = require("firebase-functions/v2/https");
 
 /**
@@ -60,10 +60,10 @@ async function finalizePhoneSignup(auth) {
   const nowMs = Date.now();
 
   // 1) Record the verified number on the user doc (server-trusted).
-  await db.collection("users").doc(uid).set({
-    phoneNumber: phone,
-    phoneVerifiedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+  //    Kept PRIVATE (userPrivate + phoneIndex, see contactMatch.js): profile
+  //    docs are readable by every member, so the number must not live there.
+  const {indexPhone} = require("./contactMatch");
+  await indexPhone(db, uid, phone);
 
   // 2) Attach any pending invite-challenges aimed at this number. Each becomes
   //    a real challenge from the inviter to this new account. (The invite loop

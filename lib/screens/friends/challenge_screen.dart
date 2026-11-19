@@ -5,6 +5,8 @@ import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'contacts_invite_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../widgets/expiry_countdown.dart';
@@ -211,6 +213,21 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
           ),
         ),
       );
+  }
+
+  Future<void> _fromContacts() async {
+    final pick = await Navigator.of(context).push<ContactPick>(
+      MaterialPageRoute(builder: (_) => const ContactsInviteScreen()),
+    );
+    if (pick == null || !mounted) return;
+    if (pick.uid != null) {
+      await _sendToUid(pick.uid!, pick.name);
+    } else if (pick.phone != null) {
+      // Same path as typing it: a member gets the challenge, anyone else a
+      // text invite with the challenge waiting for them.
+      _controller.text = pick.phone!;
+      await _send();
+    }
   }
 
   /// Re-challenge a recent opponent by uid - one tap, no typing.
@@ -421,6 +438,18 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   label: 'Send challenge',
                   busy: _busy,
                   onPressed: _send,
+                ),
+                const SizedBox(height: 10),
+                // Friends from contacts (2026-11-19): members first with
+                // Challenge, everyone else with Invite. Hashed lookup only -
+                // see ContactsInviteScreen.
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : _fromContacts,
+                  icon: const Icon(Icons.contacts_outlined),
+                  label: const Text('Find friends from contacts'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),

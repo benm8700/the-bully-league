@@ -186,6 +186,13 @@ export default function LegalPage() {
           <Li>Activity used to run the points economy: a ledger of every points award and every points spend, your daily judging streak, and your quest progress.</Li>
           <Li>Your block list, and whether you have opted out of appearing in the player directory.</Li>
           <Li>Referral attribution - who invited you, if anyone, and who you invited.</Li>
+          <Li>
+            Contacts, only if you choose &quot;Find friends from contacts&quot; and allow access.
+            Your phone turns each number into a one-way scrambled code (a hash) before anything is
+            sent; we only use those codes to tell you which of your contacts are already members,
+            and we do not store your contacts, the codes, or anyone&apos;s name or email. Invites
+            are texts you send yourself from your own phone.
+          </Li>
           <Li>Device identifiers and push notification tokens, logged to deliver alerts and to help detect multi-account abuse.</Li>
           <Li>Usage and crash data via Firebase Analytics and Crashlytics.</Li>
         </ul>
@@ -209,6 +216,11 @@ export default function LegalPage() {
           You can opt out of the directory entirely at any time, and people you have blocked never
           see you there regardless. Your rating and rank are deliberately <em>not</em> shown to an
           opponent before a match.
+        </P>
+        <P>
+          Your phone number is never shown to other users. People who already have your number in
+          their contacts can see that you are on The Bully League and challenge you; you can turn
+          this off in Settings &gt; Privacy (&quot;Let people who have my number find me&quot;).
         </P>
         <P>
           Ballots are private: nobody can see who voted for whom, including the two players.

@@ -1501,6 +1501,13 @@ exports.challengeFriend = onCall((request) => {
   return challengeFriend(request.auth, request.data);
 });
 
+// Friends from your contacts: hashed numbers in, members who can be found
+// out. Stores nothing it is sent. See contactMatch.js.
+exports.matchContacts = onCall((request) => {
+  const {matchContacts} = require("./contactMatch");
+  return matchContacts(request.auth, request.data);
+});
+
 exports.respondToChallenge = onCall((request) => {
   const {respondToChallenge} = require("./friendBattle");
   return respondToChallenge(request.auth, request.data);

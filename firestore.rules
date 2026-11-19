@@ -364,6 +364,19 @@ service cloud.firestore {
     // readable is pointless here, since it is a complete name-to-account
     // map and the player directory already answers the only legitimate
     // question ("does this person exist") under its own visibility rules.
+    // PRIVATE phone numbers and the phone lookup index (contactMatch.js):
+    // server-only. Profiles are readable by every member, so numbers moved
+    // here (2026-11-19). No client may read or write any of these.
+    match /userPrivate/{userId} {
+      allow read, write: if false;
+    }
+    match /phoneIndex/{hash} {
+      allow read, write: if false;
+    }
+    match /contactMatchLimits/{userId} {
+      allow read, write: if false;
+    }
+
     match /usernames/{usernameKey} {
       allow read, write: if false;
     }

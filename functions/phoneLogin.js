@@ -31,11 +31,11 @@ async function resolvePhoneLogin(data) {
     // Not the Auth phone (older accounts) - fall back to the user doc field.
   }
   if (!email) {
-    const found = await getFirestore().collection("users")
-        .where("phoneNumber", "==", phone).limit(1).get();
-    if (!found.empty) {
+    const {uidForPhone} = require("./contactMatch");
+    const foundUid = await uidForPhone(getFirestore(), phone);
+    if (foundUid) {
       try {
-        email = (await getAuth().getUser(found.docs[0].id)).email ?? null;
+        email = (await getAuth().getUser(foundUid)).email ?? null;
       } catch (_) {
         email = null;
       }

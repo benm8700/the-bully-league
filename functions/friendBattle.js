@@ -211,10 +211,17 @@ async function challengeFriend(auth, data) {
       throw new HttpsError("invalid-argument",
           "That doesn't look like a valid phone number.");
     }
-    const found = await db.collection("users")
-        .where("phoneNumber", "==", phone).limit(1).get();
-    if (found.empty) return inviteByPhone(db, fromUid, phone, nowMs);
-    target = found.docs[0];
+    const {uidForPhone} = require("./contactMatch");
+    const foundUid = await uidForPhone(db, phone);
+    if (!foundUid) return inviteByPhone(db, fromUid, phone, nowMs);
+    const snap = await db.collection("users").doc(foundUid).get();
+    // Opted out of being found by number (Settings > Privacy): answer
+    // exactly as for a number with no account, so a typed number can't
+    // reveal membership either.
+    if (!snap.exists || snap.data()?.contactDiscoverable === false) {
+      return inviteByPhone(db, fromUid, phone, nowMs);
+    }
+    target = snap;
   }
 
   const [fromSnap, outstandingSnap] = await Promise.all([
