@@ -34,6 +34,14 @@ const {formatAssTime, escapeAssText} = require("./captions");
 /** How long the strip is held past the measured clip end (see buildStripAss). */
 const STRIP_TAIL_PAD_SEC = 30;
 
+/**
+ * The clip's last moments always read TIME! once the battle reached its end
+ * (developer, 2026-11-18). The visible video often stops before the logged
+ * end - a silent final turn is cut as dead air, or the audio outlasts the
+ * video - and the last frame then froze on a full "0:15" mid-battle.
+ */
+const STRIP_END_HOLD_SEC = 1.5;
+
 /** Geometry on the 1080x1920 vertical canvas. */
 const STRIP = {
   height: 110,
@@ -475,6 +483,41 @@ function buildStripAss(opts) {
 
   const states = statesFromLog(log, t0Ms, durationSec, p1Id, p2Id);
 
+  // THE FINISH (see STRIP_END_HOLD_SEC): from `finish.at` to the end the
+  // strip shows the over state - at the real end if it is visible, else in
+  // the last moments of the visible video.
+  const visibleEnd = keeps ? fullEnd : opts.durationSec;
+  const lastEv = log && Array.isArray(log.events) ?
+    log.events[log.events.length - 1] : null;
+  let finish = null;
+  if (lastEv && lastEv.o && visibleEnd > 0) {
+    const overSpans = remapSpans(
+        states.filter((x) => x.state.phase === "over"), keeps);
+    const overAt = overSpans.length ? overSpans[0].start : Infinity;
+    const rc = log.kind === "rounds" ?
+      Math.max(1, Math.floor(log.turnCount / 2)) : 0;
+    finish = {
+      at: Math.max(0, Math.min(overAt, visibleEnd - STRIP_END_HOLD_SEC)),
+      state: {
+        phase: "over", kind: log.kind, floor: 0,
+        clocks: {p1: lastEv.r?.[p1Id] ?? 0, p2: lastEv.r?.[p2Id] ?? 0},
+        holderMs: 0, last: false, round: rc, roundCount: rc,
+        turnMs: log.turnMs,
+      },
+    };
+  }
+  const finishSpans = (list) => {
+    if (!finish) return list;
+    const out = [];
+    for (const x of list) {
+      if (x.state.phase === "over" || x.start >= finish.at) continue;
+      out.push(x.end > finish.at ? {...x, end: finish.at} : x);
+    }
+    out.push({start: finish.at, end: fullEnd, spanStart: finish.at,
+      oStart: finish.at, oEnd: fullEnd, state: finish.state});
+    return out;
+  };
+
   // PLAYER PICTURES replace the burned-in names (developer, 2026-11-17:
   // names landed on faces, and every other spot is covered by TikTok's
   // buttons or the app's own). The photo itself is overlaid by ffmpeg on
@@ -485,7 +528,7 @@ function buildStripAss(opts) {
   const spots = avatarSpots(seam);
   const photos = opts.photos || {};
   const ringD = STRIP.avatarD + STRIP.ring * 2;
-  for (const s of remapSpans(states, keeps)) {
+  for (const s of finishSpans(remapSpans(states, keeps))) {
     const floor = s.state.phase === "live" ? s.state.floor : 0;
     for (const who of [1, 2]) {
       if (hidden[who]) continue;
@@ -517,7 +560,7 @@ function buildStripAss(opts) {
   }
 
   // Clock / round content, one span per shown second.
-  for (const s of remapSpans(tickSpans(states), keeps)) {
+  for (const s of finishSpans(remapSpans(tickSpans(states), keeps))) {
     for (const item of stripItems(s.state, seam)) {
       push(item.layer, s.start, s.end, item.text);
     }
@@ -525,7 +568,7 @@ function buildStripAss(opts) {
 
   // The draining bar along the strip's bottom edge (rapid rounds only).
   if (log && log.kind === "rounds" && log.turnMs > 0) {
-    for (const s of remapSpans(states, keeps)) {
+    for (const s of finishSpans(remapSpans(states, keeps))) {
       const st = s.state;
       if (st.phase !== "live") continue;
       // Remaining at this piece's original start (a cut can split a turn).

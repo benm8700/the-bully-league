@@ -120,6 +120,49 @@ check("the strip draws clock, round and the bar - no names (pictures instead)", 
   assert.ok(!all.includes("LIVE"), "no LIVE in clips");
   assert.ok(!all.includes("MAIN STAGE"), "no tag outside the Main Stage");
 });
+// The visible clip ends before the logged end (a silent final turn cut, or
+// audio outlasting video): the last moments must still read TIME!.
+function timeLines(st) {
+  return st.lines.filter((l) => l.includes("TIME!")).map((l) => {
+    const [, a, b] = l.match(/Dialogue: \d+,([^,]+),([^,]+),/);
+    const sec = (t) => {
+      const [h, m, x] = t.split(":");
+      return Number(h) * 3600 + Number(m) * 60 + Number(x);
+    };
+    return [sec(a), sec(b)];
+  });
+}
+check("TIME! shows at the end even when the video stops before the battle ends", () => {
+  // Video only 20s long; the battle's end is logged at 27s.
+  const st = strip({durationSec: 20});
+  const t = timeLines(st);
+  assert.equal(t.length, 1);
+  assert.ok(Math.abs(t[0][0] - 18.5) < 0.02, `starts 1.5s before the end, got ${t[0][0]}`);
+  // Nothing else (no clock) is drawn over it.
+  const clockAfter = st.lines.some((l) => {
+    const m = l.match(/Dialogue: \d+,([^,]+),/);
+    return /\\fs50\}0:\d\d/.test(l) && m && m[1] >= "0:00:18.50";
+  });
+  assert.ok(!clockAfter, "no clock under TIME!");
+});
+check("a cut (trimmed) clip also ends on TIME!", () => {
+  // Keep 0-14s only: the final turn and the end are cut as dead air.
+  const st = strip({keeps: [{start: 0, end: 14}]});
+  const t = timeLines(st);
+  assert.equal(t.length, 1);
+  assert.ok(Math.abs(t[0][0] - 12.5) < 0.02 && Math.abs(t[0][1] - 14) < 0.02);
+});
+check("when the real end is visible, TIME! starts at the real end", () => {
+  const t = timeLines(strip());
+  assert.equal(t.length, 1);
+  assert.ok(Math.abs(t[0][0] - 27) < 0.02, `got ${t[0][0]}`);
+});
+check("no finish when the log never reached the end", () => {
+  const st = buildStripAss({canvas: CANVAS, durationSec: 20, t0Ms: T0,
+    log: log(BATTLE.slice(0, 2)), p1Id: A, p2Id: B, names: {}, hidden: {},
+    mainStage: null, keeps: null});
+  assert.equal(timeLines(st).length, 0);
+});
 check("no photo: an initials disc; with a photo: an overlay spot instead", () => {
   const none = strip();
   const all = none.lines.join("\n");
