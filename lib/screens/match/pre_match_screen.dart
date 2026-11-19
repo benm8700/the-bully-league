@@ -4,6 +4,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:bully_league/core/camera_mic_permission.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
@@ -168,12 +169,7 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     // already running"), and nothing caught it.
     Map<Permission, PermissionStatus> statuses;
     try {
-      // Long bound: the OS "Allow?" dialog waits on a PERSON, and a 30s
-      // limit failed anyone who paused on it (found 2026-11-18).
-      statuses = await [
-        Permission.camera,
-        Permission.microphone,
-      ].request().timeout(const Duration(minutes: 3));
+      statuses = await requestCameraMic();
     } catch (e) {
       debugPrint('PRECHECK: permission request failed: $e');
       // The request may have stalled while the answer was still given (or
@@ -214,7 +210,9 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     }
     try {
       debugPrint('PRECHECK: initializing video engine');
-      await _videoCallService.initialize();
+      await _videoCallService.initialize().timeout(
+        const Duration(seconds: 20),
+      );
       debugPrint('PRECHECK: video engine ready');
       final myUid = FirebaseAuth.instance.currentUser?.uid;
       if (myUid == null) {
@@ -416,10 +414,13 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
         // instead of walking into a dead match.
         final status = result.data['status'];
         if (status == 'abandoned' || status == 'completed') {
+          // Not "timed out": most often the other player backed out
+          // (found 2026-11-19), and saying it timed out reads as a bug.
           setState(
-            () => _error =
-                'That battle timed out before you got here. Challenge them '
-                'again from Roast a friend.',
+            () => _error = status == 'completed'
+                ? 'That battle is already over.'
+                : 'That battle was called off before it started. '
+                      'Challenge them again from Roast a friend.',
           );
           return;
         }

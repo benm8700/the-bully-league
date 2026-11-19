@@ -324,6 +324,17 @@ function remapSpans(spans, keeps) {
 }
 
 /**
+ * Seconds from the recording start (t0) to the first turn - the moment
+ * round 1 goes live. null when the log has no live turn.
+ */
+function firstTurnOffsetSec(log, t0Ms) {
+  if (!log || !Array.isArray(log.events) || !Number.isFinite(t0Ms)) return null;
+  const first = log.events.find((e) => e && e.f && !e.o);
+  if (!first || !Number.isFinite(Number(first.t))) return null;
+  return (Number(first.t) - t0Ms) / 1000;
+}
+
+/**
  * Turns the stored log into timed battle states on the clip's original
  * timeline (seconds from the recording start).
  */
@@ -386,23 +397,30 @@ function tickSpans(stateSpans) {
     }
     const base = st.kind === "chess" ?
       (st.floor === 1 ? st.clocks.p1 : st.clocks.p2) : st.holderMs;
-    let t = s.start;
-    while (t < s.end - 0.001) {
-      const elapsedMs = (t - s.start) * 1000;
+    // Integer milliseconds from the span start. The old float version
+    // recomputed elapsed time from `t - s.start`, which lands a hair short
+    // of each tick (0.99899... for 999ms); with a 14999ms start that read as
+    // "no time passed", ended the loop, and froze the clock at 0:15 for the
+    // whole turn (seen 2026-11-19, iPhone vs emulator).
+    const spanMs = Math.round((s.end - s.start) * 1000);
+    let elapsedMs = 0;
+    while (elapsedMs < spanMs - 1) {
       const rem = Math.max(0, base - elapsedMs);
-      // Next moment the shown second changes.
       const shown = Math.ceil(rem / 1000);
-      const changeAtMs = shown <= 0 ? Infinity : base - (shown - 1) * 1000;
-      const next = Math.min(s.end, s.start + changeAtMs / 1000);
-      const remMs = rem;
-      const state = {...st, holderMs: remMs, clocks: {...st.clocks}};
+      // Elapsed time at which the shown second next changes.
+      const changeAtMs = shown <= 0 ? spanMs : base - (shown - 1) * 1000;
+      const nextMs = Math.min(spanMs, Math.max(changeAtMs, elapsedMs + 1));
+      const state = {...st, holderMs: rem, clocks: {...st.clocks}};
       if (st.kind === "chess") {
-        if (st.floor === 1) state.clocks.p1 = remMs;
-        else state.clocks.p2 = remMs;
+        if (st.floor === 1) state.clocks.p1 = rem;
+        else state.clocks.p2 = rem;
       }
-      out.push({start: t, end: next <= t ? s.end : next, state});
-      if (next <= t) break;
-      t = next;
+      out.push({
+        start: s.start + elapsedMs / 1000,
+        end: nextMs >= spanMs ? s.end : s.start + nextMs / 1000,
+        state,
+      });
+      elapsedMs = nextMs;
     }
   }
   return out;
@@ -607,6 +625,7 @@ function buildStripAss(opts) {
 }
 
 module.exports = {
+  firstTurnOffsetSec,
   STRIP,
   avatarSpots,
   sanitiseTurnLog,

@@ -575,6 +575,10 @@ function buildFfmpegArgs(timeline, localDir, outputPath, options = {}) {
     "-filter_complex", filters.join(";"),
     "-map", "[vout]",
     ...(audioLabels.length > 0 ? ["-map", "[aout]"] : []),
+    // Pinned: the trim's select/setpts drops the stream's frame rate, and
+    // the encoder then fell back to 25fps, dropping one frame in six from a
+    // 30fps clip (found 2026-11-19 on the first start-on-round-1 render).
+    "-r", String(OUTPUT_FPS),
     "-c:v", "libx264",
     "-preset", "veryfast",
     "-crf", "23",
@@ -1256,11 +1260,29 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
       duration = Math.max(duration,
           seg.offsetMs / 1000 + sumExtinfSeconds(text));
     }
+    const {planKeeps, remapCues, removedSeconds, buildTrimFilters,
+      applyHeadCut} = require("./trimSilence");
+    let keeps = null;
     if (captions && transcript.words.length > 0) {
-      const {planKeeps, remapCues, removedSeconds, buildTrimFilters} =
-        require("./trimSilence");
-      const keeps = planKeeps(transcript.words,
+      keeps = planKeeps(transcript.words,
           {duration, failures: transcript.failures});
+      if (!buildTrimFilters(keeps, duration) && duration <= 0) {
+        warnings.push("clip duration could not be measured, so dead air " +
+          "was left in");
+      }
+    }
+    // START ON ROUND 1 (2026-11-19, developer's call). The recording runs a
+    // few seconds before the first turn so each phone's camera is warmed up;
+    // the clip cuts that lead-in off, so viewers never see the iPhone's
+    // start-up stutter or an empty countdown.
+    if (duration > 0) {
+      const {firstTurnOffsetSec} = require("./clipStrip");
+      const head = firstTurnOffsetSec(snap.data().turnLog, timeline.t0);
+      if (head != null && head > 0.3) {
+        keeps = applyHeadCut(keeps, duration, head);
+      }
+    }
+    if (keeps) {
       trimFilters = buildTrimFilters(keeps, duration);
       if (trimFilters) {
         trimKeeps = keeps;
@@ -1270,9 +1292,6 @@ async function renderMatchHighlight(matchId, {captions = true, blurUids = []} = 
         // of sync with every cut, and a clip whose subtitles lag the
         // mouth looks broken rather than merely unsubtitled.
         cues = remapCues(cues, keeps);
-      } else if (duration <= 0) {
-        warnings.push("clip duration could not be measured, so dead air " +
-          "was left in");
       }
     }
 

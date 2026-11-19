@@ -14,9 +14,18 @@ it quotes can't drift out of sync. Tick items off as they're settled.
 
 - [ ] **Google Play Developer account** ($25, one-off). Needs your own
       Google account — nobody can create it for you.
-- [ ] **Play Console listing + internal testing track**: content rating
-      questionnaire, data safety section, upload the signed AAB, invite
-      testers by email.
+- [x] Google Play Developer account + app created (`com.bullyleague.app`,
+      2026-11-19). Signed build 10 AAB uploaded to internal testing.
+- [ ] **ANDROID IS PARKED UNTIL THE iPHONE LAUNCH IS CLOSE (developer's
+      call, 2026-11-19: no Android beta; Android was the main dev/test
+      platform all along).** The one required step: Google makes new
+      personal accounts run a **closed test with 12 testers for 14 days**
+      before production. It is a box-tick, not a beta: text 12 friends one
+      opt-in link, they install it and leave it, nobody reports anything.
+      **Start it ~2 weeks before the planned iPhone launch** so both stores
+      open together. Same window: finish the Play setup tasks (answers are
+      ready in `PLAY_LISTING.md`) and upload a fresh AAB. Claude does the
+      setup; the developer's part is about 10 minutes.
 - [ ] **⚠️ THE MOMENT THE LISTING GOES LIVE: link the website's download
       button.** Set `NEXT_PUBLIC_APP_STORE_URL` to the Play listing URL in
       Vercel → Project Settings → Environment Variables (Production +
@@ -35,6 +44,16 @@ it quotes can't drift out of sync. Tick items off as they're settled.
       spectator playback and the audience view. Cloudflare Stream is the
       simpler pick: flat ~$1 per 1,000 delivered minutes, live included, no
       separate encoding bill. Needs an account ID and an API token.
+- [x] **iPhone public beta (2026-11-19)**: TestFlight public link
+      https://testflight.apple.com/join/pg5V9VhC (External group "Beta").
+      The website's download button defaults to it (`website/src/components/
+      StoreCta.tsx`, "Join the iPhone beta"), and every friend-invite text
+      links to the website, so each invite is also a beta invite. At App
+      Store launch set `NEXT_PUBLIC_APP_STORE_URL` in Vercel; it wins.
+- [ ] **Delete test accounts before App Store submission**: JudgeTestA/B/C,
+      timmy, InviteTest1 (made 2026-11-19 with Firebase test number
+      +1 650 555 1235 for the invite test) and any other test logins.
+      NEVER the friend tester (uid npX3HjNEwPWDBzGSzkiiOyGlxJJ2).
 - [ ] **Real legal review** of the Terms/Privacy page. It is live at
       `/legal` and marked on the page itself as a non-lawyer-reviewed
       placeholder. It is accurate to the product, which is a different

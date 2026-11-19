@@ -469,17 +469,43 @@ class _BattleCard extends StatelessWidget {
     required this.matchId,
     required this.match,
     required this.onChanged,
+    this.live = false,
   });
 
   final String uid;
   final String matchId;
   final Map<String, dynamic> match;
 
+  /// True when this card is already the live (listening) copy.
+  final bool live;
+
   /// Called after the clip sheet closes, so the list refreshes in place.
   final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
+    // A claimed clip still rendering: watch this one battle so the button
+    // flips from "Clip coming..." to "Watch clip" the moment it lands. The
+    // lists are one-off reads, so before this the card stayed on "Clip
+    // coming..." after the clip-ready pop-up until something refetched
+    // (developer's iPhone, 2026-11-19). Only pending cards listen.
+    final claimedNow =
+        (match['clipGrants'] as Map<String, dynamic>?)?[uid] != null;
+    if (!live && claimedNow && !clipReady(match)) {
+      return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('matches')
+            .doc(matchId)
+            .snapshots(),
+        builder: (context, snap) => _BattleCard(
+          uid: uid,
+          matchId: matchId,
+          match: snap.data?.data() ?? match,
+          onChanged: onChanged,
+          live: true,
+        ),
+      );
+    }
     final player1Id = match['player1Id'] as String? ?? '';
     final player2Id = match['player2Id'] as String? ?? '';
     final status = match['status'] as String? ?? 'pending';

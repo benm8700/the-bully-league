@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:bully_league/core/camera_mic_permission.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/services/agora_video_service.dart';
@@ -114,7 +115,12 @@ class _TutorialScreenState extends State<TutorialScreen> {
 
   /// Starts the local camera only - no channel is joined, so this is free.
   Future<void> _startCamera() async {
-    final statuses = await [Permission.camera, Permission.microphone].request();
+    Map<Permission, PermissionStatus> statuses;
+    try {
+      statuses = await requestCameraMic();
+    } catch (_) {
+      statuses = const {};
+    }
     final granted =
         (statuses[Permission.camera]?.isGranted ?? false) &&
         (statuses[Permission.microphone]?.isGranted ?? false);

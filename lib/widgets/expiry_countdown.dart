@@ -40,6 +40,12 @@ class _ExpiryCountdownState extends State<ExpiryCountdown> {
   }
 
   static String label(Duration left) {
+    // Phone-invite challenges last 7 days: "7 days" reads better than
+    // "167h 59m" (2026-11-19).
+    if (left.inHours >= 48) {
+      final d = (left.inMinutes / (60 * 24)).round();
+      return '$d days';
+    }
     if (left.inMinutes >= 5) {
       final h = left.inHours;
       final m = left.inMinutes % 60;

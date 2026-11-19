@@ -216,7 +216,31 @@ function buildTrimFilters(keeps, duration) {
   };
 }
 
+/**
+ * Drops everything before `cutSec` from a keep plan (an empty/missing plan
+ * means "the whole clip"). Used to start a clip right on round 1: the
+ * recording starts a few seconds early so each phone's camera can warm up,
+ * and an iPhone's stream stutters then catches up at double speed in that
+ * warm-up (seen 2026-11-19) - so the clip cuts it off. Returns the input
+ * unchanged when the cut is not usable.
+ */
+function applyHeadCut(keeps, duration, cutSec) {
+  const total = Number(duration);
+  const cut = Number(cutSec);
+  const base = Array.isArray(keeps) && keeps.length > 0 ?
+    keeps : [{start: 0, end: total}];
+  if (!Number.isFinite(total) || total <= 0 ||
+      !Number.isFinite(cut) || cut <= 0 || cut >= total - 1) return base;
+  const out = [];
+  for (const k of base) {
+    if (k.end <= cut) continue;
+    out.push({start: Math.max(k.start, cut), end: k.end});
+  }
+  return out.length > 0 ? out : base;
+}
+
 module.exports = {
+  applyHeadCut,
   planKeeps,
   remapTime,
   remapCues,

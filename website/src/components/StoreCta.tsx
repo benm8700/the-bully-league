@@ -17,13 +17,19 @@
  * now and activating it is one Vercel setting rather than a code change
  * and a deploy.
  */
+/** The public TestFlight beta (2026-11-19). Every friend-invite text links
+ * to this site, so during the beta the button joins the beta. Set
+ * NEXT_PUBLIC_APP_STORE_URL to the App Store listing at launch and it wins. */
+const BETA_URL = "https://testflight.apple.com/join/pg5V9VhC";
+
 export function StoreCta({
   variant = "block",
 }: {
   variant?: "block" | "inline";
 }) {
-  const url = process.env.NEXT_PUBLIC_APP_STORE_URL;
+  const url = process.env.NEXT_PUBLIC_APP_STORE_URL || BETA_URL;
   const live = Boolean(url);
+  const isBeta = url.includes("testflight.apple.com");
 
   const base =
     "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all";
@@ -49,8 +55,8 @@ export function StoreCta({
       className={`${base} ${size} text-white hover:opacity-90`}
       style={{ background: "var(--primary)", boxShadow: "0 8px 24px rgba(234,76,109,0.35)" }}
     >
-      <AndroidGlyph />
-      Get The Bully League
+      <AppleGlyph />
+      {isBeta ? "Join the iPhone beta" : "Get The Bully League"}
     </a>
   );
 }

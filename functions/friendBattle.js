@@ -279,6 +279,45 @@ async function challengeFriend(auth, data) {
 }
 
 /**
+ * Ends (no contest) every still-pending friend match between `a` and `b`
+ * other than `keepId`. Uses the (player1Id, createdAt) index My Battles
+ * already declares; mode/status/opponent are filtered in code.
+ */
+async function supersedeOldFriendMatches(db, a, b, keepId) {
+  const stale = [];
+  for (const [field, me, other] of [
+    ["player1Id", a, b], ["player1Id", b, a],
+  ]) {
+    const snap = await db.collection("matches")
+        .where(field, "==", me)
+        .orderBy("createdAt", "desc")
+        .limit(10)
+        .get();
+    for (const d of snap.docs) {
+      const m = d.data();
+      if (d.id === keepId) continue;
+      if (m.mode !== "friend" || m.status !== "pending") continue;
+      if (m.player2Id !== other) continue;
+      stale.push(d.ref);
+    }
+  }
+  for (const r of stale) {
+    await db.runTransaction(async (tx) => {
+      const fresh = await tx.get(r);
+      if (!fresh.exists || fresh.data().status !== "pending") return;
+      tx.update(r, {
+        status: "abandoned",
+        voteFinalized: true,
+        winnerId: null,
+        abandonedReason: "superseded",
+        completedAt: new Date(),
+      });
+    });
+  }
+  return stale.length;
+}
+
+/**
  * Accept or decline a challenge sent to you.
  *
  * Accepting creates the match; declining just closes it. There is no
@@ -348,6 +387,16 @@ async function respondToChallenge(auth, data) {
   });
 
   await ref.update({status: "accepted", respondedAt: nowMs, matchId});
+
+  // A NEW battle between the same two people supersedes any older one that
+  // never finished. Found 2026-11-19 (iPhone vs emulator): a battle died
+  // after both tapped Ready, so it never got swept (getActiveMatch treats
+  // "both ready" as underway), and Home's rejoin banner kept handing the
+  // dead one back - each phone sat in a different battle waiting for the
+  // other. Two people can't be in two battles with each other at once, so
+  // the older one is dead by definition.
+  await supersedeOldFriendMatches(db, challenge.fromUid, uid, matchId)
+      .catch((e) => console.error("supersede old friend matches:", e.message));
 
   // Tells the challenger their challenge was taken up, which is the whole
   // point of having sent it - without this they would have to keep

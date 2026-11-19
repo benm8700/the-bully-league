@@ -236,4 +236,15 @@ check("the strip outlasts the measured length (audio runs longer than video)", (
   assert.ok(!trimmed.lines.some((l) => l.split(",")[2] === "0:01:00.00"), "trimmed clip not padded");
 });
 
+check("a 14999ms turn still ticks every second (float freeze, 2026-11-19)", () => {
+  for (const base of [15000, 14999, 14001, 9871]) {
+    const out = tickSpans([{start: 10.2, end: 25.2,
+      state: {phase: "live", kind: "rounds", holderMs: base, clocks: {}}}]);
+    for (let i = 0; i < out.length - 1; i++) {
+      assert.ok(out[i].end - out[i].start <= 1.001, `frozen at ${base}`);
+    }
+    assert.ok(out.length >= Math.ceil(base / 1000));
+  }
+});
+
 console.log(`clipStrip: ${n} checks passed`);
