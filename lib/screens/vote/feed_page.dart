@@ -38,6 +38,8 @@ class FeedPage extends StatefulWidget {
     super.key,
     required this.match,
     required this.isActive,
+    this.watchedToEnd = false,
+    this.onWatchedToEnd,
     required this.onVote,
     required this.onCall,
   });
@@ -48,6 +50,11 @@ class FeedPage extends StatefulWidget {
   /// PageView keeps neighbours alive, so without this three clips would be
   /// running at once.
   final bool isActive;
+
+  /// Already watched to the end earlier this session (the page was rebuilt,
+  /// e.g. swiping back to retry a failed vote) - voting is open straight away.
+  final bool watchedToEnd;
+  final VoidCallback? onWatchedToEnd;
 
   /// Casts a real ballot - a per-round map {roundIndex: winnerId}, plus the
   /// required per-player emoji ratings {playerId: emojiKey}. False result means
@@ -96,7 +103,7 @@ class _FeedPageState extends State<FeedPage> {
 
   // The emoji rating boxes only come up once the battle has been watched to
   // the END, and step aside while it plays again (developer, 2026-11-17).
-  bool _seenEnd = false;
+  late bool _seenEnd = widget.watchedToEnd;
   bool _playing = false;
 
   /// The single overall winner the judge picked, by tapping that player's
@@ -186,7 +193,11 @@ class _FeedPageState extends State<FeedPage> {
     if (_bubbleFor != null && mounted) setState(() => _bubbleFor = null);
   }
 
+  bool _followBusy = false;
+
   Future<void> _toggleFollow(String uid, bool following) async {
+    if (_followBusy) return;
+    _followBusy = true;
     _bubbleClose?.cancel();
     try {
       if (following) {
@@ -202,6 +213,8 @@ class _FeedPageState extends State<FeedPage> {
           const SnackBar(content: Text("Couldn't update that. Try again.")),
         );
       }
+    } finally {
+      _followBusy = false;
     }
   }
 
@@ -331,7 +344,10 @@ class _FeedPageState extends State<FeedPage> {
         _progress = next;
         _ended = ended;
         _playing = playing;
-        if (ended) _seenEnd = true;
+        if (ended && !_seenEnd) {
+          _seenEnd = true;
+          widget.onWatchedToEnd?.call();
+        }
       });
     }
   }
@@ -860,8 +876,9 @@ class _FeedPageState extends State<FeedPage> {
     final insetBottom = MediaQuery.of(context).padding.bottom;
 
     // Nothing picked: nothing shown (developer, 2026-11-18: no "Tap the
-    // winner" prompt - picking a half is obvious).
-    if (winner == null) return const SizedBox.shrink();
+    // winner" prompt - picking a half is obvious). Also stepped aside while
+    // a follow bubble is open, which it would otherwise cover.
+    if (winner == null || _bubbleFor != null) return const SizedBox.shrink();
 
     final isP1 = winner == m.player1Id;
     final name = isP1 ? m.player1Username : m.player2Username;
@@ -1002,6 +1019,7 @@ class _FeedPageState extends State<FeedPage> {
             final name = i == 0 ? m.player1Username : m.player2Username;
             // A hair larger than the burned photo so no edge of it peeks out.
             return Positioned(
+              key: ValueKey('pic$i'),
               left: map.x(_kAvatarLeft) - 1,
               top: map.y(clipY) - 1,
               child: GestureDetector(
@@ -1030,6 +1048,7 @@ class _FeedPageState extends State<FeedPage> {
           // gate). Tap to rate, tap again to clear. Only while judging.
           final rating = widget.match.canVote && _chosenPlayerId == null;
           Widget emojis(int i, double clipY) => Positioned(
+            key: ValueKey('emojis$i'),
             left: map.x(_kAvatarLeft + _kAvatarD) + 8,
             top: map.y(clipY) + d / 2 - _EmojiRow.height / 2,
             child: _EmojiRow(
@@ -1056,10 +1075,10 @@ class _FeedPageState extends State<FeedPage> {
             // top player's grows up from the picture's bottom edge, the
             // bottom player's down from its top edge.
             return Positioned(
+              key: ValueKey('bubble$i'),
               left: map.x(_kAvatarLeft + _kAvatarD) + 8,
-              top: i == 0
-                  ? map.y(clipY) + d - _FollowBubble.height
-                  : map.y(clipY),
+              top: i == 0 ? null : map.y(clipY),
+              bottom: i == 0 ? c.maxHeight - (map.y(clipY) + d) : null,
               child: _FollowBubble(
                 name: name,
                 color: i == 0 ? House.gelRed : House.gelBlue,
@@ -1080,6 +1099,7 @@ class _FeedPageState extends State<FeedPage> {
               // it (and does not pick a winner).
               if (open != null)
                 Positioned.fill(
+                  key: const ValueKey('bubbleDismiss'),
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: _closeBubble,
@@ -1671,8 +1691,6 @@ class _FollowBubble extends StatelessWidget {
     required this.onProfile,
   });
 
-  static const double height = 76;
-
   final String name;
   final Color color;
   final bool following;
@@ -1687,7 +1705,6 @@ class _FollowBubble extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: () {},
       child: Container(
-        height: height,
         constraints: BoxConstraints(
           maxWidth: MediaQuery.sizeOf(context).width * 0.66,
         ),

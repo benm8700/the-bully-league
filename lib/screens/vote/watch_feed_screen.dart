@@ -59,6 +59,11 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
   String? _error;
   int _index = 0;
   int _votesRemaining = 0;
+
+  /// Battles this judge has already watched to the end in this session, so
+  /// swiping back to one (e.g. to retry a failed vote) does not make them
+  /// sit through it again - the page itself is rebuilt fresh.
+  final Set<String> _watchedToEnd = {};
   bool _challenging = false;
 
   int? _cursorMs;
@@ -341,7 +346,19 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
     try {
       if (_votesRemaining <= 0) {
         final token = await _requestChallenge();
-        if (token == null) return false;
+        if (token == null) {
+          // Without this the Vote tap looked like it did nothing.
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  "The quick check didn't finish. Tap Vote to try again.",
+                ),
+              ),
+            );
+          }
+          return false;
+        }
         await _service.startSession(token);
         if (!mounted) return false;
         setState(() => _votesRemaining = 25);
@@ -350,6 +367,10 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
       // the moment Vote is tapped and send the ballot behind it, instead of
       // holding the judge on a "Casting your vote..." spinner. A failed
       // ballot says so in a snackbar and leaves that battle votable.
+      // Spend the session vote NOW, not after the server answers: with the
+      // instant advance a judge can vote on the next clip before this call
+      // returns, and a stale count would skip the session check.
+      setState(() => _votesRemaining -= 1);
       _advancePast(matchId);
       final reward = await _service.castVote(
         matchId: matchId,
@@ -358,7 +379,6 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
       );
       if (mounted) {
         setState(() {
-          _votesRemaining -= 1;
           // Mark this match judged in the source list so a feed page that
           // rebuilds (scrolled away and back) sees canVote:false and shows
           // the tally rather than re-offering the green pick controls on a
@@ -412,12 +432,26 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
       }
       return true;
     } catch (e) {
+      // Only offer a retry where one can work: not "already voted", not a
+      // closed window, not a participant.
+      var retry = true;
+      if (e is FirebaseFunctionsException) {
+        final details = e.details;
+        final tooFast = details is Map && details['reason'] == 'too-fast';
+        if (e.code == 'already-exists' ||
+            e.code == 'permission-denied' ||
+            (e.code == 'failed-precondition' && !tooFast)) {
+          retry = false;
+        }
+      }
       if (mounted) {
+        // The vote was spent optimistically; give it back.
+        setState(() => _votesRemaining += 1);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '${friendlyError(e, doing: 'casting your vote')} '
-              'Swipe back to vote again.',
+              '${friendlyError(e, doing: 'casting your vote')}'
+              '${retry ? ' Swipe back to vote again.' : ''}',
             ),
           ),
         );
@@ -695,6 +729,8 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
           isActive: i == _index && widget.isActiveTab && _appForeground,
           onVote: (picks, emojiRatings) =>
               _vote(match.matchId, picks, emojiRatings),
+          watchedToEnd: _watchedToEnd.contains(match.matchId),
+          onWatchedToEnd: () => _watchedToEnd.add(match.matchId),
           onCall: _recordCall,
         );
       },

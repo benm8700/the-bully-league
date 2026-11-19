@@ -166,21 +166,38 @@ class _PreMatchScreenState extends State<PreMatchScreen> {
     // forever and the video engine was never started, i.e. this request
     // never came back (or threw - e.g. permission_handler's "a request is
     // already running"), and nothing caught it.
-    final Map<Permission, PermissionStatus> statuses;
+    Map<Permission, PermissionStatus> statuses;
     try {
+      // Long bound: the OS "Allow?" dialog waits on a PERSON, and a 30s
+      // limit failed anyone who paused on it (found 2026-11-18).
       statuses = await [
         Permission.camera,
         Permission.microphone,
-      ].request().timeout(const Duration(seconds: 30));
+      ].request().timeout(const Duration(minutes: 3));
     } catch (e) {
       debugPrint('PRECHECK: permission request failed: $e');
-      if (!mounted) return;
-      setState(
-        () => _error =
-            "Couldn't check camera and microphone access. Close the app "
-            'fully, reopen it and try again.',
-      );
-      return;
+      // The request may have stalled while the answer was still given (or
+      // was given earlier) - read the current state before giving up.
+      try {
+        statuses = {
+          Permission.camera: await Permission.camera.status,
+          Permission.microphone: await Permission.microphone.status,
+        };
+      } catch (_) {
+        statuses = const {};
+      }
+      final ok =
+          (statuses[Permission.camera]?.isGranted ?? false) &&
+          (statuses[Permission.microphone]?.isGranted ?? false);
+      if (!ok) {
+        if (!mounted) return;
+        setState(
+          () => _error =
+              "Couldn't check camera and microphone access. Close the app "
+              'fully, reopen it and try again.',
+        );
+        return;
+      }
     }
     debugPrint('PRECHECK: permission result $statuses');
     final granted =
