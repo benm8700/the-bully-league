@@ -46,6 +46,8 @@ class _ContactsInviteScreenState extends State<ContactsInviteScreen> {
   List<_Row> _others = const [];
   String _query = '';
   String? _error;
+  // iOS "select contacts" (limited access): offer a way to change the pick.
+  bool _limited = false;
 
   @override
   void initState() {
@@ -58,6 +60,7 @@ class _ContactsInviteScreenState extends State<ContactsInviteScreen> {
     try {
       final s = await FlutterContacts.permissions.check(PermissionType.read);
       if (s == PermissionStatus.granted || s == PermissionStatus.limited) {
+        _limited = s == PermissionStatus.limited;
         _load();
       }
     } catch (_) {}
@@ -71,6 +74,7 @@ class _ContactsInviteScreenState extends State<ContactsInviteScreen> {
         if (mounted) setState(() => _stage = _Stage.denied);
         return;
       }
+      _limited = s == PermissionStatus.limited;
       await _load();
     } catch (_) {
       if (mounted) setState(() => _stage = _Stage.denied);
@@ -200,11 +204,6 @@ class _ContactsInviteScreenState extends State<ContactsInviteScreen> {
         ),
         const SizedBox(height: 24),
         point(
-          Icons.lock_outline,
-          'Numbers are scrambled on your phone before anything is sent. We '
-              'never see or keep your contact list.',
-        ),
-        point(
           Icons.person_off_outlined,
           'Names and emails never leave your phone.',
         ),
@@ -267,8 +266,39 @@ class _ContactsInviteScreenState extends State<ContactsInviteScreen> {
         Expanded(
           child: ListView(
             children: [
+              if (_limited)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Showing only the contacts you picked.',
+                          style: text.bodySmall,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            FlutterContacts.permissions.openSettings(),
+                        child: const Text('Choose different contacts'),
+                      ),
+                    ],
+                  ),
+                ),
+              _header(text, 'On The Bully League'),
+              if (members.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Text(
+                    _query.isEmpty
+                        ? "None of your contacts are on The Bully League yet. "
+                              'Invite them below - your challenge will be '
+                              'waiting when they join.'
+                        : 'No matches.',
+                    style: text.bodySmall,
+                  ),
+                ),
               if (members.isNotEmpty) ...[
-                _header(text, 'On The Bully League'),
                 ...members.map(
                   (r) => ListTile(
                     leading: CircleAvatar(

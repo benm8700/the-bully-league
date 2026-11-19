@@ -38,9 +38,7 @@ class PrivacyScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: Text(
-                  'Your phone number is never shown to anyone. When a friend '
-                  'looks for contacts, their phone only sends scrambled codes, '
-                  'and we never keep their contact list.',
+                  'Your phone number is never shown to anyone.',
                   style: text.bodySmall,
                 ),
               ),

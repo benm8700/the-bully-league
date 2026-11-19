@@ -406,20 +406,36 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                // ONE BOX (2026-11-10): a phone number or a username. _send
-                // tells them apart. A number on an account gets the challenge
-                // in-app; a number with no account opens a text invite, and
-                // the challenge waits for them when they sign up with it.
+                // CONTACTS FIRST (2026-11-19, developer: the fastest way to
+                // spread the app must be the most obvious thing here). The big
+                // pink button opens "Friends from contacts" (members get
+                // Challenge, everyone else Invite - hashed lookup only, see
+                // ContactsInviteScreen). The ONE BOX below is the fallback: a
+                // phone number, username or email, which _send tells apart; a
+                // number with no account opens a text invite and the challenge
+                // waits for them when they sign up with it.
                 Text('Who are you roasting?', style: text.titleMedium),
                 const SizedBox(height: 4),
                 Text(
-                  "Enter a friend's phone number, username or email. If they "
-                  "aren't on The Bully League yet, we'll text them a link to "
-                  'join, and your challenge will be waiting. Strangers judge '
-                  'it and tell you who won. It never touches your rank.',
+                  "Pick a friend from your contacts. If they aren't on The "
+                  "Bully League yet, we'll text them a link to join, and your "
+                  'challenge will be waiting. Strangers judge it and tell you '
+                  'who won. It never touches your rank.',
                   style: text.bodySmall,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
+                NeonActionButton(
+                  label: 'Find friends from contacts',
+                  icon: Icons.contacts_rounded,
+                  busy: _busy,
+                  onPressed: _fromContacts,
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  'Or type a phone number, username or email',
+                  style: text.labelMedium,
+                ),
+                const SizedBox(height: 8),
                 TextField(
                   controller: _controller,
                   textInputAction: TextInputAction.send,
@@ -433,22 +449,12 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                   onSubmitted: (_) => _send(),
                 ),
                 const SizedBox(height: 12),
-                const SizedBox(height: 6),
-                NeonActionButton(
-                  label: 'Send challenge',
-                  busy: _busy,
-                  onPressed: _send,
-                ),
-                const SizedBox(height: 10),
-                // Friends from contacts (2026-11-19): members first with
-                // Challenge, everyone else with Invite. Hashed lookup only -
-                // see ContactsInviteScreen.
                 OutlinedButton.icon(
-                  onPressed: _busy ? null : _fromContacts,
-                  icon: const Icon(Icons.contacts_outlined),
-                  label: const Text('Find friends from contacts'),
+                  onPressed: _busy ? null : () => _send(),
+                  icon: const Icon(Icons.local_fire_department_rounded),
+                  label: const Text('Send challenge'),
                   style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
+                    minimumSize: const Size.fromHeight(50),
                   ),
                 ),
                 if (_error != null) ...[
