@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:video_player/video_player.dart';
 
 /// THE app-wide playback bar for recorded video (developer, 2026-11-09: "no
@@ -38,8 +39,77 @@ class ClipScrubber extends StatefulWidget {
   State<ClipScrubber> createState() => ClipScrubberState();
 }
 
-class ClipScrubberState extends State<ClipScrubber> {
+class ClipScrubberState extends State<ClipScrubber>
+    with SingleTickerProviderStateMixin {
   double? _dragFraction; // non-null while the finger is down
+
+  // SMOOTH MOTION (developer, 2026-11-18: the bar looked "erratic").
+  // video_player only reports the position every ~0.5s, so the bar and
+  // handle used to hop in steps. Between reports we extrapolate from the
+  // last one with a per-frame ticker, so they glide at the frame rate.
+  late final Ticker _ticker;
+  Duration _basePos = Duration.zero;
+  final Stopwatch _sinceBase = Stopwatch();
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker((_) {
+      if (mounted) setState(() {});
+    });
+    widget.controller.addListener(_onValue);
+    _onValue();
+  }
+
+  @override
+  void didUpdateWidget(ClipScrubber oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onValue);
+      widget.controller.addListener(_onValue);
+      _onValue();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onValue);
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  void _onValue() {
+    final v = widget.controller.value;
+    if (v.position != _basePos) {
+      _basePos = v.position;
+      _sinceBase
+        ..reset()
+        ..start();
+    }
+    final playing = v.isPlaying && !v.isBuffering;
+    if (playing && !_ticker.isActive) {
+      _sinceBase
+        ..reset()
+        ..start();
+      _ticker.start();
+    } else if (!playing && _ticker.isActive) {
+      _ticker.stop();
+    }
+  }
+
+  /// The position to draw: the last reported one, carried forward by the
+  /// time since while playing (never more than one report interval ahead).
+  Duration get _smoothPos {
+    final v = widget.controller.value;
+    if (!v.isPlaying || v.isBuffering) return v.position;
+    final ahead = Duration(
+      milliseconds: (_sinceBase.elapsedMilliseconds * v.playbackSpeed)
+          .round()
+          .clamp(0, 700),
+    );
+    final p = _basePos + ahead;
+    return p > v.duration ? v.duration : p;
+  }
 
   Duration get _rangeEnd {
     final total = widget.controller.value.duration;
@@ -55,7 +125,7 @@ class ClipScrubberState extends State<ClipScrubber> {
   double _fractionNow() {
     final len = _length.inMilliseconds;
     if (len == 0) return 0;
-    final pos = widget.controller.value.position - widget.start;
+    final pos = _smoothPos - widget.start;
     return (pos.inMilliseconds / len).clamp(0.0, 1.0);
   }
 
@@ -161,8 +231,7 @@ class ClipScrubberState extends State<ClipScrubber> {
                     Positioned(
                       left: 0,
                       top: _trackY - (dragging ? 4 : 2.5),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 120),
+                      child: Container(
                         height: dragging ? 8 : 5,
                         width: w * f,
                         decoration: BoxDecoration(

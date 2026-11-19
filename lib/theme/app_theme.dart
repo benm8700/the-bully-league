@@ -453,14 +453,27 @@ ThemeData _build({
         ),
       ),
     ),
+    // Neon notices (developer, 2026-11-18): every snackbar is a dark glass
+    // card with a thin pink neon edge, matching NeonDialog / NeonNote.
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: scheme.inverseSurface,
+      backgroundColor: const Color(0xFF17111F),
       contentTextStyle: TextStyle(
         fontFamily: bodyFont,
-        color: scheme.onInverseSurface,
+        color: Colors.white,
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
       ),
+      actionTextColor: const Color(0xFFFF2E7E),
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(r)),
+      elevation: 8,
+      insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: const Color(0xFFFF2E7E).withValues(alpha: 0.6),
+          width: 1.2,
+        ),
+      ),
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
       color: scheme.primary,

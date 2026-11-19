@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import '../../widgets/clip_scrubber.dart';
 
 import '../../core/emoji_ratings.dart';
 import '../../core/services/clip_cache.dart';
@@ -15,6 +14,7 @@ import '../moderation/report_screen.dart';
 import '../profile/performer_profile_screen.dart';
 import '../../widgets/live_tally.dart';
 import '../../widgets/neon_dialog.dart';
+import '../../widgets/neon_note.dart';
 import '../../widgets/player_avatar.dart';
 
 /// One battle, full screen. You watch the clip, then pick the overall winner
@@ -68,8 +68,11 @@ class FeedPage extends StatefulWidget {
 /// default three rounds this lands inside the final one.
 const _revealAfter = 0.65;
 
-/// Height of the bottom scrubber strip; bottom overlays sit above it.
-const _scrubH = 62.0;
+/// Gap between the bottom edge and the bottom overlays. The Judge feed has
+/// no scrubber (developer, 2026-11-18: judges watch it once, through - a
+/// scrubber let them drag to the end to unlock the vote, and took space
+/// from the faces). It plays once, holds the last frame, offers a replay.
+const _scrubH = 12.0;
 
 /// Half the burned-in clip strip's height as a fraction of the clip height
 /// (55px of 1920), measured from the seam: the picked half's outline sits
@@ -282,6 +285,21 @@ class _FeedPageState extends State<FeedPage> {
         if (ended) _seenEnd = true;
       });
     }
+  }
+
+  bool _heldPause = false;
+
+  void _holdPause() {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized || !c.value.isPlaying) return;
+    _heldPause = true;
+    c.pause();
+  }
+
+  void _holdResume() {
+    if (!_heldPause) return;
+    _heldPause = false;
+    if (mounted && widget.isActive) _controller?.play();
   }
 
   @override
@@ -601,105 +619,100 @@ class _FeedPageState extends State<FeedPage> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    return ColoredBox(
-      color: Colors.black,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (controller != null)
-            FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: controller.value.size.width,
-                height: controller.value.size.height,
-                child: VideoPlayer(controller),
-              ),
-            )
-          else
-            Center(
-              child: _failed
-                  ? const Text(
-                      'This clip could not be loaded.',
-                      style: TextStyle(color: Colors.white70),
-                    )
-                  : const CircularProgressIndicator(),
-            ),
-          // A subtle top scrim: the feed runs full-bleed under the system
-          // status bar, so its icons and the header chip need a dark wash to
-          // stay legible over a bright clip.
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: IgnorePointer(
-              child: Container(
-                height: MediaQuery.of(context).padding.top + 56,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0x99000000), Color(0x00000000)],
-                  ),
+    // Hold anywhere on the clip to pause, let go to carry on (developer,
+    // 2026-11-18) - a quick tap still picks the winner. On the outermost
+    // widget so it sees presses over every layer.
+    return GestureDetector(
+      onLongPressStart: (_) => _holdPause(),
+      onLongPressEnd: (_) => _holdResume(),
+      onLongPressCancel: _holdResume,
+      child: ColoredBox(
+        color: Colors.black,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (controller != null)
+              FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: controller.value.size.width,
+                  height: controller.value.size.height,
+                  child: VideoPlayer(controller),
                 ),
+              )
+            else
+              Center(
+                child: _failed
+                    ? const Text(
+                        'This clip could not be loaded.',
+                        style: TextStyle(color: Colors.white70),
+                      )
+                    : const CircularProgressIndicator(),
               ),
-            ),
-          ),
-          // Tap a roaster's HALF of the clip to pick the overall winner - the
-          // selection IS the video box, so nothing covers the faces. Sits
-          // under the buttons below (they win their own taps). FACE-OFF skips
-          // this: its clip is SEQUENTIAL (one full-frame set then the other),
-          // so there are no top/bottom halves to tap - it uses explicit
-          // red/blue winner buttons in the panel below instead.
-          if (!_isImprov && _canAct && _chosenPlayerId == null)
-            _winnerSelectLayer(context),
-          // The roasters' pictures, on top of the pick layer so a tap opens
-          // the name + Follow card instead of picking a winner.
-          // Only once the clip is showing - never floating on a black screen.
-          if (!_isImprov &&
-              controller != null &&
-              controller.value.isInitialized)
-            _playerPictures(context),
-          // The app-wide scrubber (replaces the old rewind-10 button):
-          // drag back to re-hear a line, anywhere in the clip.
-          if (controller != null)
+            // A subtle top scrim: the feed runs full-bleed under the system
+            // status bar, so its icons and the header chip need a dark wash to
+            // stay legible over a bright clip.
             Positioned(
+              top: 0,
               left: 0,
               right: 0,
-              bottom: MediaQuery.of(context).padding.bottom,
-              child: Container(
-                height: _scrubH,
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 2),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0x00000000), Color(0x99000000)],
+              child: IgnorePointer(
+                child: Container(
+                  height: MediaQuery.of(context).padding.top + 56,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x99000000), Color(0x00000000)],
+                    ),
                   ),
                 ),
-                alignment: Alignment.bottomCenter,
-                child: ClipScrubber(
-                  controller: controller,
-                  onSeekEnd: () {
-                    if (!controller.value.isPlaying) controller.play();
-                    if (_ended) setState(() => _ended = false);
+              ),
+            ),
+            // Tap a roaster's HALF of the clip to pick the overall winner - the
+            // selection IS the video box, so nothing covers the faces. Sits
+            // under the buttons below (they win their own taps). FACE-OFF skips
+            // this: its clip is SEQUENTIAL (one full-frame set then the other),
+            // so there are no top/bottom halves to tap - it uses explicit
+            // red/blue winner buttons in the panel below instead.
+            if (!_isImprov && _canAct && _chosenPlayerId == null)
+              _winnerSelectLayer(context),
+            // The roasters' pictures, on top of the pick layer so a tap opens
+            // the name + Follow card instead of picking a winner.
+            // Only once the clip is showing - never floating on a black screen.
+            if (!_isImprov &&
+                controller != null &&
+                controller.value.isInitialized)
+              _playerPictures(context),
+            // Replay, only once the clip has played to the end (no scrubber
+            // here, see _scrubH). Bottom-right, clear of the Vote pill.
+            if (controller != null && _ended)
+              Positioned(
+                right: 12,
+                bottom: MediaQuery.of(context).padding.bottom + _scrubH,
+                child: _ReplayButton(
+                  onTap: () {
+                    controller.seekTo(Duration.zero);
+                    controller.play();
+                    setState(() => _ended = false);
                   },
                 ),
               ),
-            ),
-          // The compact winner-confirm + Submit pill, once a half is picked.
-          // Face-Off uses its own bottom panel (sequential clip, explicit
-          // winner buttons) instead of the tap-the-half flow.
-          if (!_isImprov) _voteBox(context),
-          if (_isImprov && _canAct && _chosenPlayerId == null)
-            _improvVotePanel(context),
-          if (_resultShown) _resultBox(context),
-          _header(context),
-          // Only while judging (canVote hides the top-left _header, so no
-          // overlap); on an archive clip the vote-count chip takes that corner.
-          if (widget.match.canVote && _chosenPlayerId == null)
-            _kindBadge(context),
-          _stripReportFlag(context),
-        ],
+            // The compact winner-confirm + Submit pill, once a half is picked.
+            // Face-Off uses its own bottom panel (sequential clip, explicit
+            // winner buttons) instead of the tap-the-half flow.
+            if (!_isImprov) _voteBox(context),
+            if (_isImprov && _canAct && _chosenPlayerId == null)
+              _improvVotePanel(context),
+            if (_resultShown) _resultBox(context),
+            _header(context),
+            // Only while judging (canVote hides the top-left _header, so no
+            // overlap); on an archive clip the vote-count chip takes that corner.
+            if (widget.match.canVote && _chosenPlayerId == null)
+              _kindBadge(context),
+            _stripReportFlag(context),
+          ],
+        ),
       ),
     );
   }
@@ -847,61 +860,72 @@ class _FeedPageState extends State<FeedPage> {
   /// After submitting (or, for a battle you cannot act on, once revealed): the
   /// confirmation, and where allowed the live tally / verdict.
   Widget _resultBox(BuildContext context) {
-    final v = widget.match.verdict;
-    String line;
-    if (widget.match.canVote) {
-      line = 'Judged. Swipe for the next one.';
-    } else if (v == null && widget.match.windowOpen) {
-      line = widget.match.isParticipant
-          ? 'Your battle is still with the crowd.'
-          : 'You judged this one. Still being decided.';
+    final m = widget.match;
+    final v = m.verdict;
+    String title;
+    String? message;
+    IconData icon = Icons.check_rounded;
+    Color accent = NeonNote.judgeGreen;
+    if (m.canVote) {
+      title = 'Judged';
+      message = 'Swipe for the next one.';
+    } else if (v == null && m.windowOpen) {
+      if (m.isParticipant) {
+        title = 'Your battle';
+        message = 'Still with the crowd.';
+        icon = Icons.hourglass_top_rounded;
+        accent = NeonNote.pink;
+      } else {
+        title = 'You judged this one';
+        message = 'Still being decided.';
+        icon = Icons.hourglass_top_rounded;
+      }
     } else if (v == null || v.outcome == 'undecided') {
-      line = 'Nobody judged this one.';
+      title = 'No verdict';
+      message = 'Nobody judged this one.';
+      icon = Icons.remove_rounded;
     } else if (v.outcome == 'tie') {
-      line = 'The crowd tied it.';
+      title = 'Dead even';
+      message = 'The crowd tied it.';
+      icon = Icons.balance_rounded;
     } else {
       final agreed = v.winnerId == _chosenPlayerId;
-      final winner = v.winnerId == widget.match.player1Id
-          ? widget.match.player1Username
-          : widget.match.player2Username;
+      final winner = v.winnerId == m.player1Id
+          ? m.player1Username
+          : m.player2Username;
       final share =
-          (v.winnerId == widget.match.player1Id
-              ? v.player1Share
-              : 1 - v.player1Share) *
+          (v.winnerId == m.player1Id ? v.player1Share : 1 - v.player1Share) *
           100;
-      line =
-          '${agreed ? "You agreed with the crowd." : "The crowd disagreed."}\n'
-          '$winner took it with ${share.round()}%.';
+      title = agreed ? 'You called it' : 'Crowd disagreed';
+      message = '$winner took it with ${share.round()}%.';
+      icon = agreed ? Icons.check_rounded : Icons.close_rounded;
+      accent = agreed ? NeonNote.judgeGreen : NeonNote.pink;
     }
 
-    return Align(
-      alignment: Alignment.center,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 32),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.75),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              line,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-            ),
+    // Low on the screen and see-through to taps (developer, 2026-11-18):
+    // centred, it sat right over both players' pictures, so a judge could
+    // no longer open a profile to follow someone after voting.
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: MediaQuery.of(context).padding.bottom + 72,
+      child: IgnorePointer(
+        child: Center(
+          child: NeonNote(
+            title: title,
+            message: message,
+            icon: icon,
+            accent: accent,
             // The vote split is for the two roasters only - judges just
             // keep judging (developer, 2026-11-18).
-            if (widget.match.windowOpen && widget.match.isParticipant) ...[
-              const SizedBox(height: 12),
-              LiveTally(
-                matchId: widget.match.matchId,
-                player1Name: widget.match.player1Username,
-                player2Name: widget.match.player2Username,
-              ),
-            ],
-          ],
+            child: m.windowOpen && m.isParticipant
+                ? LiveTally(
+                    matchId: m.matchId,
+                    player1Name: m.player1Username,
+                    player2Name: m.player2Username,
+                  )
+                : null,
+          ),
         ),
       ),
     );
@@ -1300,7 +1324,7 @@ class _VotePill extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * 0.7,
+          maxWidth: MediaQuery.sizeOf(context).width * 0.66,
         ),
         padding: const EdgeInsets.fromLTRB(14, 8, 18, 8),
         decoration: BoxDecoration(
@@ -1502,6 +1526,35 @@ class _EmojiRowState extends State<_EmojiRow> {
             child: child,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The Judge feed's replay, shown once the clip has played to the end: a
+/// small dark-glass circle, so it never competes with the Vote pill.
+class _ReplayButton extends StatelessWidget {
+  const _ReplayButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.black.withValues(alpha: 0.5),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.35),
+            width: 1,
+          ),
+        ),
+        child: const Icon(Icons.replay_rounded, color: Colors.white, size: 22),
       ),
     );
   }
