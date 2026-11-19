@@ -241,20 +241,21 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   }
 
   // PER-PLAYER EMOJI RATING - the audience-feedback ecosystem that replaced
-  // the funniest-round mark (developer's call, 2026-09-23). Every judge rates
-  // BOTH players with one emoji, and it is REQUIRED: the whole point is that
-  // these accumulate into a player's identity, so a ballot without them would
-  // be a hole in the data. `emojiRatings` maps each participant id -> a rating
-  // key; both must be present and valid.
+  // the funniest-round mark (developer's call, 2026-09-23). OPTIONAL since
+  // 2026-11-18 (developer: rating must not be a gate on voting - the emojis
+  // sit beside each player's picture and a judge rates only if they want).
+  // `emojiRatings` maps a participant id -> a rating key; each one present
+  // must be valid, and only the ones given are counted.
   const {isRating} = require("./emojiRatings");
   const ratingP1 = emojiRatings && emojiRatings[match.player1Id];
   const ratingP2 = emojiRatings && emojiRatings[match.player2Id];
-  if (!isRating(ratingP1) || !isRating(ratingP2)) {
-    throw new HttpsError(
-        "invalid-argument",
-        "Rate both players with an emoji before submitting.",
-    );
+  if ((ratingP1 != null && !isRating(ratingP1)) ||
+      (ratingP2 != null && !isRating(ratingP2))) {
+    throw new HttpsError("invalid-argument", "That emoji rating isn't valid.");
   }
+  const givenRatings = {};
+  if (ratingP1 != null) givenRatings[match.player1Id] = ratingP1;
+  if (ratingP2 != null) givenRatings[match.player2Id] = ratingP2;
 
   if (Date.now() > voteWindowEndMs(match)) {
     throw new HttpsError("failed-precondition", "The 24-hour voting window for this match has closed.");
@@ -303,19 +304,20 @@ exports.castVote = onCall({secrets: [turnstileSecret]}, async (request) => {
   batch.set(ballotRef, {
     picks: normalizedPicks,
     weight,
-    emojiRatings: {
-      [match.player1Id]: ratingP1,
-      [match.player2Id]: ratingP2,
-    },
+    emojiRatings: givenRatings,
     timestamp: FieldValue.serverTimestamp(),
   });
   // A FRIEND battle's emojis stay on the ballot only: two buddies could stage
   // one, so it must never feed anyone's public emoji fame (2026-11-09).
   if (match.mode !== "friend") {
-    batch.set(db.collection("users").doc(match.player1Id),
-        {emojiCounts: {[ratingP1]: FieldValue.increment(1)}}, {merge: true});
-    batch.set(db.collection("users").doc(match.player2Id),
-        {emojiCounts: {[ratingP2]: FieldValue.increment(1)}}, {merge: true});
+    if (ratingP1 != null) {
+      batch.set(db.collection("users").doc(match.player1Id),
+          {emojiCounts: {[ratingP1]: FieldValue.increment(1)}}, {merge: true});
+    }
+    if (ratingP2 != null) {
+      batch.set(db.collection("users").doc(match.player2Id),
+          {emojiCounts: {[ratingP2]: FieldValue.increment(1)}}, {merge: true});
+    }
   }
   await batch.commit();
 

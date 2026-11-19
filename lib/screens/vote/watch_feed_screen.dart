@@ -130,8 +130,8 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
             _IntroLine('👆', 'Tap the half of whoever won.'),
             _IntroLine(
               '🔥',
-              'Rate both roasters with an emoji, then Submit. '
-                  'Swipe up for the next battle.',
+              'Hit Vote. Want to say more? Tap an emoji next to '
+                  'a roaster\'s picture.',
             ),
           ],
         ),
@@ -346,6 +346,11 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
         if (!mounted) return false;
         setState(() => _votesRemaining = 25);
       }
+      // Rapid-fire judging (developer, 2026-11-18): move to the next clip
+      // the moment Vote is tapped and send the ballot behind it, instead of
+      // holding the judge on a "Casting your vote..." spinner. A failed
+      // ballot says so in a snackbar and leaves that battle votable.
+      _advancePast(matchId);
       final reward = await _service.castVote(
         matchId: matchId,
         picks: picks,
@@ -409,11 +414,29 @@ class _WatchFeedScreenState extends State<WatchFeedScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyError(e, doing: 'casting your vote'))),
+          SnackBar(
+            content: Text(
+              '${friendlyError(e, doing: 'casting your vote')} '
+              'Swipe back to vote again.',
+            ),
+          ),
         );
       }
       return false;
     }
+  }
+
+  /// Slides to the clip after [matchId], if there is one.
+  void _advancePast(String matchId) {
+    final list = _matches;
+    if (list == null || !_pageController.hasClients) return;
+    final i = list.indexWhere((m) => m.matchId == matchId);
+    if (i == -1 || i + 1 >= list.length) return;
+    _pageController.animateToPage(
+      i + 1,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   /// Renders a whole multiplier as "2" rather than "2.0".

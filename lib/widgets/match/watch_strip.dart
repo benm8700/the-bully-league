@@ -111,6 +111,17 @@ class WatchStrip extends StatelessWidget {
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // A caret pointing at whoever holds the mic: up = the top
+                // video, down = the bottom one (developer, 2026-11-18).
+                if (floor != null)
+                  Icon(
+                    floor == topId
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 26,
+                    color: colors.first,
+                    shadows: [Shadow(color: colors.first, blurRadius: 8)],
+                  ),
                 _Pill(
                   colors: colors,
                   children: [

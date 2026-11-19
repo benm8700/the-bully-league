@@ -58,6 +58,11 @@ const STRIP = {
   pillR: 18,
   clockFont: 50,
   barH: 6,
+  // Turn caret (2026-11-18): left of the clock pill.
+  caretW: 34,
+  caretH: 20,
+  caretT: 7,
+  caretGap: 14,
 };
 
 // ASS colours are &HBBGGRR&.
@@ -157,12 +162,38 @@ function fmtClock(ms) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-/** A lit clock pill (glow, body, label) anchored at its left or right edge. */
-function pillItems(anchor, x, cy, w, colour, label, ink) {
-  // A wide pill (LAST WORD) grows outward so it never runs into the logo.
-  const left = anchor === "left" ?
+/** A pill's left edge. A wide pill (LAST WORD) grows outward so it never
+ * runs into the logo. */
+function pillLeft(anchor, x, w) {
+  return anchor === "left" ?
     Math.min(x, STRIP.logoClearLeft - w) :
     Math.max(x - w, STRIP.logoClearRight);
+}
+
+/**
+ * A chevron (^ or v) whose RIGHT edge is at [right], centred on [cy], with a
+ * soft glow - the "whose turn" pointer beside the clock.
+ */
+function caretItems(right, cy, up, colour) {
+  const w = STRIP.caretW;
+  const h = STRIP.caretH;
+  const t = STRIP.caretT;
+  const m = w / 2;
+  const path = up ?
+    `m 0 ${h} l ${m} 0 l ${w} ${h} l ${w - t} ${h} l ${m} ${t * 1.2} ` +
+      `l ${t} ${h}` :
+    `m 0 0 l ${m} ${h} l ${w} 0 l ${w - t} 0 l ${m} ${h - t * 1.2} l ${t} 0`;
+  const x = right - w;
+  const y = cy - h / 2;
+  return [
+    {layer: 2, text: shape(x, y, path, colour, "\\1a&H60&\\blur8")},
+    {layer: 3, text: shape(x, y, path, colour)},
+  ];
+}
+
+/** A lit clock pill (glow, body, label) anchored at its left or right edge. */
+function pillItems(anchor, x, cy, w, colour, label, ink) {
+  const left = pillLeft(anchor, x, w);
   const top = cy - STRIP.pillH / 2;
   const path = roundRect(w, STRIP.pillH, STRIP.pillR);
   return [
@@ -233,12 +264,18 @@ function stripItems(state, seam) {
   } else if (state.phase === "over") {
     items.push(...pillItems("left", L, seam, 150, C.purple,
         "{\\fs32}TIME!", C.white));
-  } else if (state.last) {
-    items.push(...pillItems("left", L, seam, 250, C.gold,
-        clockLabel(state.holderMs, "LAST WORD"), C.dark));
   } else {
-    items.push(...pillItems("left", L, seam, 150, C.pink,
-        clockLabel(state.holderMs), C.white));
+    const w = state.last ? 250 : 150;
+    const colour = state.last ? C.gold : C.pink;
+    items.push(...pillItems("left", L, seam, w, colour,
+        state.last ? clockLabel(state.holderMs, "LAST WORD") :
+          clockLabel(state.holderMs), state.last ? C.dark : C.white));
+    // A caret left of the clock pointing at whoever holds the mic: up = the
+    // top video (player 1), down = the bottom one (developer, 2026-11-18).
+    if (state.floor === 1 || state.floor === 2) {
+      items.push(...caretItems(pillLeft("left", L, w) - STRIP.caretGap,
+          seam, state.floor === 1, colour));
+    }
   }
   items.push(...roundItems(state.round, state.roundCount, R, seam));
   return items;

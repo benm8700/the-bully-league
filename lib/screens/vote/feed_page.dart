@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -70,9 +71,6 @@ const _revealAfter = 0.65;
 /// Height of the bottom scrubber strip; bottom overlays sit above it.
 const _scrubH = 62.0;
 
-/// Invisible tap-absorbing margin around each emoji bar.
-const _emojiSafe = 14.0;
-
 /// Half the burned-in clip strip's height as a fraction of the clip height
 /// (55px of 1920), measured from the seam: the picked half's outline sits
 /// right on the video's edge where it meets the strip.
@@ -112,8 +110,6 @@ class _FeedPageState extends State<FeedPage> {
   /// slots, filled from the emoji panel.
   String? _emojiP1;
   String? _emojiP2;
-
-  bool get _bothRated => _emojiP1 != null && _emojiP2 != null;
 
   int get _roundCount => widget.match.roundCount.clamp(1, 12);
 
@@ -431,7 +427,7 @@ class _FeedPageState extends State<FeedPage> {
                       fontSize: 16,
                     ),
                   ),
-                  onPressed: (_submitting || !_bothRated) ? null : _submit,
+                  onPressed: _submitting ? null : _submit,
                   child: _submitting
                       ? const SizedBox(
                           height: 20,
@@ -441,9 +437,7 @@ class _FeedPageState extends State<FeedPage> {
                             color: Colors.black,
                           ),
                         )
-                      : Text(
-                          _bothRated ? 'Submit vote' : 'Rate both to submit',
-                        ),
+                      : const Text('Vote'),
                 ),
               ),
             ],
@@ -571,8 +565,9 @@ class _FeedPageState extends State<FeedPage> {
   void _submit() {
     final winner = _selectedWinner;
     if (winner == null || _submitting) return;
-    // A real ballot now also requires an emoji rating for BOTH players.
-    if (widget.match.canVote && !_bothRated) return;
+    // Emoji ratings are optional (developer, 2026-11-18); a real ballot only
+    // waits for the clip to have played to the end.
+    if (widget.match.canVote && !(_seenEnd || _isImprov)) return;
     _choose(winner);
   }
 
@@ -587,8 +582,8 @@ class _FeedPageState extends State<FeedPage> {
       // every round"), plus the required per-player emoji ratings.
       final picks = {for (int r = 0; r < _roundCount; r++) r: winnerId};
       final emojiRatings = {
-        widget.match.player1Id: _emojiP1!,
-        widget.match.player2Id: _emojiP2!,
+        widget.match.player1Id: ?_emojiP1,
+        widget.match.player2Id: ?_emojiP2,
       };
       final ok = await widget.onVote(picks, emojiRatings);
       if (!mounted) return;
@@ -664,18 +659,6 @@ class _FeedPageState extends State<FeedPage> {
               controller != null &&
               controller.value.isInitialized)
             _playerPictures(context),
-          // Per-player emoji bars, revealed only AFTER a winner is picked, so
-          // the watching screen stays clean. Each sits on that roaster's half
-          // of the stacked clip (top = P1 red, bottom = P2 blue) and is
-          // changeable until you submit; the docked submit bar below is gated
-          // on both being rated. (Face-Off shows both bars together in its own
-          // panel - the clip is not split into halves.)
-          if (!_isImprov &&
-              widget.match.canVote &&
-              _chosenPlayerId == null &&
-              _seenEnd &&
-              !_playing)
-            _emojiBars(context),
           // The app-wide scrubber (replaces the old rewind-10 button):
           // drag back to re-hear a line, anywhere in the clip.
           if (controller != null)
@@ -772,11 +755,9 @@ class _FeedPageState extends State<FeedPage> {
     // the top-centre of the picked half (developer, 2026-11-09: while rating
     // emojis a judge must be able to SEE the pick is still the right person).
     // No fill - it must not cover the faces.
+    // Just the outline now: the picked name lives on the Vote button at the
+    // bottom ("VOTE FOR <name>", developer 2026-11-18).
     final color = top ? House.gelRed : House.gelBlue;
-    final name = top
-        ? widget.match.player1Username
-        : widget.match.player2Username;
-    final topInset = top ? MediaQuery.of(context).padding.top : 0.0;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _pickWinner(playerId),
@@ -791,69 +772,6 @@ class _FeedPageState extends State<FeedPage> {
             border: Border.all(
               color: selected ? color : Colors.transparent,
               width: 5,
-            ),
-          ),
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: AnimatedOpacity(
-              opacity: selected ? 1 : 0,
-              duration: const Duration(milliseconds: 120),
-              child: Padding(
-                padding: EdgeInsets.only(top: topInset + 10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black54, blurRadius: 6),
-                    ],
-                  ),
-                  // "<name> WINS" - the only place the name shows on the
-                  // clip (developer, 2026-11-18: no names on the video; it
-                  // pops up when the judge picks).
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.sizeOf(context).width * 0.7,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.check_rounded,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 5),
-                        Flexible(
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                        const Text(
-                          ' WINS',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
             ),
           ),
         ),
@@ -875,221 +793,53 @@ class _FeedPageState extends State<FeedPage> {
     final winner = _selectedWinner;
     final insetBottom = MediaQuery.of(context).padding.bottom;
 
-    // Open ballot, no pick yet: a quiet hint to tap a roaster, nothing else.
-    if (winner == null) {
-      if (!m.canVote) return const SizedBox.shrink();
-      return Positioned(
-        left: 0,
-        right: 0,
-        bottom: insetBottom + _scrubH + 8,
-        child: IgnorePointer(
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Tap the winner',
-                style: TextStyle(color: Colors.white, fontSize: 13),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+    // Nothing picked: nothing shown (developer, 2026-11-18: no "Tap the
+    // winner" prompt - picking a half is obvious).
+    if (winner == null) return const SizedBox.shrink();
+
+    final isP1 = winner == m.player1Id;
+    final name = isP1 ? m.player1Username : m.player2Username;
+    final color = isP1 ? House.gelRed : House.gelBlue;
 
     // Settled battle: a private "call" on a decided result, no emoji rating.
-    if (!m.canVote) {
-      final name = winner == m.player1Id
-          ? m.player1Username
-          : m.player2Username;
-      return Positioned(
-        left: 0,
-        right: 0,
-        bottom: insetBottom + _scrubH + 8,
-        child: Center(
-          child: FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: _pickGreen.withValues(alpha: 0.48),
-              foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-              textStyle: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            onPressed: _submitting ? null : _submit,
-            child: Text('Call it: $name'),
-          ),
-        ),
-      );
-    }
-
-    // Real ballot, winner picked: a DOCKED full-width submit bar. Its label is
-    // the prompt - "Rate both to submit" until both roasters are rated, then
-    // "Submit vote". The emoji bars sit just above it.
+    // Open ballot: votable once the clip has played to the end (emoji ratings
+    // are optional); until then the pill shows greyed with a short line.
+    final ready = !m.canVote || _seenEnd;
+    final hint = ready ? null : 'Voting opens when the battle ends';
+    final screen = MediaQuery.sizeOf(context);
+    final map = _ClipMap(screen);
     return Positioned(
       left: 0,
       right: 0,
-      bottom: insetBottom + _scrubH,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0x00000000), Color(0xB3000000)],
-          ),
-        ),
-        child: SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: _pickGreen.withValues(alpha: 0.9),
-              foregroundColor: Colors.black,
-              disabledBackgroundColor: Colors.white.withValues(alpha: 0.14),
-              disabledForegroundColor: Colors.white70,
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              textStyle: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            onPressed: (_submitting || !_bothRated) ? null : _submit,
-            child: _submitting
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.black,
-                    ),
-                  )
-                : Text(_bothRated ? 'Submit vote' : 'Rate both to submit'),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// The two persistent per-player emoji bars, one on each half of the stacked
-  /// clip: rate a roaster any time while watching, changeable until you submit.
-  Widget _emojiBars(BuildContext context) {
-    final m = widget.match;
-    // Each box in the MIDDLE of its roaster's half (developer, 2026-11-17),
-    // shown once the battle has been watched to the end and hidden again
-    // while it replays (picks are kept). Taps outside a box still fall
-    // through to the half underneath, so picking the winner works the same.
-    return Positioned.fill(
+      // At the bottom of the PICKED roaster's half (developer, 2026-11-18):
+      // for the top player just above their picture + emoji row (which hug
+      // the strip), for the bottom one above the scrubber.
+      bottom: isP1
+          ? screen.height - map.y(960 - 55 - _kAvatarGap - _kAvatarD) + 10
+          : insetBottom + _scrubH + 6,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Center(
-              child: _emojiBar(
-                m.player1Username,
-                _emojiP1,
-                (k) => setState(() => _emojiP1 = k),
-                House.gelRed,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: _emojiBar(
-                m.player2Username,
-                _emojiP2,
-                (k) => setState(() => _emojiP2 = k),
-                House.gelBlue,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// One player's reaction box: a single "Rating for {name}" line (so judges
-  /// always know who they're rating - the only place the name appears on the
-  /// clip) directly above the four emoji choices. Framed in that player's stage
-  /// gel (red = player 1, blue = player 2); the picked emoji lights in the same
-  /// gel; emojis are finger-sized. Wrapped so a tap never falls through to the
-  /// winner-select layer beneath.
-  Widget _emojiBar(
-    String name,
-    String? selected,
-    ValueChanged<String> onSelect,
-    Color accent,
-  ) {
-    // The opaque GestureDetector swallows taps on the bar AND on an invisible
-    // margin around it (_emojiSafe), so a slightly-missed emoji tap does
-    // nothing instead of falling through to the half and flipping the winner
-    // pick (developer, 2026-11-09).
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {},
-      child: Padding(
-        padding: const EdgeInsets.all(_emojiSafe),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: accent.withValues(alpha: 0.9),
-              width: 1.5,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 210),
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 3, bottom: 5),
-                  child: Text(
-                    'Rating for $name',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: accent,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+          if (hint != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                hint,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.75),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  shadows: const [Shadow(color: Colors.black, blurRadius: 6)],
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final r in kEmojiRatings)
-                    GestureDetector(
-                      onTap: () => onSelect(r.key),
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: selected == r.key
-                              ? accent.withValues(alpha: 0.9)
-                              : Colors.white.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(11),
-                        ),
-                        child: Text(
-                          r.emoji,
-                          style: const TextStyle(fontSize: 20),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
+            ),
+          _VotePill(
+            label: m.canVote ? 'Vote for $name' : 'Call it: $name',
+            color: color,
+            enabled: ready && !_submitting,
+            onTap: _submit,
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1100,9 +850,7 @@ class _FeedPageState extends State<FeedPage> {
     final v = widget.match.verdict;
     String line;
     if (widget.match.canVote) {
-      line = _submitting
-          ? 'Casting your vote...'
-          : 'Judged. Swipe for the next one.';
+      line = 'Judged. Swipe for the next one.';
     } else if (v == null && widget.match.windowOpen) {
       line = widget.match.isParticipant
           ? 'Your battle is still with the crowd.'
@@ -1143,8 +891,9 @@ class _FeedPageState extends State<FeedPage> {
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white, fontSize: 16),
             ),
-            if (widget.match.windowOpen &&
-                (widget.match.alreadyVoted || widget.match.isParticipant)) ...[
+            // The vote split is for the two roasters only - judges just
+            // keep judging (developer, 2026-11-18).
+            if (widget.match.windowOpen && widget.match.isParticipant) ...[
               const SizedBox(height: 12),
               LiveTally(
                 matchId: widget.match.matchId,
@@ -1195,10 +944,33 @@ class _FeedPageState extends State<FeedPage> {
             );
           }
 
+          // Optional emoji ratings, a small row right beside each picture
+          // (developer, 2026-11-18: no box, no "Rating for" label, never a
+          // gate). Tap to rate, tap again to clear. Only while judging.
+          final rating = widget.match.canVote && _chosenPlayerId == null;
+          Widget emojis(int i, double clipY) => Positioned(
+            left: map.x(_kAvatarLeft + _kAvatarD) + 8,
+            top: map.y(clipY) + d / 2 - _EmojiRow.height / 2,
+            child: _EmojiRow(
+              selected: i == 0 ? _emojiP1 : _emojiP2,
+              color: i == 0 ? House.gelRed : House.gelBlue,
+              onSelect: (k) => setState(() {
+                if (i == 0) {
+                  _emojiP1 = _emojiP1 == k ? null : k;
+                } else {
+                  _emojiP2 = _emojiP2 == k ? null : k;
+                }
+              }),
+            ),
+          );
+          const topY = 960 - 55 - _kAvatarGap - _kAvatarD;
+          const bottomY = 960 + 55 + _kAvatarGap;
           return Stack(
             children: [
-              pic(0, 960 - 55 - _kAvatarGap - _kAvatarD),
-              pic(1, 960 + 55 + _kAvatarGap),
+              pic(0, topY),
+              pic(1, bottomY),
+              if (rating) emojis(0, topY),
+              if (rating) emojis(1, bottomY),
             ],
           );
         },
@@ -1497,6 +1269,239 @@ class _TappablePicture extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// The Judge feed's one action (developer, 2026-11-18): a compact neon pill
+/// in the picked roaster's colour - `VOTE FOR name` - that replaced the
+/// big green Submit bar and the "<name> WINS" tag. Greyed until voting opens.
+class _VotePill extends StatelessWidget {
+  const _VotePill({
+    required this.label,
+    required this.color,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color color;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    // Flat and quiet (developer, 2026-11-18: the glowing gradient looked
+    // cheap): a solid pill in the player's colour, a soft drop shadow, a
+    // small check. Greyed = dark glass with a thin outline.
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.7,
+        ),
+        padding: const EdgeInsets.fromLTRB(14, 8, 18, 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          color: enabled ? color : Colors.black.withValues(alpha: 0.5),
+          border: Border.all(
+            color: enabled
+                ? Colors.transparent
+                : Colors.white.withValues(alpha: 0.28),
+            width: 1,
+          ),
+          boxShadow: enabled
+              ? const [
+                  BoxShadow(
+                    color: Colors.black45,
+                    blurRadius: 10,
+                    offset: Offset(0, 3),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.check_rounded,
+              size: 17,
+              color: enabled ? Colors.white : Colors.white38,
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: enabled ? Colors.white : Colors.white54,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The optional emoji rating beside a player's picture (developer,
+/// 2026-11-18). Folded away by default as a small "Rate" chip; a tap fans the
+/// four emojis out in place, and picking one folds them away again, leaving
+/// the picked emoji (tap it to change). Tapping the picked emoji in the open
+/// row clears it. Left open with no pick, it folds itself after a few seconds.
+/// Swallows taps so a near-miss never flips the winner pick underneath.
+class _EmojiRow extends StatefulWidget {
+  const _EmojiRow({
+    required this.selected,
+    required this.color,
+    required this.onSelect,
+  });
+
+  static const double height = 34;
+
+  final String? selected;
+  final Color color;
+  final ValueChanged<String> onSelect;
+
+  @override
+  State<_EmojiRow> createState() => _EmojiRowState();
+}
+
+class _EmojiRowState extends State<_EmojiRow> {
+  bool _open = false;
+  Timer? _autoClose;
+
+  void _setOpen(bool open) {
+    _autoClose?.cancel();
+    if (open) {
+      _autoClose = Timer(const Duration(seconds: 5), () {
+        if (mounted) setState(() => _open = false);
+      });
+    }
+    setState(() => _open = open);
+  }
+
+  @override
+  void dispose() {
+    _autoClose?.cancel();
+    super.dispose();
+  }
+
+  Widget _disc(String emoji, bool picked) {
+    const h = _EmojiRow.height;
+    return Container(
+      width: h,
+      height: h,
+      margin: const EdgeInsets.only(right: 2),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: picked
+            ? widget.color.withValues(alpha: 0.9)
+            : Colors.transparent,
+        border: picked ? Border.all(color: Colors.white, width: 1.5) : null,
+      ),
+      child: Text(
+        emoji,
+        style: TextStyle(
+          fontSize: picked ? 19 : 17,
+          shadows: const [Shadow(color: Colors.black87, blurRadius: 4)],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sel = widget.selected;
+    Widget child;
+    if (_open) {
+      child = Row(
+        key: const ValueKey('open'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final r in kEmojiRatings)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                widget.onSelect(r.key);
+                _setOpen(false);
+              },
+              child: Opacity(
+                opacity: sel == null || sel == r.key ? 1 : 0.45,
+                child: _disc(r.emoji, sel == r.key),
+              ),
+            ),
+        ],
+      );
+    } else if (sel != null) {
+      final r = kEmojiRatings.firstWhere(
+        (e) => e.key == sel,
+        orElse: () => kEmojiRatings.first,
+      );
+      child = GestureDetector(
+        key: const ValueKey('picked'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _setOpen(true),
+        child: _disc(r.emoji, true),
+      );
+    } else {
+      child = GestureDetector(
+        key: const ValueKey('chip'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _setOpen(true),
+        child: Container(
+          height: 28,
+          padding: const EdgeInsets.symmetric(horizontal: 11),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.45),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.35),
+              width: 1,
+            ),
+          ),
+          child: const Text(
+            'Rate',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      );
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: SizedBox(
+        height: _EmojiRow.height,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          widthFactor: 1,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 160),
+            transitionBuilder: (c, a) => FadeTransition(
+              opacity: a,
+              child: SizeTransition(
+                sizeFactor: a,
+                axis: Axis.horizontal,
+                axisAlignment: -1,
+                child: c,
+              ),
+            ),
+            child: child,
+          ),
+        ),
       ),
     );
   }
