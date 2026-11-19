@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/emoji_ratings.dart';
 import '../../core/services/clip_cache.dart';
+import '../../core/services/follows_service.dart';
 import '../../core/services/watch_feed_service.dart';
 import '../../theme/house_theme.dart';
 import '../../widgets/match/watch_strip.dart';
@@ -150,11 +152,58 @@ class _FeedPageState extends State<FeedPage> {
     super.initState();
     _load();
     _loadPhotos();
+    _watchFollows();
   }
 
   // Each roaster's battle-card selfie, for the tappable pictures on the
   // clip (index 0 = player 1 / top, 1 = player 2 / bottom).
   final List<String?> _photos = [null, null];
+
+  // The follow bubble (developer, 2026-11-18): tapping a roaster's picture
+  // opens a small card beside it - Follow right there, or View profile.
+  final _follows = FollowsService();
+  final List<bool> _following = [false, false];
+  final List<StreamSubscription<bool>> _followSubs = [];
+
+  void _watchFollows() {
+    final ids = [widget.match.player1Id, widget.match.player2Id];
+    for (var i = 0; i < 2; i++) {
+      _followSubs.add(
+        _follows.isFollowing(ids[i]).listen((f) {
+          if (mounted && _following[i] != f) {
+            setState(() => _following[i] = f);
+          }
+        }, onError: (_) {}),
+      );
+    }
+  }
+
+  int? _bubbleFor;
+  Timer? _bubbleClose;
+
+  void _closeBubble() {
+    _bubbleClose?.cancel();
+    if (_bubbleFor != null && mounted) setState(() => _bubbleFor = null);
+  }
+
+  Future<void> _toggleFollow(String uid, bool following) async {
+    _bubbleClose?.cancel();
+    try {
+      if (following) {
+        await _follows.unfollow(uid);
+      } else {
+        await _follows.follow(uid);
+        // Let the "Following" state show for a beat, then tidy away.
+        _bubbleClose = Timer(const Duration(milliseconds: 1100), _closeBubble);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't update that. Try again.")),
+        );
+      }
+    }
+  }
 
   Future<void> _loadPhotos() async {
     final m = widget.match;
@@ -304,6 +353,10 @@ class _FeedPageState extends State<FeedPage> {
 
   @override
   void dispose() {
+    _bubbleClose?.cancel();
+    for (final sub in _followSubs) {
+      sub.cancel();
+    }
     _controller?.removeListener(_onTick);
     _controller?.dispose();
     super.dispose();
@@ -946,7 +999,6 @@ class _FeedPageState extends State<FeedPage> {
           final map = _ClipMap(c.biggest);
           final d = _kAvatarD * map.scale;
           Widget pic(int i, double clipY) {
-            final id = i == 0 ? m.player1Id : m.player2Id;
             final name = i == 0 ? m.player1Username : m.player2Username;
             // A hair larger than the burned photo so no edge of it peeks out.
             return Positioned(
@@ -954,15 +1006,20 @@ class _FeedPageState extends State<FeedPage> {
               top: map.y(clipY) - 1,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => _openProfile(context, id, name),
+                onTap: () {
+                  _bubbleClose?.cancel();
+                  setState(() => _bubbleFor = _bubbleFor == i ? null : i);
+                },
                 // A white ring and a small + badge in the player's colour
                 // (top red, bottom blue - their winner box colour), so it
-                // reads as a button (developer, 2026-11-17).
+                // reads as a button (developer, 2026-11-17). The + turns
+                // into a check once you follow them.
                 child: _TappablePicture(
                   name: name,
                   photoUrl: _photos[i],
                   size: d + 2,
                   color: i == 0 ? House.gelRed : House.gelBlue,
+                  following: _following[i],
                 ),
               ),
             );
@@ -989,12 +1046,51 @@ class _FeedPageState extends State<FeedPage> {
           );
           const topY = 960 - 55 - _kAvatarGap - _kAvatarD;
           const bottomY = 960 + 55 + _kAvatarGap;
+          final open = _bubbleFor;
+          Widget bubble(int i, double clipY) {
+            final id = i == 0 ? m.player1Id : m.player2Id;
+            final name = i == 0 ? m.player1Username : m.player2Username;
+            final isMe = FirebaseAuth.instance.currentUser?.uid == id;
+            final following = _following[i];
+            // Opens AWAY from the strip so it never covers the clock: the
+            // top player's grows up from the picture's bottom edge, the
+            // bottom player's down from its top edge.
+            return Positioned(
+              left: map.x(_kAvatarLeft + _kAvatarD) + 8,
+              top: i == 0
+                  ? map.y(clipY) + d - _FollowBubble.height
+                  : map.y(clipY),
+              child: _FollowBubble(
+                name: name,
+                color: i == 0 ? House.gelRed : House.gelBlue,
+                following: following,
+                showFollow: !isMe,
+                onFollow: () => _toggleFollow(id, following),
+                onProfile: () {
+                  _closeBubble();
+                  _openProfile(context, id, name);
+                },
+              ),
+            );
+          }
+
           return Stack(
             children: [
+              // While the bubble is open, a tap anywhere else just closes
+              // it (and does not pick a winner).
+              if (open != null)
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _closeBubble,
+                  ),
+                ),
               pic(0, topY),
               pic(1, bottomY),
-              if (rating) emojis(0, topY),
-              if (rating) emojis(1, bottomY),
+              if (rating && open != 0) emojis(0, topY),
+              if (rating && open != 1) emojis(1, bottomY),
+              if (open == 0) bubble(0, topY),
+              if (open == 1) bubble(1, bottomY),
             ],
           );
         },
@@ -1237,6 +1333,7 @@ class _TappablePicture extends StatelessWidget {
     required this.size,
     required this.color,
     this.badge = true,
+    this.following = false,
   });
 
   final String name;
@@ -1244,6 +1341,7 @@ class _TappablePicture extends StatelessWidget {
   final double size;
   final Color color;
   final bool badge;
+  final bool following;
 
   @override
   Widget build(BuildContext context) {
@@ -1286,7 +1384,7 @@ class _TappablePicture extends StatelessWidget {
                   border: Border.all(color: Colors.white, width: 1.5),
                 ),
                 child: Icon(
-                  Icons.add_rounded,
+                  following ? Icons.check_rounded : Icons.add_rounded,
                   size: badgeSize - 6,
                   color: Colors.white,
                 ),
@@ -1519,7 +1617,7 @@ class _EmojiRowState extends State<_EmojiRow> {
               child: SizeTransition(
                 sizeFactor: a,
                 axis: Axis.horizontal,
-                axisAlignment: -1,
+                alignment: Alignment.centerLeft,
                 child: c,
               ),
             ),
@@ -1555,6 +1653,155 @@ class _ReplayButton extends StatelessWidget {
           ),
         ),
         child: const Icon(Icons.replay_rounded, color: Colors.white, size: 22),
+      ),
+    );
+  }
+}
+
+/// The follow bubble beside a roaster's picture (developer, 2026-11-18): their
+/// name, a Follow button that works right there (flips to "Following"), and a
+/// "View profile" link. Dark glass with a neon edge in the player's colour.
+class _FollowBubble extends StatelessWidget {
+  const _FollowBubble({
+    required this.name,
+    required this.color,
+    required this.following,
+    required this.showFollow,
+    required this.onFollow,
+    required this.onProfile,
+  });
+
+  static const double height = 76;
+
+  final String name;
+  final Color color;
+  final bool following;
+  final bool showFollow;
+  final VoidCallback onFollow;
+  final VoidCallback onProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    const pink = Color(0xFFFF2E7E);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: Container(
+        height: height,
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.66,
+        ),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xF21C1226), Color(0xF20B0911)],
+          ),
+          border: Border.all(color: color.withValues(alpha: 0.85), width: 1.3),
+          boxShadow: [
+            BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 14),
+            const BoxShadow(color: Colors.black54, blurRadius: 10),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showFollow) ...[
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onFollow,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      height: 30,
+                      padding: const EdgeInsets.symmetric(horizontal: 11),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(15),
+                        color: following ? Colors.transparent : pink,
+                        border: Border.all(
+                          color: following
+                              ? Colors.white.withValues(alpha: 0.5)
+                              : pink,
+                          width: 1.2,
+                        ),
+                        boxShadow: following
+                            ? null
+                            : [
+                                BoxShadow(
+                                  color: pink.withValues(alpha: 0.45),
+                                  blurRadius: 10,
+                                ),
+                              ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            following
+                                ? Icons.check_rounded
+                                : Icons.person_add_alt_1_rounded,
+                            size: 15,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            following ? 'Following' : 'Follow',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Flexible(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onProfile,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Text(
+                        'View profile',
+                        maxLines: 1,
+                        overflow: TextOverflow.fade,
+                        softWrap: false,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          decoration: TextDecoration.underline,
+                          decorationColor: Colors.white.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
